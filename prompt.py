@@ -6,6 +6,7 @@ downstream by the two host-side controls in emit.py and by the score==1.0
 filter after the rollouts.
 """
 import json
+import random
 
 APPS = {
     "libreoffice_calc": ("libreoffice_calc", "LibreOffice Calc"),
@@ -243,8 +244,9 @@ OPERATIONS = {
 }
 
 
-def user_prompt(n, cells, priors=None):
+def user_prompt(n, cells, priors=None, external=None, per_app=12, seed=0):
     priors = priors or {}
+    external = external or {}
     lines = []
     for i, c in enumerate(cells):
         op = c.get("operation") or ""
@@ -314,6 +316,35 @@ def user_prompt(n, cells, priors=None):
                       "business scenario or their rule; go somewhere clearly "
                       "different:\n" + "\n".join(sorted(set(avoid))))
 
+    # Real instructions from suites that already exist publicly. Slugs are enough
+    # for our own history -- we wrote those and the model can infer the scenario
+    # from the name -- but nothing can be inferred from a CUA-Gym id, so these go
+    # in as full text. Only the apps this batch actually targets are included; a
+    # Writer cell learns nothing from GIMP examples and the budget is finite.
+    #
+    # Sampled deterministically from `seed` so a rerun of the same batch sends the
+    # same prompt, and so successive batches see DIFFERENT examples from the same
+    # app rather than the same twelve every time.
+    ext = []
+    for app in sorted({c.get("primary") for c in cells if c.get("primary")}):
+        pool = external.get(app) or []
+        if not pool:
+            continue
+        rng = random.Random("%s/%s" % (seed, app))
+        shown = rng.sample(pool, min(per_app, len(pool)))
+        ext.append("  %s (%d such tasks exist; %d shown):\n%s"
+                   % (app, len(pool), len(shown),
+                      "\n".join("    - " + i.replace("\n", " ")[:220] for i in shown)))
+    ext_text = ""
+    if ext:
+        ext_text = ("\n\nThese tasks ALREADY EXIST in public benchmarks for the apps "
+                    "in this batch. They are shown so you do not reinvent them. A "
+                    "task that differs from one of these only in a constant -- a "
+                    "different font size, a different line spacing, a different "
+                    "column name -- counts as the same task and is worthless. Go "
+                    "somewhere structurally different: inspect a different property, "
+                    "or impose a rule none of these impose.\n" + "\n".join(ext))
+
     return (
         TASK.format(n=n)
         + "\nPer-spec targets, in order:\n"
@@ -327,6 +358,7 @@ def user_prompt(n, cells, priors=None):
         "different local file the agent must also open. Put the primary application "
         "first in apps."
         + avoid_text
+        + ext_text
         + "\n\nMake the batch diverse: different business domains, "
         "different kinds of work. Two specs must not share a business rule.\n"
     )

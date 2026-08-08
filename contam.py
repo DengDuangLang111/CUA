@@ -25,27 +25,33 @@ Two numbers per generated instruction, because they fail differently:
                 collapsed: the previous generation reached 0.987 here before
                 anyone noticed (specs/vocab.py).
 
-Both are reported with two metrics, because a paraphrase defeats one and not the
-other:
+Both are reported with three metrics, because a paraphrase defeats one and not
+the others:
 
   ratio    difflib.SequenceMatcher over characters -- catches near-verbatim text
   jaccard  overlap of content-word sets -- catches "same task, reworded"
+  cosine   TF-IDF over the same words -- catches "same task, reworded, and the
+           words it shares are the rare ones". Jaccard cannot: it scores an
+           overlap on `spacing` exactly like an overlap on `file`.
 
 WHAT THIS DOES NOT CATCH
 ------------------------
-Instruction text is the only signal here. Two tasks can share no wording and
-still be the same task -- same starting file, same required end state, different
-prose. Nothing below compares setup, gold or evaluator, so a low score is
-evidence of non-copying, not proof of a distinct task.
+Instruction text is the only signal here, and all three metrics are bag-of-words
+or worse. Two tasks can be the same task with one constant changed -- 1.5 line
+spacing versus 2.0 -- and score low on every metric below. Nothing here compares
+setup, gold or evaluator, so a low score is evidence of non-copying, not proof of
+a distinct task. `ostg.sig` is the structural check that does see those.
 
 Stdlib only, so this runs wherever the specs do.
 """
 from __future__ import annotations
 
 import argparse
+import collections
 import difflib
 import glob
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -79,21 +85,81 @@ def ratio(a, b):
     return difflib.SequenceMatcher(None, a, b).ratio()
 
 
-def closest(text, corpus, k=12):
-    """(best_ratio, best_jaccard, best_label) against a corpus of (label, text).
+def build_idf(rows):
+    """Inverse document frequency over every reference instruction at once.
 
-    Jaccard over the whole corpus first, SequenceMatcher only over its top k.
-    SequenceMatcher is quadratic in the string length and the corpus is 369 long;
-    running it against everything makes a 1000-spec check take minutes for a
-    number the prefilter already told us cannot be the maximum.
+    Jaccard weights every surviving word equally, which is wrong for this corpus:
+    `spreadsheet` appears in a large fraction of desktop tasks and `levenshtein`
+    appears once, yet both move the score by the same amount. The measured effect
+    was a pair scoring j0.37 -- under the flagging threshold -- whose shared words
+    were all the discriminative ones (spacing, paragraphs, heading) and whose
+    unshared words were all boilerplate (open, desktop, save, file).
+
+    Built once over the union of all corpora so the numbers stay comparable
+    between them; a per-corpus IDF would make 369 tasks and 10,910 tasks score on
+    different scales.
     """
+    n = len(rows) or 1
+    df = collections.Counter()
+    for _, _, tk in rows:
+        df.update(tk)
+    idf = {w: math.log((n + 1) / (d + 1)) + 1.0 for w, d in df.items()}
+    # A word no reference task uses is maximally discriminative, so an unseen
+    # term gets the weight of a term seen exactly zero times, not a weight of 0.
+    return idf, math.log(n + 1) + 1.0
+
+
+def vector(toks, idf, default):
+    """Unit-normalised TF-IDF vector. TF is binary -- `tokens` returns a set, and
+    in one-sentence instructions a repeated word carries no extra signal."""
+    v = {w: idf.get(w, default) for w in toks}
+    norm = math.sqrt(sum(x * x for x in v.values())) or 1.0
+    return v, norm
+
+
+def cosine(qv, qn, dv, dn):
+    small, large = (qv, dv) if len(qv) <= len(dv) else (dv, qv)
+    dot = sum(w * large[t] for t, w in small.items() if t in large)
+    return dot / (qn * dn)
+
+
+class Ref:
+    """A reference corpus with its TF-IDF vectors precomputed once."""
+
+    def __init__(self, name, rows, idf, default):
+        self.name = name
+        self.rows = [(lab, txt, tk) + vector(tk, idf, default) for lab, txt, tk in rows]
+        self.idf, self.default = idf, default
+
+    def __len__(self):
+        return len(self.rows)
+
+
+def closest(text, ref, k=12):
+    """(ratio, jaccard, cosine, label) for the nearest row in `ref`.
+
+    Cheap metrics over the whole corpus, SequenceMatcher only over the top k by
+    those. SequenceMatcher is quadratic in the string length and the corpus can be
+    11k long; running it against everything turns a 30-spec check into minutes for
+    a number the prefilter already ruled out. The prefilter ranks by
+    max(jaccard, cosine) rather than jaccard alone, so a pair the weighting finds
+    and the raw set overlap misses still reaches the expensive stage.
+    """
+    if isinstance(ref, list):  # bare rows, no weighting available
+        ref = Ref("-", ref, {}, 1.0)
     toks = tokens(text)
-    scored = sorted(((jaccard(toks, t), lab, s) for lab, s, t in corpus), reverse=True)
-    best = (0.0, 0.0, "-")
-    for j, lab, other in scored[:k]:
+    qv, qn = vector(toks, ref.idf, ref.default)
+    scored = []
+    for lab, other, tk, dv, dn in ref.rows:
+        j = jaccard(toks, tk)
+        c = cosine(qv, qn, dv, dn)
+        scored.append((max(j, c), j, c, lab, other))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    best = (0.0, 0.0, 0.0, "-")
+    for _, j, c, lab, other in scored[:k]:
         r = ratio(text, other)
-        if max(r, j) > max(best[0], best[1]):
-            best = (r, j, lab)
+        if max(r, j, c) > max(best[0], best[1], best[2]):
+            best = (r, j, c, lab)
     return best
 
 
@@ -223,43 +289,52 @@ def main():
                   file=sys.stderr)
         return 1
 
-    ref = [row for rows in corpora.values() for row in rows]
+    all_rows = [row for rows in corpora.values() for row in rows]
+    idf, default = build_idf(all_rows + specs)
+    ref = Ref("all", all_rows, idf, default)
+    per = {name: Ref(name, rows, idf, default) for name, rows in corpora.items()}
     print("%d generated instruction(s) vs %s\n"
           % (len(specs), ", ".join("%d %s" % (len(v), k) for k, v in corpora.items())))
 
     flagged = []
-    worst = {name: (0.0, 0.0, "-") for name in corpora}
-    print("%-34s %-13s %-13s %s" % ("slug", "vs_corpus", "vs_siblings", "closest match"))
-    print("-" * 96)
+    worst = {name: (0.0, 0.0, 0.0, "-") for name in corpora}
+    print("%-30s %-19s %-19s %s"
+          % ("slug", "vs_corpus", "vs_siblings", "closest match"))
+    print("-" * 104)
     for slug, text, _ in specs:
-        siblings = [(s, t, tk) for s, t, tk in specs if s != slug]
-        orat, ojac, olab = closest(text, ref)
-        srat, sjac, _slab = closest(text, siblings) if siblings else (0.0, 0.0, "-")
-        for name, rows in corpora.items():
-            r, j, lab = closest(text, rows)
-            if max(r, j) > max(worst[name][0], worst[name][1]):
-                worst[name] = (r, j, "%s <- %s" % (slug[:24], lab))
-        mark = " <<<" if max(orat, ojac) >= args.threshold else ""
+        sib = [(s, t, tk) for s, t, tk in specs if s != slug]
+        orat, ojac, ocos, olab = closest(text, ref)
+        srat, sjac, scos, _l = (closest(text, Ref("sib", sib, idf, default))
+                                if sib else (0.0, 0.0, 0.0, "-"))
+        for name, r_ in per.items():
+            r, j, c, lab = closest(text, r_)
+            if max(r, j, c) > max(worst[name][:3]):
+                worst[name] = (r, j, c, "%s <- %s" % (slug[:22], lab))
+        mark = " <<<" if max(orat, ojac, ocos) >= args.threshold else ""
         if mark:
-            flagged.append((slug, orat, ojac, olab))
-        print("%-34s r%.2f j%.2f   r%.2f j%.2f   %s%s"
-              % (slug[:33], orat, ojac, srat, sjac, olab, mark))
+            flagged.append((slug, orat, ojac, ocos, olab))
+        print("%-30s r%.2f j%.2f c%.2f   r%.2f j%.2f c%.2f   %s%s"
+              % (slug[:29], orat, ojac, ocos, srat, sjac, scos, olab, mark))
 
     print("\nworst case per corpus:")
-    for name, (r, j, who) in worst.items():
-        verdict = "OVER" if max(r, j) >= args.threshold else "ok"
-        print("  %-12s ratio %.2f jaccard %.2f  %-4s  %s" % (name, r, j, verdict, who))
+    for name, (r, j, c, who) in worst.items():
+        verdict = "OVER" if max(r, j, c) >= args.threshold else "ok"
+        print("  %-12s ratio %.2f jaccard %.2f cosine %.2f  %-4s  %s"
+              % (name, r, j, c, verdict, who))
 
     print()
     if flagged:
         print("%d spec(s) over the %.2f threshold:" % (len(flagged), args.threshold))
-        for slug, r, j, lab in flagged:
-            print("  %-34s ratio %.2f jaccard %.2f  <- %s" % (slug, r, j, lab))
+        for slug, r, j, c, lab in flagged:
+            print("  %-30s ratio %.2f jaccard %.2f cosine %.2f  <- %s"
+                  % (slug, r, j, c, lab))
         print("A high score is not proof of copying -- two tasks can share a domain "
               "and a verb. Read the pair before dropping either.")
     else:
         print("nothing over the %.2f threshold against %d corpus/corpora."
               % (args.threshold, len(corpora)))
+    print("text similarity cannot see a duplicate that differs only in a constant; "
+          "run ostg.sig for that.")
     return 1 if flagged else 0
 
 

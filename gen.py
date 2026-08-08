@@ -218,6 +218,12 @@ def main():
                          "per-cell avoid list. Default: */specs.jsonl next to --out, "
                          "so a run stays its own task set but still knows what every "
                          "earlier run already wrote. 'none' to disable.")
+    ap.add_argument("--avoid-corpus", action="append", default=[], metavar="PATH",
+                    help="a tasks.jsonl of instructions that ALREADY EXIST publicly "
+                         "(e.g. CUA-Gym). Per-app samples are shown to the model as "
+                         "things not to write. Repeat for several corpora")
+    ap.add_argument("--avoid-per-app", type=int, default=12,
+                    help="how many existing instructions per app to show")
     ap.add_argument("--taxonomy", action="store_true",
                     help="draw briefs from the enumerated intent x domain x "
                          "constraints product (ostg/taxonomy.py) instead of "
@@ -281,13 +287,43 @@ def main():
         print("avoid list: %d slug(s) from %d earlier run(s), over %d cell(s)"
               % (len(seen), len(prior_files), len(priors)))
 
+    # The self-play avoid list above only knows what WE wrote. It cannot stop the
+    # model landing on a task that already exists in a public suite -- and CUA-Gym
+    # holds 9,835 desktop tasks over exactly ostg's applications, built from 980
+    # templates whose largest family has 120 variants. Colliding there is
+    # contamination at evaluation time no matter that nobody sampled from it, and
+    # ostg.contam only finds such a collision AFTER the tokens are spent. Showing
+    # the model real examples per app moves the check to where it is free.
+    #
+    # Sampled per app rather than sent whole: 9,835 instructions do not fit in a
+    # prompt, and the ones that matter for a Writer cell are the Writer ones.
+    external = collections.defaultdict(list)
+    for path in args.avoid_corpus:
+        p = Path(path)
+        if not p.is_file():
+            print("--avoid-corpus not found: %s" % path, file=sys.stderr)
+            return 1
+        for line in p.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            r = json.loads(line)
+            app = (r.get("app_type") or r.get("primary") or "").strip()
+            instr = (r.get("instruction") or "").strip()
+            if app and instr:
+                external[app].append(instr)
+    if external:
+        print("external avoid corpus: %d instruction(s) over %d app(s)"
+              % (sum(len(v) for v in external.values()), len(external)))
+
     if args.dry_run:
         c = (TAX.cells(args.n, args.seed, DOMAIN_APP, only)
              if args.taxonomy else cells(args.n, args.seed, only, blockers))
         sp = P.system_prompt()
         print("SYSTEM (%d chars, ~%d tok)\n%s\n" % (len(sp), len(sp) // 4, "=" * 60))
         print(sp)
-        print("=" * 60, "\nUSER\n", P.user_prompt(args.n, c, priors), sep="")
+        print("=" * 60, "\nUSER\n",
+              P.user_prompt(args.n, c, priors, external, args.avoid_per_app,
+                            args.seed), sep="")
         return 0
 
     if not cfg["key"]:
@@ -320,7 +356,9 @@ def main():
                          (x.get("blocker") or "")[:22]))
             system_blocks = [{"type": "text", "text": P.system_prompt(),
                               "cache_control": {"type": "ephemeral"}}]
-            msgs = [{"role": "user", "content": P.user_prompt(args.n, c, priors)}]
+            msgs = [{"role": "user",
+                     "content": P.user_prompt(args.n, c, priors, external,
+                                              args.avoid_per_app, args.seed + b)}]
             try:
                 resp = call(msgs, system_blocks, cfg)
             except RuntimeError as e:
