@@ -420,6 +420,7 @@ def main():
             except RuntimeError as e:
                 print("  failed: %s" % e)
                 continue
+            kept_before = kept
             u = resp.get("usage", {})
             print("  in=%s out=%s cache_read=%s thinking_blocks=%d"
                   % (u.get("input_tokens"), u.get("output_tokens"),
@@ -450,7 +451,9 @@ def main():
                 priors[(s.get("artifact"), s.get("source"))].append(slug)
                 fh.write(json.dumps(s, ensure_ascii=False) + "\n")
                 kept += 1
-            print("  %d emitted, %d kept" % (len(specs), kept))
+            # kept is a running total across batches; this line is about THIS one.
+            print("  %d emitted, %d kept (%d so far)"
+                  % (len(specs), kept - kept_before, kept))
 
     n_here = sum(1 for x in args.out.read_text().splitlines() if x.strip()) \
         if args.out.is_file() else 0

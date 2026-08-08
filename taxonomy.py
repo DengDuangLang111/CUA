@@ -136,10 +136,18 @@ def enumerate_space(shard=None):
     space = [(i, d, c) for i in INTENTS for d in DOMAINS for c in CONSTRAINTS]
     if shard:
         idx, total = shard
-        # Strided rather than blocked: a contiguous slice of this product would
-        # hand one process every `create` cell and another every `repair` cell,
-        # so each process's batch-level intent balancing would have nothing left
-        # to balance.
+        # Permute before striding. A raw stride inherits the product's own
+        # periodicity: the comprehension varies `constraints` fastest over its 4
+        # values, so `space[i::4]` handed every shard exactly ONE constraint level
+        # -- shard 0 got 65 cells all at c=1, shard 3 all at c=4. Blocking instead
+        # would have done the same thing to `intent`, the outermost axis. Any
+        # arithmetic partition of a product aligns with some axis of it; a
+        # permutation aligns with none.
+        #
+        # The seed is a constant, not `seed`: every process must derive the SAME
+        # permutation or the shards stop being disjoint, which is the one property
+        # that lets them run without coordinating.
+        random.Random(20260808).shuffle(space)
         space = space[idx::total]
     return space
 
