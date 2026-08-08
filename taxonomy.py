@@ -122,12 +122,29 @@ def observed_pairs(domain_app):
     return hosts
 
 
-def enumerate_space():
-    """The full product, as a list. 5 x 13 x 4 = 260."""
-    return [(i, d, c) for i in INTENTS for d in DOMAINS for c in CONSTRAINTS]
+def enumerate_space(shard=None):
+    """The full product, as a list. 5 x 13 x 4 = 260.
+
+    `shard` is (index, total) and keeps only every total-th cell. Batches within
+    one process are sequential because each one is told what the previous ones
+    wrote; that serialisation is what makes 200 specs a ~3 hour run. Disjoint
+    shards let several processes run at once without reintroducing the collision
+    the avoid list exists to prevent -- two processes cannot draw the same
+    (intent, domain, constraints) cell because the partition is by construction,
+    not by coordination.
+    """
+    space = [(i, d, c) for i in INTENTS for d in DOMAINS for c in CONSTRAINTS]
+    if shard:
+        idx, total = shard
+        # Strided rather than blocked: a contiguous slice of this product would
+        # hand one process every `create` cell and another every `repair` cell,
+        # so each process's batch-level intent balancing would have nothing left
+        # to balance.
+        space = space[idx::total]
+    return space
 
 
-def cells(n, seed, domain_app, only_apps=None, used=None):
+def cells(n, seed, domain_app, only_apps=None, used=None, shard=None):
     """Draw n briefs from the enumerated space.
 
     `used` is the set of (intent, domain, constraints) triples already spent by
@@ -137,7 +154,7 @@ def cells(n, seed, domain_app, only_apps=None, used=None):
     batch rather than silent repeats.
     """
     rng = random.Random(seed)
-    space = enumerate_space()
+    space = enumerate_space(shard)
     rng.shuffle(space)
     used = set(used or ())
     hosts = observed_pairs(domain_app)

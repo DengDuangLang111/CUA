@@ -266,8 +266,24 @@ def main():
                          "named tool and thinking cannot be combined, so the tool "
                          "call becomes probable rather than guaranteed and batches "
                          "are retried when it is missing")
+    ap.add_argument("--shard", default=None, metavar="I/N",
+                    help="take only cells I, I+N, I+2N ... of the taxonomy "
+                         "product, so N processes can run at once over disjoint "
+                         "cells. Batches inside one process stay sequential")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+
+    shard = None
+    if args.shard:
+        try:
+            i, n_ = (int(x) for x in args.shard.split("/"))
+        except ValueError:
+            print("--shard wants I/N, e.g. 0/4", file=sys.stderr)
+            return 1
+        if not 0 <= i < n_:
+            print("--shard index must be in [0, N)", file=sys.stderr)
+            return 1
+        shard = (i, n_)
 
     load_env(args.env)
     cfg = {
@@ -355,7 +371,7 @@ def main():
               % (sum(len(v) for v in external.values()), len(external)))
 
     if args.dry_run:
-        c = (TAX.cells(args.n, args.seed, DOMAIN_APP, only)
+        c = (TAX.cells(args.n, args.seed, DOMAIN_APP, only, shard=shard)
              if args.taxonomy else cells(args.n, args.seed, only, blockers))
         sp = P.system_prompt()
         print("SYSTEM (%d chars, ~%d tok)\n%s\n" % (len(sp), len(sp) // 4, "=" * 60))
@@ -375,7 +391,8 @@ def main():
     spent = set()
     with args.out.open("a", encoding="utf-8") as fh:
         for b in range(args.batches):
-            c = (TAX.cells(args.n, args.seed + b * 1000, DOMAIN_APP, only, spent)
+            c = (TAX.cells(args.n, args.seed + b * 1000, DOMAIN_APP, only, spent,
+                           shard=shard)
                  if args.taxonomy
                  else cells(args.n, args.seed + b * 1000, only, blockers))
             if args.taxonomy:
