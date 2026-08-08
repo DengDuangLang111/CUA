@@ -198,7 +198,13 @@ def call(messages, system_blocks, cfg, timeout=900):
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read().decode("utf-8", "replace"))
     except urllib.error.HTTPError as e:
-        raise RuntimeError("HTTP %d: %s" % (e.code, e.read().decode("utf-8", "replace")[:600])) from None
+        body = e.read().decode("utf-8", "replace")[:600]
+        # Transient by status, so the caller knows whether a retry is pointless.
+        # 429 and 5xx say the gateway or the model was momentarily unavailable;
+        # 4xx otherwise says the request itself is wrong and will stay wrong.
+        err = RuntimeError("HTTP %d: %s" % (e.code, body))
+        err.transient = e.code == 429 or 500 <= e.code < 600
+        raise err from None
 
 
 def extract(resp):
@@ -211,15 +217,26 @@ def extract(resp):
 def call_and_extract(messages, system_blocks, cfg, tries=3):
     """One batch, retried only for a MISSING TOOL CALL.
 
+    Two failures are worth retrying and they are not the same failure.
+
     Under tool_choice auto the model can answer in prose instead of calling the
-    tool, which loses the batch. Retrying is safe here because a batch is
-    self-contained -- nothing has been written yet -- and because the failure is
-    the model's choice rather than a bad request, so the same prompt can succeed.
-    Everything else (HTTP errors, malformed input) propagates: retrying those just
-    spends tokens on the same failure.
+    tool, which loses the batch. Retrying is safe because a batch is
+    self-contained -- nothing has been written yet -- and the failure was the
+    model's choice, so the same prompt can succeed.
+
+    A 429 or a 5xx is the other one. This originally propagated, on the reasoning
+    that retrying an HTTP error spends tokens on the same failure -- true of a
+    400, false of a gateway timeout, which is exactly what cost one shard a whole
+    batch. A deterministic 4xx still propagates; there is nothing to wait for.
     """
     for attempt in range(1, tries + 1):
-        resp = call(messages, system_blocks, cfg)
+        try:
+            resp = call(messages, system_blocks, cfg)
+        except RuntimeError as e:
+            if attempt == tries or not getattr(e, "transient", False):
+                raise
+            print("  retry %d/%d after %s" % (attempt, tries - 1, str(e)[:60]))
+            continue
         thought = sum(1 for b in resp.get("content", []) if b.get("type") == "thinking")
         try:
             specs = extract(resp)
