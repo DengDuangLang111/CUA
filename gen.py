@@ -18,6 +18,7 @@ import urllib.request
 from pathlib import Path
 
 from ostg import prompt as P
+from ostg import taxonomy as TAX
 
 HERE = Path(__file__).resolve().parent
 LABELS = HERE / "data" / "osworld361_labels.json"
@@ -217,6 +218,10 @@ def main():
                          "per-cell avoid list. Default: */specs.jsonl next to --out, "
                          "so a run stays its own task set but still knows what every "
                          "earlier run already wrote. 'none' to disable.")
+    ap.add_argument("--taxonomy", action="store_true",
+                    help="draw briefs from the enumerated intent x domain x "
+                         "constraints product (ostg/taxonomy.py) instead of "
+                         "sampling axis targets out of the official suite")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -277,7 +282,8 @@ def main():
               % (len(seen), len(prior_files), len(priors)))
 
     if args.dry_run:
-        c = cells(args.n, args.seed, only, blockers)
+        c = (TAX.cells(args.n, args.seed, DOMAIN_APP, only)
+             if args.taxonomy else cells(args.n, args.seed, only, blockers))
         sp = P.system_prompt()
         print("SYSTEM (%d chars, ~%d tok)\n%s\n" % (len(sp), len(sp) // 4, "=" * 60))
         print(sp)
@@ -289,11 +295,24 @@ def main():
         return 1
 
     kept = 0
+    # Taxonomy cells already spent this run, so later batches walk the 260-cell
+    # product instead of re-drawing its most probable corners.
+    spent = set()
     with args.out.open("a", encoding="utf-8") as fh:
         for b in range(args.batches):
-            c = cells(args.n, args.seed + b * 1000, only, blockers)
+            c = (TAX.cells(args.n, args.seed + b * 1000, DOMAIN_APP, only, spent)
+                 if args.taxonomy
+                 else cells(args.n, args.seed + b * 1000, only, blockers))
+            if args.taxonomy:
+                spent.update((x["intent"], x["domain"], x["constraints"]) for x in c)
             print("\nbatch %d/%d" % (b + 1, args.batches))
             for x in c:
+                if x.get("intent"):
+                    print("  %-14s %-18s c=%d  %-18s %-20s avoid=%d"
+                          % (x["intent"], x["domain"], x["constraints"],
+                             x["artifact"], x["primary"],
+                             len(priors.get((x["artifact"], x["source"]), []))))
+                    continue
                 print("  %-16s %-20s %-14s %-10s apps=%d %-19s avoid=%d %s"
                       % (x["source"], x["artifact"], x["operation"] or "-",
                          x.get("gold_kind", "file"), x["app_count"], x["primary"],
@@ -322,6 +341,9 @@ def main():
                     # The model never emits `operation`; it is stamped from the
                     # brief so a later batch can report on what was steered for.
                     s["operation"] = c[i]["operation"]
+                    for k in ("intent", "domain", "constraints"):
+                        if k in c[i]:
+                            s[k] = c[i][k]
                     # gold_kind is dictated by the cell, never by the model: a
                     # blocked cell is drawn precisely because it needs that shape,
                     # and letting the model downgrade it back to "file" would put

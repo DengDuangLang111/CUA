@@ -251,12 +251,23 @@ def user_prompt(n, cells, priors=None):
         extra = ""
         if c.get("needs_setup_shell"):
             extra += ", and it needs setup_shell to install or start something"
-        lines.append(
-            "  spec %d: artifact=%s, source=%s, operation=%s, apps=%d, primary=%s, "
-            "gold_kind=%s%s"
-            % (i + 1, c["artifact"], c["source"], op or "any", c["app_count"],
-               c["primary"], c.get("gold_kind", "file"), extra)
-        )
+        if c.get("intent"):
+            # Taxonomy brief: intent/domain/constraints lead, because they are
+            # what the model has to invent around. artifact/primary follow as
+            # constraints on what it may end in.
+            lines.append(
+                "  spec %d: intent=%s, domain=%s, constraints=%d, artifact=%s, "
+                "source=%s, apps=%d, primary=%s%s"
+                % (i + 1, c["intent"], c["domain"], c["constraints"],
+                   c["artifact"], c["source"], c["app_count"], c["primary"], extra)
+            )
+        else:
+            lines.append(
+                "  spec %d: artifact=%s, source=%s, operation=%s, apps=%d, primary=%s, "
+                "gold_kind=%s%s"
+                % (i + 1, c["artifact"], c["source"], op or "any", c["app_count"],
+                   c["primary"], c.get("gold_kind", "file"), extra)
+            )
 
     kinds = sorted({c.get("gold_kind", "file") for c in cells})
     kind_text = ""
@@ -264,6 +275,22 @@ def user_prompt(n, cells, priors=None):
         kind_text = ("\n\ngold_kind for each spec is given above and is NOT yours to "
                      "change:\n" + "\n".join("  %s = %s" % (k, GOLD_KINDS[k])
                                              for k in kinds if k in GOLD_KINDS))
+
+    tax = ""
+    if any(c.get("intent") for c in cells):
+        from ostg import taxonomy as T
+        ints = sorted({c["intent"] for c in cells if c.get("intent")})
+        doms = sorted({c["domain"] for c in cells if c.get("domain")})
+        cons = sorted({c["constraints"] for c in cells if c.get("constraints")})
+        tax = ("\n\nintent is what the user is fundamentally trying to get done:\n"
+               + "\n".join("  %s = %s" % (i, T.INTENTS[i]) for i in ints)
+               + "\n\ndomain is the business setting the scenario is dressed in "
+                 "(%s). Invent realistic names, values and rules from that world -- "
+                 "it is the main thing keeping two specs apart.\n"
+                 % ", ".join(doms)
+               + "\nconstraints is how many explicit requirements the instruction "
+                 "imposes:\n"
+               + "\n".join("  %d = %s" % (c, T.CONSTRAINTS[c]) for c in cons))
 
     ops = sorted({c.get("operation") for c in cells if c.get("operation")})
     op_text = ""
@@ -292,6 +319,7 @@ def user_prompt(n, cells, priors=None):
         + "\nPer-spec targets, in order:\n"
         + "\n".join(lines)
         + kind_text
+        + tax
         + op_text
         + "\n\nartifact is what the probe inspects. source is where the information "
         "needed to do the task comes from: self = inside the artifact itself, "
