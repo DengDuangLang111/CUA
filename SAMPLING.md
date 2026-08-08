@@ -125,18 +125,60 @@ their rule; go somewhere clearly different:
 
 ---
 
-## 5. 还没做：事后测污染
+## 5. 事后测污染：`ostg.contam`
 
-现在的安全性靠"只借坐标"这条纪律保证，**没有任何东西在事后验证它**。
+"只借坐标"是纪律，不是保证。`ostg.contam` 事后把每条 instruction 跟参考语料算相似度，
+把"我们希望没污染"变成一个数字。依据是 `taskgen/specs/vocab.py` 里记的那次教训：
+上一代生成到过 0.987 的指令相似度才被发现模式塌缩。同一把尺子，换个用途。
 
-该补的是：生成完之后，把每条 instruction 跟**全部 361 条**官方 instruction 算相似度，
-超阈值的直接扔。这把"我们希望没污染"变成一个数字。361 × N 条短文本，秒级。
+```bash
+python -m ostg.contam out/runs/<b>/specs.jsonl \
+  --corpus osworld=/mnt/d/research/OSWorld-upstream \
+  --corpus cuagym=/mnt/d/research/cua-gym/tasks.jsonl
+```
 
-依据是 `taskgen/specs/vocab.py` 里记的那次教训：上一代生成到过 0.987 的指令相似度
-才被发现模式塌缩。同一把尺子，换个用途。
+### 参考语料不止 OSWorld
 
-这一步跟 ostg「质量控制在事后、不在生成端」的主张是一路的——所以它属于 `filter`
-那一层，不属于 `gen`。
+**凡是这批任务将来可能被拿去评测的套件，都得进 `--corpus`**，不只是 gen 抽过坐标的那个。
+跟一个谁都没抽样过的套件重合，在评测时**照样是污染**——生成端的意图不进入这个判断。
+
+| 语料 | 条数 | 取得方式 |
+|---|---|---|
+| OSWorld | 369 | `OSWorld-upstream/evaluation_examples/examples/` |
+| OSWorld-V2 | 369（其中 334 条与 v1 逐字相同） | 同上路径；**加它等于没加**，真身在 HF `xlangai/osworld_v2_tasks`，本地 HF cache 只有 5 个文件没拉全 |
+| **CUA-Gym** | **10,910（桌面侧 9,835）** | `hf download xlangai/CUA-Gym --repo-type dataset --include "data/tasks.parquet"`，CC BY 4.0，parquet 3.7 MB |
+
+CUA-Gym 是 **xlang-ai 出品，和 OSWorld 同一个实验室**，而且它跟 ostg 是同一件事的两个做法——
+`instruction` + `initial_setup.py` + `reward.py`，对应 ostg 的 `instruction` + `setup_py` + `probe_py`。
+它的桌面侧应用分布和 ostg 的目标几乎完全重合：
+
+```
+libreoffice_calc 2576 · libreoffice_writer 2093 · libreoffice_impress 1402
+multi_apps 1369 · vscode 1178 · pdf 679 · vlc 71 · gimp 30
+```
+
+**约束方是 CUA-Gym，不是 OSWorld。** 29 条 v2 spec 里 27 条的最近邻落在 CUA-Gym。
+语料大 30 倍，最近邻自然更近，但结论不变：只对着 361 条查重是在量错的东西。
+
+### 0.60 这个阈值挡不住参数级重复
+
+实测最高的五对里有两对是**同一个任务换个数字**，而它们全都低于阈值：
+
+```
+writer-body-double-spacing   r0.47 j0.37
+  ostg  : ...body text paragraphs... to double spacing (2.0). Leave heading paragraphs unchanged.
+  cuagym: ...body text paragraphs in this report to 1.5 line spacing and keep the heading paragraphs at single spacing?
+```
+
+2.0 对 1.5，此外没有区别。`impress-slide-numbers-bottom-right` 同理（都是 Impress
+右下角加页码，一个逐页一个母版）。**文本相似度对这种改一个参数的重复是盲的**，
+所以 contam 的低分只是"没抄"的证据，不是"任务不同"的证明——docstring 里写死了这句。
+
+真正的修法不是把阈值调低（只会多出假阳性），是把 CUA-Gym 的 9,835 条桌面指令
+**喂回生成端当避让清单**，跟 §4 的自对弈避让合流。那还没做。
+
+这一层跟 ostg「质量控制在事后、不在生成端」的主张一路，属于 `filter`，不属于 `gen`——
+但上面这条避让是例外，它必须进 `gen`。
 
 ---
 
