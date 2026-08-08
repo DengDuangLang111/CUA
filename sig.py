@@ -68,13 +68,15 @@ An AST walk over the grader source collecting three things:
             `paragraph_format.line_spacing`, `font.size`, `cell.value`. Two names
             rather than the full chain because the receiver is named differently
             in every script (`para`, `p`, `body1`) while the property is not.
-  calls     the functions it calls by bare name, filtered to ones that appear in
-            enough graders to mean something.
+  literals  string literals of a plausible length: `files.autoSave`, `w:spacing`.
+            These name the inspected thing whenever the library does not.
+  calls     the functions it calls by bare name.
 
-Similarity is Jaccard over `modules | attrs`. `calls` is collected and reported
-but kept out of the score: helper names are author-specific noise
-(`persist_app_state`, `verify_task`) and dilute a signal that attrs carries
-cleanly.
+Similarity is Jaccard over the WORD PIECES of `modules | attrs | literals` --
+`paragraph_format.line_spacing` and `w:spacing` both yield `spacing`, which whole
+identifiers never would. `calls` is collected and reported but kept out of the
+score: helper names are author-specific noise (`persist_app_state`,
+`verify_task`) and dilute the signal.
 
 This is a heuristic, not a proof. Two graders can inspect the same property for
 genuinely different reasons -- every Writer font task reads `font.name`. Read the
