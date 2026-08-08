@@ -161,6 +161,22 @@ def cells(n, seed, domain_app, only_apps=None, used=None, shard=None):
     cell is spent the draw simply returns fewer than n -- the caller sees a short
     batch rather than silent repeats.
     """
+    # How many times each intent and each artifact were already drawn by EARLIER
+    # batches, read off the spent-cell set rather than kept in a variable.
+    #
+    # The rotation counter below used to start at zero on every call, and since a
+    # batch draws each intent exactly once it never advanced past zero -- every
+    # batch took options[0], the alphabetically first buildable artifact for that
+    # intent. Over a 200-spec run that produced FOUR distinct artifacts:
+    # info_seeking was browser_tab 40 times out of 40, transform was
+    # pdf_or_archive, create and repair were both filesystem, configure was
+    # app_data_store. spreadsheet, text_document, slide_deck, source_code and
+    # raster_image could not occur at all. The artifact axis was not narrow, it
+    # was constant.
+    #
+    # `used` is the only cross-batch state cells() receives, so the offset is
+    # derived from it. Snapshotted here because the loop adds to `used` as it goes.
+    prior_intent = collections.Counter(c[0] for c in (used or ()))
     rng = random.Random(seed)
     space = enumerate_space(shard)
     rng.shuffle(space)
@@ -203,12 +219,18 @@ def cells(n, seed, domain_app, only_apps=None, used=None, shard=None):
         used.add((intent, domain, constraints))
         taken[intent] += 1
 
-        artifact = options[rotation[intent] % len(options)]
+        # prior_intent carries the offset across batches; rotation carries it
+        # within one, for the case where n exceeds the number of intents.
+        turn = prior_intent[intent] + rotation[intent]
+        artifact = options[turn % len(options)]
         apps = [a for a, _ in hosts[artifact].most_common()
                 if not only_apps or a in only_apps]
-        primary = apps[rotation[artifact] % len(apps)]
+        # Divided, not counted separately: the app should advance only once the
+        # artifact rotation has come all the way round, so an artifact carried by
+        # two apps alternates between them across full cycles instead of tracking
+        # the intent counter and re-aliasing with it.
+        primary = apps[(turn // len(options)) % len(apps)]
         rotation[intent] += 1
-        rotation[artifact] += 1
 
         out.append({
             "intent": intent,
@@ -220,11 +242,22 @@ def cells(n, seed, domain_app, only_apps=None, used=None, shard=None):
             # follows from the intent (transform and repair act on something
             # already present; the rest are told what to do), and crossing it
             # would produce cells like configure+second_local_artifact.
-            "source": "self" if intent in ("transform", "repair")
-                      else "prompt_literal",
+            #
+            # browser_tab is the exception on both fields. A task whose answer is
+            # WHICH PAGE CHROME ENDED ON leaves no file, so it is graded by
+            # OSWorld's own url matcher and its probe_py is empty BY DESIGN. Left
+            # at "file" the cell overwrote the model's correct `browser_state`
+            # (gen.py stamps gold_kind from the cell, deliberately, so a blocked
+            # cell cannot be downgraded) and emit would then wire an empty probe
+            # into a file-reading evaluator: every such task scores 0 forever,
+            # and the build-time controls report n/a rather than failing, so it
+            # ships silently. Measured on the killed run: 5 of the first 21.
+            "source": "live_web" if artifact == "browser_tab"
+                      else ("self" if intent in ("transform", "repair")
+                            else "prompt_literal"),
             "operation": "",
             "app_count": 1,
-            "gold_kind": "file",
+            "gold_kind": "browser_state" if artifact == "browser_tab" else "file",
             "needs_setup_shell": False,
             "blocker": "",
             "drawn_from": "taxonomy:%s/%s/%d" % (intent, domain, constraints),

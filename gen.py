@@ -446,6 +446,17 @@ def main():
                     s["gold_kind"] = c[i]["gold_kind"]
                     if c[i].get("blocker"):
                         s["blocker"] = c[i]["blocker"]
+                # A file-graded task with no probe is unscoreable: emit wires the
+                # empty program into a file-reading evaluator, the metric receives
+                # an empty string, and the task scores 0 forever while both
+                # build-time controls report n/a rather than failing. That is how
+                # a mislabelled browser_tab cell put 5 dead tasks into the first
+                # 21 of a run without anything complaining. Cheap to assert, and
+                # the failure it catches is invisible downstream.
+                if s.get("gold_kind") == "file" and not (s.get("probe_py") or "").strip():
+                    print("  drop %r: gold_kind=file with empty probe_py" % slug)
+                    seen.discard(slug)
+                    continue
                 # Grow the avoid-list inside the run too, so batch 2 of a
                 # --batches 3 call already knows what batch 1 just wrote.
                 priors[(s.get("artifact"), s.get("source"))].append(slug)
