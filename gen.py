@@ -177,6 +177,15 @@ def call(messages, system_blocks, cfg, timeout=900):
         "tools": [P.tool_definition(TOOL)],
         "tool_choice": {"type": "tool", "name": TOOL},
     }
+    # Extended thinking and a FORCED tool choice are mutually exclusive: naming the
+    # tool is itself the decision, so the model has nothing left to think about and
+    # the API rejects the pair. Asking for thinking therefore means dropping to
+    # tool_choice auto, which turns the structured output from a guarantee into a
+    # probability -- hence the retry in generate(), which is the price of thinking,
+    # not an optimisation.
+    if cfg.get("thinking"):
+        payload["thinking"] = {"type": "adaptive"}
+        payload["tool_choice"] = {"type": "auto"}
     req = urllib.request.Request(
         cfg["base"] + "/v1/messages",
         data=json.dumps(payload).encode(),
@@ -197,6 +206,30 @@ def extract(resp):
         if b.get("type") == "tool_use" and b.get("name") == TOOL:
             return b.get("input", {}).get("specs", [])
     raise RuntimeError("no tool_use block (stop_reason=%s)" % resp.get("stop_reason"))
+
+
+def call_and_extract(messages, system_blocks, cfg, tries=3):
+    """One batch, retried only for a MISSING TOOL CALL.
+
+    Under tool_choice auto the model can answer in prose instead of calling the
+    tool, which loses the batch. Retrying is safe here because a batch is
+    self-contained -- nothing has been written yet -- and because the failure is
+    the model's choice rather than a bad request, so the same prompt can succeed.
+    Everything else (HTTP errors, malformed input) propagates: retrying those just
+    spends tokens on the same failure.
+    """
+    for attempt in range(1, tries + 1):
+        resp = call(messages, system_blocks, cfg)
+        thought = sum(1 for b in resp.get("content", []) if b.get("type") == "thinking")
+        try:
+            specs = extract(resp)
+        except RuntimeError as e:
+            if attempt == tries:
+                raise
+            print("  retry %d/%d: %s" % (attempt, tries - 1, e))
+            continue
+        return specs, resp, thought
+    raise AssertionError("unreachable")
 
 
 def main():
@@ -228,6 +261,11 @@ def main():
                     help="draw briefs from the enumerated intent x domain x "
                          "constraints product (ostg/taxonomy.py) instead of "
                          "sampling axis targets out of the official suite")
+    ap.add_argument("--thinking", action="store_true",
+                    help="extended thinking. Forces tool_choice to auto, since a "
+                         "named tool and thinking cannot be combined, so the tool "
+                         "call becomes probable rather than guaranteed and batches "
+                         "are retried when it is missing")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -237,6 +275,7 @@ def main():
         "key": os.environ.get("PPAPI_API_KEY", ""),
         "model": args.model or os.environ.get("PPAPI_MODEL", "claude-opus-4-6"),
         "max_tokens": args.max_tokens,
+        "thinking": args.thinking,
     }
     only = [a.strip() for a in args.apps.split(",")] if args.apps else None
     if args.blockers is None:
@@ -360,14 +399,14 @@ def main():
                      "content": P.user_prompt(args.n, c, priors, external,
                                               args.avoid_per_app, args.seed + b)}]
             try:
-                resp = call(msgs, system_blocks, cfg)
+                specs, resp, thought = call_and_extract(msgs, system_blocks, cfg)
             except RuntimeError as e:
                 print("  failed: %s" % e)
                 continue
             u = resp.get("usage", {})
-            print("  in=%s out=%s cache_read=%s"
-                  % (u.get("input_tokens"), u.get("output_tokens"), u.get("cache_read_input_tokens")))
-            specs = extract(resp)
+            print("  in=%s out=%s cache_read=%s thinking_blocks=%d"
+                  % (u.get("input_tokens"), u.get("output_tokens"),
+                     u.get("cache_read_input_tokens"), thought))
             for i, s in enumerate(specs):
                 slug = s.get("slug") or ""
                 if not slug or slug in seen:
