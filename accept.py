@@ -97,8 +97,10 @@ def load_ref(path):
     return out
 
 
-def main():
-    argv = sys.argv[1:]
+def main(argv=None):
+    """Returns the number of hard-gate failures, so callers can stop a pipeline."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    hard_fails = 0
     refs = []
     while "--ref" in argv:
         i = argv.index("--ref")
@@ -132,6 +134,7 @@ def main():
                     for i, j in itertools.combinations(range(len(rows)), 2)),
                    reverse=True)
     hi = [p for p in pairs if p[0] >= 0.4]
+    hard_fails += len(hi)
     print("\n[1] instruction jaccard: max=%.2f p90=%.2f pairs>=0.4: %d  %s"
           % (pairs[0][0], pairs[len(pairs) // 10][0], len(hi),
              "FAIL" if hi else "ok"))
@@ -145,6 +148,7 @@ def main():
                      for i, j in itertools.combinations(range(len(rows)), 2)),
                     reverse=True)
     chi = [p for p in cpairs if p[0] >= 0.5]
+    hard_fails += len(chi)
     print("\n[1b] instruction tf-idf cosine: max=%.2f p90=%.2f pairs>=0.5: %d  %s"
           % (cpairs[0][0], cpairs[len(cpairs) // 10][0], len(chi),
              "FAIL" if chi else "ok"))
@@ -170,6 +174,7 @@ def main():
                              rows[i]["slug"]) for i, (qv, qn) in enumerate(qvecs)),
                            reverse=True)
             n5 = sum(1 for s, _ in worst if s >= 0.5)
+            hard_fails += n5
             print("\n[3] vs %s (%d refs) tf-idf cosine: max=%.2f p90=%.2f #>=0.5: %d  %s"
                   % (name, len(rvecs), worst[0][0], worst[len(worst) // 10][0], n5,
                      "FAIL" if n5 else "ok"))
@@ -185,6 +190,8 @@ def main():
             drift = max(abs(c.get(k, 0) / len(rows) - v) for k, v in target.items())
             print("    max quota drift: %.0f%% %s" % (drift * 100, "ok" if drift < 0.10 else "CHECK"))
 
+    return hard_fails
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(min(main(), 1))

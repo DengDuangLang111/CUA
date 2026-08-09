@@ -13,31 +13,44 @@ judged by stock OSWorld machinery; the taxonomy cell dictates the grade:
 Nothing is built on the host and nothing is uploaded; the task JSON is the
 whole task.
 
-## Run
+## Pipeline
 
-    # generate specs AND runnable tasks (examples/ + manifest.json) in one pass
-    python -m ostg.gen --n 5 --batches 4 --seed 424242 --thinking --stream \
-      --out out/runs/v8/specs.jsonl \
+    gen  ->  ship  ->  rollout
+
+    # 1. generate: specs + runnable task JSON in one pass. --thinking buys
+    #    deeper probes on hard cells; --shard I/N runs N processes over
+    #    disjoint coordinates; --refill re-draws when a batch is lost.
+    python -m ostg.gen --n 5 --batches 40 --seed S --stream \
+      --out out/runs/<set>/specs.jsonl \
       --avoid-corpus /mnt/d/research/cua-gym/tasks.jsonl
 
-    # pre-rollout controls: setup exit code + idle agent must score 0
-    # (OSWorld venv; boots one fresh VM per task)
-    python -m ostg.control --tasks out/runs/v8 \
+    # 2. ship: everything between generation and rollout, one command,
+    #    stops at the first failing stage.
+    python -m ostg.ship out/runs/<set> [more sets ...] \
+      --ref cua-gym=/mnt/d/research/cua-gym/tasks.jsonl \
+      --ref osworld=/mnt/d/research/OSWorld/evaluation_examples/examples \
       --path_to_vm /mnt/d/research/OSWorld/docker_vm_data/Ubuntu.qcow2
 
-    # rollouts: point the runner at the emitted directory
-    ... run_multienv_qwen.py \
-      --test_config_base_dir out/runs/v8 \
-      --test_all_meta_path out/runs/v8/manifest.json
+    # 3. rollout: point the runner at the shipped set
+    ... run_multienv_qwen.py --test_config_base_dir out/runs/<set> \
+        --test_all_meta_path out/runs/<set>/manifest.json
 
-## Accept
+ship runs three stages and is safe to re-run any time:
 
-Five gates before a set ships, three duplicate detectors with disjoint blind
-spots:
+    re-emit   examples/ + manifest.json rebuilt from specs.jsonl with the
+              CURRENT emitter and gate -- emit fixes and gate tightenings
+              reach sets generated before them; rejected specs are dropped
+              with the reason printed
+    accept    the six gates below; any hard failure blocks the ship
+    control   only with --path_to_vm: one fresh VM per task, setup exit code
+              checked (OSWorld never does) and an idle agent must score 0
+
+## The accept gates
+
+Six gates, three duplicate detectors with disjoint blind spots. Standalone:
 
     python -m ostg.accept out/runs/<set>/specs.jsonl [more specs.jsonl ...] \
-      --ref cua-gym=/mnt/d/research/cua-gym/tasks.jsonl \
-      --ref osworld=/mnt/d/research/OSWorld/evaluation_examples/examples
+      --ref cua-gym=... --ref osworld=...
 
     1  instruction jaccard, all pairs     none >= 0.4. Real duplicates measure
                                           0.5-0.65; same-theme-different-task
@@ -71,8 +84,9 @@ sig.py) not to transfer across grader styles.
     taxonomy.py             intent x domain x difficulty (ambiguity defined,
                             not yet crossed in); cells() draws briefs
     gen.py                  cells -> Claude -> specs.jsonl + task JSON
-    control.py              the two checks above, on the real evaluation path
-    accept.py               the five gates above, over finished spec sets
+    ship.py                 re-emit + accept + control, one command, no logic
+    control.py              the VM negative checks, on the real evaluation path
+    accept.py               the six gates, over finished spec sets
     prompts/single_json.txt the whole prompt (SYSTEM + USER head)
 
 ## OSWorld facts the emitter is built on

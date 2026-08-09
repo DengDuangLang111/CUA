@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--tasks", type=Path, required=True,
                     help="directory holding examples/ and manifest.json")
@@ -24,7 +24,7 @@ def main():
     ap.add_argument("--start", type=int, default=0,
                     help="skip the first N manifest tasks, so two processes "
                          "can split one set")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     import requests
     from desktop_env.desktop_env import DesktopEnv
