@@ -491,6 +491,16 @@ def task_json(spec, batch):
             flush = _flush_postconfig(spec["open_path"])
             if flush:
                 evaluator["postconfig"] = flush
+        # Chrome writes Web Data / Preferences lazily; a probe reading them
+        # while Chrome runs sees stale state (confirmed false-FAIL on a task
+        # the agent had done perfectly). Quit Chrome before grading so it
+        # flushes -- the browser counterpart of the LibreOffice flush.
+        p = spec.get("probe") or ""
+        if ".config/google-chrome" in p or "Web Data" in p:
+            steps = list(evaluator.get("postconfig") or [])
+            steps.append({"type": "execute", "parameters": {
+                "command": "pkill -TERM -f google-chrome; sleep 4", "shell": True}})
+            evaluator["postconfig"] = steps
 
     return domain, {
         "id": str(uuid.uuid5(NS, "%s/%s" % (batch, spec["slug"]))),
