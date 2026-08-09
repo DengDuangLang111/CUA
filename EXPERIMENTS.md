@@ -56,7 +56,8 @@ never prepared, and score 0 for reasons indistinguishable from a weak agent.
 
 | run | status | max steps | thinking | solved |
 |---|---|---|---|---|
-| v8big-all, think-preserve | 13 / 203 scored (04:45) | 100 | on, history preserved | 6 |
+| v8big-all, think-preserve | 28 / 203 scored (06:30) | 100 | on, history preserved | 10 (37%) |
+| v9 corpus generation (§9) | ~120 / 206 specs | — | generator-side | — |
 | v8nt-opus46 | stopped at 8 / 23 | 50 | off | 4 |
 | v8nt-opus5 | stopped at 9 / 20 | 50 | off | 3 |
 
@@ -438,7 +439,46 @@ judge so rates stay comparable across corpora.
 
 ---
 
-## 9. Open
+## 9. The v9 corpus — ambiguity and voice, activated
+
+Why: measured against the official OSWorld instructions, v8's are twice as
+long (median 53 vs 26 words), carry an absolute path 87% of the time (official:
+5%), open with a bare imperative 1% of the time (official: 18%), and speak in
+one register — a first-person workplace persona. Fine for grading, narrow for
+SFT: a model trained only on over-explicit requests never practices resolving
+"fix my rota thing". The instruction's explicitness and the grader's precision
+are decoupled — a probe can pin an exact path while the instruction says "the
+rota spreadsheet on my desktop" — so vagueness costs no grading rigor.
+
+Design, generating as of this writing:
+
+- **Ambiguity joins the coordinate product** (intent × domain × difficulty ×
+  ambiguity, 325 → 1300 cells), four levels with a 10/30/30/30 quota: explicit
+  / functional reference / deictic (target pre-opened, "this sheet") /
+  outcome-only ("get the numbers right before I resend it").
+- **Voice** is derived per cell at 30/25/45: terse / polite / persona.
+- **Mechanical gates**: an ambiguity≥2 instruction containing /home/user or a
+  filename is rejected; deictic without open_path is rejected.
+- **Two prompt rules from the audit findings**: every countable promise is
+  checked in full or not made (the partial-verdict feedback), and browser
+  targets must have URLs that encode the work (query parameters a form fill
+  produces), closing the navigation-only difficulty collapse.
+- Same machinery, same seeds; the walk itself is not comparable to v8's (the
+  space quadrupled), so cross-version pairing is reference-only.
+
+First 74 specs: path rate 11% (from 87%), ambiguity 13/31/28/27 against the
+10/30/30/30 target, all axes stamped and gated. Two generator defects were
+caught and fixed in the first hour — a module-resolution mislaunch (Python
+prefers the working directory's package over PYTHONPATH; the fix is running
+from the versioned worktree) and a crash on a malformed model output (the tool
+schema is not server-enforced; one spec arrived as a string — the loop now
+skips non-objects, and generation resumes with --start-batch).
+
+Next: an instruction-level comparison against v8 (length, path rate, voice
+compliance, per-level samples, and a common-judge audit), reviewed before any
+VM time is spent; then the same controls and rollout protocol as v8.
+
+## 10. Open
 
 - **The main rollout is mid-flight** (13 of 203 at this writing); claims about
   thinking's effect on the solve rate, and the preserve/no-preserve A/B, wait
@@ -451,12 +491,16 @@ judge so rates stay comparable across corpora.
 - **The 82% spent on failures is unaddressed.** The safe reductions —
   `max_tokens` near the measured p90 rather than 81920, and a stability poll in
   place of the fixed 60-second settle — are identified and not implemented.
-- **The ambiguity axis is unused**, and using it requires changing the prompt and
-  the grader together.
+- **Voice compliance is unmeasured**: v9 assigns a register per task, but
+  whether "terse" actually comes out terse (early sign: tone yes, length no)
+  waits on the full-corpus comparison.
+- **Browser difficulty labels in v8 overstate**: the grader checks only the
+  final URL, so a d5 navigation task is effectively d1. v9's rule 13 addresses
+  new tasks; v8's ten browser tasks should be read grade-first.
 
 ---
 
-## 10. A note on confidence
+## 11. A note on confidence
 
 Three conclusions here were stated before the evidence supported them and later
 contradicted: a loop-count threshold at n=12, a claim that one prompt style never
