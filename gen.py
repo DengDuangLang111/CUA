@@ -444,7 +444,14 @@ def task_json(spec, batch):
         config.append({"type": "execute",
                        "parameters": {"command": spec["setup"], "shell": True}})
     if spec.get("open_path") and grade != "browser":
-        config.append({"type": "open", "parameters": {"path": spec["open_path"]}})
+        p = spec["open_path"]
+        if p.lower().endswith((".html", ".htm")):
+            # xdg-open on an html file 500s in the VM (browser handoff); give
+            # the intended start state -- the page open in Chrome -- via launch.
+            config.append({"type": "launch", "parameters": {
+                "command": ["google-chrome", "file://" + p]}})
+        else:
+            config.append({"type": "open", "parameters": {"path": p}})
 
     if grade == "browser":
         # The official chrome template: debug port for chrome_open_tabs, socat
