@@ -246,6 +246,39 @@ v3 唯一没改善的是自相似度（median 0.14 → 0.19，最差一对 0.44�
 `configure/human_resources/c=3`，旧的是"改 VLC 快照目录"（写死 `/home/user`），
 新的换成了"配置字幕"——按应用避让让它主动换了方向。
 
+### ①② 的中期结果：方向对，但暴露了新短板
+
+跑到 112 条时测自相似度：
+
+```
+            median  p75    p90    max     >=0.35
+v4 (112)     0.16   0.22   0.28   0.64    2 (2%)
+v3 (185)     0.19   0.26   0.30   0.44   12 (6%)
+```
+
+**整条曲线左移，超阈值率 6% → 2%，三倍改善。** 但最差的一对反而更近：
+
+```
+c0.64  epostcard-filing-rule-irs       shard 2 第 27 条  info_seeking/nonprofit/c=3
+       irs-epostcard-requirement-page  shard 3 第 2 条   info_seeking/nonprofit/c=1
+```
+
+连虚构的机构都撞了——两条都是"社区食物银行、年收入低于 5 万、申报 e-Postcard"。
+
+根因不是跨分片失效，是**避让清单的采样是随机的**：
+
+```python
+shown = rng.sample(pool, min(own_per_app, len(pool)))
+```
+
+某个应用下已有 27 条时随机抽 8 条，**漏掉关键那条的概率是 70%**。清单展示得
+越随机，越容易漏掉最该避的那条。这个缺陷在 v3 时被更严重的问题掩盖了。
+
+**下一轮的修法**：把随机抽样换成**按与当前 brief 的相关度排序取前 N**，用
+`ostg.contam` 现成的 TF-IDF——拿当前格子的 (intent, domain, artifact) 拼查询串
+去检索自己写过的任务。同一个 nonprofit + info_seeking + browser_tab 会被优先
+展示。同理适用于 CUA-Gym 那份外部清单（现在也是随机抽 12 条）。
+
 ---
 
 ## 8. 跑完之后要做的
