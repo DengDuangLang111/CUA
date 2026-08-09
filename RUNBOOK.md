@@ -225,6 +225,13 @@ Memory red lines (measured, 19 GB total):
 | rollout × 2 + control × 1 | **screenshot 500s, tasks die silently** (measured 2026-08-09) |
 | control × 3 (exclusive) | safe |
 
+**Runner memory creeps.** With preserve-thinking the runner processes grow by
+several GB over ~5 hours (context history handling); available memory decays
+from ~7G to ~3G and screenshot-500s begin. The fix is the recovery mechanism
+itself: kill the runner and its containers, relaunch with the same
+--result_dir — memory resets, scored tasks are skipped, and every casualty
+re-runs in the same stroke.
+
 Screenshot-500 symptom: `Failed to get screenshot. Status code: 500` followed
 by `TypeError: a bytes-like object is required` in the runner log — the task
 has no result.txt; heal it with the §5 same-result_dir relaunch.
