@@ -1,0 +1,17 @@
+{
+ "slug": "overtime-pay-rollup",
+ "instruction": "The workbook hours.xlsx on the Desktop lists each employee's department, hourly rate and hours worked for the week. Anything above 40 hours is overtime and is paid at 1.5 times the base rate. Fill in the Total Pay column for every employee, rounded to two decimals, and save the file.",
+ "artifact": "spreadsheet",
+ "source": "self",
+ "apps": [
+  "libreoffice_calc"
+ ],
+ "app_count": 1,
+ "open_paths": [
+  "Desktop/hours.xlsx"
+ ],
+ "save_target": "Desktop/hours.xlsx",
+ "setup_py": "import openpyxl\nwb = openpyxl.Workbook(); ws = wb.active; ws.title = 'Hours'\nws.append(['Name', 'Dept', 'Rate', 'Hours', 'Total Pay'])\nfor r in [('Ana Reyes','Ops',22.5,44),('Ben Halvorsen','Ops',19.0,38),\n          ('Cy Okonkwo','Lab',31.25,52),('Dee Marchetti','Lab',27.0,40)]:\n    ws.append(list(r) + [None])\nwb.save(P('Desktop/hours.xlsx'))\n",
+ "solve_py": "import openpyxl\nwb = openpyxl.load_workbook(P('Desktop/hours.xlsx')); ws = wb['Hours']\nfor row in ws.iter_rows(min_row=2):\n    rate, hours = row[2].value, row[3].value\n    pay = rate * min(hours, 40) + rate * 1.5 * max(hours - 40, 0)\n    row[4].value = round(pay, 2)\nwb.save(P('Desktop/hours.xlsx'))\n",
+ "probe_py": "rows = read_xlsx(P('Desktop/hours.xlsx'))['Hours']\nok = len(rows) >= 5\nfor r in rows[1:]:\n    rate, hours, got = num(r[2]), num(r[3]), num(r[4])\n    if rate is None or hours is None or got is None:\n        ok = False; break\n    want = rate * min(hours, 40) + rate * 1.5 * max(hours - 40, 0)\n    if abs(got - round(want, 2)) > 0.005:\n        ok = False; break\nprint('PASS' if ok else 'FAIL')\n"
+}

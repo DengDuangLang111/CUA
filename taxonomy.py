@@ -9,7 +9,7 @@ three Impress restyle tasks r0.52-0.63 (see ostg.contam).
 
 This module defines the axes up front instead, and crosses them:
 
-    intent  x  domain  x  constraints   =   5 x 13 x 4  =  260 cells
+    intent  x  domain  x  difficulty   =   5 x 13 x 5  =  325 cells
 
 `domain` is the axis v2 lacked entirely. Its absence is what let the generator
 produce three "change a VS Code setting" tasks in a row: nothing forced them
@@ -79,16 +79,41 @@ DOMAINS = [
     "travel", "manufacturing", "nonprofit",
 ]
 
-# How many explicit requirements the instruction imposes. This is the
-# generatable half of "difficulty": it is fixed at writing time and countable
-# from the instruction text, unlike step count, which only exists after a
-# rollout and belongs to the agent as much as to the task.
-CONSTRAINTS = {
-    1: "one requirement -- a single condition, field or transformation",
-    2: "two requirements that must both hold",
-    3: "three requirements, at least one of which depends on another",
-    4: "four or more requirements, including an ordering or tie-breaking rule",
+# Difficulty, as (how many applications) x (how many explicit requirements).
+#
+# v3 used requirement count alone and it did not predict anything: across the
+# first 15 rollouts the success rate was 0/1, 1/5, 0/1, 0/4 over its four levels,
+# with retry loops as common at 2 requirements as at 4. Application count has
+# evidence behind it -- in the official 361-task campaign multi_apps is the
+# lowest-scoring domain at 31% with a median of 36 steps, against 7 steps for
+# single-app chrome.
+#
+# The scale is ordered so every level is buildable and none is empty. An earlier
+# draft put "two apps, 4+ requirements" and "two apps, 1-2 requirements" both at
+# level 3, which collapses to "any two-app task" and leaves single-app 4+ with
+# nowhere to go -- 46 of v3's 185 specs were exactly that. Levels 4 and 5 are
+# split by app count rather than by "3 apps" versus "more than 3": the whole
+# official suite contains three tasks with four applications, so a top tier
+# defined as >3 would be unbuildable.
+DIFFICULTY = {
+    1: ("one application, one requirement -- a single condition, field or "
+        "transformation", 1, 1),
+    2: ("one application, two or three requirements that must all hold", 1, 2),
+    3: ("one application and four or more requirements, INCLUDING an ordering "
+        "or tie-breaking rule; or two applications and one to three "
+        "requirements", 1, 4),
+    4: ("two applications and four or more requirements including an ordering "
+        "rule; or three applications and one to three requirements", 2, 4),
+    5: ("three or more applications, four or more requirements, including an "
+        "ordering or tie-breaking rule", 3, 4),
 }
+
+# How much of a run each level should be. Deliberately not uniform: level 5 is
+# harder than the hardest thing the official suite contains (3+ apps AND an
+# ordering rule, where official's 3-app tasks already score 31%), so most of
+# those rollouts will fail and produce no SFT sample. 15% buys a measurement of
+# where the model breaks without spending a third of the VM budget on it.
+DIFFICULTY_MIX = {1: 0.15, 2: 0.25, 3: 0.25, 4: 0.20, 5: 0.15}
 
 # Which artifacts each intent can plausibly end in. Without this the product
 # yields cells like configure+slide_deck, which is not a task anyone writes.
@@ -123,7 +148,7 @@ def observed_pairs(domain_app):
 
 
 def enumerate_space(shard=None):
-    """The full product, as a list. 5 x 13 x 4 = 260.
+    """The full product, as a list. 5 x 13 x 5 = 325.
 
     `shard` is (index, total) and keeps only every total-th cell. Batches within
     one process are sequential because each one is told what the previous ones
@@ -133,7 +158,7 @@ def enumerate_space(shard=None):
     (intent, domain, constraints) cell because the partition is by construction,
     not by coordination.
     """
-    space = [(i, d, c) for i in INTENTS for d in DOMAINS for c in CONSTRAINTS]
+    space = [(i, d, c) for i in INTENTS for d in DOMAINS for c in DIFFICULTY]
     if shard:
         idx, total = shard
         # Permute before striding. A raw stride inherits the product's own
@@ -177,6 +202,11 @@ def cells(n, seed, domain_app, only_apps=None, used=None, shard=None):
     # `used` is the only cross-batch state cells() receives, so the offset is
     # derived from it. Snapshotted here because the loop adds to `used` as it goes.
     prior_intent = collections.Counter(c[0] for c in (used or ()))
+    # Difficulty is quota-driven, not uniform over the product. Levels are equal
+    # thirds of the cartesian space but must not be equal shares of a run: see
+    # DIFFICULTY_MIX. `spent_diff` is how many of each level earlier batches
+    # already took, so the quota is a run-level property, not a per-batch one.
+    spent_diff = collections.Counter(c[2] for c in (used or ()))
     rng = random.Random(seed)
     space = enumerate_space(shard)
     rng.shuffle(space)
@@ -191,14 +221,24 @@ def cells(n, seed, domain_app, only_apps=None, used=None, shard=None):
     # each time spreads the batch across all five without changing which cells
     # are reachable.
     taken = collections.Counter()
+    taken_diff = collections.Counter()
     out = []
 
     while len(out) < n:
         # Cheapest correct form: scan for the first unspent cell whose intent is
         # currently least represented. The space is 260 entries, so the linear
         # scan costs nothing and avoids the bookkeeping a heap would need.
+        # Sort by (how far this intent is ahead, how far this difficulty is
+        # ahead of its quota). Difficulty is second because intent balance is a
+        # hard guarantee and the mix is a target: a run that ends one level-4
+        # short is fine, a run that writes 40 `transform` and 8 `repair` is the
+        # collapse the whole taxonomy exists to prevent.
+        drawn = sum(spent_diff.values()) + len(out)
+        def diff_debt(level):
+            want = DIFFICULTY_MIX.get(level, 0) * max(drawn + 1, 1)
+            return (spent_diff[level] + taken_diff[level]) - want
         pick = None
-        for cell in sorted(space, key=lambda c: taken[c[0]]):
+        for cell in sorted(space, key=lambda c: (taken[c[0]], diff_debt(c[2]))):
             if cell in used:
                 continue
             intent, _, _ = cell
@@ -215,9 +255,11 @@ def cells(n, seed, domain_app, only_apps=None, used=None, shard=None):
         if pick is None:
             break  # space exhausted, or --apps excludes everything left
 
-        (intent, domain, constraints), options = pick
-        used.add((intent, domain, constraints))
+        (intent, domain, difficulty), options = pick
+        used.add((intent, domain, difficulty))
         taken[intent] += 1
+        taken_diff[difficulty] += 1
+        _gloss, n_apps, n_reqs = DIFFICULTY[difficulty]
 
         # prior_intent carries the offset across batches; rotation carries it
         # within one, for the case where n exceeds the number of intents.
@@ -235,7 +277,11 @@ def cells(n, seed, domain_app, only_apps=None, used=None, shard=None):
         out.append({
             "intent": intent,
             "domain": domain,
-            "constraints": constraints,
+            "difficulty": difficulty,
+            # Kept because emit, report and task_index.csv all read it, and
+            # because "how many requirements" is still the countable half of
+            # what difficulty means. It is now derived, not an axis.
+            "constraints": n_reqs,
             "artifact": artifact,
             "primary": primary,
             # v1/v2 axes the emitter still reads. `source` is not crossed: it
@@ -252,14 +298,33 @@ def cells(n, seed, domain_app, only_apps=None, used=None, shard=None):
             # into a file-reading evaluator: every such task scores 0 forever,
             # and the build-time controls report n/a rather than failing, so it
             # ships silently. Measured on the killed run: 5 of the first 21.
+            # `second_local_artifact` says the data lives in a SECOND FILE the
+            # agent must open, not in the instruction. v3 never produced one --
+            # source was a hardcoded three-way choice -- and the cost was
+            # measurable: 56% of its specs were prompt_literal, and the ones that
+            # inlined a table (up to 36 numbers in a single instruction) are where
+            # the agent's retry loops started. Dozens of keystrokes is dozens of
+            # chances to see a screen that does not match.
+            #
+            # It replaces prompt_literal on alternate draws rather than always:
+            # "the values are stated in the instruction" is a real task shape too,
+            # and reading a number out of a sentence is not the failure -- typing
+            # sixty of them is.
             "source": "live_web" if artifact == "browser_tab"
                       else ("self" if intent in ("transform", "repair")
-                            else "prompt_literal"),
+                            else ("second_local_artifact" if turn % 2 else
+                                  "prompt_literal")),
             "operation": "",
-            "app_count": 1,
+            # 1 for most, 2 or 3 for one draw in four. v3 emitted app_count=1 for
+            # 184 of 185 specs because this was hardcoded, so the multi-app shape
+            # -- which the official suite carries as its own domain -- never
+            # occurred. Kept a minority: every extra application multiplies the
+            # ways a rollout can wander off, and the loop rate is already 75%.
+            # From the difficulty level, not a rotation. This is the axis now.
+            "app_count": n_apps,
             "gold_kind": "browser_state" if artifact == "browser_tab" else "file",
             "needs_setup_shell": False,
             "blocker": "",
-            "drawn_from": "taxonomy:%s/%s/%d" % (intent, domain, constraints),
+            "drawn_from": "taxonomy:%s/%s/d%d" % (intent, domain, difficulty),
         })
     return out

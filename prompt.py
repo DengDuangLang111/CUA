@@ -8,6 +8,61 @@ filter after the rollouts.
 import json
 import random
 
+from pathlib import Path
+
+from ostg.contam import tokens
+
+# The prose lives in prompts/*.txt, not in this file. It is the part a human
+# actually edits and reviews, and burying 6 KB of it between two Python string
+# literals made that harder than it needed to be. Read at import: the files ship
+# with the package and a missing one is a broken install, not a runtime case.
+PROMPTS = Path(__file__).resolve().parent / "prompts"
+
+
+def _sections(name="prompt.txt"):
+    """Split prompts/prompt.txt on [SECTION] headers, dropping # comment lines.
+
+    One file rather than three because that is what a person edits, but the
+    sections stay separate: ROLE and RULES go in the cached system message and
+    TASK opens the user message, which is rebuilt every batch. Concatenating them
+    into one blob would quietly move 5 KB out of the cache and into every request.
+    """
+    out, key = {}, None
+    for line in (PROMPTS / name).read_text(encoding="utf-8").splitlines():
+        if line.startswith("#"):
+            continue
+        if line.startswith("[") and line.rstrip().endswith("]"):
+            key = line.strip()[1:-1]
+            out[key] = []
+        elif key is not None:
+            out[key].append(line)
+    return {k: "\n".join(v).strip("\n") + "\n" for k, v in out.items()}
+
+
+_S = _sections()
+ROLE, TASK, RULES = _S["ROLE"], _S["TASK"], _S["RULES"]
+EXAMPLE = json.loads((PROMPTS / "example.json").read_text(encoding="utf-8"))
+
+
+def relevant(pool, brief, k):
+    """The k instructions in `pool` most like the brief we are about to send.
+
+    Was rng.sample. With 27 chrome tasks already written and 8 shown at random,
+    the chance of missing the one that matters is 70% -- and v4 duly produced two
+    IRS e-Postcard tasks from different shards that invented the same fictional
+    food bank, scoring 0.64 against each other while the batch-level numbers
+    improved. An avoid list that shows the wrong eight is not an avoid list.
+
+    Content-word overlap is enough here and keeps this module stdlib-only. The
+    brief has no prose to match on, so it is spelled out as its coordinates:
+    'nonprofit info_seeking browser_tab chrome' does retrieve the IRS one.
+    """
+    q = tokens(brief)
+    if not q:
+        return pool[:k]
+    scored = sorted(pool, key=lambda t: -len(q & tokens(t)))
+    return scored[:k]
+
 APPS = {
     "libreoffice_calc": ("libreoffice_calc", "LibreOffice Calc"),
     "libreoffice_writer": ("libreoffice_writer", "LibreOffice Writer"),
@@ -124,110 +179,8 @@ def P(*a):
     return p
 '''
 
-ROLE = """\
-ROLE
-You design computer-use tasks for an Ubuntu 22.04 GNOME desktop with LibreOffice
-7.x, Chrome, GIMP, VLC, Thunderbird, VS Code, Files and a terminal. Every task is
-graded automatically with no human in the loop, so a task is only worth writing
-if a program can decide whether it was done.
-"""
 
-TASK = """\
-TASK
-Emit {n} task specs. Each one is four things:
 
-  instruction  what the user wants, in plain English
-  setup_py     writes the starting files. Everything it creates is copied into the
-               VM before the agent starts.
-  probe_py     runs INSIDE THE VM after the agent stops. It inspects the machine
-               and prints exactly PASS or exactly FAIL. This is the answer key.
-  solve_py     turns the starting files into the finished state a perfect agent
-               would leave behind. It is a second, independent expression of
-               "done"; if it and probe_py disagree the task is ill-specified and
-               gets flagged.
-
-In all three, P(...) is the user's home directory, so P("Desktop/sales.xlsx") is
-the file the agent sees at /home/user/Desktop/sales.xlsx. Use the same path in
-setup_py, solve_py and probe_py. Parent directories are created for you.
-
-There is no gold file and no file comparison. probe_py decides, alone.
-
-gold_kind says which of those four applies:
-  file (default)  probe_py reads files; solve_py reproduces them. All four fields.
-  browser_state   the answer is which page Chrome ended on. OSWorld grades it
-                  against url_patterns; emit "" for probe_py and "" for solve_py.
-  infeasible      the task cannot be done here and refusing IS the correct answer.
-                  Emit "" for probe_py and "" for solve_py.
-"""
-
-RULES = """\
-RULES
-1  probe_py MUST print FAIL on the untouched setup files. A probe that can only
-   print PASS gives every idle agent a perfect score, and nothing downstream can
-   detect it. Make the check depend on work the agent has to do.
-2  probe_py must check the SUBSTANCE of the task, not a proxy for it. If the task
-   is "sort by date descending", check the whole ordering, not just the first row.
-3  probe_py runs as the desktop user with stdlib, PIL, lxml and requests, plus the
-   readers already imported for you: read_xlsx(p) -> {sheet: rows},
-   read_docx(p) -> [paragraph], read_pptx(p) -> [[shape_text]], norm(v), num(v).
-   There is NO openpyxl and NO python-docx in the VM. It gets 120 seconds, and no
-   network except 127.0.0.1.
-4  Live GUI state is readable and fair game: the accessibility tree of the whole
-   desktop is at http://127.0.0.1:5000/accessibility, Chrome's tabs at
-   http://127.0.0.1:1337/json, windows via `wmctrl -lx`.
-5  setup_py and solve_py have stdlib plus openpyxl, docx, pptx and PIL, and they
-   run on the host, so they cannot use anything only the VM has. No randomness,
-   no clocks, no network. solve_py must reach the finished state by writing files,
-   not by launching an application.
-6  gold_kind=file (the default) means solve_py must be able to produce exactly the
-   state probe_py checks. If the target is a config file the agent would create,
-   solve_py writes it at the same path.
-6b gold_kind=browser_state is for a task whose answer is which page Chrome ended
-   up on. Emit "" for probe_py and "" for solve_py; OSWorld grades it itself.
-   Give start_url (the page the agent starts from) and url_patterns, a list of
-   REGEXES that the final URL must ALL match, e.g.
-     ["^https://(www\\\\.)?dmv\\\\.virginia\\\\.gov/licenses-ids/license/applying/eligibility"]
-   A single loose fragment like ["civil/documents-and-forms"] is also fine. Write
-   the regex against the URL only -- page text is not available.
-   Never make the answer depend on content that changes: no prices, no rankings,
-   no availability, no "today's" anything. A page that is reachable by navigating
-   a stable site structure is the target; put the argument in url_stability.
-6c gold_kind=infeasible is for a task that CANNOT be done on this desktop, where
-   the correct behaviour is to refuse. Emit "" for solve_py and "" for probe_py.
-   The task must be genuinely impossible with the installed applications -- not
-   merely tedious, not "needs a plugin you could install". State it as a normal,
-   plausible-sounding user request; do not hint that it is impossible.
-6e setup_shell runs commands INSIDE THE VM before the agent starts, as a list of
-   SHELL STRINGS. They run as the desktop user, so anything system-wide needs
-   sudo, and sudo needs the password piped in. Copy this form exactly -- it is
-   what all six official install tasks use:
-     ["echo {CLIENT_PASSWORD} | sudo -S apt-get update -y && echo {CLIENT_PASSWORD} | sudo -S apt-get install -y jq"]
-   {CLIENT_PASSWORD} is substituted for you. A command that cannot succeed is not
-   retried and not reported -- it silently does nothing and the agent then meets a
-   machine missing the thing the task is about. Use setup_shell only when the task
-   genuinely needs something installed or started.
-7  The instruction must be complete on its own. Never point at a file for the real
-   requirements. Never state the answer or a count of the answer.
-8  Say what the user wants, never which control to operate. No "right-click", no
-   "ctrl+h", no "use the terminal".
-9  One unambiguous end state. If two careful people would produce different files,
-   rewrite it until they would not.
-10 Data at a realistic size for the scenario, roughly 10 to 40 rows or under two
-   pages. Real-sounding names and values, not Item 1 / Company X.
-11 Guest paths are lowercase with no spaces, given to P() without a leading slash.
-11b EVERY path in setup_py, solve_py and probe_py goes through P(). Never write
-   "/home/user/..." as a literal and never call os.path.expanduser("~") or read
-   $HOME -- not in a comparison, not inside a config file you write, not in a
-   glob. Both happen to be correct in the VM, where P() also resolves to
-   /home/user, and both break the host-side check that runs your probe against
-   your own solve_py before the task is ever shipped. A task that bypasses P()
-   loses that check silently: it still runs, but nobody finds out beforehand if
-   its probe is wrong. Config files that must hold an absolute path are the
-   common trap -- write P("Pictures/x") into them, not the literal string.
-12 If the agent edits a document in place, set save_target to that guest path so
-   the file is flushed to disk before the probe runs.
-13 Slugs are unique, lowercase, under 40 characters.
-"""
 
 
 def system_prompt():
@@ -269,9 +222,9 @@ def user_prompt(n, cells, priors=None, external=None, per_app=12, seed=0,
             # what the model has to invent around. artifact/primary follow as
             # constraints on what it may end in.
             lines.append(
-                "  spec %d: intent=%s, domain=%s, constraints=%d, artifact=%s, "
+                "  spec %d: intent=%s, domain=%s, difficulty=%d, apps=%d, artifact=%s, "
                 "source=%s, apps=%d, primary=%s%s"
-                % (i + 1, c["intent"], c["domain"], c["constraints"],
+                % (i + 1, c["intent"], c["domain"], c.get("difficulty", 0), c.get("app_count", 1),
                    c["artifact"], c["source"], c["app_count"], c["primary"], extra)
             )
         else:
@@ -294,16 +247,18 @@ def user_prompt(n, cells, priors=None, external=None, per_app=12, seed=0,
         from ostg import taxonomy as T
         ints = sorted({c["intent"] for c in cells if c.get("intent")})
         doms = sorted({c["domain"] for c in cells if c.get("domain")})
-        cons = sorted({c["constraints"] for c in cells if c.get("constraints")})
+        cons = sorted({c["difficulty"] for c in cells if c.get("difficulty")})
         tax = ("\n\nintent is what the user is fundamentally trying to get done:\n"
                + "\n".join("  %s = %s" % (i, T.INTENTS[i]) for i in ints)
                + "\n\ndomain is the business setting the scenario is dressed in "
                  "(%s). Invent realistic names, values and rules from that world -- "
                  "it is the main thing keeping two specs apart.\n"
                  % ", ".join(doms)
-               + "\nconstraints is how many explicit requirements the instruction "
-                 "imposes:\n"
-               + "\n".join("  %d = %s" % (c, T.CONSTRAINTS[c]) for c in cons))
+               + "\ndifficulty is how many APPLICATIONS the task spans and how many "
+                 "explicit requirements it imposes. It is not a hint -- the spec must "
+                 "match the level it was given, and apps= says how many applications "
+                 "to put in the apps list.\n"
+               + "\n".join("  %d = %s" % (c, T.DIFFICULTY[c][0]) for c in cons))
 
     ops = sorted({c.get("operation") for c in cells if c.get("operation")})
     op_text = ""
@@ -351,8 +306,10 @@ def user_prompt(n, cells, priors=None, external=None, per_app=12, seed=0,
         pool = own.get(app) or []
         if not pool:
             continue
-        rng = random.Random("own/%s/%s" % (seed, app))
-        shown = rng.sample(pool, min(own_per_app, len(pool)))
+        brief = " ".join(sorted({"%s %s %s %s" % (c.get("intent") or "", c.get("domain") or "",
+                                                   c.get("artifact") or "", app)
+                                 for c in cells if c.get("primary") == app}))
+        shown = relevant(pool, brief, own_per_app)
         ours.append("  %s (we have written %d; %d shown):\n%s"
                     % (app, len(pool), len(shown),
                        "\n".join("    - " + i.replace("\n", " ")[:200] for i in shown)))
@@ -369,8 +326,10 @@ def user_prompt(n, cells, priors=None, external=None, per_app=12, seed=0,
         pool = external.get(app) or []
         if not pool:
             continue
-        rng = random.Random("%s/%s" % (seed, app))
-        shown = rng.sample(pool, min(per_app, len(pool)))
+        brief = " ".join(sorted({"%s %s %s %s" % (c.get("intent") or "", c.get("domain") or "",
+                                                   c.get("artifact") or "", app)
+                                 for c in cells if c.get("primary") == app}))
+        shown = relevant(pool, brief, per_app)
         ext.append("  %s (%d such tasks exist; %d shown):\n%s"
                    % (app, len(pool), len(shown),
                       "\n".join("    - " + i.replace("\n", " ")[:220] for i in shown)))
@@ -404,51 +363,6 @@ def user_prompt(n, cells, priors=None, external=None, per_app=12, seed=0,
     )
 
 
-EXAMPLE = {
-    "slug": "overtime-pay-rollup",
-    "instruction": (
-        "The workbook hours.xlsx on the Desktop lists each employee's department, "
-        "hourly rate and hours worked for the week. Anything above 40 hours is "
-        "overtime and is paid at 1.5 times the base rate. Fill in the Total Pay "
-        "column for every employee, rounded to two decimals, and save the file."
-    ),
-    "artifact": "spreadsheet",
-    "source": "self",
-    "apps": ["libreoffice_calc"],
-    "app_count": 1,
-    "open_paths": ["Desktop/hours.xlsx"],
-    "save_target": "Desktop/hours.xlsx",
-    "setup_py": (
-        "import openpyxl\n"
-        "wb = openpyxl.Workbook(); ws = wb.active; ws.title = 'Hours'\n"
-        "ws.append(['Name', 'Dept', 'Rate', 'Hours', 'Total Pay'])\n"
-        "for r in [('Ana Reyes','Ops',22.5,44),('Ben Halvorsen','Ops',19.0,38),\n"
-        "          ('Cy Okonkwo','Lab',31.25,52),('Dee Marchetti','Lab',27.0,40)]:\n"
-        "    ws.append(list(r) + [None])\n"
-        "wb.save(P('Desktop/hours.xlsx'))\n"
-    ),
-    "solve_py": (
-        "import openpyxl\n"
-        "wb = openpyxl.load_workbook(P('Desktop/hours.xlsx')); ws = wb['Hours']\n"
-        "for row in ws.iter_rows(min_row=2):\n"
-        "    rate, hours = row[2].value, row[3].value\n"
-        "    pay = rate * min(hours, 40) + rate * 1.5 * max(hours - 40, 0)\n"
-        "    row[4].value = round(pay, 2)\n"
-        "wb.save(P('Desktop/hours.xlsx'))\n"
-    ),
-    "probe_py": (
-        "rows = read_xlsx(P('Desktop/hours.xlsx'))['Hours']\n"
-        "ok = len(rows) >= 5\n"
-        "for r in rows[1:]:\n"
-        "    rate, hours, got = num(r[2]), num(r[3]), num(r[4])\n"
-        "    if rate is None or hours is None or got is None:\n"
-        "        ok = False; break\n"
-        "    want = rate * min(hours, 40) + rate * 1.5 * max(hours - 40, 0)\n"
-        "    if abs(got - round(want, 2)) > 0.005:\n"
-        "        ok = False; break\n"
-        "print('PASS' if ok else 'FAIL')\n"
-    ),
-}
 
 SCHEMA = {
     "type": "object",
