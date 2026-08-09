@@ -1,7 +1,10 @@
-# ostg v8
+# ostg v9
 
-LLM-generated OSWorld tasks, one self-contained JSON each. Three grades, all
-judged by stock OSWorld machinery; the taxonomy cell dictates the grade:
+LLM-generated OSWorld tasks, one self-contained JSON each. Every task is drawn
+at a coordinate in the product intent x domain x difficulty x ambiguity (1300
+cells), with a voice register derived per cell -- the cell dictates what kind
+of task gets written and how its instruction may speak. Three grades, all
+judged by stock OSWorld machinery; the cell dictates the grade:
 
     probe    (default) setup + a python3 probe in the VM printing PASS/FAIL;
              vm_command_line + check_include_exclude
@@ -13,13 +16,31 @@ judged by stock OSWorld machinery; the taxonomy cell dictates the grade:
 Nothing is built on the host and nothing is uploaded; the task JSON is the
 whole task.
 
+The v9 axes (see EXPERIMENTS.md section 2 for the measurements):
+
+    ambiguity  1 explicit (10%): full paths, enumerated requirements
+               2 functional (30%): objects named by what they are, no paths
+               3 deictic (30%): the target is already open (open_path);
+                 "this sheet" -- browser tasks use start_url as the referent
+               4 outcome (30%): end state only, operations inferred
+    voice      terse 30% / polite 25% / persona 45%
+
+    Graders stay exact at every level: the probe pins full paths regardless of
+    how vaguely the instruction points. Gates enforce mechanically: a path or
+    filename in an ambiguity>=2 instruction rejects the spec; deictic without
+    open_path rejects it. Rules 12-13 (prompt): every countable promise is
+    checked in full or not made; browser url_patterns must encode the work.
+
 ## Pipeline
 
     gen  ->  ship  ->  rollout
 
     # 1. generate: specs + runnable task JSON in one pass. --thinking buys
     #    deeper probes on hard cells; --shard I/N runs N processes over
-    #    disjoint coordinates; --refill re-draws when a batch is lost.
+    #    disjoint coordinates; --refill re-draws when a batch is lost;
+    #    --start-batch resumes after a crash with seeds aligned.
+    #    RUN FROM THE VERSIONED WORKTREE as cwd: python -m puts the working
+    #    directory ahead of PYTHONPATH, and a stale ostg/ there wins.
     python -m ostg.gen --n 5 --batches 40 --seed S --stream \
       --out out/runs/<set>/specs.jsonl \
       --avoid-corpus /mnt/d/research/cua-gym/tasks.jsonl
@@ -103,8 +124,8 @@ sig.py) not to transfer across grader styles.
 
 ## Files
 
-    taxonomy.py             intent x domain x difficulty (ambiguity defined,
-                            not yet crossed in); cells() draws briefs
+    taxonomy.py             intent x domain x difficulty x ambiguity, voice
+                            derived per cell; cells() draws briefs
     gen.py                  cells -> Claude -> specs.jsonl + task JSON
     ship.py                 re-emit + accept + control, one command, no logic
     control.py              the VM negative checks, on the real evaluation path
