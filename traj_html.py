@@ -140,7 +140,7 @@ def task_page(td, meta):
     total = {}
     for s in steps:
         total[s.get("step_num")] = total.get(s.get("step_num"), 0) + 1
-    seen, prev = {}, None
+    seen, prev, prev_n = {}, None, None
 
     frames = []
     for s in steps:
@@ -151,7 +151,9 @@ def task_page(td, meta):
         clock = "%s:%s:%s" % (t[9:11], t[11:13], t[13:15]) if "@" in t and len(t) >= 15 else ""
         resp = (s.get("response") or "").strip()
         parts = ["<div class=frame><h3>step %s <small>%s</small></h3>" % (label, clock)]
-        if resp != prev:
+        # Same call = same step_num; identical text from a DIFFERENT call (a
+        # degenerate loop) still renders in full, so loops stay visible.
+        if not (resp == prev and n == prev_n):
             think, desc, xml = split_response(resp)
             if think:
                 parts.append('<div class="blk b-think"><span class=tag>THINKING'
@@ -164,7 +166,7 @@ def task_page(td, meta):
                              '</span>%s</div>' % html.escape(xml))
         else:
             parts.append("<p class=meta>same model call as the previous action</p>")
-        prev = resp
+        prev, prev_n = resp, n
         parts.append('<div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)'
                      '</span>%s</div>' % html.escape(str(s.get("action"))))
         png = s.get("screenshot_file")
