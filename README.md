@@ -30,12 +30,43 @@ whole task.
       --test_config_base_dir out/runs/v8 \
       --test_all_meta_path out/runs/v8/manifest.json
 
+## Accept
+
+Five gates before a set ships, three duplicate detectors with disjoint blind
+spots:
+
+    python -m ostg.accept out/runs/<set>/specs.jsonl [more specs.jsonl ...] \
+      --ref cua-gym=/mnt/d/research/cua-gym/tasks.jsonl \
+      --ref osworld=/mnt/d/research/OSWorld/evaluation_examples/examples
+
+    1  instruction jaccard, all pairs     none >= 0.4. Real duplicates measure
+                                          0.5-0.65; same-theme-different-task
+                                          measures <= 0.30.
+    2  grader signatures, all pairs       what the probe READS -- identifier
+                                          word pieces, constants dropped.
+                                          >= 0.30 (the measured knee) goes to
+                                          hand review, not auto-fail: it
+                                          catches re-dressed duplicates whose
+                                          nouns all changed (a confirmed pair
+                                          scored jaccard 0.29, signature 1.00)
+                                          but is coarse on table specs.
+    3  tf-idf cosine vs cua-gym           none >= 0.5. Sharper than jaccard:
+                                          idf downweights boilerplate, so
+                                          shared DISCRIMINATIVE words score.
+    4  tf-idf cosine vs osworld-361      none >= 0.5 -- the train-on-test gate.
+    5  axis balance                       intents even; difficulty quota drift
+                                          under 10%.
+
+External corpora get the text detectors only: signatures were measured (old
+sig.py) not to transfer across grader styles.
+
 ## Files
 
     taxonomy.py             intent x domain x difficulty (ambiguity defined,
                             not yet crossed in); cells() draws briefs
     gen.py                  cells -> Claude -> specs.jsonl + task JSON
     control.py              the two checks above, on the real evaluation path
+    accept.py               the five gates above, over finished spec sets
     prompts/single_json.txt the whole prompt (SYSTEM + USER head)
 
 ## OSWorld facts the emitter is built on
