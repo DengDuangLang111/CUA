@@ -677,6 +677,8 @@ def main():
                          "disjoint coordinates; cross-process duplication is "
                          "held down by the sibling-run avoid list, re-read "
                          "before every batch")
+    ap.add_argument("--start-batch", type=int, default=0,
+                    help="resume: skip the first N batches (seeds stay aligned)")
     ap.add_argument("--refill", type=int, default=2,
                     help="extra batches drawn from fresh cells when a batch is "
                          "lost (no tool call after retries) or its specs are "
@@ -773,7 +775,7 @@ def main():
     kept = 0
     spent = set()
     target = args.n * args.batches
-    b = 0
+    b = args.start_batch
     with args.out.open("a", encoding="utf-8") as fh:
         # A lost batch (thinking means tool_choice auto, so no tool call is
         # possible even after retries) or a rejected spec leaves the run short;
@@ -810,6 +812,9 @@ def main():
                      u.get("cache_read_input_tokens"), thought))
             kept_before = kept
             for i, s in enumerate(specs):
+                if not isinstance(s, dict):
+                    print("  skip non-object spec entry %r" % str(s)[:60])
+                    continue
                 slug = s.get("slug") or ""
                 if not slug or slug in seen:
                     print("  skip duplicate/blank slug %r" % slug)
