@@ -121,6 +121,12 @@ def main():
     sigs = [signature(r) for r in rows]
     print("== %d specs from %d file(s)" % (len(rows), len(argv)))
 
+    # One idf over everything -- references if given, else our own set -- so
+    # internal and external cosines sit on the same scale.
+    ref_tokens = {name: [tokens(t) for t in load_ref(path)] for name, path in refs}
+    idf, dflt = build_idf([t for ts in ref_tokens.values() for t in ts] + tks)
+    qvecs = [vector(t, idf, dflt) for t in tks]
+
     # 1. surface duplicates, whole set + cross-source
     pairs = sorted(((jac(tks[i], tks[j]), i, j)
                     for i, j in itertools.combinations(range(len(rows)), 2)),
@@ -133,6 +139,19 @@ def main():
         tag = "CROSS" if rows[i]["_src"] != rows[j]["_src"] else "     "
         print("    %.2f %s %s ~ %s" % (s, tag, rows[i]["slug"], rows[j]["slug"]))
 
+    # 1b. same pairs through the sharper lens: idf downweights boilerplate, so
+    #     a pair sharing its DISCRIMINATIVE words scores where jaccard shrugs.
+    cpairs = sorted(((cosine(*qvecs[i], *qvecs[j]), i, j)
+                     for i, j in itertools.combinations(range(len(rows)), 2)),
+                    reverse=True)
+    chi = [p for p in cpairs if p[0] >= 0.5]
+    print("\n[1b] instruction tf-idf cosine: max=%.2f p90=%.2f pairs>=0.5: %d  %s"
+          % (cpairs[0][0], cpairs[len(cpairs) // 10][0], len(chi),
+             "FAIL" if chi else "ok"))
+    for s, i, j in cpairs[:5]:
+        print("    %.2f (j=%.2f)  %s ~ %s"
+              % (s, jac(tks[i], tks[j]), rows[i]["slug"], rows[j]["slug"]))
+
     # 2. structural duplicates: grader signatures, 0.30 measured knee
     spairs = sorted(((jac(sigs[i], sigs[j]), i, j)
                      for i, j in itertools.combinations(range(len(rows)), 2)
@@ -143,12 +162,8 @@ def main():
     for s, i, j in flag[:8]:
         print("    %.2f  %s ~ %s" % (s, rows[i]["slug"], rows[j]["slug"]))
 
-    # 3. contamination vs each reference corpus: tf-idf cosine, one shared idf
-    #    over the union of everything so numbers are comparable across corpora.
+    # 3. contamination vs each reference corpus, on the same shared idf.
     if refs:
-        ref_tokens = {name: [tokens(t) for t in load_ref(path)] for name, path in refs}
-        idf, dflt = build_idf([t for ts in ref_tokens.values() for t in ts] + tks)
-        qvecs = [vector(t, idf, dflt) for t in tks]
         for name, _ in refs:
             rvecs = [vector(t, idf, dflt) for t in ref_tokens[name]]
             worst = sorted(((max(cosine(qv, qn, dv, dn) for dv, dn in rvecs),

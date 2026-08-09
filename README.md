@@ -42,6 +42,12 @@ spots:
     1  instruction jaccard, all pairs     none >= 0.4. Real duplicates measure
                                           0.5-0.65; same-theme-different-task
                                           measures <= 0.30.
+    1b instruction tf-idf cosine, pairs   none >= 0.5; the 0.35-0.5 band goes
+                                          to hand review. Re-dressed duplicates
+                                          top out at ~0.34-0.44 here (measured:
+                                          the vlc pair, the listings pair), so
+                                          the text layer flags them and the
+                                          signature layer convicts them.
     2  grader signatures, all pairs       what the probe READS -- identifier
                                           word pieces, constants dropped.
                                           >= 0.30 (the measured knee) goes to
