@@ -82,13 +82,24 @@ ARTIFACT_HOSTS = {
 }
 
 
-def cells(n, seed, only_apps=None, used=None):
+def cells(n, seed, only_apps=None, used=None, shard=None):
     """Draw n briefs. `used` is the (intent, domain, difficulty) triples earlier
-    batches spent, so a run walks the product instead of re-drawing corners."""
+    batches spent, so a run walks the product instead of re-drawing corners.
+
+    `shard` is (index, total): keep only every total-th cell of the product, so
+    N processes generate at once over disjoint coordinates. Permute before
+    striding -- a raw stride aligns with the innermost axis and hands each
+    shard a single difficulty level. The permutation seed is a CONSTANT, not
+    `seed`: every process must derive the same partition or the shards stop
+    being disjoint."""
     prior_intent = collections.Counter(c[0] for c in (used or ()))
     spent_diff = collections.Counter(c[2] for c in (used or ()))
     rng = random.Random(seed)
     space = [(i, d, c) for i in INTENTS for d in DOMAINS for c in DIFFICULTY]
+    if shard:
+        idx, total = shard
+        random.Random(20260808).shuffle(space)
+        space = space[idx::total]
     rng.shuffle(space)
     used = set(used or ())
     rotation = collections.Counter()

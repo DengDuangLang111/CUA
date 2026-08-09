@@ -632,6 +632,12 @@ def main():
     ap.add_argument("--stream", action="store_true",
                     help="stream the response; the gateway 504s any request "
                          "that sends nothing for minutes, which is every batch")
+    ap.add_argument("--shard", default=None, metavar="I/N",
+                    help="take only cells I, I+N, I+2N ... of the taxonomy "
+                         "product, so N processes can generate at once over "
+                         "disjoint coordinates; cross-process duplication is "
+                         "held down by the sibling-run avoid list, re-read "
+                         "before every batch")
     ap.add_argument("--refill", type=int, default=2,
                     help="extra batches drawn from fresh cells when a batch is "
                          "lost (no tool call after retries) or its specs are "
@@ -646,6 +652,18 @@ def main():
     ap.add_argument("--avoid-own-per-app", type=int, default=8)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+
+    shard = None
+    if args.shard:
+        try:
+            i, n_ = (int(x) for x in args.shard.split("/"))
+        except ValueError:
+            print("--shard wants I/N, e.g. 0/2", file=sys.stderr)
+            return 1
+        if not 0 <= i < n_:
+            print("--shard index must be in [0, N)", file=sys.stderr)
+            return 1
+        shard = (i, n_)
 
     load_env(args.env)
     cfg = {
@@ -695,7 +713,7 @@ def main():
               % (sum(len(v) for v in external.values()), len(external)))
 
     if args.dry_run:
-        c = T.cells(args.n, args.seed, only)
+        c = T.cells(args.n, args.seed, only, shard=shard)
         sp = system_prompt()
         print("SYSTEM (%d chars, ~%d tok)\n%s\n" % (len(sp), len(sp) // 4, "=" * 60))
         print(sp)
@@ -723,7 +741,7 @@ def main():
         # refill batches draw FRESH cells until the quota is met or the extras
         # run out.
         while b < args.batches or (kept < target and b < args.batches + args.refill):
-            c = T.cells(args.n, args.seed + b * 1000, only, spent)
+            c = T.cells(args.n, args.seed + b * 1000, only, spent, shard=shard)
             label = " (refill)" if b >= args.batches else ""
             b += 1
             if not c:
