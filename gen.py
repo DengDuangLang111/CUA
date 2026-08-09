@@ -266,14 +266,15 @@ def load_env(path=".env"):
         os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 
 
-def call(messages, system_blocks, cfg, timeout=900):
+def call(messages, system_blocks, cfg, timeout=900, tool=None):
+    tool = tool or tool_definition()
     payload = {
         "model": cfg["model"],
         "max_tokens": cfg["max_tokens"],
         "system": system_blocks,
         "messages": messages,
-        "tools": [tool_definition()],
-        "tool_choice": {"type": "tool", "name": TOOL},
+        "tools": [tool],
+        "tool_choice": {"type": "tool", "name": tool["name"]},
     }
     # Thinking and a forced tool choice are mutually exclusive; auto makes the
     # tool call probable rather than guaranteed, hence the retry in the caller.
@@ -357,17 +358,18 @@ def _assemble(response):
     return out
 
 
-def extract(resp):
+def extract(resp, name=TOOL, field="specs"):
     for b in resp.get("content", []):
-        if b.get("type") == "tool_use" and b.get("name") == TOOL:
-            return b.get("input", {}).get("specs", [])
+        if b.get("type") == "tool_use" and b.get("name") == name:
+            inp = b.get("input", {})
+            return inp.get(field, []) if field else inp
     raise RuntimeError("no tool_use block (stop_reason=%s)" % resp.get("stop_reason"))
 
 
-def call_and_extract(messages, system_blocks, cfg, tries=3):
+def call_and_extract(messages, system_blocks, cfg, tries=3, tool=None, field="specs"):
     for attempt in range(1, tries + 1):
         try:
-            resp = call(messages, system_blocks, cfg)
+            resp = call(messages, system_blocks, cfg, tool=tool)
         except RuntimeError as e:
             if attempt == tries or not getattr(e, "transient", False):
                 raise
@@ -375,7 +377,7 @@ def call_and_extract(messages, system_blocks, cfg, tries=3):
             continue
         thought = sum(1 for b in resp.get("content", []) if b.get("type") == "thinking")
         try:
-            specs = extract(resp)
+            specs = extract(resp, name=(tool or tool_definition())["name"], field=field)
         except RuntimeError as e:
             if attempt == tries:
                 raise

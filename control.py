@@ -6,6 +6,11 @@ Per task: boot a fresh VM, run the setup by hand and check its exit code
 (OSWorld never does), then env.evaluate() on the untouched desktop -- an idle
 agent must score 0. Catches a broken setup, a probe that crashes, and a probe
 that passes without work, each before any rollout minutes are spent.
+
+With --gold gold.jsonl (from ostg.gold) the check inverts: after setup the
+gold script runs and the grader must award 1.0 -- catching probes that can
+never pass (stale-store reads, impossible constants). It cannot catch a gold
+whose world-beliefs are wrong; audit.py owns that direction.
 """
 import argparse
 import json
@@ -24,6 +29,9 @@ def main(argv=None):
     ap.add_argument("--start", type=int, default=0,
                     help="skip the first N manifest tasks, so two processes "
                          "can split one set")
+    ap.add_argument("--gold", type=Path, default=None,
+                    help="gold.jsonl: run each task's gold script after setup "
+                         "and require score 1.0 instead of 0.0")
     args = ap.parse_args(argv)
 
     import requests
@@ -36,7 +44,14 @@ def main(argv=None):
         files = files[args.start:]
     if args.limit:
         files = files[:args.limit]
-    report = args.report or (args.tasks / "control_report.jsonl")
+    report = args.report or (args.tasks / ("gold_report.jsonl" if args.gold
+                                           else "control_report.jsonl"))
+    golds = {}
+    if args.gold:
+        for l in args.gold.read_text(encoding="utf-8").splitlines():
+            if l.strip():
+                g = json.loads(l)
+                golds[g["slug"]] = g.get("gold") or ""
 
     env = DesktopEnv(provider_name=args.provider_name, path_to_vm=str(args.path_to_vm),
                      action_space="pyautogui", headless=True, require_a11y_tree=False,
@@ -63,6 +78,17 @@ def main(argv=None):
                 rcs.append(r.get("returncode"))
                 err = err or (r.get("error") or "").strip()[-200:]
             env.is_environment_used = True  # manual POSTs bypass the flag
+            slug = (task.get("ostg") or {}).get("slug") or task["id"]
+            gold_rc = None
+            if args.gold:
+                g = golds.get(slug)
+                if not g:
+                    print("%-38s no gold script, skipped" % slug)
+                    continue
+                gr = requests.post(base + "/execute",
+                                   json={"command": g, "shell": True},
+                                   timeout=180).json()
+                gold_rc = gr.get("returncode")
             probe_out = probe_err = ""
             res = task["evaluator"].get("result") or {}
             if res.get("type") == "vm_command_line":
@@ -72,12 +98,13 @@ def main(argv=None):
                 probe_out = (pr.get("output") or "").strip()
                 probe_err = (pr.get("error") or "").strip()[-200:]
             score = env.evaluate()
-            row = {"slug": (task.get("ostg") or {}).get("slug") or task["id"],
+            want = 1.0 if args.gold else 0.0
+            row = {"slug": slug,
                    "grade": (task.get("ostg") or {}).get("grade", "probe"),
-                   "setup_rc": rcs, "setup_err": err,
+                   "setup_rc": rcs, "setup_err": err, "gold_rc": gold_rc,
                    "probe_out": probe_out, "probe_err": probe_err,
                    "score": score,
-                   "ok": all(rc == 0 for rc in rcs) and score == 0.0}
+                   "ok": all(rc == 0 for rc in rcs) and score == want}
             bad += not row["ok"]
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
             fh.flush()
