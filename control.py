@@ -21,6 +21,9 @@ def main():
     ap.add_argument("--client_password", default="password")
     ap.add_argument("--report", type=Path, default=None)
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--start", type=int, default=0,
+                    help="skip the first N manifest tasks, so two processes "
+                         "can split one set")
     args = ap.parse_args()
 
     import requests
@@ -29,6 +32,8 @@ def main():
     manifest = json.loads((args.tasks / "manifest.json").read_text(encoding="utf-8"))
     files = [args.tasks / "examples" / d / ("%s.json" % i)
              for d, ids in sorted(manifest.items()) for i in ids]
+    if args.start:
+        files = files[args.start:]
     if args.limit:
         files = files[:args.limit]
     report = args.report or (args.tasks / "control_report.jsonl")
