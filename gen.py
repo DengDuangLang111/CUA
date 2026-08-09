@@ -371,7 +371,26 @@ def extract(resp, name=TOOL, field="specs"):
     for b in resp.get("content", []):
         if b.get("type") == "tool_use" and b.get("name") == name:
             inp = b.get("input", {})
-            return inp.get(field, []) if field else inp
+            out = inp.get(field, []) if field else inp
+            # The schema is not server-enforced: the model sometimes returns
+            # the array (or an element) as a JSON string. Parse it back.
+            if isinstance(out, str):
+                try:
+                    out = json.loads(out)
+                except ValueError:
+                    pass
+            if isinstance(out, list):
+                fixed = []
+                for x in out:
+                    if isinstance(x, str):
+                        try:
+                            x = json.loads(x)
+                        except ValueError:
+                            continue
+                    if isinstance(x, dict):
+                        fixed.append(x)
+                out = fixed
+            return out
     raise RuntimeError("no tool_use block (stop_reason=%s)" % resp.get("stop_reason"))
 
 
