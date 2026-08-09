@@ -1,0 +1,66 @@
+RULES
+1  probe_py MUST print FAIL on the untouched setup files. A probe that can only
+   print PASS gives every idle agent a perfect score, and nothing downstream can
+   detect it. Make the check depend on work the agent has to do.
+2  probe_py must check the SUBSTANCE of the task, not a proxy for it. If the task
+   is "sort by date descending", check the whole ordering, not just the first row.
+3  probe_py runs as the desktop user with stdlib, PIL, lxml and requests, plus the
+   readers already imported for you: read_xlsx(p) -> {sheet: rows},
+   read_docx(p) -> [paragraph], read_pptx(p) -> [[shape_text]], norm(v), num(v).
+   There is NO openpyxl and NO python-docx in the VM. It gets 120 seconds, and no
+   network except 127.0.0.1.
+4  Live GUI state is readable and fair game: the accessibility tree of the whole
+   desktop is at http://127.0.0.1:5000/accessibility, Chrome's tabs at
+   http://127.0.0.1:1337/json, windows via `wmctrl -lx`.
+5  setup_py and solve_py have stdlib plus openpyxl, docx, pptx and PIL, and they
+   run on the host, so they cannot use anything only the VM has. No randomness,
+   no clocks, no network. solve_py must reach the finished state by writing files,
+   not by launching an application.
+6  gold_kind=file (the default) means solve_py must be able to produce exactly the
+   state probe_py checks. If the target is a config file the agent would create,
+   solve_py writes it at the same path.
+6b gold_kind=browser_state is for a task whose answer is which page Chrome ended
+   up on. Emit "" for probe_py and "" for solve_py; OSWorld grades it itself.
+   Give start_url (the page the agent starts from) and url_patterns, a list of
+   REGEXES that the final URL must ALL match, e.g.
+     ["^https://(www\\\\.)?dmv\\\\.virginia\\\\.gov/licenses-ids/license/applying/eligibility"]
+   A single loose fragment like ["civil/documents-and-forms"] is also fine. Write
+   the regex against the URL only -- page text is not available.
+   Never make the answer depend on content that changes: no prices, no rankings,
+   no availability, no "today's" anything. A page that is reachable by navigating
+   a stable site structure is the target; put the argument in url_stability.
+6c gold_kind=infeasible is for a task that CANNOT be done on this desktop, where
+   the correct behaviour is to refuse. Emit "" for solve_py and "" for probe_py.
+   The task must be genuinely impossible with the installed applications -- not
+   merely tedious, not "needs a plugin you could install". State it as a normal,
+   plausible-sounding user request; do not hint that it is impossible.
+6e setup_shell runs commands INSIDE THE VM before the agent starts, as a list of
+   SHELL STRINGS. They run as the desktop user, so anything system-wide needs
+   sudo, and sudo needs the password piped in. Copy this form exactly -- it is
+   what all six official install tasks use:
+     ["echo {CLIENT_PASSWORD} | sudo -S apt-get update -y && echo {CLIENT_PASSWORD} | sudo -S apt-get install -y jq"]
+   {CLIENT_PASSWORD} is substituted for you. A command that cannot succeed is not
+   retried and not reported -- it silently does nothing and the agent then meets a
+   machine missing the thing the task is about. Use setup_shell only when the task
+   genuinely needs something installed or started.
+7  The instruction must be complete on its own. Never point at a file for the real
+   requirements. Never state the answer or a count of the answer.
+8  Say what the user wants, never which control to operate. No "right-click", no
+   "ctrl+h", no "use the terminal".
+9  One unambiguous end state. If two careful people would produce different files,
+   rewrite it until they would not.
+10 Data at a realistic size for the scenario, roughly 10 to 40 rows or under two
+   pages. Real-sounding names and values, not Item 1 / Company X.
+11 Guest paths are lowercase with no spaces, given to P() without a leading slash.
+11b EVERY path in setup_py, solve_py and probe_py goes through P(). Never write
+   "/home/user/..." as a literal and never call os.path.expanduser("~") or read
+   $HOME -- not in a comparison, not inside a config file you write, not in a
+   glob. Both happen to be correct in the VM, where P() also resolves to
+   /home/user, and both break the host-side check that runs your probe against
+   your own solve_py before the task is ever shipped. A task that bypasses P()
+   loses that check silently: it still runs, but nobody finds out beforehand if
+   its probe is wrong. Config files that must hold an absolute path are the
+   common trap -- write P("Pictures/x") into them, not the literal string.
+12 If the agent edits a document in place, set save_target to that guest path so
+   the file is flushed to disk before the probe runs.
+13 Slugs are unique, lowercase, under 40 characters.

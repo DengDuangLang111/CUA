@@ -18,6 +18,7 @@ import urllib.request
 from pathlib import Path
 
 from ostg import prompt as P
+from ostg import prompt_single as PS
 from ostg import taxonomy as TAX
 
 HERE = Path(__file__).resolve().parent
@@ -174,7 +175,7 @@ def call(messages, system_blocks, cfg, timeout=900):
         "max_tokens": cfg["max_tokens"],
         "system": system_blocks,
         "messages": messages,
-        "tools": [P.tool_definition(TOOL)],
+        "tools": [cfg["tool"]],
         "tool_choice": {"type": "tool", "name": TOOL},
     }
     # Extended thinking and a FORCED tool choice are mutually exclusive: naming the
@@ -298,6 +299,10 @@ def main():
                     help="take only cells I, I+N, I+2N ... of the taxonomy "
                          "product, so N processes can run at once over disjoint "
                          "cells. Batches inside one process stay sequential")
+    ap.add_argument("--single", action="store_true",
+                    help="emit self-contained OSWorld task JSON (instruction + "
+                         "setup + probe, both run in the VM) instead of the "
+                         "host-built four-field spec. See ostg.prompt_single")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -319,6 +324,8 @@ def main():
         fixed_cells = json.loads(Path(args.cells_from).read_text(encoding="utf-8"))
         print("regenerating %d fixed cell(s) from %s" % (len(fixed_cells), args.cells_from))
 
+    P_ = PS if args.single else P
+
     load_env(args.env)
     cfg = {
         "base": os.environ.get("PPAPI_BASE_URL", "https://app-us.ppapi.ai").rstrip("/"),
@@ -326,6 +333,9 @@ def main():
         "model": args.model or os.environ.get("PPAPI_MODEL", "claude-opus-4-6"),
         "max_tokens": args.max_tokens,
         "thinking": args.thinking,
+        # The tool definition travels in cfg because call() is module
+        # level and the choice of prompt module is made in main().
+        "tool": P_.tool_definition(TOOL),
     }
     only = [a.strip() for a in args.apps.split(",")] if args.apps else None
     if args.blockers is None:
@@ -425,11 +435,11 @@ def main():
     if args.dry_run:
         c = (TAX.cells(args.n, args.seed, DOMAIN_APP, only, shard=shard)
              if args.taxonomy else cells(args.n, args.seed, only, blockers))
-        sp = P.system_prompt()
+        sp = P_.system_prompt()
         print("SYSTEM (%d chars, ~%d tok)\n%s\n" % (len(sp), len(sp) // 4, "=" * 60))
         print(sp)
         print("=" * 60, "\nUSER\n",
-              P.user_prompt(args.n, c, priors, external, args.avoid_per_app,
+              P_.user_prompt(args.n, c, priors, external, args.avoid_per_app,
                             args.seed, own_by_app, args.avoid_own_per_app), sep="")
         return 0
 
@@ -469,10 +479,16 @@ def main():
                          x.get("gold_kind", "file"), x["app_count"], x["primary"],
                          len(priors.get((x["artifact"], x["source"]), [])),
                          (x.get("blocker") or "")[:22]))
-            system_blocks = [{"type": "text", "text": P.system_prompt(),
-                              "cache_control": {"type": "ephemeral"}}]
+            system_blocks = [{"type": "text", "text": P_.system_prompt(),
+                              # 1h, not the 5m default: a batch takes 7-10
+                              # minutes to generate, so the system prompt expired
+                              # between every pair of calls and cache_read came
+                              # back 0 for the whole run. 1,700 tokens recomputed
+                              # per batch, paid for and never used.
+                              "cache_control": {"type": "ephemeral",
+                                                "ttl": "1h"}}]
             msgs = [{"role": "user",
-                     "content": P.user_prompt(args.n, c, priors, external,
+                     "content": P_.user_prompt(args.n, c, priors, external,
                                               args.avoid_per_app, args.seed + b,
                                               own_by_app, args.avoid_own_per_app)}]
             try:
@@ -503,7 +519,10 @@ def main():
                     # blocked cell is drawn precisely because it needs that shape,
                     # and letting the model downgrade it back to "file" would put
                     # the task straight back into the class that cannot be built.
-                    s["gold_kind"] = c[i]["gold_kind"]
+                    # The single-JSON contract has no gold_kind: every task is
+                    # graded by its own probe.
+                    if not args.single:
+                        s["gold_kind"] = c[i]["gold_kind"]
                     if c[i].get("blocker"):
                         s["blocker"] = c[i]["blocker"]
                 # A file-graded task with no probe is unscoreable: emit wires the
@@ -513,10 +532,6 @@ def main():
                 # a mislabelled browser_tab cell put 5 dead tasks into the first
                 # 21 of a run without anything complaining. Cheap to assert, and
                 # the failure it catches is invisible downstream.
-                if s.get("gold_kind") == "file" and not (s.get("probe_py") or "").strip():
-                    print("  drop %r: gold_kind=file with empty probe_py" % slug)
-                    seen.discard(slug)
-                    continue
                 # Grow the avoid-list inside the run too, so batch 2 of a
                 # --batches 3 call already knows what batch 1 just wrote.
                 priors[(s.get("artifact"), s.get("source"))].append(slug)
