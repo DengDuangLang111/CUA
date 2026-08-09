@@ -418,6 +418,24 @@ FAIL. Second, the per-grade split: 4.6 went 10/10 partial on browser tasks and
 fixed grader templates cannot check. Both agree with the pilot's PDF-export
 anecdote. The decision stands.
 
+**A common judge removed the confound.** Sonnet 4.6 then audited both corpora
+under the identical rubric — four audits in total:
+
+| judge → corpus | covered | partial | overreach | missing/task |
+|---|---|---|---|---|
+| Opus 4.6 → Opus 5 set | 35% | 36% | 27% | 0.8 |
+| Opus 5 → 4.6 set | 14% | 81% | 3% | 4.3 |
+| Sonnet 4.6 → Opus 5 set | 26% | 70% | 2% | **2.0** |
+| Sonnet 4.6 → 4.6 set | 17% | 80% | 1% | **3.1** |
+
+Same judge, same severity: the Opus 5 corpus carries ~35% fewer coverage gaps
+(2.0 vs 3.1 missing items per task; covered 26% vs 17%). The direction of the
+cross-audit holds; its size does not — the true gap is ~1.5x, not the ~5x the
+asymmetric table implied, because Opus 4.6 judges softly (0.8/task on the same
+corpus where Sonnet finds 2.0) and Opus 5 judges harshly (4.3 where Sonnet
+finds 3.1). Decision unchanged; future audits should use a fixed third-party
+judge so rates stay comparable across corpora.
+
 ---
 
 ## 9. Open
