@@ -30,14 +30,19 @@ and the tasks run against a real Ubuntu VM under Docker.
 **Three grading routes**, chosen per task rather than one imposed on all:
 
 - **probe** (172 of 206) — a program that reads the finished state and prints
-  PASS or FAIL. Used when "done" cannot be said in a rule: several files that
+  PASS or FAIL (delivered through OSWorld's `vm_command_line` getter and the
+  `check_include_exclude` metric, which tolerates the raw trailing newline). Used when "done" cannot be said in a rule: several files that
   must agree, a value computed from the data, a directory laid out a particular
   way.
-- **table** (24) — OSWorld's own spreadsheet comparison.
-- **browser** (10) — OSWorld's URL matcher.
+- **table** (24) — OSWorld's own spreadsheet comparison (`compare_table`
+  judging inline `check_cell` rules on the host; no gold file).
+- **browser** (10) — OSWorld's URL matcher (`is_expected_url_pattern_match`
+  over the `active_url_from_accessTree` getter).
 
 Preferring the built-in metric where it fits means less generated code, and
-grading maintained by the benchmark rather than by us.
+grading maintained by the benchmark rather than by us. (Grade counts are
+over the 206 generated; the controls below removed three, leaving the 203
+that roll.)
 
 **Tasks are self-contained.** The setup runs inside the VM as a shell command,
 so the JSON carries everything it needs as text and can be handed to anyone with
@@ -64,7 +69,7 @@ never prepared, and score 0 for reasons indistinguishable from a weak agent.
 
 | run | status | max steps | thinking | solved |
 |---|---|---|---|---|
-| v8big-all, think-preserve | 28 / 203 scored (06:30) | 100 | on, history preserved | 10 (37%) |
+| v8big-all, think-preserve | 32 / 203 scored (07:30) | 100 | on, history preserved | 11 (34%) |
 | v9 corpus (§2) — the tasks the NEXT trajectory rollout will run | complete: 213 specs, under instruction review | — | — | — |
 | v8nt-opus46 | stopped at 8 / 23 | 50 | off | 4 |
 | v8nt-opus5 | stopped at 9 / 20 | 50 | off | 3 |
@@ -79,7 +84,7 @@ carry the grader-strictness confound described in §6.
 ## 2. The v9 corpus — ambiguity and voice, activated
 
 Why: measured against the official OSWorld instructions, v8's are twice as
-long (median 53 vs 26 words), carry an absolute path 87% of the time (official:
+long (median 52 vs 26 words), carry an absolute path 87% of the time (official:
 5%), open with a bare imperative 1% of the time (official: 18%), and speak in
 one register — a first-person workplace persona. Fine for grading, narrow for
 SFT: a model trained only on over-explicit requests never practices resolving
@@ -87,7 +92,7 @@ SFT: a model trained only on over-explicit requests never practices resolving
 are decoupled — a probe can pin an exact path while the instruction says "the
 rota spreadsheet on my desktop" — so vagueness costs no grading rigor.
 
-Design, generating as of this writing:
+Design:
 
 - **Ambiguity joins the coordinate product** (intent × domain × difficulty ×
   ambiguity, 325 → 1300 cells), four levels with a 10/30/30/30 quota: explicit
@@ -95,7 +100,7 @@ Design, generating as of this writing:
   outcome-only ("get the numbers right before I resend it").
 - **Voice** is derived per cell at 30/25/45: terse / polite / persona.
 - **Mechanical gates**: an ambiguity≥2 instruction containing /home/user or a
-  filename is rejected; deictic without open_path is rejected.
+  filename is rejected; deictic without open_path is rejected (grade=browser is exempt: there the start_url page is the referent).
 - **Two prompt rules from the audit findings**: every countable promise is
   checked in full or not made (the partial-verdict feedback), and browser
   targets must have URLs that encode the work (query parameters a form fill
@@ -113,18 +118,19 @@ instructions:
 | first-person persona | 16% | 37% | 21% |
 | contains absolute path | 5% | 87% | **12%** |
 
-Ambiguity landed 14/31/26/29 against the 10/30/30/30 quota; every polite task
+Ambiguity landed 14/31/25/29 against the 10/30/30/30 quota; every polite task
 opens with Please/Could; persona fell from a monoculture to a plurality. The
 one partial miss: terse tasks carry the register's tone but not its brevity
 (median 47 words vs persona's 63) — the "one or two sentences" instruction is
 half-obeyed, and a hard length cap is a one-line rule for the next iteration.
 
-Three generator defects were caught and fixed during the run, all downstream
-of the tool schema not being server-enforced: a module-resolution mislaunch
-(Python prefers the working directory's package over PYTHONPATH — run from
-the versioned worktree), a spec arriving as a string, and whole spec arrays
-arriving as JSON strings — one shard silently discarded 17,000 string
-fragments before extract learned to parse both shapes back.
+Three generator defects were caught and fixed during the run. One was
+operational: a module-resolution mislaunch (Python puts the working
+directory ahead of PYTHONPATH, so the old package shadowed the new — run
+from the versioned worktree). Two were downstream of the tool schema not
+being server-enforced: a spec arriving as a JSON string, and whole spec
+arrays arriving as JSON strings — one shard silently discarded 17,000
+string fragments before extract learned to parse both shapes back.
 
 The instruction review is in front of the operator now; VM controls and the
 v8-protocol rollout follow approval.
