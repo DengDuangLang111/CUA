@@ -51,12 +51,24 @@ def task_page(td, meta):
     if meta.get("task"):
         out.append("<details><summary>task config + evaluator</summary><pre>%s</pre></details>"
                    % html.escape(json.dumps(meta["task"], indent=1, ensure_ascii=False)))
+    # One model call can emit several actions; they share a step_num (the
+    # runner increments per call). Label them 11.1/11.2 and print the
+    # response once per call, not once per action.
+    total = {}
     for s in steps:
+        total[s.get("step_num")] = total.get(s.get("step_num"), 0) + 1
+    seen, prev = {}, None
+    for s in steps:
+        n = s.get("step_num")
+        seen[n] = seen.get(n, 0) + 1
+        label = str(n) if total[n] == 1 else "%s.%d" % (n, seen[n])
         t = str(s.get("action_timestamp", ""))     # 20260809@001656079456
         clock = "%s:%s:%s" % (t[9:11], t[11:13], t[13:15]) if "@" in t and len(t) >= 15 else ""
-        out.append("<div class=step><h3>step %s <small>%s</small></h3>"
-                   % (s.get("step_num"), clock))
-        out.append("<pre>%s</pre>" % html.escape((s.get("response") or "").strip()))
+        out.append("<div class=step><h3>step %s <small>%s</small></h3>" % (label, clock))
+        resp = (s.get("response") or "").strip()
+        if resp != prev:
+            out.append("<pre>%s</pre>" % html.escape(resp))
+        prev = resp
         out.append("<p><code>%s</code></p>" % html.escape(str(s.get("action"))))
         png = s.get("screenshot_file")
         if png and os.path.isfile(os.path.join(td, png)):
