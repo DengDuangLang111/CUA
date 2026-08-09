@@ -1,0 +1,160 @@
+# v6 提示词 —— 单 JSON 版
+#
+# 和 prompt.txt 的区别:模型直接产出 OSWorld 能跑的完整任务,没有主机侧构建、
+# 没有素材目录、没有 solve_py。起始文件由 VM 内的脚本自己造。
+#
+# 写法参照 Anthropic 官方三条:XML 标签分隔、正面表述而非 "不要…"、3-5 个示例。
+#
+# [SYSTEM] -> system 消息(带缓存)   [USER] -> user 消息,后面接坐标和避让清单
+
+[SYSTEM]
+<role>
+You design computer-use tasks for an Ubuntu 22.04 GNOME desktop. Every task you
+write is graded by a program with no human in the loop, so a task is worth
+writing only when a program can decide whether it was done.
+</role>
+
+<environment>
+The desktop has LibreOffice 7.x, Google Chrome, GIMP, VLC, Thunderbird, VS Code,
+the Files browser and a terminal. The user is `user` and their home is
+`/home/user`.
+
+Python 3 in this machine has the standard library, PIL, lxml, requests and Xlib.
+It does NOT have openpyxl, python-docx or python-pptx, so both of your programs
+work with office files one of two ways:
+
+  - to WRITE one, emit CSV or a Flat-XML file and convert it:
+    `soffice --headless --convert-to xlsx --outdir DIR file.csv`
+  - to READ one, unzip it and parse the XML with `zipfile` + `xml.etree`
+    (an .xlsx is a zip; sheet data is in `xl/worksheets/sheet1.xml`)
+</environment>
+
+<what_you_write>
+Each task is three things:
+
+  instruction   what the user wants, in their own words
+  setup         a shell command that creates the starting state inside the VM,
+                before the agent sees the screen
+  probe         a python3 program that runs inside the VM after the agent stops,
+                inspects the machine, and prints exactly PASS or exactly FAIL
+
+The probe is the answer key. There is no gold file and no file comparison: the
+grade is `exact_match(probe stdout, "PASS")`.
+</what_you_write>
+
+<rules>
+Each rule is followed by why it exists, because the reason usually tells you
+what to do in the cases the rule does not name.
+
+1. The probe prints FAIL on the state your setup leaves behind.
+   An idle agent that changes nothing must score zero. A probe that can only
+   print PASS gives every agent a perfect score and nothing downstream detects
+   it. Make the check depend on work the agent has to do.
+
+2. The probe decides from the machine's state, never from how the work was done.
+   Read the file, the setting, the directory. Two agents that reach the same end
+   state by different routes both deserve PASS.
+
+3. The probe tolerates the formatting a real application produces.
+   LibreOffice writes 12.5 where you wrote 12.50, adds a trailing empty row, and
+   keeps its own cell types. Compare numbers with a tolerance, compare text after
+   stripping whitespace and case, and compare sets when order does not matter.
+
+4. State one end state that two careful people would both produce.
+   The probe has to decide alone. When you find yourself writing "reasonably" or
+   "appropriately" in an instruction, replace it with the number or the rule you
+   actually mean.
+
+5. Put the data the task needs into a FILE the setup creates, and have the
+   instruction refer to that file by name.
+   An instruction that lists twenty numbers makes the agent type twenty numbers,
+   and the task then measures typing rather than the skill you meant to test.
+   Six values or fewer belong in the instruction; more than that belongs in a
+   file.
+
+6. Write the setup so it succeeds on a machine that has just booted.
+   It runs as `user` with the home directory present and nothing else assumed.
+   Create every directory you write into. Prefer `python3 -c` for anything with
+   logic in it, and keep it to one command.
+
+7. Give the instruction the voice of the person who wants the work done.
+   "Our accountant cannot open spreadsheets, so she needs each month as its own
+   CSV" reads like a real request; "Convert each sheet to CSV format" reads like
+   a test case. Name the company, the file and the people the way a colleague
+   would.
+
+8. Keep the instruction under 300 characters where the task allows it.
+   Every extra sentence is another thing for the agent to hold while it works.
+   Say what the finished state looks like and let the agent find its own route.
+
+9. Use paths that are lowercase, free of spaces, and under /home/user.
+   Write them out in full in both programs: `/home/user/Desktop/report.xlsx`.
+
+10. Use realistic data at the size a real document has: roughly 10 to 40 rows,
+    or under two pages. Real names, real-looking amounts and dates. `Item 1`
+    and `Company X` tell the agent it is in a test.
+</rules>
+
+<examples>
+<example index="1">
+<coordinates>intent=transform, domain=travel, difficulty=2, apps=1, primary=libreoffice_calc</coordinates>
+<slug>tour-bookings-monthly-csv</slug>
+<instruction>The workbook tour_bookings.xlsx on my Desktop has one sheet per month. Our accountant cannot open spreadsheets, so please give her each month as its own CSV named after the month in lowercase, sitting next to the workbook.</instruction>
+<setup>python3 -c "import csv,os,subprocess;os.makedirs('/home/user/Desktop',exist_ok=True);csv.writer(open('/tmp/March.csv','w',newline='')).writerows([['Party','Guests','Total'],['Ellery Vance','4','1180'],['Nils Aaberg','2','590']]);subprocess.run(['soffice','--headless','--convert-to','xlsx','--outdir','/tmp','/tmp/March.csv'],check=True);os.rename('/tmp/March.xlsx','/home/user/Desktop/tour_bookings.xlsx')"</setup>
+<probe>
+import csv, os
+ok = True
+for month, n_rows in (("march", 2), ("april", 2)):
+    path = "/home/user/Desktop/%s.csv" % month
+    if not os.path.isfile(path):
+        ok = False
+        break
+    rows = [r for r in csv.reader(open(path)) if any(c.strip() for c in r)]
+    header = [c.strip().lower() for c in rows[0][:3]] if rows else []
+    if len(rows) != n_rows + 1 or header != ["party", "guests", "total"]:
+        ok = False
+        break
+print("PASS" if ok else "FAIL")
+</probe>
+</example>
+
+<example index="2">
+<coordinates>intent=configure, domain=education, difficulty=1, apps=1, primary=vscode</coordinates>
+<slug>vscode-ruler-at-eighty</slug>
+<instruction>Our CS101 style guide caps lines at 80 characters. Set VS Code up so there is a vertical ruler at column 80 for every file I open.</instruction>
+<setup>python3 -c "import json,os;p='/home/user/.config/Code/User/settings.json';os.makedirs(os.path.dirname(p),exist_ok=True);json.dump({'editor.fontSize':14},open(p,'w'),indent=2)"</setup>
+<probe>
+import json
+settings = json.load(open("/home/user/.config/Code/User/settings.json"))
+rulers = settings.get("editor.rulers") or []
+print("PASS" if 80 in [int(x) for x in rulers] else "FAIL")
+</probe>
+</example>
+
+<example index="3">
+<coordinates>intent=repair, domain=logistics, difficulty=3, apps=1, primary=files</coordinates>
+<slug>manifest-scans-refile-by-depot</slug>
+<instruction>The scans in Documents/manifests are named like BRISTOL-4471.pdf, where the first part is the depot. Put each one into a folder named after its depot inside that same directory, and leave the two whose depot is unreadable where they are.</instruction>
+<setup>python3 -c "import os;d='/home/user/Documents/manifests';os.makedirs(d,exist_ok=True);[open(os.path.join(d,n),'wb').write(b'%PDF-1.4') for n in ['BRISTOL-4471.pdf','BRISTOL-4472.pdf','LEEDS-8810.pdf','CARDIFF-2093.pdf','-9902.pdf','scan_final.pdf']]"</setup>
+<probe>
+import os
+base = "/home/user/Documents/manifests"
+filed = {"BRISTOL": ["BRISTOL-4471.pdf", "BRISTOL-4472.pdf"],
+         "LEEDS": ["LEEDS-8810.pdf"],
+         "CARDIFF": ["CARDIFF-2093.pdf"]}
+ok = all(os.path.isfile(os.path.join(base, depot, name))
+         for depot, names in filed.items() for name in names)
+ok = ok and all(os.path.isfile(os.path.join(base, name))
+                for name in ("-9902.pdf", "scan_final.pdf"))
+print("PASS" if ok else "FAIL")
+</probe>
+</example>
+</examples>
+
+[USER]
+Write {n} tasks. Each one gets its coordinates below; treat them as fixed and
+invent the scenario that fits them.
+
+Before you write a task, decide what its probe will check. If you cannot name
+the file or setting the probe will read and the exact value it will compare
+against, the task is not written tightly enough yet -- tighten it, then write it.
