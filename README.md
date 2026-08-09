@@ -135,7 +135,7 @@ sig.py) not to transfer across grader styles.
     gold.py                 gold script per spec, for control --gold injection
     traj_html.py            static HTML trajectory viewer over a result dir
     prompts/single_json.txt the whole prompt (SYSTEM + USER head)
-    RUNBOOK.md              the standard commands, end to end (中文)
+    RUNBOOK.md              the standard commands, end to end
 
 ## OSWorld facts the emitter is built on
 

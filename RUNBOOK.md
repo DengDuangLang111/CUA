@@ -1,50 +1,62 @@
-# ostg 标准操作手册
+# ostg operations runbook
 
-从生成到 SFT 数据的每一步标准指令。全部在 **WSL** 上执行(Mac 只改代码);
-设计与阈值的"为什么"看 [README.md](README.md),这里只记"怎么跑"。
+The standard commands for every step from generation to SFT data. Everything
+executes on **WSL** (the Mac copy is for editing code); the *why* behind the
+design and thresholds lives in [README.md](README.md) and EXPERIMENTS.md —
+this file only records *how to run*.
 
-约定(下文所有命令假设已设):
+Conventions (every command below assumes):
 
 ```bash
-TG=/mnt/d/research/os-simple-taskgen-v8      # 执行仓库,branch v8
+TG=/mnt/d/research/os-simple-taskgen-v8      # execution repo
 OW=/mnt/d/research/OSWorld
 P=$OW/.venv/bin/python
 R=$OW/results_generated/qwen36-27b-bf16-local
 cd $TG
 ```
 
-流水线全景:
+Pipeline at a glance:
 
-    gen(可分片) -> ship(re-emit+gates) -> [cull] -> merge -> control(3路) -> rollout -> traj_html -> 分析/SFT抽取
+    gen (shardable) -> ship (re-emit + gates) -> [cull] -> merge
+      -> control (3-lane) -> rollout -> traj_html -> analysis / SFT harvest
 
 ---
 
-## 0 同步代码 Mac → WSL
+## 0 Sync code Mac → WSL
 
-Mac 端 scratchpad 仓库提交后:
+After committing in the Mac-side repo:
 
 ```bash
-git bundle create /tmp/ostg.bundle <上次同步的commit>..v8
-cat /tmp/ostg.bundle | ssh osworld-windows 'wsl -e bash -lc "cat > /tmp/ostg.bundle && cd /mnt/d/research/os-simple-taskgen-v8/ostg && git fetch -q /tmp/ostg.bundle v8 && git merge --ff-only -q FETCH_HEAD && git log --oneline -1"'
+git bundle create /tmp/ostg.bundle <last-synced-commit>..v9
+cat /tmp/ostg.bundle | ssh osworld-windows 'wsl -e bash -lc "cat > /tmp/ostg.bundle && cd /mnt/d/research/ostg-v9/ostg && git fetch -q /tmp/ostg.bundle v9 && git merge --ff-only -q FETCH_HEAD && git log --oneline -1"'
 ```
 
-## 1 生成 gen
+Do NOT pipe the bundle and a heredoc script in the same ssh call — they fight
+over stdin and the binary corrupts the script. Two steps, always.
 
-默认不开 thinking(省 5 倍钱、躲 504);`--thinking` 只在想要 d4/d5 更深探针时用。
-两分片并行(同 seed 得到不相交的坐标切分,错开写不同目录):
+## 1 Generate
+
+Non-thinking is the default (5x cheaper, dodges the gateway 504); `--thinking`
+only when you want deeper probes on d4/d5 cells. Two shards in parallel (same
+seed gives disjoint coordinate slices; write to different dirs):
 
 ```bash
+cd /mnt/d/research/ostg-v9          # cwd MUST be the versioned worktree:
+                                    # python -m puts cwd ahead of PYTHONPATH,
+                                    # and a stale ostg/ elsewhere wins
 for i in 0 1; do
-  setsid nohup env PYTHONPATH=. $P -m ostg.gen --n 5 --batches 20 --seed <S> --stream \
-    --shard $i/2 --out out/runs/<set>-s$i/specs.jsonl \
+  setsid nohup $P -m ostg.gen --n 5 --batches 20 --seed <S> --stream \
+    --shard $i/2 --env $TG/.env --out $TG/out/runs/<set>-s$i/specs.jsonl \
     --avoid-corpus /mnt/d/research/cua-gym/tasks.jsonl \
-    > logs/<set>-s$i.log 2>&1 &
+    > $TG/logs/<set>-s$i.log 2>&1 &
 done
 ```
 
-批间丢失由 `--refill`(默认 2)自动补抽。跑完看日志尾部的收官统计。
+Batch losses are re-drawn by `--refill` (default 2). After a crash, resume
+with `--start-batch N` — seeds stay aligned, finished batches are not redone.
+Check the tail of the log for the closing axis summary.
 
-## 2 验收 ship
+## 2 Ship (accept gates)
 
 ```bash
 PYTHONPATH=. $P -m ostg.ship out/runs/<set>-s0 out/runs/<set>-s1 \
@@ -52,30 +64,34 @@ PYTHONPATH=. $P -m ostg.ship out/runs/<set>-s0 out/runs/<set>-s1 \
   --ref osworld-361=$OW/evaluation_examples/examples
 ```
 
-re-emit 用当前 emitter 重编译全部 task JSON(旧集自动吃到新修复),然后过
-HARD/REVIEW 门(见 README)。**删重复**:把该行从 `specs.jsonl` 挪到同目录
-`specs_culled.jsonl`,重跑 ship 即可(每对留先生成的那条)。
+re-emit rebuilds every task JSON with the current emitter (older sets pick up
+newer fixes), then runs the HARD/REVIEW gates (see README). **To cull a
+duplicate**: move its line from `specs.jsonl` to `specs_culled.jsonl` in the
+same run dir and re-run ship (keep the earlier-generated member of a pair).
 
-## 3 合并 merge
+## 3 Merge
 
-目录规则:**一次启动 = 一个目录**(并行分片各写各的,避免两进程同写一个
-jsonl 把行写花);**一个任务集 = 可能由多次启动拼成**(分片、中断续跑)。
-而 runner 只吃一个 `--test_config_base_dir` + 一个 manifest,control 分片也
-需要统一有序的 manifest,所以拼装是标准动作:
+Directory rule: **one launch = one directory** (parallel shards each write
+their own; two processes appending one jsonl would interleave). **One task set
+= possibly several launches** (shards, crash-resumes). The runner takes ONE
+`--test_config_base_dir` + ONE manifest, and control's `--start/--limit`
+sharding needs a single ordered manifest, so assembly is a standard step:
 
 ```bash
 PYTHONPATH=. $P -m ostg.merge out/runs/<set>-s0 out/runs/<set>-s1 --out out/runs/<set>-all
 ```
 
-id 撞车直接报错退出;源目录不动。cull 之后要重新 merge。
+Exits loudly on id collisions; sources are untouched. Re-merge after any cull.
 
-## 4 control 负例检查(rollout 前必跑)
+## 4 Control (negative checks — run before every rollout)
 
-抓三类 OSWorld 静默吞掉的故障:setup 退出码非 0、probe 崩溃(任务会无声退出
-分母)、probe 白给 PASS(SFT 毒药)。三路并行,N 条每路 ceil(N/3):
+Catches three failure classes OSWorld swallows silently: setup exiting
+non-zero, a probe that crashes (the task silently leaves the denominator),
+and a probe that passes without work (SFT poison). Three lanes, ceil(N/3)
+each:
 
 ```bash
-L=69   # ceil(206/3)
+L=69
 for i in 0 1 2; do
   setsid nohup env PYTHONPATH=.:$OW $P -m ostg.control \
     --tasks out/runs/<set>-all --path_to_vm $OW/docker_vm_data/Ubuntu.qcow2 \
@@ -84,58 +100,69 @@ for i in 0 1 2; do
 done
 ```
 
-约 4 分钟/条/路。BAD 处理同 cull:挪出 specs → ship → 重新 merge。
-**不要和 rollout 混跑**(见 §7 内存)。
+Roughly 2–4 minutes per task per lane. BAD tasks: cull as in §2, then
+re-merge. **Never run control concurrently with a rollout** (see §7 memory).
+Known blind spot: control skips `open` config steps, so a task whose start
+state depends on `open` (deictic/a3 tasks) is not fully exercised.
 
-## 4.5 正向验收:gold 注入 + audit 审计(v8.4 起)
+## 4.5 Positive-direction checks: gold injection + audit (v8.4+)
 
-control 只证明"没干活得 0 分";这两道补反方向。四道检查按**盲区**分工,
-每道抓其余三道结构上看不见的病(右列 = 自己抓不了、由谁兜底):
+Control only proves "no work scores 0"; these two cover the reverse direction.
+Four checks divided by blind spot — each catches what the others structurally
+cannot (right column: what it misses, and who covers that):
 
-| 检查 | 抓什么 | 抓不了什么(兜底者) |
+| check | catches | cannot catch (covered by) |
 |---|---|---|
-| control 负例 | 白给分、坏 setup | 一切正向病(下面三个)|
-| gold 注入 | 永远判不过的判分器:懒写盘时序、路径/常量错 | 金标世界信念错(audit)|
-| audit 审计 | 指令⊄判分覆盖;金标里错误的世界断言 | 要真实执行才暴露的(rollout)|
-| rollout | 以上全部漏掉的 | ——最贵,最终裁判 |
+| control (negative) | free points, broken setup | everything positive (below) |
+| gold injection | graders that can never pass: lazy-write timing, wrong paths/constants | gold whose world-beliefs are wrong (audit) |
+| audit | instruction ⊄ grader coverage; wrong world assumptions in golds | anything only real execution exposes (rollout) |
+| rollout | whatever slipped past all three | — most expensive, final referee |
 
-**audit 是 LLM 审计**:每条任务一次调用,审计员读指令+判分器源码,给出
-covered / partial(指令要求判分器不查)/ overreach(判分器查指令没要求的),
-外加 world_assumptions(判分器常量里对活网/外部世界的信念,审计员用自己的
-世界知识核对)。**审计员必须换模型**(出题 opus-5 → 审计 opus-4-6)。
+**The audit is an LLM review**: one call per task; the judge reads the
+instruction plus the grader source and returns covered / partial (instruction
+demands the grader ignores) / overreach (grader demands the instruction never
+made), plus world_assumptions (beliefs about the live web baked into grader
+constants, checked against the judge's own world knowledge). **Use a
+different model than the generator** — and prefer one fixed third-party judge
+across corpora so rates stay comparable (judge severities differ measurably).
 
 ```bash
-# ① LLM 覆盖审计(纯 API,不占 VM,report-only)
+# 1) LLM coverage audit (API only, no VM, report-only)
 PYTHONPATH=. $P -m ostg.audit out/runs/<set>-s0/specs.jsonl [...] \
-  --out out/runs/audit-<set>.jsonl --model claude-opus-4-6 --stream
+  --out out/runs/audit-<set>.jsonl --model claude-sonnet-4-6 --stream
 
-# ② 金标脚本生成(纯 API;答案钥匙要算准,用强模型)
+# 2) gold scripts (API only; the answer key must be computed accurately)
 PYTHONPATH=. $P -m ostg.gold out/runs/<set>-s0/specs.jsonl [...] \
   --out out/runs/gold-<set>.jsonl --model claude-opus-5 --stream
 
-# ③ 金标注入(VM,control 的镜像模式:注入后判分必须 1.0)
+# 3) gold injection (VM; control's mirror mode: must score 1.0 after injection)
 PYTHONPATH=.:$OW $P -m ostg.control --tasks out/runs/<set>-all \
   --path_to_vm $OW/docker_vm_data/Ubuntu.qcow2 --gold out/runs/gold-<set>.jsonl
 ```
 
-读结果:
-- `audit-*.jsonl` 里 verdict != covered 或 world_assumptions 非空的 → 人工过一遍,
-  处置三选一:删任务 / 改探针金标 / 改指令(砍掉判分器不看的承诺);
-- `gold_report.jsonl` 里 ok=false 的分两种:`gold_rc != 0` = 钥匙脚本自己烂(重生成),
-  `gold_rc == 0` 且 score 0 = **判分器永假,真病**(看 probe_out 定位);
-- 已知校准案例:chrome 懒写盘(gold 可抓)、panama 双要求(audit 可抓)、
-  itinerary 活网金标(audit world_assumptions 可抓)。
+Reading the results:
 
-## 5 rollout 标准指令
+- `audit-*.jsonl`: rows with verdict != covered or non-empty
+  world_assumptions go to review; the remedies are cull / fix the grader
+  gold / trim the instruction promise.
+- `gold_report.jsonl` rows with ok=false split two ways: `gold_rc != 0` means
+  the key script itself is broken (regenerate); `gold_rc == 0` with score 0
+  means **the grader can never pass — a real defect** (probe_out locates it).
+- Calibration cases on record: the Chrome lazy-write class (gold injection
+  catches), the dual-requirement browser class (audit catches), the
+  wrong-world-belief class (audit's world_assumptions catches).
 
-前置:隧道自检(HTTP 200 + 模型 id 即通):
+## 5 Rollout
+
+Preflight — the tunnel must answer (HTTP 200 + model id):
 
 ```bash
 cd $OW && set -a && . ./.env && set +a && curl -s -w '\nHTTP %{http_code}\n' \
   -H "Authorization: Bearer $OPENAI_API_KEY" http://127.0.0.1:18001/v1/models
 ```
 
-标准参数(与官方 361 campaign 同口径,除了 sleep 1 与 max_steps 100):
+Standard parameters (official-361 protocol except sleep 1, max_steps 100, and
+thinking captured + preserved):
 
 ```bash
 cd $OW && setsid nohup .venv/bin/python scripts/python/run_multienv_qwen.py \
@@ -143,44 +170,65 @@ cd $OW && setsid nohup .venv/bin/python scripts/python/run_multienv_qwen.py \
   --observation_type screenshot --action_space pyautogui \
   --model qwen36-27b-bf16-local --base_url http://127.0.0.1:18001/v1 \
   --temperature 0.6 --top_p 0.95 --max_tokens 81920 \
-  --max_steps 100 --sleep_after_execution 1 --num_envs 3 --simple_path \
+  --max_steps 100 --sleep_after_execution 1 \
+  --enable_thinking --preserve_thinking --num_envs 3 --simple_path \
   --screen_width 1920 --screen_height 1080 \
   --test_config_base_dir $TG/out/runs/<set>-all \
   --test_all_meta_path $TG/out/runs/<set>-all/manifest.json \
-  --result_dir $R/<set>-ms100-$(date +%Y%m%d) \
+  --result_dir $R/<set>-ms100-think-preserve-$(date +%Y%m%d) \
   > $TG/logs/rollout-<set>.log 2>&1 &
 ```
 
-**补跑 = 用同一 `--result_dir` 重启同一条命令**:有 result.txt 的自动跳过,
-没有的重跑(截图 500 之类的中途夭折就这么救)。
+**Re-running with the same `--result_dir` is the recovery mechanism**: tasks
+with a result.txt are skipped, tasks without one are redone (screenshot-500
+casualties, Slurm handoff blips, setup aborts — all healed by one relaunch at
+the end).
 
-## 6 HTML 轨迹查看器
+max_steps counts MODEL CALLS, not actions: one call emitting several
+tool_calls burns one step. Thinking lands in traj.jsonl inside the response
+(`<think>…</think>`), preserved across turns via
+`chat_template_kwargs.preserve_thinking`.
 
-上游 OSWorld 没有这功能;跑完(或跑到一半)随时生成/刷新:
+## 6 HTML trajectory viewer
+
+Upstream OSWorld has no visualizer; generate/refresh at any time, mid-run
+safe:
 
 ```bash
-PYTHONPATH=. $P -m ostg.traj_html $R/<run目录名> --tasks out/runs/<set>-all
+PYTHONPATH=. $P -m ostg.traj_html $R/<run-dir> --tasks out/runs/<set>-all
 ```
 
-浏览:Windows 上直接开 `D:\research\OSWorld\results_generated\...\<run>\index.html`。
-每任务一页:每步的模型原始输出、pyautogui 动作、执行后截图。增量安全,可反复跑。
+Browse `D:\research\OSWorld\results_generated\...\<run>\index.html` on
+Windows. Per task: a step player (prev/next, arrow keys, slider) with labeled
+THINKING / ACTION / TOOL CALL / EXECUTED blocks per model call, taxonomy
+chips, config/evaluator fold-out, recording link. Step numbers are per model
+call; multi-action calls render as 11.1 / 11.2.
 
-## 7 健康检查与并发红线
+To hand the whole thing to someone: recompress the screenshots and zip
+(`traj_bundle` pattern — JPEG bytes under the .png names, browsers sniff
+content; ~30 MB for a 2,000-screenshot run, recordings excluded).
+
+## 7 Health checks and concurrency red lines
 
 ```bash
-ss -ltn | grep 18001                        # 隧道还在吗
-docker ps --format "{{.Names}}" | wc -l     # 现有 VM 数
-free -g                                     # 可用内存
-grep -c "Failed to get screenshot" logs/rollout-<set>.log   # 500 计数,涨了=内存紧
+ss -ltn | grep 18001                       # tunnel alive?
+docker ps --format "{{.Names}}" | wc -l    # VM count
+free -g                                    # available memory
+grep -c "Failed to get screenshot" logs/rollout-<set>.log   # rising = memory pressure
 ```
 
-内存红线(实测,总内存 19G):
+Memory red lines (measured, 19 GB total):
 
-| 组合 | 结论 |
+| mix | verdict |
 |---|---|
-| rollout ×3 VM(独占) | 安全档,标准配置 |
-| rollout ×2 + control ×1 | **会出截图 500,任务无声夭折**(2026-08-09 实测)|
-| control ×3(独占) | 安全 |
+| rollout × 3 VMs (exclusive) | safe — the standard configuration |
+| rollout × 2 + control × 1 | **screenshot 500s, tasks die silently** (measured 2026-08-09) |
+| control × 3 (exclusive) | safe |
 
-截图 500 的症状:runner 日志 `Failed to get screenshot. Status code: 500` 后跟
-`TypeError: a bytes-like object is required` ——该任务没有 result.txt,按 §5 补跑。
+Screenshot-500 symptom: `Failed to get screenshot. Status code: 500` followed
+by `TypeError: a bytes-like object is required` in the runner log — the task
+has no result.txt; heal it with the §5 same-result_dir relaunch.
+
+Slurm serving chain: the vLLM job self-renews every 24 h (USR1 → successor,
+14-link cap). Each handoff is a ~5–10 minute service gap; up to num_envs
+in-flight tasks abort and are healed by the §5 relaunch.
