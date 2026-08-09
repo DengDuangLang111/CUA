@@ -33,8 +33,13 @@ def score_of(td):
 
 
 def task_page(td, meta):
-    steps = [json.loads(l) for l in open(os.path.join(td, "traj.jsonl"), encoding="utf-8")
-             if l.strip()]
+    steps = []
+    for l in open(os.path.join(td, "traj.jsonl"), encoding="utf-8"):
+        if l.strip():
+            try:
+                steps.append(json.loads(l))
+            except ValueError:   # torn line while the runner is mid-write
+                pass
     score = score_of(td)
     cls = "pass" if score == 1.0 else "fail"
     title = meta.get("slug") or os.path.basename(td)
