@@ -1,70 +1,232 @@
-"""Generate task specs with Claude.
+"""Generate self-contained OSWorld tasks with Claude, in one pass.
 
-    python -m ostg.gen --n 6 --out out/specs.jsonl
+    python -m ostg.gen --n 5 --batches 4 --thinking --out out/runs/v8/specs.jsonl
 
-Axis targets are drawn at random from the labelled official suite
-(taskgen/data/osworld361_labels.json), so the generated batch samples the same
-category space OSWorld-Verified actually occupies. Nothing is validated here;
-specs are appended as-is and judged by emit.py's controls and by the rollouts.
+Each batch: draw taxonomy cells, prompt the model, append specs.jsonl, and
+write runnable task JSON (examples/<domain>/<id>.json + manifest.json) next to
+it. specs.jsonl doubles as the avoid-list memory across runs.
+
+The task JSON leans on three facts checked against the OSWorld source:
+the expected getter reads `rules` (plural); vm_command_line returns raw stdout
+(PASS arrives as "PASS\n", which check_include_exclude tolerates and
+exact_match does not); and setup exit codes are never checked, so a broken
+setup is silent -- ostg.control exists to catch that before rollouts.
 """
 import argparse
 import collections
 import json
 import os
 import random
+import re
+import socket
 import sys
 import urllib.error
 import urllib.request
+import uuid
 from pathlib import Path
 
-from ostg import prompt as P
-from ostg import prompt_single as PS
-from ostg import taxonomy as TAX
+from ostg import taxonomy as T
 
 HERE = Path(__file__).resolve().parent
-LABELS = HERE / "data" / "osworld361_labels.json"
+PROMPTS = HERE / "prompts"
 TOOL = "emit_task_specs"
+# v6's namespace: a slug keeps its id across versions, so results can be joined.
+NS = uuid.UUID("2f8e41b6-7c05-5d93-9a12-6be0d47cf381")
 
-# Axes worth STRATIFYING on -- i.e. the ones a coverage report can be trusted to
-# mean something. The 40-task blind relabel put artifact at 10% disagreement and
-# source at 14% (excluding refusals); `operation` came in at 27.5% because
-# derive/rewrite/set_value are semantically nested.
-AXES = ("artifact", "source")
-
-# Axes worth STEERING on. Not the same list, and the 27.5% is why: that number
-# says two annotators disagree about what to CALL a finished task, which
-# disqualifies operation as a measurement. It says nothing about whether
-# "operation=remove_element" and "operation=set_value" make the model write
-# different tasks -- and they plainly do. Measurement needs reliability,
-# steering does not.
-#
-# Adding operation to the brief takes the reachable cell count over the 260
-# generatable official tasks from 37 (artifact x source) to 80. Batch-level
-# de-duplication deliberately stays at (artifact, source), so the anti-collapse
-# guarantee below is unchanged and the extra coverage accrues across batches.
-STEER = ("artifact", "source", "operation")
-
-
-# Blockers we now have a shape for. The label file marks these tasks
-# generatable=False, and that was correct while a spec could only ever be "probe
-# reads a file solve_py wrote". Each entry says what a spec drawn from such a
-# cell has to become instead. subjective_judgement stays out on purpose: 1 task,
-# and no deterministic answer exists for it at any gold_kind.
-BLOCKER_STRATEGY = {
-    "refusal_not_observable": {"gold_kind": "infeasible"},
-    # gold_kind is decided per task below, not here: over the 56 official
-    # live_web tasks the judging target follows the ARTIFACT, not the blocker.
-    # browser_tab is graded on the browser 29 times out of 29; text_document
-    # (8/8), source_code (3/3) and spreadsheet (6/7) are graded on a file, with
-    # the web page acting only as the source of the data.
-    "needs_live_web": {"source": "live_web"},
-    "needs_network_install": {"gold_kind": "file", "setup_shell": True},
-    # needs_gui_only_state (8 tasks) is deliberately absent. Official grades those
-    # with check_accessibility_tree, whose rules are CSS selectors or xpath over
-    # the GNOME accessibility XML of a desktop the generator never sees. There is
-    # no honest way to have a model guess those, and inventing a probe to replace
-    # them would be reimplementing a getter OSWorld already ships.
+# app -> OSWorld domain (the examples/ subdirectory and manifest key).
+APPS = {
+    "libreoffice_calc": "libreoffice_calc",
+    "libreoffice_writer": "libreoffice_writer",
+    "libreoffice_impress": "libreoffice_impress",
+    "chrome": "chrome",
+    "gimp": "gimp",
+    "vlc": "vlc",
+    "thunderbird": "thunderbird",
+    "vscode": "vs_code",
+    "files": "os",
+    "terminal": "os",
 }
+
+SCHEMA = {
+    "type": "object",
+    "required": ["specs"],
+    "properties": {
+        "specs": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["slug", "instruction", "apps", "setup", "probe"],
+                "properties": {
+                    "slug": {"type": "string",
+                             "description": "unique, lowercase, under 40 characters"},
+                    "instruction": {
+                        "type": "string",
+                        "description": "what the user wants, in their voice. Complete on its "
+                                       "own, and it never states the answer the probe checks."},
+                    "apps": {"type": "array",
+                             "items": {"type": "string", "enum": list(APPS)},
+                             "description": "applications the agent must use, PRIMARY FIRST"},
+                    "setup": {
+                        "type": "string",
+                        "description": "ONE shell command, run inside the VM as the desktop "
+                                       "user before the agent starts. It creates every file and "
+                                       "directory the task begins from. Office files are made by "
+                                       "writing CSV and calling soffice --headless --convert-to, "
+                                       "because the VM has LibreOffice but not openpyxl."},
+                    "probe": {
+                        "type": "string",
+                        "description": "a python3 program, run inside the VM after the agent "
+                                       "stops. It inspects the machine and prints exactly PASS "
+                                       "or exactly FAIL. Write it as real lines of Python: it is "
+                                       "used verbatim, so a newline is a newline."},
+                    "open_path": {
+                        "type": "string",
+                        "description": "optional absolute path opened in its application before "
+                                       "the agent starts, e.g. /home/user/Desktop/sales.xlsx"},
+                    "probe_reads": {
+                        "type": "string",
+                        "description": "the file or setting the probe reads and the value it "
+                                       "compares against, in one line. Naming it forces the "
+                                       "check to exist before the scenario is written."},
+                },
+            },
+        }
+    },
+}
+
+
+def _sections(name):
+    out, key = {}, None
+    for line in (PROMPTS / name).read_text(encoding="utf-8").splitlines():
+        if line.startswith("#"):
+            continue
+        if line.startswith("[") and line.rstrip().endswith("]"):
+            key = line.strip()[1:-1]
+            out[key] = []
+        elif key is not None:
+            out[key].append(line)
+    return {k: "\n".join(v).strip("\n") + "\n" for k, v in out.items()}
+
+
+_S = _sections("single_json.txt")
+SYSTEM, USER_HEAD = _S["SYSTEM"], _S["USER"]
+
+STOP = {
+    "the", "a", "an", "and", "or", "to", "of", "in", "on", "at", "for", "with",
+    "is", "are", "be", "it", "its", "this", "that", "there", "then", "so",
+    "i", "me", "my", "you", "your", "we", "us", "our", "please", "help", "can",
+    "could", "would", "should", "want", "need", "make", "do", "does", "did",
+    "have", "has", "from", "by", "as", "into", "out", "up", "down", "all", "any",
+    "each", "every", "file", "files", "open", "save", "using", "use", "new",
+}
+WORD = re.compile(r"[a-z0-9_]+")
+
+
+def tokens(text):
+    return {w for w in WORD.findall(str(text).lower()) if w not in STOP and len(w) > 2}
+
+
+def relevant(pool, brief, k):
+    """The k instructions most like the brief, by content-word overlap."""
+    q = tokens(brief)
+    if not q:
+        return pool[:k]
+    return sorted(pool, key=lambda t: -len(q & tokens(t)))[:k]
+
+
+def system_prompt():
+    return SYSTEM + ("\n<output>\nThe examples show the shape. Emit your tasks "
+                     "through the tool.\n</output>\n")
+
+
+def user_prompt(n, cells, external=None, own=None, per_app=12, own_per_app=8):
+    external = external or {}
+    own = own or {}
+    lines = []
+    for i, c in enumerate(cells):
+        lines.append(
+            "  spec %d: intent=%s, domain=%s, difficulty=%d, apps=%d, artifact=%s, "
+            "source=%s, primary=%s"
+            % (i + 1, c["intent"], c["domain"], c["difficulty"], c["app_count"],
+               c["artifact"], c["source"], c["primary"]))
+
+    ints = sorted({c["intent"] for c in cells})
+    doms = sorted({c["domain"] for c in cells})
+    cons = sorted({c["difficulty"] for c in cells})
+    tax = ("\n\nintent is what the user is fundamentally trying to get done:\n"
+           + "\n".join("  %s = %s" % (i, T.INTENTS[i]) for i in ints)
+           + "\n\ndomain is the business setting the scenario is dressed in "
+             "(%s). Invent realistic names, values and rules from that world -- "
+             "it is the main thing keeping two specs apart.\n"
+             % ", ".join(doms)
+           + "\ndifficulty is how many APPLICATIONS the task spans and how many "
+             "explicit requirements it imposes. It is not a hint -- the spec must "
+             "match the level it was given, and apps= says how many applications "
+             "to put in the apps list.\n"
+           + "\n".join("  %d = %s" % (c, T.DIFFICULTY[c][0]) for c in cons))
+
+    def brief_for(app):
+        return " ".join(sorted({"%s %s %s %s" % (c["intent"], c["domain"],
+                                                 c["artifact"], app)
+                                for c in cells if c["primary"] == app}))
+
+    ours = []
+    for app in sorted({c["primary"] for c in cells}):
+        pool = own.get(app) or []
+        if not pool:
+            continue
+        shown = relevant(pool, brief_for(app), own_per_app)
+        ours.append("  %s (we have written %d; %d shown):\n%s"
+                    % (app, len(pool), len(shown),
+                       "\n".join("    - " + i.replace("\n", " ")[:200] for i in shown)))
+    own_text = ""
+    if ours:
+        own_text = ("\n\nWE have already written these, for the same applications. "
+                    "Do not write any of them again in different clothes: a task is "
+                    "the same task if it acts on the same kind of state through the "
+                    "same application, however different the industry, the file "
+                    "names and the numbers are.\n" + "\n".join(ours))
+
+    ext = []
+    for app in sorted({c["primary"] for c in cells}):
+        pool = external.get(app) or []
+        if not pool:
+            continue
+        shown = relevant(pool, brief_for(app), per_app)
+        ext.append("  %s (%d such tasks exist; %d shown):\n%s"
+                   % (app, len(pool), len(shown),
+                      "\n".join("    - " + i.replace("\n", " ")[:220] for i in shown)))
+    ext_text = ""
+    if ext:
+        ext_text = ("\n\nThese tasks ALREADY EXIST in public benchmarks for the apps "
+                    "in this batch. They are shown so you do not reinvent them. A "
+                    "task that differs from one of these only in a constant -- a "
+                    "different font size, a different line spacing, a different "
+                    "column name -- counts as the same task and is worthless. Go "
+                    "somewhere structurally different: inspect a different property, "
+                    "or impose a rule none of these impose.\n" + "\n".join(ext))
+
+    return (
+        USER_HEAD.format(n=n)
+        + "\nPer-spec targets, in order:\n"
+        + "\n".join(lines)
+        + tax
+        + "\n\nartifact is what the probe inspects. source is where the information "
+        "needed to do the task comes from: self = inside the artifact itself, "
+        "prompt_literal = stated in the instruction, second_local_artifact = a "
+        "different local file the agent must also open. Put the primary application "
+        "first in apps."
+        + own_text
+        + ext_text
+        + "\n\nMake the batch diverse: different business domains, "
+        "different kinds of work. Two specs must not share a business rule.\n"
+    )
+
+
+def tool_definition(name=TOOL):
+    return {"name": name,
+            "description": "Emit the finished task specs.",
+            "input_schema": SCHEMA}
 
 
 def load_env(path=".env"):
@@ -79,111 +241,17 @@ def load_env(path=".env"):
         os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 
 
-# Which application owns a domain's tasks. multi_apps is deliberately absent: it
-# names an app COUNT, not an app, so it cannot tell us a primary.
-DOMAIN_APP = {
-    "chrome": "chrome",
-    "gimp": "gimp",
-    "libreoffice_calc": "libreoffice_calc",
-    "libreoffice_impress": "libreoffice_impress",
-    "libreoffice_writer": "libreoffice_writer",
-    "os": "files",
-    "thunderbird": "thunderbird",
-    "vlc": "vlc",
-    "vs_code": "vscode",
-}
-
-
-def cells(n, seed, only_apps=None, blockers=None):
-    """Draw n axis targets by sampling real official tasks.
-
-    The primary application is derived from the artifact using the artifact's
-    OBSERVED domain spread in the official suite, not from an independent
-    rotation -- rotating apps separately produced incoherent targets such as
-    artifact=raster_image with primary=libreoffice_calc.
-
-    `blockers` selects which BLOCKER_STRATEGY classes to admit alongside the
-    plainly generatable tasks; None means all of them.
-    """
-    admit = set(BLOCKER_STRATEGY) if blockers is None else set(blockers)
-    tasks = json.loads(LABELS.read_text())["tasks"]
-    pool = [t for t in tasks
-            if t.get("generatable") or t.get("blocker") in admit]
-    if not pool:
-        raise SystemExit("no generatable tasks in the label file")
-
-    hosts = collections.defaultdict(list)
-    for t in pool:
-        app = DOMAIN_APP.get(t["domain"])
-        if app and (not only_apps or app in only_apps):
-            hosts[t["artifact"]].append(app)
-
-    rng = random.Random(seed)
-    seen = collections.Counter()
-    used_cells = set()
-    out = []
-    for _ in range(n):
-        # No repeated (artifact, source) cell within a batch. The first real batch
-        # drew spreadsheet/self three times out of eight and all three came back as
-        # "add a derived column and save" -- the same mode collapse that took the
-        # previous generation to 0.987 instruction similarity. Sampling the cell
-        # without replacement inside a batch costs nothing and prevents it.
-        for _try in range(400):
-            t = rng.choice(pool)
-            # De-duplicate on the source the MODEL will see, not the one in the
-            # label. A blocker strategy can rewrite it -- every needs_live_web
-            # task is presented as source=live_web whatever its label said -- so
-            # keying on the raw value let two tasks with different labels arrive
-            # as the same brief, which is exactly what this loop exists to stop.
-            strat = BLOCKER_STRATEGY.get(t.get("blocker")) or {}
-            eff_src = strat.get("source") or t["source"]
-            cell = (t["artifact"], eff_src)
-            if hosts.get(t["artifact"]) and cell not in used_cells:
-                used_cells.add(cell)
-                break
-        else:
-            continue
-        # Spread across the apps that really carry this artifact, most common first.
-        opts = [a for a, _ in collections.Counter(hosts[t["artifact"]]).most_common()]
-        app = opts[seen[t["artifact"]] % len(opts)]
-        seen[t["artifact"]] += 1
-        src = eff_src
-        gold_kind = strat.get("gold_kind", "file")
-        if t.get("blocker") == "needs_live_web":
-            gold_kind = "browser_state" if t["artifact"] == "browser_tab" else "file"
-        out.append({
-            "artifact": t["artifact"],
-            "source": src if src in P.SOURCES else "self",
-            # Steering only. The label may be arguable (27.5% blind-relabel
-            # disagreement) but it still splits one brief into several.
-            "operation": t.get("operation") or "",
-            "app_count": min(max(int(t.get("app_count") or 1), 1), 3),
-            "primary": app,
-            # What the blocker forces this spec to be. "file" for everything that
-            # was already generatable, so the default path is unchanged.
-            "gold_kind": gold_kind,
-            "needs_setup_shell": bool(strat.get("setup_shell")),
-            "blocker": t.get("blocker") or "",
-            "drawn_from": t["id"],
-        })
-    return out
-
-
 def call(messages, system_blocks, cfg, timeout=900):
     payload = {
         "model": cfg["model"],
         "max_tokens": cfg["max_tokens"],
         "system": system_blocks,
         "messages": messages,
-        "tools": [cfg["tool"]],
+        "tools": [tool_definition()],
         "tool_choice": {"type": "tool", "name": TOOL},
     }
-    # Extended thinking and a FORCED tool choice are mutually exclusive: naming the
-    # tool is itself the decision, so the model has nothing left to think about and
-    # the API rejects the pair. Asking for thinking therefore means dropping to
-    # tool_choice auto, which turns the structured output from a guarantee into a
-    # probability -- hence the retry in generate(), which is the price of thinking,
-    # not an optimisation.
+    # Thinking and a forced tool choice are mutually exclusive; auto makes the
+    # tool call probable rather than guaranteed, hence the retry in the caller.
     if cfg.get("thinking"):
         payload["thinking"] = {"type": "adaptive"}
         payload["tool_choice"] = {"type": "auto"}
@@ -200,11 +268,13 @@ def call(messages, system_blocks, cfg, timeout=900):
             return json.loads(r.read().decode("utf-8", "replace"))
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", "replace")[:600]
-        # Transient by status, so the caller knows whether a retry is pointless.
-        # 429 and 5xx say the gateway or the model was momentarily unavailable;
-        # 4xx otherwise says the request itself is wrong and will stay wrong.
         err = RuntimeError("HTTP %d: %s" % (e.code, body))
         err.transient = e.code == 429 or 500 <= e.code < 600
+        raise err from None
+    except (urllib.error.URLError, socket.timeout, TimeoutError) as e:
+        # A timeout or a dropped connection must not kill the remaining batches.
+        err = RuntimeError("network: %s" % e)
+        err.transient = True
         raise err from None
 
 
@@ -216,20 +286,6 @@ def extract(resp):
 
 
 def call_and_extract(messages, system_blocks, cfg, tries=3):
-    """One batch, retried only for a MISSING TOOL CALL.
-
-    Two failures are worth retrying and they are not the same failure.
-
-    Under tool_choice auto the model can answer in prose instead of calling the
-    tool, which loses the batch. Retrying is safe because a batch is
-    self-contained -- nothing has been written yet -- and the failure was the
-    model's choice, so the same prompt can succeed.
-
-    A 429 or a 5xx is the other one. This originally propagated, on the reasoning
-    that retrying an HTTP error spends tokens on the same failure -- true of a
-    400, false of a gateway timeout, which is exactly what cost one shard a whole
-    batch. A deterministic 4xx still propagates; there is nothing to wait for.
-    """
     for attempt in range(1, tries + 1):
         try:
             resp = call(messages, system_blocks, cfg)
@@ -250,81 +306,118 @@ def call_and_extract(messages, system_blocks, cfg, tries=3):
     raise AssertionError("unreachable")
 
 
+# The wrapper exists so an uncaught exception reaches stdout as FAIL instead of
+# an empty string a metric cannot tell from an idle agent.
+PROBE_WRAPPER = """import sys, traceback
+def _main():
+%s
+
+try:
+    _main()
+except Exception:
+    traceback.print_exc(file=sys.stderr)
+    print("FAIL")
+"""
+
+
+def wrap_probe(body):
+    lines = (body or "").rstrip("\n").splitlines()
+    return PROBE_WRAPPER % "\n".join(("    " + l) if l.strip() else l for l in lines)
+
+
+def task_json(spec, batch):
+    apps = spec.get("apps") or ["files"]
+    domain = APPS.get(apps[0], "os")
+    return domain, {
+        "id": str(uuid.uuid5(NS, "%s/%s" % (batch, spec["slug"]))),
+        "snapshot": domain,
+        "instruction": spec["instruction"],
+        "source": "generated: ostg/%s#%s" % (batch, spec["slug"]),
+        # shell=True: the setup is one command line with quoting in it, run by
+        # /bin/sh. No `until`: a non-zero exit would retry forever (OSWorld
+        # counts only HTTP failures toward the cap).
+        "config": [{"type": "execute",
+                    "parameters": {"command": spec["setup"], "shell": True}}]
+                  + ([{"type": "open", "parameters": {"path": spec["open_path"]}}]
+                     if spec.get("open_path") else []),
+        "related_apps": apps,
+        # `rules`, plural: the getter reads config["rules"]. check_include_exclude
+        # rather than exact_match because stdout arrives raw, "PASS\n".
+        "evaluator": {
+            "func": "check_include_exclude",
+            "result": {"type": "vm_command_line",
+                       "command": ["python3", "-c", wrap_probe(spec.get("probe"))]},
+            "expected": {"type": "rule",
+                         "rules": {"include": ["PASS"], "exclude": ["FAIL"]}},
+        },
+        "ostg": {"slug": spec["slug"], "batch": batch,
+                 "intent": spec.get("intent"), "domain": spec.get("domain"),
+                 "difficulty": spec.get("difficulty"),
+                 "app_count": spec.get("app_count")},
+    }
+
+
+def read_own(files):
+    """(slugs seen, app -> instructions) across every specs.jsonl given."""
+    seen, own = set(), collections.defaultdict(list)
+    for f in files:
+        try:
+            text = f.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for line in text.splitlines():
+            if not line.strip():
+                continue
+            try:
+                r = json.loads(line)
+            except ValueError:
+                continue
+            if not r.get("slug"):
+                continue
+            seen.add(r["slug"])
+            app = (r.get("apps") or [None])[0]
+            if app and r.get("instruction"):
+                own[app].append(r["instruction"])
+    return seen, own
+
+
+def gate(spec):
+    """Why this spec cannot become a task, or None."""
+    if not (spec.get("setup") or "").strip():
+        return "no setup"
+    probe = (spec.get("probe") or "").strip()
+    if not probe:
+        return "no probe"
+    try:
+        compile(wrap_probe(spec["probe"]), spec.get("slug", "?"), "exec")
+    except SyntaxError as e:
+        return "probe SyntaxError: %s" % e
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--n", type=int, default=6, help="specs per batch")
+    ap.add_argument("--n", type=int, default=5, help="specs per batch")
     ap.add_argument("--batches", type=int, default=1)
-    ap.add_argument("--out", type=Path, default=Path("out/specs.jsonl"))
+    ap.add_argument("--out", type=Path, default=Path("out/runs/v8/specs.jsonl"))
+    ap.add_argument("--batch", default=None,
+                    help="batch name for task ids; default: the --out directory name")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--model", default=None)
     ap.add_argument("--env", default=".env")
-    ap.add_argument("--max-tokens", type=int, default=32000)
-    ap.add_argument("--apps", default=None, help="comma-separated primary-app rotation")
-    ap.add_argument("--blockers", default=None,
-                    help="comma-separated blocker classes to admit beyond the plainly "
-                         "generatable tasks; 'none' for none. Default: all of "
-                         + ",".join(BLOCKER_STRATEGY))
+    ap.add_argument("--max-tokens", type=int, default=48000)
+    ap.add_argument("--apps", default=None, help="comma-separated primary-app filter")
+    ap.add_argument("--thinking", action="store_true")
     ap.add_argument("--priors", default=None,
-                    help="glob of earlier specs.jsonl files whose slugs feed the "
-                         "per-cell avoid list. Default: */specs.jsonl next to --out, "
-                         "so a run stays its own task set but still knows what every "
-                         "earlier run already wrote. 'none' to disable.")
+                    help="glob of earlier specs.jsonl feeding the avoid list; "
+                         "default: sibling runs next to --out; 'none' to disable")
     ap.add_argument("--avoid-corpus", action="append", default=[], metavar="PATH",
-                    help="a tasks.jsonl of instructions that ALREADY EXIST publicly "
-                         "(e.g. CUA-Gym). Per-app samples are shown to the model as "
-                         "things not to write. Repeat for several corpora")
-    ap.add_argument("--avoid-per-app", type=int, default=12,
-                    help="how many existing PUBLIC instructions per app to show")
-    ap.add_argument("--avoid-own-per-app", type=int, default=8,
-                    help="how many of OUR OWN earlier instructions per app to show. "
-                         "Keyed by application rather than by (artifact, source) "
-                         "cell, because an app with a small operation space -- VLC, "
-                         "GIMP -- produces the same task twice from two different "
-                         "cells and the per-cell list never sees it")
-    ap.add_argument("--taxonomy", action="store_true",
-                    help="draw briefs from the enumerated intent x domain x "
-                         "constraints product (ostg/taxonomy.py) instead of "
-                         "sampling axis targets out of the official suite")
-    ap.add_argument("--thinking", action="store_true",
-                    help="extended thinking. Forces tool_choice to auto, since a "
-                         "named tool and thinking cannot be combined, so the tool "
-                         "call becomes probable rather than guaranteed and batches "
-                         "are retried when it is missing")
-    ap.add_argument("--cells-from", default=None, metavar="FILE",
-                    help="a JSON list of cell dicts to regenerate at EXACTLY those "
-                         "coordinates, instead of drawing from the taxonomy. Used to "
-                         "replace specs that were rejected downstream without moving "
-                         "the run's axis distribution")
-    ap.add_argument("--shard", default=None, metavar="I/N",
-                    help="take only cells I, I+N, I+2N ... of the taxonomy "
-                         "product, so N processes can run at once over disjoint "
-                         "cells. Batches inside one process stay sequential")
-    ap.add_argument("--single", action="store_true",
-                    help="emit self-contained OSWorld task JSON (instruction + "
-                         "setup + probe, both run in the VM) instead of the "
-                         "host-built four-field spec. See ostg.prompt_single")
+                    help="tasks.jsonl of PUBLIC instructions (app_type + "
+                         "instruction) the model must not reinvent; repeatable")
+    ap.add_argument("--avoid-per-app", type=int, default=12)
+    ap.add_argument("--avoid-own-per-app", type=int, default=8)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
-
-    shard = None
-    if args.shard:
-        try:
-            i, n_ = (int(x) for x in args.shard.split("/"))
-        except ValueError:
-            print("--shard wants I/N, e.g. 0/4", file=sys.stderr)
-            return 1
-        if not 0 <= i < n_:
-            print("--shard index must be in [0, N)", file=sys.stderr)
-            return 1
-        shard = (i, n_)
-
-    # Cells to regenerate verbatim, when replacing specs rejected downstream.
-    fixed_cells = None
-    if args.cells_from:
-        fixed_cells = json.loads(Path(args.cells_from).read_text(encoding="utf-8"))
-        print("regenerating %d fixed cell(s) from %s" % (len(fixed_cells), args.cells_from))
-
-    P_ = PS if args.single else P
 
     load_env(args.env)
     cfg = {
@@ -333,87 +426,27 @@ def main():
         "model": args.model or os.environ.get("PPAPI_MODEL", "claude-opus-4-6"),
         "max_tokens": args.max_tokens,
         "thinking": args.thinking,
-        # The tool definition travels in cfg because call() is module
-        # level and the choice of prompt module is made in main().
-        "tool": P_.tool_definition(TOOL),
     }
     only = [a.strip() for a in args.apps.split(",")] if args.apps else None
-    if args.blockers is None:
-        blockers = None
-    elif args.blockers.strip().lower() == "none":
-        blockers = []
-    else:
-        blockers = [b.strip() for b in args.blockers.split(",")]
-        unknown = sorted(set(blockers) - set(BLOCKER_STRATEGY))
-        if unknown:
-            print("unknown blocker class(es): %s; known: %s"
-                  % (", ".join(unknown), ", ".join(BLOCKER_STRATEGY)), file=sys.stderr)
-            return 1
-
+    batch_name = args.batch or args.out.parent.name
     args.out.parent.mkdir(parents=True, exist_ok=True)
 
-    # Each run owns its own specs.jsonl, so nothing from an older prompt or an
-    # older framework can end up in this run's task set. The avoid list is the one
-    # thing that must NOT be per-run: it exists to stop the same cell producing the
-    # same business scenario over and over, and that only works if it remembers
-    # across runs. So slugs are read from every run, results are written to one.
-    prior_files = []
     if args.priors is None:
         prior_files = sorted(args.out.parent.parent.glob("*/" + args.out.name))
-    elif args.priors.strip().lower() != "none":
+    elif args.priors.strip().lower() == "none":
+        prior_files = []
+    else:
         prior_files = sorted(Path().glob(args.priors))
     prior_files = [f for f in prior_files if f.resolve() != args.out.resolve()]
 
-    def read_priors():
-        """(seen, per-cell slugs, per-app instructions), re-read from disk.
+    def priors_now():
+        return read_own(prior_files + ([args.out] if args.out.is_file() else []))
 
-        Called before EVERY batch, not once at startup. Four sharded processes
-        write to four sibling specs.jsonl files, and reading them once meant each
-        process only ever knew what IT had written. The measured cost was two
-        near-duplicate pairs across shards -- a VLC loop task written twice, once
-        for an estate agency and once for a clinic, and the same VS Code settings
-        repair written twice. Disjoint taxonomy cells stop two processes drawing
-        the same coordinates; nothing stopped them writing the same task.
-
-        The per-app list is the second fix and a different one. The per-cell list
-        is keyed on (artifact, source), which is too fine: those two VLC tasks sat
-        in different cells and were still the same task, because VLC has only a
-        handful of settings worth writing a task about. Grouping by APPLICATION is
-        the granularity at which a small operation space actually bites, and full
-        instructions are sent rather than slugs -- a slug does not say what the
-        task was, and the whole point is for the model to recognise it.
-        """
-        seen, cells_, apps_ = set(), collections.defaultdict(list), collections.defaultdict(list)
-        for f in prior_files + ([args.out] if args.out.is_file() else []):
-            try:
-                text = f.read_text(encoding="utf-8")
-            except OSError:
-                continue
-            for line in text.splitlines():
-                if not line.strip():
-                    continue
-                try:
-                    r = json.loads(line)
-                except ValueError:
-                    continue      # a sibling mid-write; the next batch will see it
-                if not r.get("slug"):
-                    continue
-                seen.add(r["slug"])
-                cells_[(r.get("artifact"), r.get("source"))].append(r["slug"])
-                app = (r.get("apps") or [None])[0] or r.get("primary")
-                if app and r.get("instruction"):
-                    apps_[app].append(r["instruction"])
-        return seen, cells_, apps_
-
-    seen, priors, own_by_app = read_priors()
+    seen, own_by_app = priors_now()
     if seen:
-        print("avoid list: %d slug(s) from %d earlier run(s), over %d cell(s), %d app(s)"
-              % (len(seen), len(prior_files), len(priors), len(own_by_app)))
+        print("avoid list: %d slug(s), %d app(s) with instructions"
+              % (len(seen), len(own_by_app)))
 
-    # Instructions from suites that already exist publicly. The per-cell and
-    # per-app lists above only know what WE wrote; this is what stops the model
-    # reinventing one of CUA-Gym's 9,835 desktop tasks, and it acts before the
-    # tokens are spent rather than after.
     external = collections.defaultdict(list)
     for path in args.avoid_corpus:
         p = Path(path)
@@ -433,123 +466,90 @@ def main():
               % (sum(len(v) for v in external.values()), len(external)))
 
     if args.dry_run:
-        c = (TAX.cells(args.n, args.seed, DOMAIN_APP, only, shard=shard)
-             if args.taxonomy else cells(args.n, args.seed, only, blockers))
-        sp = P_.system_prompt()
+        c = T.cells(args.n, args.seed, only)
+        sp = system_prompt()
         print("SYSTEM (%d chars, ~%d tok)\n%s\n" % (len(sp), len(sp) // 4, "=" * 60))
         print(sp)
         print("=" * 60, "\nUSER\n",
-              P_.user_prompt(args.n, c, priors, external, args.avoid_per_app,
-                            args.seed, own_by_app, args.avoid_own_per_app), sep="")
+              user_prompt(args.n, c, external, own_by_app,
+                          args.avoid_per_app, args.avoid_own_per_app), sep="")
         return 0
 
     if not cfg["key"]:
         print("PPAPI_API_KEY is empty; put it in %s" % args.env, file=sys.stderr)
         return 1
 
+    tasks_dir = args.out.parent / "examples"
+    manifest = collections.defaultdict(list)
+    for f in sorted(tasks_dir.glob("*/*.json")):
+        manifest[f.parent.name].append(f.stem)
+
     kept = 0
-    # Taxonomy cells already spent this run, so later batches walk the 260-cell
-    # product instead of re-drawing its most probable corners.
     spent = set()
     with args.out.open("a", encoding="utf-8") as fh:
         for b in range(args.batches):
-            if fixed_cells is not None:
-                c = fixed_cells[b * args.n:(b + 1) * args.n]
-                if not c:
-                    break
-            else:
-                c = (TAX.cells(args.n, args.seed + b * 1000, DOMAIN_APP, only, spent,
-                           shard=shard)
-                 if args.taxonomy
-                 else cells(args.n, args.seed + b * 1000, only, blockers))
-            if args.taxonomy:
-                spent.update((x["intent"], x["domain"], x["constraints"]) for x in c)
-            # Re-read before every batch so the other shards' work is visible.
-            seen, priors, own_by_app = read_priors()
+            c = T.cells(args.n, args.seed + b * 1000, only, spent)
+            if not c:
+                break
+            spent.update((x["intent"], x["domain"], x["difficulty"]) for x in c)
+            seen, own_by_app = priors_now()  # sibling runs may be writing
             print("\nbatch %d/%d" % (b + 1, args.batches))
             for x in c:
-                if x.get("intent"):
-                    print("  %-14s %-18s c=%d  %-18s %-20s avoid=%d"
-                          % (x["intent"], x["domain"], x["constraints"],
-                             x["artifact"], x["primary"],
-                             len(priors.get((x["artifact"], x["source"]), []))))
-                    continue
-                print("  %-16s %-20s %-14s %-10s apps=%d %-19s avoid=%d %s"
-                      % (x["source"], x["artifact"], x["operation"] or "-",
-                         x.get("gold_kind", "file"), x["app_count"], x["primary"],
-                         len(priors.get((x["artifact"], x["source"]), [])),
-                         (x.get("blocker") or "")[:22]))
-            system_blocks = [{"type": "text", "text": P_.system_prompt(),
-                              # 1h, not the 5m default: a batch takes 7-10
-                              # minutes to generate, so the system prompt expired
-                              # between every pair of calls and cache_read came
-                              # back 0 for the whole run. 1,700 tokens recomputed
-                              # per batch, paid for and never used.
-                              "cache_control": {"type": "ephemeral",
-                                                "ttl": "1h"}}]
+                print("  %-14s %-18s d=%d  %-18s %s"
+                      % (x["intent"], x["domain"], x["difficulty"],
+                         x["artifact"], x["primary"]))
+            system_blocks = [{"type": "text", "text": system_prompt(),
+                              # 1h: a batch takes longer than the 5m default TTL.
+                              "cache_control": {"type": "ephemeral", "ttl": "1h"}}]
             msgs = [{"role": "user",
-                     "content": P_.user_prompt(args.n, c, priors, external,
-                                              args.avoid_per_app, args.seed + b,
-                                              own_by_app, args.avoid_own_per_app)}]
+                     "content": user_prompt(args.n, c, external, own_by_app,
+                                            args.avoid_per_app,
+                                            args.avoid_own_per_app)}]
             try:
                 specs, resp, thought = call_and_extract(msgs, system_blocks, cfg)
             except RuntimeError as e:
                 print("  failed: %s" % e)
                 continue
-            kept_before = kept
             u = resp.get("usage", {})
             print("  in=%s out=%s cache_read=%s thinking_blocks=%d"
                   % (u.get("input_tokens"), u.get("output_tokens"),
                      u.get("cache_read_input_tokens"), thought))
+            kept_before = kept
             for i, s in enumerate(specs):
                 slug = s.get("slug") or ""
                 if not slug or slug in seen:
                     print("  skip duplicate/blank slug %r" % slug)
                     continue
+                why = gate(s)
+                if why:
+                    print("  skip %-34s %s" % (slug, why))
+                    continue
                 seen.add(slug)
                 if i < len(c):
-                    s["drawn_from"] = c[i]["drawn_from"]
-                    # The model never emits `operation`; it is stamped from the
-                    # brief so a later batch can report on what was steered for.
-                    s["operation"] = c[i]["operation"]
-                    for k in ("intent", "domain", "constraints"):
-                        if k in c[i]:
-                            s[k] = c[i][k]
-                    # gold_kind is dictated by the cell, never by the model: a
-                    # blocked cell is drawn precisely because it needs that shape,
-                    # and letting the model downgrade it back to "file" would put
-                    # the task straight back into the class that cannot be built.
-                    # The single-JSON contract has no gold_kind: every task is
-                    # graded by its own probe.
-                    if not args.single:
-                        s["gold_kind"] = c[i]["gold_kind"]
-                    if c[i].get("blocker"):
-                        s["blocker"] = c[i]["blocker"]
-                # A file-graded task with no probe is unscoreable: emit wires the
-                # empty program into a file-reading evaluator, the metric receives
-                # an empty string, and the task scores 0 forever while both
-                # build-time controls report n/a rather than failing. That is how
-                # a mislabelled browser_tab cell put 5 dead tasks into the first
-                # 21 of a run without anything complaining. Cheap to assert, and
-                # the failure it catches is invisible downstream.
-                # Grow the avoid-list inside the run too, so batch 2 of a
-                # --batches 3 call already knows what batch 1 just wrote.
-                priors[(s.get("artifact"), s.get("source"))].append(slug)
+                    for k in ("drawn_from", "intent", "domain", "difficulty",
+                              "constraints", "artifact", "source", "app_count"):
+                        s[k] = c[i][k]
                 fh.write(json.dumps(s, ensure_ascii=False) + "\n")
+                fh.flush()
+                domain, tj = task_json(s, batch_name)
+                d = tasks_dir / domain
+                d.mkdir(parents=True, exist_ok=True)
+                (d / ("%s.json" % tj["id"])).write_text(
+                    json.dumps(tj, ensure_ascii=False, indent=1), encoding="utf-8")
+                manifest[domain].append(tj["id"])
                 kept += 1
-            # kept is a running total across batches; this line is about THIS one.
+            (args.out.parent / "manifest.json").write_text(
+                json.dumps(manifest, indent=1, sort_keys=True), encoding="utf-8")
             print("  %d emitted, %d kept (%d so far)"
                   % (len(specs), kept - kept_before, kept))
 
-    n_here = sum(1 for x in args.out.read_text().splitlines() if x.strip()) \
-        if args.out.is_file() else 0
-    print("\n%d spec(s) in %s (%d slug(s) known across all runs)"
-          % (n_here, args.out, len(seen)))
-    if seen:
-        rows = [json.loads(x) for x in args.out.read_text().splitlines() if x.strip()]
-        for ax in AXES + ("app_count",):
-            d = collections.Counter(r.get(ax) for r in rows)
-            print("  %-11s %s" % (ax, "  ".join("%s=%d" % kv for kv in d.most_common())))
+    rows = [json.loads(x) for x in args.out.read_text().splitlines() if x.strip()] \
+        if args.out.is_file() else []
+    print("\n%d spec(s) in %s, %d task json under %s"
+          % (len(rows), args.out, sum(len(v) for v in manifest.values()), tasks_dir))
+    for ax in ("intent", "domain", "difficulty", "artifact"):
+        d = collections.Counter(r.get(ax) for r in rows)
+        print("  %-11s %s" % (ax, "  ".join("%s=%d" % kv for kv in d.most_common())))
     return 0
 
 
