@@ -1,8 +1,11 @@
 # Synthetic task generation for OSWorld — design, experiments, results
 
-Status 2026-08-09. v8 is the pipeline in use; sections 1–3 describe it and the
-design behind it. Sections 4–7 are the experiments that produced that design,
-with sample sizes attached so weak evidence can be told from strong.
+Status 2026-08-09. **v9 (§9) is the standard pipeline going forward** — the
+ambiguity and voice axes are part of every future corpus, and the v9 tasks are
+what the next trajectory rollout runs. v8 remains the corpus of the rollout
+currently in flight. Sections 1–3 describe the running system and the design
+behind it; sections 4–9 are the experiments that produced it, with sample
+sizes attached so weak evidence can be told from strong.
 
 ---
 
