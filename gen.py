@@ -273,7 +273,13 @@ def main():
                          "(e.g. CUA-Gym). Per-app samples are shown to the model as "
                          "things not to write. Repeat for several corpora")
     ap.add_argument("--avoid-per-app", type=int, default=12,
-                    help="how many existing instructions per app to show")
+                    help="how many existing PUBLIC instructions per app to show")
+    ap.add_argument("--avoid-own-per-app", type=int, default=8,
+                    help="how many of OUR OWN earlier instructions per app to show. "
+                         "Keyed by application rather than by (artifact, source) "
+                         "cell, because an app with a small operation space -- VLC, "
+                         "GIMP -- produces the same task twice from two different "
+                         "cells and the per-cell list never sees it")
     ap.add_argument("--taxonomy", action="store_true",
                     help="draw briefs from the enumerated intent x domain x "
                          "constraints product (ostg/taxonomy.py) instead of "
@@ -283,6 +289,11 @@ def main():
                          "named tool and thinking cannot be combined, so the tool "
                          "call becomes probable rather than guaranteed and batches "
                          "are retried when it is missing")
+    ap.add_argument("--cells-from", default=None, metavar="FILE",
+                    help="a JSON list of cell dicts to regenerate at EXACTLY those "
+                         "coordinates, instead of drawing from the taxonomy. Used to "
+                         "replace specs that were rejected downstream without moving "
+                         "the run's axis distribution")
     ap.add_argument("--shard", default=None, metavar="I/N",
                     help="take only cells I, I+N, I+2N ... of the taxonomy "
                          "product, so N processes can run at once over disjoint "
@@ -301,6 +312,12 @@ def main():
             print("--shard index must be in [0, N)", file=sys.stderr)
             return 1
         shard = (i, n_)
+
+    # Cells to regenerate verbatim, when replacing specs rejected downstream.
+    fixed_cells = None
+    if args.cells_from:
+        fixed_cells = json.loads(Path(args.cells_from).read_text(encoding="utf-8"))
+        print("regenerating %d fixed cell(s) from %s" % (len(fixed_cells), args.cells_from))
 
     load_env(args.env)
     cfg = {
@@ -337,38 +354,56 @@ def main():
         prior_files = sorted(Path().glob(args.priors))
     prior_files = [f for f in prior_files if f.resolve() != args.out.resolve()]
 
-    seen = set()
-    # What has already been written in each (artifact, source) cell, so the model
-    # can be told to go somewhere else. Every one of the 260 generatable official
-    # tasks lands in one of 37 such cells, and the two biggest hold 48 and 40 of
-    # them -- without this list every draw from those cells asks the model the
-    # same four-coordinate question and the answers converge. Pure self-play: the
-    # list is built from specs WE generated, so it borrows nothing from the
-    # official suite, which is also the evaluation set.
-    priors = collections.defaultdict(list)
-    for f in prior_files + ([args.out] if args.out.is_file() else []):
-        for line in f.read_text().splitlines():
-            if not line.strip():
-                continue
-            r = json.loads(line)
-            if not r.get("slug"):
-                continue
-            seen.add(r["slug"])
-            priors[(r.get("artifact"), r.get("source"))].append(r["slug"])
-    if seen:
-        print("avoid list: %d slug(s) from %d earlier run(s), over %d cell(s)"
-              % (len(seen), len(prior_files), len(priors)))
+    def read_priors():
+        """(seen, per-cell slugs, per-app instructions), re-read from disk.
 
-    # The self-play avoid list above only knows what WE wrote. It cannot stop the
-    # model landing on a task that already exists in a public suite -- and CUA-Gym
-    # holds 9,835 desktop tasks over exactly ostg's applications, built from 980
-    # templates whose largest family has 120 variants. Colliding there is
-    # contamination at evaluation time no matter that nobody sampled from it, and
-    # ostg.contam only finds such a collision AFTER the tokens are spent. Showing
-    # the model real examples per app moves the check to where it is free.
-    #
-    # Sampled per app rather than sent whole: 9,835 instructions do not fit in a
-    # prompt, and the ones that matter for a Writer cell are the Writer ones.
+        Called before EVERY batch, not once at startup. Four sharded processes
+        write to four sibling specs.jsonl files, and reading them once meant each
+        process only ever knew what IT had written. The measured cost was two
+        near-duplicate pairs across shards -- a VLC loop task written twice, once
+        for an estate agency and once for a clinic, and the same VS Code settings
+        repair written twice. Disjoint taxonomy cells stop two processes drawing
+        the same coordinates; nothing stopped them writing the same task.
+
+        The per-app list is the second fix and a different one. The per-cell list
+        is keyed on (artifact, source), which is too fine: those two VLC tasks sat
+        in different cells and were still the same task, because VLC has only a
+        handful of settings worth writing a task about. Grouping by APPLICATION is
+        the granularity at which a small operation space actually bites, and full
+        instructions are sent rather than slugs -- a slug does not say what the
+        task was, and the whole point is for the model to recognise it.
+        """
+        seen, cells_, apps_ = set(), collections.defaultdict(list), collections.defaultdict(list)
+        for f in prior_files + ([args.out] if args.out.is_file() else []):
+            try:
+                text = f.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            for line in text.splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    r = json.loads(line)
+                except ValueError:
+                    continue      # a sibling mid-write; the next batch will see it
+                if not r.get("slug"):
+                    continue
+                seen.add(r["slug"])
+                cells_[(r.get("artifact"), r.get("source"))].append(r["slug"])
+                app = (r.get("apps") or [None])[0] or r.get("primary")
+                if app and r.get("instruction"):
+                    apps_[app].append(r["instruction"])
+        return seen, cells_, apps_
+
+    seen, priors, own_by_app = read_priors()
+    if seen:
+        print("avoid list: %d slug(s) from %d earlier run(s), over %d cell(s), %d app(s)"
+              % (len(seen), len(prior_files), len(priors), len(own_by_app)))
+
+    # Instructions from suites that already exist publicly. The per-cell and
+    # per-app lists above only know what WE wrote; this is what stops the model
+    # reinventing one of CUA-Gym's 9,835 desktop tasks, and it acts before the
+    # tokens are spent rather than after.
     external = collections.defaultdict(list)
     for path in args.avoid_corpus:
         p = Path(path)
@@ -395,7 +430,7 @@ def main():
         print(sp)
         print("=" * 60, "\nUSER\n",
               P.user_prompt(args.n, c, priors, external, args.avoid_per_app,
-                            args.seed), sep="")
+                            args.seed, own_by_app, args.avoid_own_per_app), sep="")
         return 0
 
     if not cfg["key"]:
@@ -408,12 +443,19 @@ def main():
     spent = set()
     with args.out.open("a", encoding="utf-8") as fh:
         for b in range(args.batches):
-            c = (TAX.cells(args.n, args.seed + b * 1000, DOMAIN_APP, only, spent,
+            if fixed_cells is not None:
+                c = fixed_cells[b * args.n:(b + 1) * args.n]
+                if not c:
+                    break
+            else:
+                c = (TAX.cells(args.n, args.seed + b * 1000, DOMAIN_APP, only, spent,
                            shard=shard)
                  if args.taxonomy
                  else cells(args.n, args.seed + b * 1000, only, blockers))
             if args.taxonomy:
                 spent.update((x["intent"], x["domain"], x["constraints"]) for x in c)
+            # Re-read before every batch so the other shards' work is visible.
+            seen, priors, own_by_app = read_priors()
             print("\nbatch %d/%d" % (b + 1, args.batches))
             for x in c:
                 if x.get("intent"):
@@ -431,7 +473,8 @@ def main():
                               "cache_control": {"type": "ephemeral"}}]
             msgs = [{"role": "user",
                      "content": P.user_prompt(args.n, c, priors, external,
-                                              args.avoid_per_app, args.seed + b)}]
+                                              args.avoid_per_app, args.seed + b,
+                                              own_by_app, args.avoid_own_per_app)}]
             try:
                 specs, resp, thought = call_and_extract(msgs, system_blocks, cfg)
             except RuntimeError as e:

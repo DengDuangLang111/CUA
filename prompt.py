@@ -215,6 +215,15 @@ RULES
 10 Data at a realistic size for the scenario, roughly 10 to 40 rows or under two
    pages. Real-sounding names and values, not Item 1 / Company X.
 11 Guest paths are lowercase with no spaces, given to P() without a leading slash.
+11b EVERY path in setup_py, solve_py and probe_py goes through P(). Never write
+   "/home/user/..." as a literal and never call os.path.expanduser("~") or read
+   $HOME -- not in a comparison, not inside a config file you write, not in a
+   glob. Both happen to be correct in the VM, where P() also resolves to
+   /home/user, and both break the host-side check that runs your probe against
+   your own solve_py before the task is ever shipped. A task that bypasses P()
+   loses that check silently: it still runs, but nobody finds out beforehand if
+   its probe is wrong. Config files that must hold an absolute path are the
+   common trap -- write P("Pictures/x") into them, not the literal string.
 12 If the agent edits a document in place, set save_target to that guest path so
    the file is flushed to disk before the probe runs.
 13 Slugs are unique, lowercase, under 40 characters.
@@ -244,9 +253,11 @@ OPERATIONS = {
 }
 
 
-def user_prompt(n, cells, priors=None, external=None, per_app=12, seed=0):
+def user_prompt(n, cells, priors=None, external=None, per_app=12, seed=0,
+                own=None, own_per_app=8):
     priors = priors or {}
     external = external or {}
+    own = own or {}
     lines = []
     for i, c in enumerate(cells):
         op = c.get("operation") or ""
@@ -325,6 +336,34 @@ def user_prompt(n, cells, priors=None, external=None, per_app=12, seed=0):
     # Sampled deterministically from `seed` so a rerun of the same batch sends the
     # same prompt, and so successive batches see DIFFERENT examples from the same
     # app rather than the same twelve every time.
+    # Our own earlier instructions for the apps in this batch, grouped by
+    # APPLICATION rather than by cell. The per-cell list above missed the two
+    # closest pairs a 185-spec run produced: a VLC "loop fullscreen unattended"
+    # task written once for an estate agency and once for a clinic, and the same
+    # VS Code settings repair written twice. Different cells, different business
+    # domains, same task -- because VLC has only a handful of settings worth a
+    # task, and dressing changes the nouns, not the verb.
+    #
+    # Full instructions, not slugs: a slug says what we called it, and the model
+    # has to recognise what it WAS.
+    ours = []
+    for app in sorted({c.get("primary") for c in cells if c.get("primary")}):
+        pool = own.get(app) or []
+        if not pool:
+            continue
+        rng = random.Random("own/%s/%s" % (seed, app))
+        shown = rng.sample(pool, min(own_per_app, len(pool)))
+        ours.append("  %s (we have written %d; %d shown):\n%s"
+                    % (app, len(pool), len(shown),
+                       "\n".join("    - " + i.replace("\n", " ")[:200] for i in shown)))
+    own_text = ""
+    if ours:
+        own_text = ("\n\nWE have already written these, for the same applications. "
+                    "Do not write any of them again in different clothes: a task is "
+                    "the same task if it acts on the same kind of state through the "
+                    "same application, however different the industry, the file "
+                    "names and the numbers are.\n" + "\n".join(ours))
+
     ext = []
     for app in sorted({c.get("primary") for c in cells if c.get("primary")}):
         pool = external.get(app) or []
@@ -358,6 +397,7 @@ def user_prompt(n, cells, priors=None, external=None, per_app=12, seed=0):
         "different local file the agent must also open. Put the primary application "
         "first in apps."
         + avoid_text
+        + own_text
         + ext_text
         + "\n\nMake the batch diverse: different business domains, "
         "different kinds of work. Two specs must not share a business rule.\n"
