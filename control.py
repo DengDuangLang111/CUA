@@ -77,6 +77,19 @@ def main(argv=None):
                                   timeout=180).json()
                 rcs.append(r.get("returncode"))
                 err = err or (r.get("error") or "").strip()[-200:]
+            # `open` steps were skipped by reset (they need files the manual
+            # executes just created); run them now so deictic tasks that start
+            # from an opened document are actually exercised.
+            open_rc = None
+            for c in cfg:
+                if c["type"] == "open":
+                    orr = requests.post(base + "/setup/open_file",
+                                        json={"path": c["parameters"]["path"]},
+                                        timeout=180)
+                    open_rc = orr.status_code
+                    if orr.status_code != 200:
+                        err = err or ("open %s -> HTTP %d"
+                                      % (c["parameters"]["path"], orr.status_code))
             env.is_environment_used = True  # manual POSTs bypass the flag
             slug = (task.get("ostg") or {}).get("slug") or task["id"]
             gold_rc = None
@@ -102,9 +115,11 @@ def main(argv=None):
             row = {"slug": slug,
                    "grade": (task.get("ostg") or {}).get("grade", "probe"),
                    "setup_rc": rcs, "setup_err": err, "gold_rc": gold_rc,
+                   "open_rc": open_rc,
                    "probe_out": probe_out, "probe_err": probe_err,
                    "score": score,
-                   "ok": all(rc == 0 for rc in rcs) and score == want}
+                   "ok": all(rc == 0 for rc in rcs) and score == want
+                         and open_rc in (None, 200)}
             bad += not row["ok"]
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
             fh.flush()
