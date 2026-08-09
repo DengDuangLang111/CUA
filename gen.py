@@ -584,6 +584,10 @@ def main():
     ap.add_argument("--stream", action="store_true",
                     help="stream the response; the gateway 504s any request "
                          "that sends nothing for minutes, which is every batch")
+    ap.add_argument("--refill", type=int, default=2,
+                    help="extra batches drawn from fresh cells when a batch is "
+                         "lost (no tool call after retries) or its specs are "
+                         "rejected, until n*batches specs are kept")
     ap.add_argument("--priors", default=None,
                     help="glob of earlier specs.jsonl feeding the avoid list; "
                          "default: sibling runs next to --out; 'none' to disable")
@@ -663,14 +667,22 @@ def main():
 
     kept = 0
     spent = set()
+    target = args.n * args.batches
+    b = 0
     with args.out.open("a", encoding="utf-8") as fh:
-        for b in range(args.batches):
+        # A lost batch (thinking means tool_choice auto, so no tool call is
+        # possible even after retries) or a rejected spec leaves the run short;
+        # refill batches draw FRESH cells until the quota is met or the extras
+        # run out.
+        while b < args.batches or (kept < target and b < args.batches + args.refill):
             c = T.cells(args.n, args.seed + b * 1000, only, spent)
+            label = " (refill)" if b >= args.batches else ""
+            b += 1
             if not c:
                 break
             spent.update((x["intent"], x["domain"], x["difficulty"]) for x in c)
             seen, own_by_app = priors_now()  # sibling runs may be writing
-            print("\nbatch %d/%d" % (b + 1, args.batches))
+            print("\nbatch %d/%d%s" % (b, args.batches, label))
             for x in c:
                 print("  %-14s %-18s d=%d  %-18s %-19s %s"
                       % (x["intent"], x["domain"], x["difficulty"],
