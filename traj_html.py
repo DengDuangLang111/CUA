@@ -46,8 +46,16 @@ def task_page(td, meta):
     out = [PAGE % html.escape(title),
            "<h2>%s <span class=%s>score %s</span></h2>" % (html.escape(title), cls, score),
            "<p><b>%s</b></p>" % html.escape(meta.get("instruction", ""))]
+    if os.path.isfile(os.path.join(td, "recording.mp4")):
+        out.append('<p><a href="recording.mp4">recording.mp4</a></p>')
+    if meta.get("task"):
+        out.append("<details><summary>task config + evaluator</summary><pre>%s</pre></details>"
+                   % html.escape(json.dumps(meta["task"], indent=1, ensure_ascii=False)))
     for s in steps:
-        out.append("<div class=step><h3>step %s</h3>" % s.get("step_num"))
+        t = str(s.get("action_timestamp", ""))     # 20260809@001656079456
+        clock = "%s:%s:%s" % (t[9:11], t[11:13], t[13:15]) if "@" in t and len(t) >= 15 else ""
+        out.append("<div class=step><h3>step %s <small>%s</small></h3>"
+                   % (s.get("step_num"), clock))
         out.append("<pre>%s</pre>" % html.escape((s.get("response") or "").strip()))
         out.append("<p><code>%s</code></p>" % html.escape(str(s.get("action"))))
         png = s.get("screenshot_file")
@@ -68,7 +76,9 @@ def main():
         for f in glob.glob(os.path.join(a.tasks, "examples", "*", "*.json")):
             j = json.load(open(f, encoding="utf-8"))
             meta[j["id"]] = {"slug": (j.get("ostg") or {}).get("slug", j["id"]),
-                             "instruction": j.get("instruction", "")}
+                             "instruction": j.get("instruction", ""),
+                             "task": {"config": j.get("config"),
+                                      "evaluator": j.get("evaluator")}}
     rows = []
     for tj in sorted(glob.glob(os.path.join(a.result_dir, "*", "*", "traj.jsonl"))):
         td = os.path.dirname(tj)
@@ -77,6 +87,7 @@ def main():
         rows.append((os.path.basename(os.path.dirname(td)),
                      m.get("slug", os.path.basename(td)), score, n,
                      os.path.relpath(os.path.join(td, "viewer.html"), a.result_dir)))
+    rows.sort(key=lambda r: (-(r[2] == 1.0), r[0], r[1]))   # passes first
     done = [r for r in rows if r[2] is not None]
     passed = sum(1 for r in rows if r[2] == 1.0)
     idx = [PAGE % "rollout index",
