@@ -108,8 +108,11 @@ sig.py) not to transfer across grader styles.
     gen.py                  cells -> Claude -> specs.jsonl + task JSON
     ship.py                 re-emit + accept + control, one command, no logic
     control.py              the VM negative checks, on the real evaluation path
-    accept.py               the six gates, over finished spec sets
+    accept.py               the gates, over finished spec sets
+    merge.py                several run dirs -> one rollout set (one manifest)
+    traj_html.py            static HTML trajectory viewer over a result dir
     prompts/single_json.txt the whole prompt (SYSTEM + USER head)
+    RUNBOOK.md              the standard commands, end to end (中文)
 
 ## OSWorld facts the emitter is built on
 
