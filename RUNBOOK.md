@@ -87,6 +87,45 @@ done
 约 4 分钟/条/路。BAD 处理同 cull:挪出 specs → ship → 重新 merge。
 **不要和 rollout 混跑**(见 §7 内存)。
 
+## 4.5 正向验收:gold 注入 + audit 审计(v8.4 起)
+
+control 只证明"没干活得 0 分";这两道补反方向。四道检查按**盲区**分工,
+每道抓其余三道结构上看不见的病(右列 = 自己抓不了、由谁兜底):
+
+| 检查 | 抓什么 | 抓不了什么(兜底者) |
+|---|---|---|
+| control 负例 | 白给分、坏 setup | 一切正向病(下面三个)|
+| gold 注入 | 永远判不过的判分器:懒写盘时序、路径/常量错 | 金标世界信念错(audit)|
+| audit 审计 | 指令⊄判分覆盖;金标里错误的世界断言 | 要真实执行才暴露的(rollout)|
+| rollout | 以上全部漏掉的 | ——最贵,最终裁判 |
+
+**audit 是 LLM 审计**:每条任务一次调用,审计员读指令+判分器源码,给出
+covered / partial(指令要求判分器不查)/ overreach(判分器查指令没要求的),
+外加 world_assumptions(判分器常量里对活网/外部世界的信念,审计员用自己的
+世界知识核对)。**审计员必须换模型**(出题 opus-5 → 审计 opus-4-6)。
+
+```bash
+# ① LLM 覆盖审计(纯 API,不占 VM,report-only)
+PYTHONPATH=. $P -m ostg.audit out/runs/<set>-s0/specs.jsonl [...] \
+  --out out/runs/audit-<set>.jsonl --model claude-opus-4-6 --stream
+
+# ② 金标脚本生成(纯 API;答案钥匙要算准,用强模型)
+PYTHONPATH=. $P -m ostg.gold out/runs/<set>-s0/specs.jsonl [...] \
+  --out out/runs/gold-<set>.jsonl --model claude-opus-5 --stream
+
+# ③ 金标注入(VM,control 的镜像模式:注入后判分必须 1.0)
+PYTHONPATH=.:$OW $P -m ostg.control --tasks out/runs/<set>-all \
+  --path_to_vm $OW/docker_vm_data/Ubuntu.qcow2 --gold out/runs/gold-<set>.jsonl
+```
+
+读结果:
+- `audit-*.jsonl` 里 verdict != covered 或 world_assumptions 非空的 → 人工过一遍,
+  处置三选一:删任务 / 改探针金标 / 改指令(砍掉判分器不看的承诺);
+- `gold_report.jsonl` 里 ok=false 的分两种:`gold_rc != 0` = 钥匙脚本自己烂(重生成),
+  `gold_rc == 0` 且 score 0 = **判分器永假,真病**(看 probe_out 定位);
+- 已知校准案例:chrome 懒写盘(gold 可抓)、panama 双要求(audit 可抓)、
+  itinerary 活网金标(audit world_assumptions 可抓)。
+
 ## 5 rollout 标准指令
 
 前置:隧道自检(HTTP 200 + 模型 id 即通):

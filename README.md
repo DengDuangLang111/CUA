@@ -110,6 +110,8 @@ sig.py) not to transfer across grader styles.
     control.py              the VM negative checks, on the real evaluation path
     accept.py               the gates, over finished spec sets
     merge.py                several run dirs -> one rollout set (one manifest)
+    audit.py                LLM coverage audit: instruction vs grader, both ways
+    gold.py                 gold script per spec, for control --gold injection
     traj_html.py            static HTML trajectory viewer over a result dir
     prompts/single_json.txt the whole prompt (SYSTEM + USER head)
     RUNBOOK.md              the standard commands, end to end (中文)
