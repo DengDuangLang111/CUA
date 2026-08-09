@@ -255,6 +255,11 @@ def call(messages, system_blocks, cfg, timeout=900):
     if cfg.get("thinking"):
         payload["thinking"] = {"type": "adaptive"}
         payload["tool_choice"] = {"type": "auto"}
+    # Streaming is about the gateway: a batch sends nothing for minutes, nginx
+    # hits proxy_read_timeout and answers 504 before Anthropic is ever reached.
+    # An event stream keeps bytes moving, so the timeout never arms.
+    if cfg.get("stream"):
+        payload["stream"] = True
     req = urllib.request.Request(
         cfg["base"] + "/v1/messages",
         data=json.dumps(payload).encode(),
@@ -265,6 +270,8 @@ def call(messages, system_blocks, cfg, timeout=900):
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
+            if payload.get("stream"):
+                return _assemble(r)
             return json.loads(r.read().decode("utf-8", "replace"))
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", "replace")[:600]
@@ -276,6 +283,49 @@ def call(messages, system_blocks, cfg, timeout=900):
         err = RuntimeError("network: %s" % e)
         err.transient = True
         raise err from None
+
+
+def _assemble(response):
+    """Rebuild the non-streaming response shape from an SSE event stream, so
+    callers cannot tell the difference. Handles the three block types this
+    generator can receive: text, thinking, tool_use (partial_json fragments)."""
+    blocks, out = {}, {"content": [], "usage": {}, "stop_reason": None}
+    for raw in response:
+        line = raw.decode("utf-8", "replace").strip()
+        if not line.startswith("data:"):
+            continue
+        try:
+            ev = json.loads(line[5:].strip())
+        except ValueError:
+            continue
+        kind = ev.get("type")
+        if kind == "message_start":
+            out["usage"] = dict(ev.get("message", {}).get("usage") or {})
+        elif kind == "content_block_start":
+            blocks[ev["index"]] = dict(ev["content_block"])
+            blocks[ev["index"]]["_json"] = ""
+        elif kind == "content_block_delta":
+            b = blocks.setdefault(ev["index"], {"type": "text", "text": "", "_json": ""})
+            d = ev.get("delta", {})
+            if d.get("type") == "text_delta":
+                b["text"] = b.get("text", "") + d.get("text", "")
+            elif d.get("type") == "thinking_delta":
+                b["thinking"] = b.get("thinking", "") + d.get("thinking", "")
+            elif d.get("type") == "input_json_delta":
+                b["_json"] += d.get("partial_json", "")
+        elif kind == "message_delta":
+            out["stop_reason"] = (ev.get("delta") or {}).get("stop_reason")
+            out["usage"].update(ev.get("usage") or {})
+    for i in sorted(blocks):
+        b = blocks[i]
+        frag = b.pop("_json", "")
+        if b.get("type") == "tool_use":
+            try:
+                b["input"] = json.loads(frag) if frag else b.get("input") or {}
+            except ValueError:
+                continue  # truncated tool call: extract() raises, the retry covers it
+        out["content"].append(b)
+    return out
 
 
 def extract(resp):
@@ -408,6 +458,9 @@ def main():
     ap.add_argument("--max-tokens", type=int, default=48000)
     ap.add_argument("--apps", default=None, help="comma-separated primary-app filter")
     ap.add_argument("--thinking", action="store_true")
+    ap.add_argument("--stream", action="store_true",
+                    help="stream the response; the gateway 504s any request "
+                         "that sends nothing for minutes, which is every batch")
     ap.add_argument("--priors", default=None,
                     help="glob of earlier specs.jsonl feeding the avoid list; "
                          "default: sibling runs next to --out; 'none' to disable")
@@ -426,6 +479,7 @@ def main():
         "model": args.model or os.environ.get("PPAPI_MODEL", "claude-opus-4-6"),
         "max_tokens": args.max_tokens,
         "thinking": args.thinking,
+        "stream": args.stream,
     }
     only = [a.strip() for a in args.apps.split(",")] if args.apps else None
     batch_name = args.batch or args.out.parent.name

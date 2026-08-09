@@ -13,7 +13,7 @@ host and nothing is uploaded; the task JSON is the whole task.
 ## Run
 
     # generate specs AND runnable tasks (examples/ + manifest.json) in one pass
-    python -m ostg.gen --n 5 --batches 4 --seed 424242 --thinking \
+    python -m ostg.gen --n 5 --batches 4 --seed 424242 --thinking --stream \
       --out out/runs/v8/specs.jsonl \
       --avoid-corpus /mnt/d/research/cua-gym/tasks.jsonl
 
