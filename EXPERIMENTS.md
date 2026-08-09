@@ -395,6 +395,29 @@ identity. The corpora are **complements, not substitutes** — a merged ~400-tas
 pool exists if ever wanted, at the price of running the 4.6 half through the
 same VM controls.
 
+**The bidirectional audit landed 2026-08-09 and closed the revisit clause.**
+Each model blind-reviewed the other's corpus for instruction–grader coverage
+(one call per task; the 4.6-as-judge side was calibrated first — it
+independently re-found all three defects we had confirmed by hand, including
+the example.com gold error). Verdict rates:
+
+| | Opus 5 tasks (4.6 judging) | Opus 4.6 tasks (Opus 5 judging) |
+|---|---|---|
+| covered | 35% | 15% |
+| partial (grader under-checks) | 37% | **82%** |
+| overreach (grader over-demands) | 28% | 3% |
+| missing items per task | 0.8 | **4.3** |
+
+The judges differ, so judge severity is confounded with corpus quality and the
+absolute gap should be discounted. Two things survive the confound. First, the
+failure *styles* are opposite: Opus 5's graders err toward overreach (false
+FAILs — wasted trajectories), 4.6's toward partial (false PASSes — poisoned
+labels), and for SFT harvesting a false PASS is strictly worse than a false
+FAIL. Second, the per-grade split: 4.6 went 10/10 partial on browser tasks and
+21/23 on table tasks — it keeps writing promises into instructions that the
+fixed grader templates cannot check. Both agree with the pilot's PDF-export
+anecdote. The decision stands.
+
 ---
 
 ## 9. Open
