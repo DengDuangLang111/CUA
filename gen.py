@@ -280,6 +280,10 @@ def call(messages, system_blocks, cfg, timeout=900):
     if cfg.get("thinking"):
         payload["thinking"] = {"type": "adaptive"}
         payload["tool_choice"] = {"type": "auto"}
+    else:
+        # Explicit, not omitted: Opus 5 thinks by default, and the forced tool
+        # choice above demands thinking off.
+        payload["thinking"] = {"type": "disabled"}
     # Streaming is about the gateway: a batch sends nothing for minutes, nginx
     # hits proxy_read_timeout and answers 504 before Anthropic is ever reached.
     # An event stream keeps bytes moving, so the timeout never arms.
