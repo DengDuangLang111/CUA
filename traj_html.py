@@ -37,16 +37,20 @@ a{color:#1a63c9;text-decoration:none} a:hover{text-decoration:underline}
        padding:1em 1.2em;margin:.8em 0}
 .frame h3{margin:.1em 0 .5em}
 .frame h3 small{color:#5f6368;font-weight:400}
-.think{background:#f3e8fd;border-left:4px solid #8430ce;padding:.6em .9em;
-       border-radius:0 8px 8px 0;white-space:pre-wrap;margin:.5em 0;
-       font-size:.93em}
-.think b{color:#8430ce}
+.blk{border:1px solid #e3e6ea;border-left-width:4px;border-radius:8px;
+     padding:.55em .9em .6em;margin:.55em 0;white-space:pre-wrap;
+     font-size:.92em;background:#fbfcfd}
+.blk .tag{display:block;font-size:.7em;font-weight:700;letter-spacing:.08em;
+     margin:0 0 .35em;font-family:-apple-system,'Segoe UI',sans-serif}
+.b-think{border-left-color:#8a94a6}.b-think .tag{color:#8a94a6}
+.b-act{border-left-color:#1a73e8}.b-act .tag{color:#1a73e8}
+.b-tool{border-left-color:#b0b6bf;font-family:ui-monospace,Menlo,Consolas,monospace;
+        font-size:.85em}.b-tool .tag{color:#9aa0a6}
+.b-exec{border-left-color:#1e8e3e;font-family:ui-monospace,Menlo,Consolas,monospace;
+        font-size:.88em}.b-exec .tag{color:#1e8e3e}
 .resp{background:#f8f9fa;border:1px solid #eceff1;border-radius:8px;
       padding:.6em .9em;white-space:pre-wrap;overflow-x:auto;font-size:.9em;
       font-family:ui-monospace,Menlo,Consolas,monospace}
-.exec{display:inline-block;background:#e8f0fe;color:#174ea6;border-radius:6px;
-      padding:.15em .6em;margin:.25em 0;font-family:ui-monospace,Menlo,monospace;
-      font-size:.88em}
 img.shot{max-width:100%;border:1px solid #dadce0;border-radius:8px;margin-top:.5em}
 table{border-collapse:collapse;width:100%;background:#fff;border-radius:10px;
       overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)}
@@ -107,11 +111,19 @@ def score_of(td):
 
 
 def split_response(r):
-    """(think, rest): the reasoning and everything after it."""
+    """(think, action_desc, tool_xml): reasoning verbatim, the natural-language
+    action line, and the raw tool_call block."""
+    think = ""
+    rest = r
     if "</think>" in r:
-        t = r.split("</think>")[0].replace("<think>", "").strip()
-        return t, r.split("</think>", 1)[1].strip()
-    return "", r.strip()
+        think = r.split("</think>")[0].replace("<think>", "").strip()
+        rest = r.split("</think>", 1)[1]
+    rest = rest.strip()
+    if "<tool_call>" in rest:
+        desc, xml = rest.split("<tool_call>", 1)
+        desc = desc.replace("Action:", "", 1).strip()
+        return think, desc, "<tool_call>" + xml
+    return think, rest, ""
 
 
 def task_page(td, meta):
@@ -140,15 +152,21 @@ def task_page(td, meta):
         resp = (s.get("response") or "").strip()
         parts = ["<div class=frame><h3>step %s <small>%s</small></h3>" % (label, clock)]
         if resp != prev:
-            think, rest = split_response(resp)
+            think, desc, xml = split_response(resp)
             if think:
-                parts.append("<div class=think><b>思考</b><br>%s</div>" % html.escape(think))
-            if rest:
-                parts.append("<div class=resp>%s</div>" % html.escape(rest))
+                parts.append('<div class="blk b-think"><span class=tag>THINKING'
+                             '</span>%s</div>' % html.escape(think))
+            if desc:
+                parts.append('<div class="blk b-act"><span class=tag>ACTION'
+                             '</span>%s</div>' % html.escape(desc))
+            if xml:
+                parts.append('<div class="blk b-tool"><span class=tag>TOOL CALL'
+                             '</span>%s</div>' % html.escape(xml))
         else:
             parts.append("<p class=meta>same model call as the previous action</p>")
         prev = resp
-        parts.append('<div><span class=exec>%s</span></div>' % html.escape(str(s.get("action"))))
+        parts.append('<div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)'
+                     '</span>%s</div>' % html.escape(str(s.get("action"))))
         png = s.get("screenshot_file")
         if png and os.path.isfile(os.path.join(td, png)):
             parts.append('<img class=shot loading=lazy src="%s">' % png)
