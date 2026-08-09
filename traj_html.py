@@ -173,7 +173,19 @@ def task_page(td, meta):
         parts.append("</div>")
         frames.append("".join(parts))
 
+    o = meta.get("ostg") or {}
+    chips = []
+    for lab, val in (("grade", o.get("grade")), ("intent", o.get("intent")),
+                     ("domain", o.get("domain")),
+                     ("difficulty", "d%s" % o.get("difficulty") if o.get("difficulty") else None),
+                     ("apps", " + ".join(meta.get("apps") or []) or None),
+                     ("batch", o.get("batch"))):
+        if val:
+            chips.append('<span class=chip><b style="color:#5f6368;font-weight:600">'
+                         '%s</b>&nbsp;%s</span>' % (lab, html.escape(str(val))))
     head = ["<h2>%s %s</h2>" % (html.escape(title), badge(score)),
+            ('<div class=chips style="margin:.2em 0 .6em">%s</div>' % "".join(chips))
+            if chips else "",
             '<div class=instr>%s</div>' % html.escape(meta.get("instruction", ""))]
     links = ['<a href="index.html" onclick="history.back();return false">&larr; back</a>']
     if os.path.isfile(os.path.join(td, "recording.mp4")):
@@ -203,6 +215,8 @@ def main():
             j = json.load(open(f, encoding="utf-8"))
             meta[j["id"]] = {"slug": (j.get("ostg") or {}).get("slug", j["id"]),
                              "instruction": j.get("instruction", ""),
+                             "ostg": j.get("ostg") or {},
+                             "apps": j.get("related_apps") or [],
                              "task": {"config": j.get("config"),
                                       "evaluator": j.get("evaluator")}}
     rows = []
@@ -210,9 +224,11 @@ def main():
         td = os.path.dirname(tj)
         m = meta.get(os.path.basename(td), {})
         score, n = task_page(td, m)
+        o = m.get("ostg") or {}
         rows.append((os.path.basename(os.path.dirname(td)),
                      m.get("slug", os.path.basename(td)), score, n,
-                     os.path.relpath(os.path.join(td, "viewer.html"), a.result_dir)))
+                     os.path.relpath(os.path.join(td, "viewer.html"), a.result_dir),
+                     o.get("grade", ""), o.get("difficulty", ""), o.get("intent", "")))
     rows.sort(key=lambda r: (-(r[2] == 1.0), r[0], r[1]))
     done = [r for r in rows if r[2] is not None]
     passed = sum(1 for r in rows if r[2] == 1.0)
@@ -221,10 +237,11 @@ def main():
            '<span class=chip>%d scored</span>'
            '<span class="chip" style="color:#1e8e3e;font-weight:600">%d passed</span></div>'
            % (len(rows), len(done), passed),
-           "<table><tr><th>domain<th>task<th>score<th>steps"]
-    for dom, slug, score, n, rel in rows:
-        idx.append('<tr><td>%s<td><a href="%s">%s</a><td>%s<td>%d'
-                   % (dom, rel, html.escape(slug), badge(score), n))
+           "<table><tr><th>domain<th>task<th>grade<th>diff<th>intent<th>score<th>steps"]
+    for dom, slug, score, n, rel, grade, diff, intent in rows:
+        idx.append('<tr><td>%s<td><a href="%s">%s</a><td>%s<td>%s<td>%s<td>%s<td>%d'
+                   % (dom, rel, html.escape(slug), grade,
+                      ("d%s" % diff) if diff != "" else "", intent, badge(score), n))
     idx.append("</table>")
     open(os.path.join(a.result_dir, "index.html"), "w", encoding="utf-8").write(
         page("rollout index", "".join(idx)))
