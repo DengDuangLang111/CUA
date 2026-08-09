@@ -510,6 +510,26 @@ def read_own(files):
     return seen, own
 
 
+_PYC = re.compile(r'^\s*python3?\s+-c\s+(["\'])(.*)\1\s*$', re.S)
+
+
+def _setup_compiles(setup):
+    """SyntaxError in a `python3 -c` setup, or None. Catches the newline
+    double-escape (a literal backslash-n between statements) that cost two of
+    the first twenty specs their setup, silently, in a real VM."""
+    m = _PYC.match(setup)
+    if not m:
+        return None
+    body = m.group(2)
+    if m.group(1) == '"':
+        body = re.sub(r'\\([\\"$`])', r'\1', body)
+    try:
+        compile(body, "<setup>", "exec")
+    except SyntaxError as e:
+        return "setup python SyntaxError: %s" % str(e)[:80]
+    return None
+
+
 def gate(spec):
     """Why this spec cannot become a task, or None. Strict on purpose: a bad
     field that slips through either crashes evaluate() (no result.txt) or
@@ -534,6 +554,9 @@ def gate(spec):
 
     if not (spec.get("setup") or "").strip():
         return "no setup"
+    why = _setup_compiles(spec["setup"])
+    if why:
+        return why
 
     if grade == "table":
         t = spec.get("table_target") or ""
