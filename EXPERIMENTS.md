@@ -57,7 +57,7 @@ never prepared, and score 0 for reasons indistinguishable from a weak agent.
 | run | status | max steps | thinking | solved |
 |---|---|---|---|---|
 | v8big-all, think-preserve | 28 / 203 scored (06:30) | 100 | on, history preserved | 10 (37%) |
-| v9 corpus generation (§9) | ~120 / 206 specs | — | generator-side | — |
+| v9 corpus (§9) — the tasks the NEXT trajectory rollout will run | complete: 213 specs, under instruction review | — | — | — |
 | v8nt-opus46 | stopped at 8 / 23 | 50 | off | 4 |
 | v8nt-opus5 | stopped at 9 / 20 | 50 | off | 3 |
 
@@ -437,6 +437,13 @@ corpus where Sonnet finds 2.0) and Opus 5 judges harshly (4.3 where Sonnet
 finds 3.1). Decision unchanged; future audits should use a fixed third-party
 judge so rates stay comparable across corpora.
 
+Operationally, Sonnet's stricter pass is the quarantine input for SFT
+harvesting: on the v8 corpus it flags 145 tasks partial — 120 of the
+under-verifying kind, where a lazy agent could pass — and 11 with fragile
+world assumptions. These cross with rollout scores when trajectories are
+harvested: passed-but-quarantined gets extra review; failed-on-overreach
+becomes the false-FAIL rescue list.
+
 ---
 
 ## 9. The v9 corpus — ambiguity and voice, activated
@@ -466,17 +473,31 @@ Design, generating as of this writing:
 - Same machinery, same seeds; the walk itself is not comparable to v8's (the
   space quadrupled), so cross-version pairing is reference-only.
 
-First 74 specs: path rate 11% (from 87%), ambiguity 13/31/28/27 against the
-10/30/30/30 target, all axes stamped and gated. Two generator defects were
-caught and fixed in the first hour — a module-resolution mislaunch (Python
-prefers the working directory's package over PYTHONPATH; the fix is running
-from the versioned worktree) and a crash on a malformed model output (the tool
-schema is not server-enforced; one spec arrived as a string — the loop now
-skips non-objects, and generation resumes with --start-batch).
+The corpus completed at **213 specs**. Measured against v8 and the official
+instructions:
 
-Next: an instruction-level comparison against v8 (length, path rate, voice
-compliance, per-level samples, and a common-judge audit), reviewed before any
-VM time is spent; then the same controls and rollout protocol as v8.
+| | official | v8 | v9 |
+|---|---|---|---|
+| median words | 26 | 52 | 56 |
+| opens Please/Could | 28% | 1% | **26%** |
+| first-person persona | 16% | 37% | 21% |
+| contains absolute path | 5% | 87% | **12%** |
+
+Ambiguity landed 14/31/26/29 against the 10/30/30/30 quota; every polite task
+opens with Please/Could; persona fell from a monoculture to a plurality. The
+one partial miss: terse tasks carry the register's tone but not its brevity
+(median 47 words vs persona's 63) — the "one or two sentences" instruction is
+half-obeyed, and a hard length cap is a one-line rule for the next iteration.
+
+Three generator defects were caught and fixed during the run, all downstream
+of the tool schema not being server-enforced: a module-resolution mislaunch
+(Python prefers the working directory's package over PYTHONPATH — run from
+the versioned worktree), a spec arriving as a string, and whole spec arrays
+arriving as JSON strings — one shard silently discarded 17,000 string
+fragments before extract learned to parse both shapes back.
+
+The instruction review is in front of the operator now; VM controls and the
+v8-protocol rollout follow approval.
 
 ## 10. Open
 
