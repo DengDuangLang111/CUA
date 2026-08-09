@@ -190,6 +190,33 @@ def main(argv=None):
             drift = max(abs(c.get(k, 0) / len(rows) - v) for k, v in target.items())
             print("    max quota drift: %.0f%% %s" % (drift * 100, "ok" if drift < 0.10 else "CHECK"))
 
+    # 5. corpus concentration -- pairwise checks cannot see a MONOCULTURE.
+    #    SFT on a narrow corpus teaches the generator's habits, not the skill.
+    COMMON = set("chrome desktop documents downloads pictures libreoffice calc "
+                 "writer impress code thunderbird gimp vlc python csv pdf the".split())
+    ents = collections.Counter()
+    for r in rows:
+        seen, instr = set(), r["instruction"]
+        for m in re.finditer(r"\b[A-Z][a-z]{2,}(?: [A-Z][a-z]{2,})?\b", instr):
+            head = instr[:m.start()].rstrip()
+            # Sentence-initial capitals are grammar, not entities.
+            if not head or head[-1] in ".!?:;\"'":
+                continue
+            if m.group().lower() not in COMMON:
+                seen.add(m.group())
+        ents.update(seen)
+    reused = [(e, c) for e, c in ents.most_common() if c >= 3]
+    print("\n[5] entity reuse across tasks (>=3): %d  %s"
+          % (len(reused), "CHECK" if reused else "ok"))
+    for e, c in reused[:6]:
+        print("    %dx  %s" % (c, e))
+    grams = [b for t in (r["instruction"].lower() for r in rows)
+             for b in zip(t.split(), t.split()[1:])]
+    print("    distinct-bigram ratio: %.2f (higher = more varied phrasing)"
+          % (len(set(grams)) / max(len(grams), 1)))
+    setups = sum(1 for r in rows if (r.get("setup") or "").lstrip().startswith("python3 -c"))
+    print("    setup via python3 -c: %d/%d" % (setups, len(rows)))
+
     return hard_fails
 
 

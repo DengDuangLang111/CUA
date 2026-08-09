@@ -41,40 +41,62 @@ ship runs three stages and is safe to re-run any time:
               CURRENT emitter and gate -- emit fixes and gate tightenings
               reach sets generated before them; rejected specs are dropped
               with the reason printed
-    accept    the six gates below; any hard failure blocks the ship
-    control   only with --path_to_vm: one fresh VM per task, setup exit code
-              checked (OSWorld never does) and an idle agent must score 0
+    accept    the gates below; any hard failure blocks the ship
+    control   only with --path_to_vm: one fresh VM per task, on the real
+              evaluation path. Catches three failure classes OSWorld leaves
+              SILENT, each before rollout minutes are spent:
+              - setup rc != 0 (OSWorld never checks exit codes): the agent
+                meets a desktop without the promised files, scores 0, and it
+                reads as a model failure
+              - probe crash: evaluator exception means no result.txt -- the
+                task quietly leaves the denominator
+              - probe passing on the untouched desktop: a do-nothing
+                trajectory would be graded success; for SFT data that is the
+                worst poison. An idle agent must score 0.
+              Real yield: 2/20 caught in the first opus-5 set (setup \n
+              escaping -- since also blocked statically by the compile gate).
+
+To cull a duplicate after the fact: move its line from specs.jsonl to
+specs_culled.jsonl in the same run dir and re-run ship.
 
 ## The accept gates
 
-Six gates, three duplicate detectors with disjoint blind spots. Standalone:
+Numbers match the tool's output labels. HARD gates block the ship; REVIEW
+gates print worklists. Standalone:
 
     python -m ostg.accept out/runs/<set>/specs.jsonl [more specs.jsonl ...] \
       --ref cua-gym=... --ref osworld=...
 
-    1  instruction jaccard, all pairs     none >= 0.4. Real duplicates measure
-                                          0.5-0.65; same-theme-different-task
-                                          measures <= 0.30.
-    1b instruction tf-idf cosine, pairs   none >= 0.5; the 0.35-0.5 band goes
-                                          to hand review. Re-dressed duplicates
-                                          top out at ~0.34-0.44 here (measured:
-                                          the vlc pair, the listings pair), so
-                                          the text layer flags them and the
-                                          signature layer convicts them.
-    2  grader signatures, all pairs       what the probe READS -- identifier
-                                          word pieces, constants dropped.
-                                          >= 0.30 (the measured knee) goes to
-                                          hand review, not auto-fail: it
-                                          catches re-dressed duplicates whose
-                                          nouns all changed (a confirmed pair
-                                          scored jaccard 0.29, signature 1.00)
-                                          but is coarse on table specs.
-    3  tf-idf cosine vs cua-gym           none >= 0.5. Sharper than jaccard:
-                                          idf downweights boilerplate, so
-                                          shared DISCRIMINATIVE words score.
-    4  tf-idf cosine vs osworld-361      none >= 0.5 -- the train-on-test gate.
-    5  axis balance                       intents even; difficulty quota drift
-                                          under 10%.
+    1  HARD    instruction jaccard, all    none >= 0.4. Real duplicates measure
+               pairs                       0.5-0.65; same-theme-different-task
+                                           measures <= 0.30.
+    1b HARD    instruction tf-idf cosine,  none >= 0.5; the 0.35-0.5 band goes
+               all pairs                   to hand review. Re-dressed duplicates
+                                           top out at ~0.34-0.44 here (measured:
+                                           the vlc pair, the listings pair), so
+                                           the text layer flags them and the
+                                           signature layer convicts them.
+    2  REVIEW  grader signatures, all      what the probe READS -- identifier
+               pairs                       word pieces, constants dropped.
+                                           >= 0.30 (the measured knee) goes to
+                                           hand review, not auto-fail: it
+                                           catches re-dressed duplicates whose
+                                           nouns all changed (a confirmed pair
+                                           scored jaccard 0.29, signature 1.00)
+                                           but is coarse on table specs.
+    3  HARD    tf-idf cosine vs EACH       none >= 0.5, one line per --ref.
+               --ref corpus                cua-gym = the co-trained benchmark;
+                                           osworld-361 = train-on-test. Sharper
+                                           than jaccard: idf downweights
+                                           boilerplate, so shared
+                                           DISCRIMINATIVE words score.
+    4  REVIEW  axis balance                intents even; difficulty quota drift
+                                           under 10% or CHECK.
+    5  REVIEW  corpus concentration        what pairwise checks cannot see: a
+                                           monoculture. Entities reused across
+                                           >= 3 tasks (sentence-initial capitals
+                                           excluded), distinct-bigram ratio,
+                                           setup-template share.
 
 External corpora get the text detectors only: signatures were measured (old
 sig.py) not to transfer across grader styles.
