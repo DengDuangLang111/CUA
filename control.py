@@ -40,33 +40,45 @@ def main():
     with report.open("w", encoding="utf-8") as fh:
         for f in files:
             task = json.loads(f.read_text(encoding="utf-8"))
-            setup_cmd = task["config"][0]["parameters"]["command"]
-            probe_cmd = task["evaluator"]["result"]["command"]
-            # Empty config: reset boots the VM but leaves setup to us, so the
-            # exit code is observable.
-            env.reset(task_config=dict(task, config=[]))
+            cfg = task.get("config") or []
+            execs = [c["parameters"] for c in cfg if c["type"] == "execute"]
+            # Non-execute steps (chrome launch, open tabs) run through reset as
+            # they would in a real rollout; execute steps run by hand so their
+            # exit codes are observable. `open` is dropped: it needs the files
+            # the execute steps have not created yet, and grading never reads it.
+            rest = [c for c in cfg if c["type"] not in ("execute", "open")]
+            env.reset(task_config=dict(task, config=rest))
             base = "http://%s:%s" % (env.vm_ip, env.server_port)
-            r = requests.post(base + "/execute",
-                              json={"command": setup_cmd, "shell": True},
-                              timeout=180).json()
+            rcs, err = [], ""
+            for p in execs:
+                r = requests.post(base + "/execute",
+                                  json={"command": p["command"],
+                                        "shell": p.get("shell", False)},
+                                  timeout=180).json()
+                rcs.append(r.get("returncode"))
+                err = err or (r.get("error") or "").strip()[-200:]
             env.is_environment_used = True  # manual POSTs bypass the flag
-            pr = requests.post(base + "/execute",
-                               json={"command": probe_cmd, "shell": False},
-                               timeout=180).json()
+            probe_out = probe_err = ""
+            res = task["evaluator"].get("result") or {}
+            if res.get("type") == "vm_command_line":
+                pr = requests.post(base + "/execute",
+                                   json={"command": res["command"], "shell": False},
+                                   timeout=180).json()
+                probe_out = (pr.get("output") or "").strip()
+                probe_err = (pr.get("error") or "").strip()[-200:]
             score = env.evaluate()
             row = {"slug": (task.get("ostg") or {}).get("slug") or task["id"],
-                   "setup_rc": r.get("returncode"),
-                   "setup_err": (r.get("error") or "").strip()[-200:],
-                   "probe_out": (pr.get("output") or "").strip(),
-                   "probe_err": (pr.get("error") or "").strip()[-200:],
+                   "grade": (task.get("ostg") or {}).get("grade", "probe"),
+                   "setup_rc": rcs, "setup_err": err,
+                   "probe_out": probe_out, "probe_err": probe_err,
                    "score": score,
-                   "ok": r.get("returncode") == 0 and score == 0.0}
+                   "ok": all(rc == 0 for rc in rcs) and score == 0.0}
             bad += not row["ok"]
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
             fh.flush()
-            print("%-38s rc=%-3s probe=%-6s score=%s %s"
-                  % (row["slug"], row["setup_rc"], row["probe_out"][:6],
-                     score, "ok" if row["ok"] else "BAD"))
+            print("%-38s %-7s rc=%-6s probe=%-6s score=%s %s"
+                  % (row["slug"], row["grade"], row["setup_rc"],
+                     probe_out[:6], score, "ok" if row["ok"] else "BAD"))
     env.close()
     print("%d task(s), %d bad -> %s" % (len(files), bad, report))
     return 1 if bad else 0

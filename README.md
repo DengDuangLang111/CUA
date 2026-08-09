@@ -1,14 +1,17 @@
 # ostg v8
 
-LLM-generated OSWorld tasks, one self-contained JSON each:
+LLM-generated OSWorld tasks, one self-contained JSON each. Three grades, all
+judged by stock OSWorld machinery; the taxonomy cell dictates the grade:
 
-    instruction   what the user wants
-    setup         ONE shell command, run inside the VM before the agent starts
-    probe         a python3 program, run inside the VM after; prints PASS or FAIL
+    probe    (default) setup + a python3 probe in the VM printing PASS/FAIL;
+             vm_command_line + check_include_exclude
+    table    spreadsheet cells: the .xlsx is pulled out and check_cell rules
+             run on the host (openpyxl); vm_file + compare_table, no gold file
+    browser  browser_tab cells: where Chrome ended up;
+             active_url_from_accessTree + is_expected_url_pattern_match
 
-Graded by stock OSWorld machinery: `vm_command_line` runs the probe,
-`check_include_exclude` wants PASS and refuses FAIL. Nothing is built on the
-host and nothing is uploaded; the task JSON is the whole task.
+Nothing is built on the host and nothing is uploaded; the task JSON is the
+whole task.
 
 ## Run
 

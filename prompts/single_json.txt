@@ -38,8 +38,9 @@ Each task is three things:
   probe         a python3 program that runs inside the VM after the agent stops,
                 inspects the machine, and prints exactly PASS or exactly FAIL
 
-The probe is the answer key. There is no gold file and no file comparison: the
-grade is `exact_match(probe stdout, "PASS")`.
+The probe is the answer key. There is no gold file and no file comparison.
+That is grade=probe, the default; two other grades, described in <grades>,
+replace the probe with a checker OSWorld already ships.
 </what_you_write>
 
 <rules>
@@ -95,6 +96,32 @@ what to do in the cases the rule does not name.
     and `Company X` tell the agent it is in a test.
 </rules>
 
+<grades>
+Each task's coordinates carry a grade, which fixes how it is judged and which
+fields you write. You never choose the grade; you write to it.
+
+grade=probe -- the default, exactly as described above: setup + probe.
+
+grade=table -- the finished work is a spreadsheet at table_target, an absolute
+.xlsx path under /home/user. Write setup as usual but NO probe: OSWorld pulls
+the file out of the VM and checks table_rules on the host, where openpyxl
+exists. Each rule is
+
+  {"type": "check_cell", "sheet_idx": 0, "coordinate": "E3",
+   "props": {"value": {"method": "approx:0.01", "ref": 191.67}}}
+
+Methods: eq, ne, gt, ge, lt, le to compare, approx:THRESHOLD for numbers the
+application may round, re for a regex over text. Cover every requirement the
+instruction imposes with at least one rule.
+
+grade=browser -- the answer is the page Chrome ends on. No probe and usually
+no setup. Give start_url, the page Chrome is opened at; url_patterns, regexes
+that must ALL match the final URL (re.search, so escape literal dots); and
+url_stability, one sentence arguing why this answer will not change -- stable
+site structure, historical facts, versioned documentation. Never prices,
+rankings, availability, anything dated today.
+</grades>
+
 <examples>
 <example index="1">
 <coordinates>intent=transform, domain=travel, difficulty=2, apps=1, primary=libreoffice_calc</coordinates>
@@ -132,6 +159,31 @@ print("PASS" if 80 in [int(x) for x in rulers] else "FAIL")
 </example>
 
 <example index="3">
+<coordinates>intent=transform, domain=finance, difficulty=2, apps=1, primary=libreoffice_calc, grade=table</coordinates>
+<slug>loan-ledger-interest-column</slug>
+<instruction>The ledger loans.xlsx on my Desktop lists our outstanding loans, principal in column B and annual rate in C. Add a column D headed Interest with each loan's yearly interest amount, to two decimals.</instruction>
+<setup>python3 -c "import csv,os,subprocess;os.makedirs('/home/user/Desktop',exist_ok=True);csv.writer(open('/tmp/loans.csv','w',newline='')).writerows([['Borrower','Principal','Rate'],['Ashford Dental','12000','0.045'],['Riverside Cafe','8000','0.06'],['Kemp Logistics','15000','0.05'],['Nolan Print','6000','0.055'],['Vera Floral','9500','0.04']]);subprocess.run(['soffice','--headless','--convert-to','xlsx','--outdir','/tmp','/tmp/loans.csv'],check=True);os.rename('/tmp/loans.xlsx','/home/user/Desktop/loans.xlsx')"</setup>
+<table_target>/home/user/Desktop/loans.xlsx</table_target>
+<table_rules>[
+ {"type": "check_cell", "sheet_idx": 0, "coordinate": "D1",
+  "props": {"value": {"method": "eq", "ref": "Interest"}}},
+ {"type": "check_cell", "sheet_idx": 0, "coordinate": "D2",
+  "props": {"value": {"method": "approx:0.01", "ref": 540}}},
+ {"type": "check_cell", "sheet_idx": 0, "coordinate": "D4",
+  "props": {"value": {"method": "approx:0.01", "ref": 750}}}
+]</table_rules>
+</example>
+
+<example index="4">
+<coordinates>intent=info_seeking, domain=education, difficulty=1, apps=1, primary=chrome, grade=browser</coordinates>
+<slug>rfc-2616-official-text</slug>
+<instruction>I teach our intro networking class tomorrow and want the authoritative text of RFC 2616 on screen, from the RFC Editor's own site rather than a mirror.</instruction>
+<start_url>https://www.rfc-editor.org/</start_url>
+<url_patterns>["rfc-editor\\.org/rfc/rfc2616"]</url_patterns>
+<url_stability>RFC numbers are permanent identifiers and the RFC Editor has served /rfc/rfcNNNN paths unchanged for decades.</url_stability>
+</example>
+
+<example index="5">
 <coordinates>intent=repair, domain=logistics, difficulty=3, apps=1, primary=files</coordinates>
 <slug>manifest-scans-refile-by-depot</slug>
 <instruction>The scans in Documents/manifests are named like BRISTOL-4471.pdf, where the first part is the depot. Put each one into a folder named after its depot inside that same directory, and leave the two whose depot is unreadable where they are.</instruction>
@@ -155,6 +207,8 @@ print("PASS" if ok else "FAIL")
 Write {n} tasks. Each one gets its coordinates below; treat them as fixed and
 invent the scenario that fits them.
 
-Before you write a task, decide what its probe will check. If you cannot name
-the file or setting the probe will read and the exact value it will compare
-against, the task is not written tightly enough yet -- tighten it, then write it.
+Before you write a task, decide what its check will read. For grade=probe,
+name the file or setting the probe inspects and the exact value it compares
+against; for grade=table, the cells and the values the rules assert; for
+grade=browser, the final URL. If you cannot, the task is not written tightly
+enough yet -- tighten it, then write it.

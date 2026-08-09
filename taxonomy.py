@@ -48,11 +48,11 @@ DIFFICULTY_MIX = {1: 0.15, 2: 0.25, 3: 0.25, 4: 0.20, 5: 0.15}
 # means changing the prompt and the grader together.
 AMBIGUITY = (1, 2, 3, 4)
 
-# Which artifacts each intent can plausibly end in. browser_tab is absent:
-# its answer is where Chrome ended up, which a probe cannot read.
+# Which artifacts each intent can plausibly end in. browser_tab is graded by
+# OSWorld's own url matcher (grade=browser), not by a probe.
 INTENT_ARTIFACTS = {
     "info_seeking": {"spreadsheet", "text_document", "terminal_output",
-                     "filesystem"},
+                     "filesystem", "browser_tab"},
     "transform": {"spreadsheet", "text_document", "slide_deck", "pdf_or_archive",
                   "raster_image", "source_code"},
     "configure": {"preference_store", "app_data_store", "desktop_session"},
@@ -66,6 +66,7 @@ INTENT_ARTIFACTS = {
 # Derived once from osworld361_labels.json (v6 read it at runtime).
 ARTIFACT_HOSTS = {
     "app_data_store": ["chrome", "vscode", "thunderbird"],
+    "browser_tab": ["chrome"],
     "desktop_session": ["vlc", "thunderbird", "vscode", "libreoffice_impress",
                         "gimp", "files"],
     "filesystem": ["files", "vscode", "chrome", "thunderbird"],
@@ -140,10 +141,15 @@ def cells(n, seed, only_apps=None, used=None):
             "constraints": n_reqs,
             "artifact": artifact,
             "primary": primary,
-            "source": ("self" if intent in ("transform", "repair")
-                       else ("second_local_artifact" if turn % 2 else
-                             "prompt_literal")),
+            "source": ("live_web" if artifact == "browser_tab"
+                       else ("self" if intent in ("transform", "repair")
+                             else ("second_local_artifact" if turn % 2 else
+                                   "prompt_literal"))),
             "app_count": n_apps,
+            # How the task is judged; the cell dictates it and the model
+            # cannot downgrade it (the v6 lesson).
+            "grade": ("browser" if artifact == "browser_tab"
+                      else "table" if artifact == "spreadsheet" else "probe"),
             "drawn_from": "taxonomy:%s/%s/d%d" % (intent, domain, difficulty),
         })
     return out

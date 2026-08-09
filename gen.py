@@ -55,7 +55,7 @@ SCHEMA = {
             "type": "array",
             "items": {
                 "type": "object",
-                "required": ["slug", "instruction", "apps", "setup", "probe"],
+                "required": ["slug", "instruction", "apps"],
                 "properties": {
                     "slug": {"type": "string",
                              "description": "unique, lowercase, under 40 characters"},
@@ -88,6 +88,31 @@ SCHEMA = {
                         "description": "the file or setting the probe reads and the value it "
                                        "compares against, in one line. Naming it forces the "
                                        "check to exist before the scenario is written."},
+                    "table_target": {
+                        "type": "string",
+                        "description": "grade=table only: absolute path of the .xlsx under "
+                                       "/home/user the finished work lives in"},
+                    "table_rules": {
+                        "type": "array", "items": {"type": "object"},
+                        "description": "grade=table only: check_cell rules judged on the host, "
+                                       "e.g. {\"type\":\"check_cell\",\"sheet_idx\":0,"
+                                       "\"coordinate\":\"E3\",\"props\":{\"value\":"
+                                       "{\"method\":\"approx:0.01\",\"ref\":191.67}}}. "
+                                       "Methods: eq, ne, gt, ge, lt, le, approx:THRESHOLD, re."},
+                    "start_url": {
+                        "type": "string",
+                        "description": "grade=browser only: the page Chrome is opened at "
+                                       "before the agent starts"},
+                    "url_patterns": {
+                        "type": "array", "items": {"type": "string"},
+                        "description": "grade=browser only: regexes the FINAL url must ALL "
+                                       "match (re.search). Escape dots you mean literally."},
+                    "url_stability": {
+                        "type": "string",
+                        "description": "grade=browser only: one sentence arguing why this "
+                                       "answer will not change -- stable site structure, "
+                                       "historical facts, versioned docs. Never prices, "
+                                       "rankings, availability."},
                 },
             },
         }
@@ -146,9 +171,9 @@ def user_prompt(n, cells, external=None, own=None, per_app=12, own_per_app=8):
     for i, c in enumerate(cells):
         lines.append(
             "  spec %d: intent=%s, domain=%s, difficulty=%d, apps=%d, artifact=%s, "
-            "source=%s, primary=%s"
+            "source=%s, primary=%s, grade=%s"
             % (i + 1, c["intent"], c["domain"], c["difficulty"], c["app_count"],
-               c["artifact"], c["source"], c["primary"]))
+               c["artifact"], c["source"], c["primary"], c.get("grade", "probe")))
 
     ints = sorted({c["intent"] for c in cells})
     doms = sorted({c["domain"] for c in cells})
@@ -378,29 +403,79 @@ def wrap_probe(body):
 def task_json(spec, batch):
     apps = spec.get("apps") or ["files"]
     domain = APPS.get(apps[0], "os")
-    return domain, {
-        "id": str(uuid.uuid5(NS, "%s/%s" % (batch, spec["slug"]))),
-        "snapshot": domain,
-        "instruction": spec["instruction"],
-        "source": "generated: ostg/%s#%s" % (batch, spec["slug"]),
-        # shell=True: the setup is one command line with quoting in it, run by
-        # /bin/sh. No `until`: a non-zero exit would retry forever (OSWorld
-        # counts only HTTP failures toward the cap).
-        "config": [{"type": "execute",
-                    "parameters": {"command": spec["setup"], "shell": True}}]
-                  + ([{"type": "open", "parameters": {"path": spec["open_path"]}}]
-                     if spec.get("open_path") else []),
-        "related_apps": apps,
+    grade = spec.get("grade") or "probe"
+
+    # shell=True: the setup is one command line with quoting in it, run by
+    # /bin/sh. No `until`: a non-zero exit would retry forever (OSWorld
+    # counts only HTTP failures toward the cap).
+    config = []
+    if (spec.get("setup") or "").strip():
+        config.append({"type": "execute",
+                       "parameters": {"command": spec["setup"], "shell": True}})
+    if spec.get("open_path") and grade != "browser":
+        config.append({"type": "open", "parameters": {"path": spec["open_path"]}})
+
+    if grade == "browser":
+        # The official chrome template: debug port for chrome_open_tabs, socat
+        # so the CDP endpoint is reachable, then the start page.
+        config += [
+            {"type": "launch", "parameters": {
+                "command": ["google-chrome", "--remote-debugging-port=1337"]}},
+            {"type": "launch", "parameters": {
+                "command": ["socat", "tcp-listen:9222,fork", "tcp:localhost:1337"]}},
+            {"type": "chrome_open_tabs", "parameters": {
+                "urls_to_open": [spec["start_url"]]}},
+            {"type": "activate_window", "parameters": {
+                "window_name": "Google Chrome"}},
+        ]
+        evaluator = {
+            "func": "is_expected_url_pattern_match",
+            "result": {"type": "active_url_from_accessTree",
+                       "goto_prefix": "https://www."},
+            "expected": {"type": "rule",
+                         "rules": {"expected": spec["url_patterns"]}},
+        }
+    elif grade == "table":
+        target = spec["table_target"]
+        evaluator = {
+            "func": "compare_table",
+            "result": {"type": "vm_file", "path": target,
+                       "dest": os.path.basename(target)},
+            "options": {"rules": spec["table_rules"]},
+            # The official calc pattern: flush the open workbook to disk before
+            # vm_file pulls it. Every step here logs on failure instead of
+            # raising, so a closed window cannot erase result.txt.
+            "postconfig": [
+                {"type": "activate_window", "parameters": {
+                    "window_name": "%s - LibreOffice Calc" % os.path.basename(target),
+                    "strict": True}},
+                {"type": "sleep", "parameters": {"seconds": 0.5}},
+                {"type": "execute", "parameters": {
+                    "command": ["python", "-c",
+                                "import pyautogui; pyautogui.hotkey(\"ctrl\", \"s\");"]}},
+                {"type": "sleep", "parameters": {"seconds": 0.5}},
+            ],
+        }
+    else:
         # `rules`, plural: the getter reads config["rules"]. check_include_exclude
         # rather than exact_match because stdout arrives raw, "PASS\n".
-        "evaluator": {
+        evaluator = {
             "func": "check_include_exclude",
             "result": {"type": "vm_command_line",
                        "command": ["python3", "-c", wrap_probe(spec.get("probe"))]},
             "expected": {"type": "rule",
                          "rules": {"include": ["PASS"], "exclude": ["FAIL"]}},
-        },
-        "ostg": {"slug": spec["slug"], "batch": batch,
+        }
+
+    return domain, {
+        "id": str(uuid.uuid5(NS, "%s/%s" % (batch, spec["slug"]))),
+        "snapshot": domain,
+        "instruction": spec["instruction"],
+        "source": "generated: ostg/%s#%s" % (batch, spec["slug"]),
+        "config": config,
+        "related_apps": apps,
+        "evaluator": evaluator,
+        "ostg": {"slug": spec["slug"], "batch": batch, "grade": grade,
                  "intent": spec.get("intent"), "domain": spec.get("domain"),
                  "difficulty": spec.get("difficulty"),
                  "app_count": spec.get("app_count")},
@@ -432,9 +507,57 @@ def read_own(files):
 
 
 def gate(spec):
-    """Why this spec cannot become a task, or None."""
+    """Why this spec cannot become a task, or None. Strict on purpose: a bad
+    field that slips through either crashes evaluate() (no result.txt) or
+    ships a task that can never score."""
+    grade = spec.get("grade") or "probe"
+
+    if grade == "browser":
+        u = spec.get("start_url") or ""
+        if not u.startswith(("http://", "https://")):
+            return "bad start_url %r" % u
+        pats = spec.get("url_patterns") or []
+        if not pats:
+            return "no url_patterns"
+        for p in pats:
+            try:
+                re.compile(p)
+            except re.error as e:
+                return "bad url regex %r: %s" % (p, e)
+        if not (spec.get("url_stability") or "").strip():
+            return "no url_stability"
+        return None
+
     if not (spec.get("setup") or "").strip():
         return "no setup"
+
+    if grade == "table":
+        t = spec.get("table_target") or ""
+        if not (t.startswith("/home/user/") and t.endswith(".xlsx")):
+            return "bad table_target %r" % t
+        rules = spec.get("table_rules") or []
+        if not rules:
+            return "no table_rules"
+        for r in rules:
+            if not isinstance(r, dict):
+                return "table rule not an object"
+            # check_cell only: it is the one rule type that guards its own
+            # errors (returns 0.0); sheet_name/sheet_data need a golden
+            # workbook and raise without one.
+            if r.get("type") != "check_cell":
+                return "table rule type %r not allowed" % r.get("type")
+            if not re.fullmatch(r"[A-Z]+[1-9][0-9]*", str(r.get("coordinate", ""))):
+                return "bad coordinate %r" % r.get("coordinate")
+            if "sheet_idx" not in r:
+                return "check_cell without sheet_idx"
+            props = r.get("props")
+            if not isinstance(props, dict) or not props:
+                return "check_cell without props"
+            for rule in props.values():
+                if not (isinstance(rule, dict) and "method" in rule and "ref" in rule):
+                    return "prop rule needs method and ref"
+        return None
+
     probe = (spec.get("probe") or "").strip()
     if not probe:
         return "no probe"
@@ -549,9 +672,9 @@ def main():
             seen, own_by_app = priors_now()  # sibling runs may be writing
             print("\nbatch %d/%d" % (b + 1, args.batches))
             for x in c:
-                print("  %-14s %-18s d=%d  %-18s %s"
+                print("  %-14s %-18s d=%d  %-18s %-19s %s"
                       % (x["intent"], x["domain"], x["difficulty"],
-                         x["artifact"], x["primary"]))
+                         x["artifact"], x["primary"], x.get("grade", "probe")))
             system_blocks = [{"type": "text", "text": system_prompt(),
                               # 1h: a batch takes longer than the 5m default TTL.
                               "cache_control": {"type": "ephemeral", "ttl": "1h"}}]
@@ -574,15 +697,18 @@ def main():
                 if not slug or slug in seen:
                     print("  skip duplicate/blank slug %r" % slug)
                     continue
+                # The cell dictates the grade; stamp before gate so the gate
+                # judges the spec against the contract it was asked for.
+                if i < len(c):
+                    for k in ("drawn_from", "intent", "domain", "difficulty",
+                              "constraints", "artifact", "source", "app_count",
+                              "grade"):
+                        s[k] = c[i][k]
                 why = gate(s)
                 if why:
                     print("  skip %-34s %s" % (slug, why))
                     continue
                 seen.add(slug)
-                if i < len(c):
-                    for k in ("drawn_from", "intent", "domain", "difficulty",
-                              "constraints", "artifact", "source", "app_count"):
-                        s[k] = c[i][k]
                 fh.write(json.dumps(s, ensure_ascii=False) + "\n")
                 fh.flush()
                 domain, tj = task_json(s, batch_name)
