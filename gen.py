@@ -404,6 +404,31 @@ def wrap_probe(body):
     return PROBE_WRAPPER % "\n".join(("    " + l) if l.strip() else l for l in lines)
 
 
+# Documents where ctrl+s saves silently in the official VM image; anything
+# else (GIMP's export dialog, plain text editors) is left alone.
+_FLUSH_APP = {".xlsx": "LibreOffice Calc", ".ods": "LibreOffice Calc",
+              ".odt": "LibreOffice Writer", ".odp": "LibreOffice Impress"}
+
+
+def _flush_postconfig(path):
+    """The official calc pattern: focus the document window and ctrl+s, so an
+    unsaved GUI buffer cannot fail the grade. Every step logs on failure
+    instead of raising, so a closed window cannot erase result.txt."""
+    app = _FLUSH_APP.get(os.path.splitext(path)[1].lower())
+    if not app:
+        return None
+    return [
+        {"type": "activate_window", "parameters": {
+            "window_name": "%s - %s" % (os.path.basename(path), app),
+            "strict": True}},
+        {"type": "sleep", "parameters": {"seconds": 0.5}},
+        {"type": "execute", "parameters": {
+            "command": ["python", "-c",
+                        "import pyautogui; pyautogui.hotkey(\"ctrl\", \"s\");"]}},
+        {"type": "sleep", "parameters": {"seconds": 0.5}},
+    ]
+
+
 def task_json(spec, batch):
     apps = spec.get("apps") or ["files"]
     domain = APPS.get(apps[0], "os")
@@ -446,20 +471,10 @@ def task_json(spec, batch):
             "result": {"type": "vm_file", "path": target,
                        "dest": os.path.basename(target)},
             "options": {"rules": spec["table_rules"]},
-            # The official calc pattern: flush the open workbook to disk before
-            # vm_file pulls it. Every step here logs on failure instead of
-            # raising, so a closed window cannot erase result.txt.
-            "postconfig": [
-                {"type": "activate_window", "parameters": {
-                    "window_name": "%s - LibreOffice Calc" % os.path.basename(target),
-                    "strict": True}},
-                {"type": "sleep", "parameters": {"seconds": 0.5}},
-                {"type": "execute", "parameters": {
-                    "command": ["python", "-c",
-                                "import pyautogui; pyautogui.hotkey(\"ctrl\", \"s\");"]}},
-                {"type": "sleep", "parameters": {"seconds": 0.5}},
-            ],
         }
+        flush = _flush_postconfig(target)
+        if flush:
+            evaluator["postconfig"] = flush
     else:
         # `rules`, plural: the getter reads config["rules"]. check_include_exclude
         # rather than exact_match because stdout arrives raw, "PASS\n".
@@ -470,6 +485,12 @@ def task_json(spec, batch):
             "expected": {"type": "rule",
                          "rules": {"include": ["PASS"], "exclude": ["FAIL"]}},
         }
+        # A document the agent edits in a GUI app may sit unsaved when the
+        # probe reads the disk; flush it the way official calc tasks do.
+        if spec.get("open_path"):
+            flush = _flush_postconfig(spec["open_path"])
+            if flush:
+                evaluator["postconfig"] = flush
 
     return domain, {
         "id": str(uuid.uuid5(NS, "%s/%s" % (batch, spec["slug"]))),

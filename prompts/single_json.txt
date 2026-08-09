@@ -94,6 +94,10 @@ what to do in the cases the rule does not name.
 10. Use realistic data at the size a real document has: roughly 10 to 40 rows,
     or under two pages. Real names, real-looking amounts and dates. `Item 1`
     and `Company X` tell the agent it is in a test.
+
+11. When a check fails, say why on stderr before printing FAIL.
+    Only stdout is graded; stderr reaches the run log. A failed rollout that
+    says "week-37 missing" is debuggable; a bare FAIL is not.
 </rules>
 
 <grades>
@@ -129,19 +133,21 @@ rankings, availability, anything dated today.
 <instruction>The workbook tour_bookings.xlsx on my Desktop has one sheet per month. Our accountant cannot open spreadsheets, so please give her each month as its own CSV named after the month in lowercase, sitting next to the workbook.</instruction>
 <setup>python3 -c "import csv,os,subprocess;os.makedirs('/home/user/Desktop',exist_ok=True);csv.writer(open('/tmp/March.csv','w',newline='')).writerows([['Party','Guests','Total'],['Ellery Vance','4','1180'],['Nils Aaberg','2','590']]);subprocess.run(['soffice','--headless','--convert-to','xlsx','--outdir','/tmp','/tmp/March.csv'],check=True);os.rename('/tmp/March.xlsx','/home/user/Desktop/tour_bookings.xlsx')"</setup>
 <probe>
-import csv, os
-ok = True
+import csv, os, sys
+problem = None
 for month, n_rows in (("march", 2), ("april", 2)):
     path = "/home/user/Desktop/%s.csv" % month
     if not os.path.isfile(path):
-        ok = False
+        problem = path + " missing"
         break
     rows = [r for r in csv.reader(open(path)) if any(c.strip() for c in r)]
     header = [c.strip().lower() for c in rows[0][:3]] if rows else []
     if len(rows) != n_rows + 1 or header != ["party", "guests", "total"]:
-        ok = False
+        problem = path + ": wrong row count or header"
         break
-print("PASS" if ok else "FAIL")
+if problem:
+    print(problem, file=sys.stderr)
+print("FAIL" if problem else "PASS")
 </probe>
 </example>
 
