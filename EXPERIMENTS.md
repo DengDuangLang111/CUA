@@ -1,11 +1,16 @@
 # Synthetic task generation for OSWorld — design, experiments, results
 
-Status 2026-08-09. **v9 (§9) is the standard pipeline going forward** — the
+Status 2026-08-09. **v9 (§2) is the standard pipeline going forward** — the
 ambiguity and voice axes are part of every future corpus, and the v9 tasks are
 what the next trajectory rollout runs. v8 remains the corpus of the rollout
-currently in flight. Sections 1–3 describe the running system and the design
-behind it; sections 4–9 are the experiments that produced it, with sample
+currently in flight. Sections 1–4 describe the running system and the design
+behind it; sections 5–9 are the experiments that produced it, with sample
 sizes attached so weak evidence can be told from strong.
+
+Code and docs: https://github.com/DengDuangLang111/CUA (private) — default
+branch `v9` is the standard pipeline; `v8`/`v8.4` are the frozen lines the
+current rollout and its tooling run on; earlier branches preserve the v3–v5
+history.
 
 ---
 
@@ -60,18 +65,71 @@ never prepared, and score 0 for reasons indistinguishable from a weak agent.
 | run | status | max steps | thinking | solved |
 |---|---|---|---|---|
 | v8big-all, think-preserve | 28 / 203 scored (06:30) | 100 | on, history preserved | 10 (37%) |
-| v9 corpus (§9) — the tasks the NEXT trajectory rollout will run | complete: 213 specs, under instruction review | — | — | — |
+| v9 corpus (§2) — the tasks the NEXT trajectory rollout will run | complete: 213 specs, under instruction review | — | — | — |
 | v8nt-opus46 | stopped at 8 / 23 | 50 | off | 4 |
 | v8nt-opus5 | stopped at 9 / 20 | 50 | off | 3 |
 
 The two pilots varied the model that *generated* the tasks — Opus 4.6 against
 Opus 5 — holding the solving agent fixed. They were superseded by a full-corpus
-replication (§8) and stopped to free the VMs; their partial numbers stand but
-carry the grader-strictness confound described in §5.
+replication (§9) and stopped to free the VMs; their partial numbers stand but
+carry the grader-strictness confound described in §6.
 
 ---
 
-## 2. How a task is specified
+## 2. The v9 corpus — ambiguity and voice, activated
+
+Why: measured against the official OSWorld instructions, v8's are twice as
+long (median 53 vs 26 words), carry an absolute path 87% of the time (official:
+5%), open with a bare imperative 1% of the time (official: 18%), and speak in
+one register — a first-person workplace persona. Fine for grading, narrow for
+SFT: a model trained only on over-explicit requests never practices resolving
+"fix my rota thing". The instruction's explicitness and the grader's precision
+are decoupled — a probe can pin an exact path while the instruction says "the
+rota spreadsheet on my desktop" — so vagueness costs no grading rigor.
+
+Design, generating as of this writing:
+
+- **Ambiguity joins the coordinate product** (intent × domain × difficulty ×
+  ambiguity, 325 → 1300 cells), four levels with a 10/30/30/30 quota: explicit
+  / functional reference / deictic (target pre-opened, "this sheet") /
+  outcome-only ("get the numbers right before I resend it").
+- **Voice** is derived per cell at 30/25/45: terse / polite / persona.
+- **Mechanical gates**: an ambiguity≥2 instruction containing /home/user or a
+  filename is rejected; deictic without open_path is rejected.
+- **Two prompt rules from the audit findings**: every countable promise is
+  checked in full or not made (the partial-verdict feedback), and browser
+  targets must have URLs that encode the work (query parameters a form fill
+  produces), closing the navigation-only difficulty collapse.
+- Same machinery, same seeds; the walk itself is not comparable to v8's (the
+  space quadrupled), so cross-version pairing is reference-only.
+
+The corpus completed at **213 specs**. Measured against v8 and the official
+instructions:
+
+| | official | v8 | v9 |
+|---|---|---|---|
+| median words | 26 | 52 | 56 |
+| opens Please/Could | 28% | 1% | **26%** |
+| first-person persona | 16% | 37% | 21% |
+| contains absolute path | 5% | 87% | **12%** |
+
+Ambiguity landed 14/31/26/29 against the 10/30/30/30 quota; every polite task
+opens with Please/Could; persona fell from a monoculture to a plurality. The
+one partial miss: terse tasks carry the register's tone but not its brevity
+(median 47 words vs persona's 63) — the "one or two sentences" instruction is
+half-obeyed, and a hard length cap is a one-line rule for the next iteration.
+
+Three generator defects were caught and fixed during the run, all downstream
+of the tool schema not being server-enforced: a module-resolution mislaunch
+(Python prefers the working directory's package over PYTHONPATH — run from
+the versioned worktree), a spec arriving as a string, and whole spec arrays
+arriving as JSON strings — one shard silently discarded 17,000 string
+fragments before extract learned to parse both shapes back.
+
+The instruction review is in front of the operator now; VM controls and the
+v8-protocol rollout follow approval.
+
+## 3. How a task is specified
 
 Generation does not ask for "a task". It draws a **coordinate** and asks for a
 task at that coordinate, so a run walks a product space instead of returning to
@@ -129,7 +187,7 @@ derives the same partition.
 
 ---
 
-## 3. How duplication is measured
+## 4. How duplication is measured
 
 Generated tasks must not restate what a benchmark already contains, and must not
 restate each other. Three detectors, chosen because each is blind to something
@@ -201,7 +259,7 @@ nothing in yield.
 
 ---
 
-## 4. What each round established
+## 5. What each round established
 
 **v2** (29 tasks) — first end-to-end generation. Established that the four-field
 contract works at all.
@@ -235,7 +293,7 @@ generated a batch. v8 carries the idea into production.
 
 ---
 
-## 5. What the 74-task rollout showed
+## 6. What the 74-task rollout showed
 
 Qwen3.6-27B BF16 on one H200, screenshot observation, pyautogui, 100-step cap,
 1920×1080, temperature 0.6. **26 of 74 solved (35%).**
@@ -293,7 +351,7 @@ comparisons.
 
 ---
 
-## 6. What running it costs
+## 7. What running it costs
 
 Measured over 74 tasks and 3,566 steps.
 
@@ -322,7 +380,7 @@ action's writes land.
 
 ---
 
-## 7. Thinking mode was inert until v8
+## 8. Thinking mode was inert until v8
 
 Every run before v8, **including the official 361-task campaign**, ran without
 thinking despite passing `--enable_thinking`. The agent honours that flag only
@@ -349,10 +407,10 @@ are 1500 and 32768.
 
 ---
 
-## 8. Why the tasks come from Opus 5 rather than Opus 4.6
+## 9. Why the tasks come from Opus 5 rather than Opus 4.6
 
 Two rounds of evidence, one small and one at scale. The small round (20 vs 23
-tasks, §4–5) produced the initial verdict. The 2026-08-09 replication then
+tasks, §5–6) produced the initial verdict. The 2026-08-09 replication then
 regenerated the **entire corpus** with Opus 4.6 under the same seeds — the same
 coordinate walk through the cell product, batch for batch, so the generating
 model is the only variable. 207 specs came back (Opus 5: 206), at half the
@@ -385,7 +443,7 @@ adjudicated. That asymmetry — not the row-by-row scores — is the choice.
 Two findings cut against the choice and are recorded rather than hidden. At
 scale, Opus 4.6's probes are *longer* and carry *more* comparisons; the pilot's
 impression that Opus 5 probes deeper does not survive n = 200 — though length
-is not correctness, and the one paired-rollout anecdote (§5's PDF-export pair)
+is not correctness, and the one paired-rollout anecdote (§6's PDF-export pair)
 had 4.6 checking file existence where Opus 5 verified file content. And 4.6
 generates at half the cost. A bidirectional blind audit — each model reviewing
 the other's corpus for instruction–grader divergence — is in flight as of this
@@ -448,59 +506,6 @@ harvested: passed-but-quarantined gets extra review; failed-on-overreach
 becomes the false-FAIL rescue list.
 
 ---
-
-## 9. The v9 corpus — ambiguity and voice, activated
-
-Why: measured against the official OSWorld instructions, v8's are twice as
-long (median 53 vs 26 words), carry an absolute path 87% of the time (official:
-5%), open with a bare imperative 1% of the time (official: 18%), and speak in
-one register — a first-person workplace persona. Fine for grading, narrow for
-SFT: a model trained only on over-explicit requests never practices resolving
-"fix my rota thing". The instruction's explicitness and the grader's precision
-are decoupled — a probe can pin an exact path while the instruction says "the
-rota spreadsheet on my desktop" — so vagueness costs no grading rigor.
-
-Design, generating as of this writing:
-
-- **Ambiguity joins the coordinate product** (intent × domain × difficulty ×
-  ambiguity, 325 → 1300 cells), four levels with a 10/30/30/30 quota: explicit
-  / functional reference / deictic (target pre-opened, "this sheet") /
-  outcome-only ("get the numbers right before I resend it").
-- **Voice** is derived per cell at 30/25/45: terse / polite / persona.
-- **Mechanical gates**: an ambiguity≥2 instruction containing /home/user or a
-  filename is rejected; deictic without open_path is rejected.
-- **Two prompt rules from the audit findings**: every countable promise is
-  checked in full or not made (the partial-verdict feedback), and browser
-  targets must have URLs that encode the work (query parameters a form fill
-  produces), closing the navigation-only difficulty collapse.
-- Same machinery, same seeds; the walk itself is not comparable to v8's (the
-  space quadrupled), so cross-version pairing is reference-only.
-
-The corpus completed at **213 specs**. Measured against v8 and the official
-instructions:
-
-| | official | v8 | v9 |
-|---|---|---|---|
-| median words | 26 | 52 | 56 |
-| opens Please/Could | 28% | 1% | **26%** |
-| first-person persona | 16% | 37% | 21% |
-| contains absolute path | 5% | 87% | **12%** |
-
-Ambiguity landed 14/31/26/29 against the 10/30/30/30 quota; every polite task
-opens with Please/Could; persona fell from a monoculture to a plurality. The
-one partial miss: terse tasks carry the register's tone but not its brevity
-(median 47 words vs persona's 63) — the "one or two sentences" instruction is
-half-obeyed, and a hard length cap is a one-line rule for the next iteration.
-
-Three generator defects were caught and fixed during the run, all downstream
-of the tool schema not being server-enforced: a module-resolution mislaunch
-(Python prefers the working directory's package over PYTHONPATH — run from
-the versioned worktree), a spec arriving as a string, and whole spec arrays
-arriving as JSON strings — one shard silently discarded 17,000 string
-fragments before extract learned to parse both shapes back.
-
-The instruction review is in front of the operator now; VM controls and the
-v8-protocol rollout follow approval.
 
 ## 10. Open
 
