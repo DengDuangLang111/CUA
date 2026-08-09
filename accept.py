@@ -182,7 +182,9 @@ def main(argv=None):
                 print("    %.2f  %s" % (s, slug))
 
     # 4. axis balance of the union
-    for ax, target in (("intent", None), ("difficulty", {1: .15, 2: .25, 3: .25, 4: .20, 5: .15})):
+    for ax, target in (("intent", None), ("ambiguity", {1: .10, 2: .30, 3: .30, 4: .30}),
+                   ("voice", None),
+                   ("difficulty", {1: .15, 2: .25, 3: .25, 4: .20, 5: .15})):
         c = collections.Counter(r.get(ax) for r in rows)
         line = "  ".join("%s=%d" % kv for kv in sorted(c.items(), key=str))
         print("\n[4] %s: %s" % (ax, line))

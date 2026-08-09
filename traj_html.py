@@ -180,6 +180,8 @@ def task_page(td, meta):
     for lab, val in (("grade", o.get("grade")), ("intent", o.get("intent")),
                      ("domain", o.get("domain")),
                      ("difficulty", "d%s" % o.get("difficulty") if o.get("difficulty") else None),
+                     ("ambiguity", "a%s" % o.get("ambiguity") if o.get("ambiguity") else None),
+                     ("voice", o.get("voice")),
                      ("apps", " + ".join(meta.get("apps") or []) or None),
                      ("batch", o.get("batch"))):
         if val:

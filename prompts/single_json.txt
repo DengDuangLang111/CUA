@@ -126,9 +126,43 @@ site structure, historical facts, versioned documentation. Never prices,
 rankings, availability, anything dated today.
 </grades>
 
+<ambiguity>
+Each coordinate carries ambiguity, which fixes how explicitly the instruction
+may point at its objects. The check stays exact at every level -- setup and
+probe always use full paths -- only the instruction's wording loosens.
+
+  1 explicit    name the file and where it lives; enumerate each requirement.
+  2 functional  describe objects by what they are -- "the staffing rota
+                spreadsheet on my desktop" -- never by filename or path. The
+                setup must make that description match exactly one thing.
+  3 deictic     the target is already on screen: set open_path (for
+                grade=browser the start_url page is the referent) and say
+                "this sheet", "this page". No filename, no path anywhere in
+                the instruction.
+  4 outcome     state the end the user wants and the constraint that matters
+                -- "get the rota numbers right before I resend it" -- and let
+                the agent infer the operations. Every implicit requirement
+                must still be one the check verifies.
+
+At levels 2-4 the instruction contains no /home/user path and (outside
+grade=browser) no filename; the gate rejects violations mechanically.
+</ambiguity>
+
+<voice>
+Each coordinate also carries voice, the register the instruction is written in:
+
+  terse    a hurried colleague: imperative, no pleasantries, one or two
+           sentences.
+  polite   a considerate request: "Please..." / "Could you...", still concrete.
+  persona  a named person in a real workplace with a reason for the ask.
+
+Write the instruction in its assigned voice; the corpus must not drift into a
+single register.
+</voice>
+
 <examples>
 <example index="1">
-<coordinates>intent=transform, domain=travel, difficulty=2, apps=1, primary=libreoffice_calc</coordinates>
+<coordinates>intent=transform, domain=travel, difficulty=2, apps=1, primary=libreoffice_calc, ambiguity=1, voice=polite</coordinates>
 <slug>tour-bookings-monthly-csv</slug>
 <instruction>The workbook tour_bookings.xlsx on my Desktop has one sheet per month. Our accountant cannot open spreadsheets, so please give her each month as its own CSV named after the month in lowercase, sitting next to the workbook.</instruction>
 <setup>python3 -c "import csv,os,subprocess;os.makedirs('/home/user/Desktop',exist_ok=True);csv.writer(open('/tmp/March.csv','w',newline='')).writerows([['Party','Guests','Total'],['Ellery Vance','4','1180'],['Nils Aaberg','2','590']]);subprocess.run(['soffice','--headless','--convert-to','xlsx','--outdir','/tmp','/tmp/March.csv'],check=True);os.rename('/tmp/March.xlsx','/home/user/Desktop/tour_bookings.xlsx')"</setup>
@@ -152,20 +186,24 @@ print("FAIL" if problem else "PASS")
 </example>
 
 <example index="2">
-<coordinates>intent=configure, domain=education, difficulty=1, apps=1, primary=vscode</coordinates>
-<slug>vscode-ruler-at-eighty</slug>
-<instruction>Our CS101 style guide caps lines at 80 characters. Set VS Code up so there is a vertical ruler at column 80 for every file I open.</instruction>
-<setup>python3 -c "import json,os;p='/home/user/.config/Code/User/settings.json';os.makedirs(os.path.dirname(p),exist_ok=True);json.dump({'editor.fontSize':14},open(p,'w'),indent=2)"</setup>
+<coordinates>intent=repair, domain=education, difficulty=1, apps=1, primary=libreoffice_writer, ambiguity=3, voice=terse</coordinates>
+<slug>syllabus-title-case-fix</slug>
+<instruction>Fix the title line of this document -- it must read exactly "Course Syllabus: Fall Term".</instruction>
+<open_path>/home/user/Documents/syllabus.odt</open_path>
+<setup>python3 -c "import os,subprocess;os.makedirs('/home/user/Documents',exist_ok=True);open('/tmp/syllabus.txt','w').write('course syllabus: fall term\n\nWeek 1 - Foundations\nWeek 2 - Sources and citation\n');subprocess.run(['soffice','--headless','--convert-to','odt','--outdir','/tmp','/tmp/syllabus.txt'],check=True);os.rename('/tmp/syllabus.odt','/home/user/Documents/syllabus.odt')"</setup>
 <probe>
-import json
-settings = json.load(open("/home/user/.config/Code/User/settings.json"))
-rulers = settings.get("editor.rulers") or []
-print("PASS" if 80 in [int(x) for x in rulers] else "FAIL")
+import sys, zipfile, xml.etree.ElementTree as ET
+z = zipfile.ZipFile("/home/user/Documents/syllabus.odt")
+flat = "".join(ET.fromstring(z.read("content.xml")).itertext())
+ok = "Course Syllabus: Fall Term" in flat and "course syllabus: fall term" not in flat
+if not ok:
+    print("title not in the exact required case", file=sys.stderr)
+print("PASS" if ok else "FAIL")
 </probe>
 </example>
 
 <example index="3">
-<coordinates>intent=transform, domain=finance, difficulty=2, apps=1, primary=libreoffice_calc, grade=table</coordinates>
+<coordinates>intent=transform, domain=finance, difficulty=2, apps=1, primary=libreoffice_calc, grade=table, ambiguity=1, voice=persona</coordinates>
 <slug>loan-ledger-interest-column</slug>
 <instruction>The ledger loans.xlsx on my Desktop lists our outstanding loans, principal in column B and annual rate in C. Add a column D headed Interest with each loan's yearly interest amount, to two decimals.</instruction>
 <setup>python3 -c "import csv,os,subprocess;os.makedirs('/home/user/Desktop',exist_ok=True);csv.writer(open('/tmp/loans.csv','w',newline='')).writerows([['Borrower','Principal','Rate'],['Ashford Dental','12000','0.045'],['Riverside Cafe','8000','0.06'],['Kemp Logistics','15000','0.05'],['Nolan Print','6000','0.055'],['Vera Floral','9500','0.04']]);subprocess.run(['soffice','--headless','--convert-to','xlsx','--outdir','/tmp','/tmp/loans.csv'],check=True);os.rename('/tmp/loans.xlsx','/home/user/Desktop/loans.xlsx')"</setup>
@@ -181,7 +219,7 @@ print("PASS" if 80 in [int(x) for x in rulers] else "FAIL")
 </example>
 
 <example index="4">
-<coordinates>intent=info_seeking, domain=education, difficulty=1, apps=1, primary=chrome, grade=browser</coordinates>
+<coordinates>intent=info_seeking, domain=education, difficulty=1, apps=1, primary=chrome, grade=browser, ambiguity=2, voice=persona</coordinates>
 <slug>rfc-2616-official-text</slug>
 <instruction>I teach our intro networking class tomorrow and want the authoritative text of RFC 2616 on screen, from the RFC Editor's own site rather than a mirror.</instruction>
 <start_url>https://www.rfc-editor.org/</start_url>
@@ -190,9 +228,9 @@ print("PASS" if 80 in [int(x) for x in rulers] else "FAIL")
 </example>
 
 <example index="5">
-<coordinates>intent=repair, domain=logistics, difficulty=3, apps=1, primary=files</coordinates>
+<coordinates>intent=repair, domain=logistics, difficulty=3, apps=1, primary=files, ambiguity=4, voice=terse</coordinates>
 <slug>manifest-scans-refile-by-depot</slug>
-<instruction>The scans in Documents/manifests are named like BRISTOL-4471.pdf, where the first part is the depot. Put each one into a folder named after its depot inside that same directory, and leave the two whose depot is unreadable where they are.</instruction>
+<instruction>The depot scans dump in my Documents is unusable again. Get every scan filed under its depot; anything whose depot you can't tell, leave where it sits.</instruction>
 <setup>python3 -c "import os;d='/home/user/Documents/manifests';os.makedirs(d,exist_ok=True);[open(os.path.join(d,n),'wb').write(b'%PDF-1.4') for n in ['BRISTOL-4471.pdf','BRISTOL-4472.pdf','LEEDS-8810.pdf','CARDIFF-2093.pdf','-9902.pdf','scan_final.pdf']]"</setup>
 <probe>
 import os

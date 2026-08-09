@@ -46,7 +46,23 @@ DIFFICULTY_MIX = {1: 0.15, 2: 0.25, 3: 0.25, 4: 0.20, 5: 0.15}
 # The slide's fourth axis, not yet crossed in: the probe decides alone, so
 # today every instruction must name one unambiguous end state. Crossing this in
 # means changing the prompt and the grader together.
-AMBIGUITY = (1, 2, 3, 4)
+AMBIGUITY = {
+    1: "explicit -- name the file and where it lives; enumerate each requirement",
+    2: "functional -- objects described by what they are ('the staffing rota "
+       "spreadsheet on my desktop'), never by filename or path; setup makes the "
+       "description match exactly one thing",
+    3: "deictic -- the target is already on screen (open_path, or start_url for "
+       "browser): 'this sheet', 'this page'; no filename, no path",
+    4: "outcome -- state the end the user wants and the binding constraint; the "
+       "agent infers the operations; implicit requirements stay checkable",
+}
+AMBIGUITY_MIX = {1: 0.10, 2: 0.30, 3: 0.30, 4: 0.30}
+VOICES = {
+    "terse": "a hurried colleague: imperative, no pleasantries, one or two sentences",
+    "polite": "a considerate request: 'Please...' / 'Could you...', still concrete",
+    "persona": "a named person in a real workplace with a reason for the ask",
+}
+VOICE_MIX = (("terse", 0.30), ("polite", 0.25), ("persona", 0.45))
 
 # Which artifacts each intent can plausibly end in. browser_tab is graded by
 # OSWorld's own url matcher (grade=browser), not by a probe.
@@ -94,8 +110,10 @@ def cells(n, seed, only_apps=None, used=None, shard=None):
     being disjoint."""
     prior_intent = collections.Counter(c[0] for c in (used or ()))
     spent_diff = collections.Counter(c[2] for c in (used or ()))
+    spent_amb = collections.Counter(c[3] for c in (used or ()) if len(c) > 3)
     rng = random.Random(seed)
-    space = [(i, d, c) for i in INTENTS for d in DOMAINS for c in DIFFICULTY]
+    space = [(i, d, c, a) for i in INTENTS for d in DOMAINS
+             for c in DIFFICULTY for a in AMBIGUITY]
     if shard:
         idx, total = shard
         random.Random(20260808).shuffle(space)
@@ -105,6 +123,7 @@ def cells(n, seed, only_apps=None, used=None, shard=None):
     rotation = collections.Counter()
     taken = collections.Counter()
     taken_diff = collections.Counter()
+    taken_amb = collections.Counter()
     out = []
 
     while len(out) < n:
@@ -116,8 +135,12 @@ def cells(n, seed, only_apps=None, used=None, shard=None):
             want = DIFFICULTY_MIX.get(level, 0) * max(drawn + 1, 1)
             return (spent_diff[level] + taken_diff[level]) - want
 
+        def amb_debt(level):
+            want = AMBIGUITY_MIX.get(level, 0) * max(drawn + 1, 1)
+            return (spent_amb[level] + taken_amb[level]) - want
+
         pick = None
-        for cell in sorted(space, key=lambda c: (taken[c[0]], diff_debt(c[2]))):
+        for cell in sorted(space, key=lambda c: (taken[c[0]], diff_debt(c[2]), amb_debt(c[3]))):
             if cell in used:
                 continue
             intent = cell[0]
@@ -132,10 +155,18 @@ def cells(n, seed, only_apps=None, used=None, shard=None):
         if pick is None:
             break
 
-        (intent, domain, difficulty), options = pick
-        used.add((intent, domain, difficulty))
+        (intent, domain, difficulty, ambiguity), options = pick
+        used.add((intent, domain, difficulty, ambiguity))
         taken[intent] += 1
         taken_diff[difficulty] += 1
+        taken_amb[ambiguity] += 1
+        r = rng.random()
+        voice, acc = VOICE_MIX[-1][0], 0.0
+        for v, w in VOICE_MIX:
+            acc += w
+            if r <= acc:
+                voice = v
+                break
         _gloss, n_apps, n_reqs = DIFFICULTY[difficulty]
 
         turn = prior_intent[intent] + rotation[intent]
@@ -149,6 +180,8 @@ def cells(n, seed, only_apps=None, used=None, shard=None):
             "intent": intent,
             "domain": domain,
             "difficulty": difficulty,
+            "ambiguity": ambiguity,
+            "voice": voice,
             "constraints": n_reqs,
             "artifact": artifact,
             "primary": primary,

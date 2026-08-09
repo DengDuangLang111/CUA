@@ -171,9 +171,10 @@ def user_prompt(n, cells, external=None, own=None, per_app=12, own_per_app=8):
     for i, c in enumerate(cells):
         lines.append(
             "  spec %d: intent=%s, domain=%s, difficulty=%d, apps=%d, artifact=%s, "
-            "source=%s, primary=%s, grade=%s"
+            "source=%s, primary=%s, grade=%s, ambiguity=%d, voice=%s"
             % (i + 1, c["intent"], c["domain"], c["difficulty"], c["app_count"],
-               c["artifact"], c["source"], c["primary"], c.get("grade", "probe")))
+               c["artifact"], c["source"], c["primary"], c.get("grade", "probe"),
+               c["ambiguity"], c["voice"]))
 
     ints = sorted({c["intent"] for c in cells})
     doms = sorted({c["domain"] for c in cells})
@@ -188,7 +189,15 @@ def user_prompt(n, cells, external=None, own=None, per_app=12, own_per_app=8):
              "explicit requirements it imposes. It is not a hint -- the spec must "
              "match the level it was given, and apps= says how many applications "
              "to put in the apps list.\n"
-           + "\n".join("  %d = %s" % (c, T.DIFFICULTY[c][0]) for c in cons))
+           + "\n".join("  %d = %s" % (c, T.DIFFICULTY[c][0]) for c in cons)
+           + "\n\nambiguity is how explicitly the instruction may point at its "
+             "objects. The check stays exact at every level -- only the wording "
+             "loosens (see <ambiguity>):\n"
+           + "\n".join("  %d = %s" % (a, T.AMBIGUITY[a])
+                       for a in sorted({c["ambiguity"] for c in cells}))
+           + "\n\nvoice is the register the instruction is written in:\n"
+           + "\n".join("  %s = %s" % (v, T.VOICES[v])
+                       for v in sorted({c["voice"] for c in cells})))
 
     def brief_for(app):
         return " ".join(sorted({"%s %s %s %s" % (c["intent"], c["domain"],
@@ -522,6 +531,7 @@ def task_json(spec, batch):
         "ostg": {"slug": spec["slug"], "batch": batch, "grade": grade,
                  "intent": spec.get("intent"), "domain": spec.get("domain"),
                  "difficulty": spec.get("difficulty"),
+                 "ambiguity": spec.get("ambiguity"), "voice": spec.get("voice"),
                  "app_count": spec.get("app_count")},
     }
 
@@ -571,6 +581,16 @@ def _setup_compiles(setup):
 
 
 def gate(spec):
+    amb = spec.get("ambiguity") or 1
+    _instr = spec.get("instruction") or ""
+    if amb >= 2 and "/home/user" in _instr:
+        return "absolute path in an ambiguity>=2 instruction"
+    if amb >= 2 and spec.get("grade") != "browser" and re.search(
+            r"\b[\w-]+\.(xlsx|ods|odt|odp|docx|pptx|csv|txt|pdf|py|md|json|html|htm|png|jpg|mp4)\b",
+            _instr):
+        return "filename in an ambiguity>=2 instruction"
+    if amb == 3 and spec.get("grade") != "browser" and not (spec.get("open_path") or "").strip():
+        return "ambiguity=3 without open_path"
     """Why this spec cannot become a task, or None. Strict on purpose: a bad
     field that slips through either crashes evaluate() (no result.txt) or
     ships a task that can never score."""
@@ -765,7 +785,7 @@ def main():
             b += 1
             if not c:
                 break
-            spent.update((x["intent"], x["domain"], x["difficulty"]) for x in c)
+            spent.update((x["intent"], x["domain"], x["difficulty"], x["ambiguity"]) for x in c)
             seen, own_by_app = priors_now()  # sibling runs may be writing
             print("\nbatch %d/%d%s" % (b, args.batches, label))
             for x in c:
@@ -799,7 +819,7 @@ def main():
                 if i < len(c):
                     for k in ("drawn_from", "intent", "domain", "difficulty",
                               "constraints", "artifact", "source", "app_count",
-                              "grade"):
+                              "grade", "ambiguity", "voice"):
                         s[k] = c[i][k]
                 why = gate(s)
                 if why:
