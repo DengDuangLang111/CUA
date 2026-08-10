@@ -635,8 +635,11 @@ def gate(spec):
             return "cold task with open_path"
         if not spec.get("warm") and re.search(r"\b(is|are) (already )?open\b", _instr):
             return "cold task whose instruction presumes an open workspace"
-    if spec.get("voice") == "terse" and len(_instr.split()) > 40:
-        return "terse instruction over 40 words"
+    if spec.get("voice") in ("terse", "sloppy") and len(_instr.split()) > 40:
+        return "terse/sloppy instruction over 40 words"
+    _cap = {1: 150, 2: 150, 3: 250}.get(spec.get("difficulty") or 3, 300)
+    if len(_instr) > _cap:
+        return "instruction over %d chars for d%s" % (_cap, spec.get("difficulty"))
     """Why this spec cannot become a task, or None. Strict on purpose: a bad
     field that slips through either crashes evaluate() (no result.txt) or
     ships a task that can never score."""

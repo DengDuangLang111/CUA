@@ -57,11 +57,14 @@ AMBIGUITY = {
 }
 AMBIGUITY_MIX = {1: 0.10, 2: 0.30, 3: 0.30, 4: 0.30}
 VOICES = {
-    "terse": "a hurried colleague: imperative, no pleasantries, one or two sentences",
-    "polite": "a considerate request: 'Please...' / 'Could you...', still concrete",
-    "persona": "a named person in a real workplace with a reason for the ask",
+    "terse": "a direct command: state the goal and constraints, nothing else",
+    "sloppy": "a fast typer: lowercase, clipped grammar, abbreviations ('pls'), "
+              "no punctuation ceremony -- still unambiguous about the goal",
+    "polite": "a considerate request: 'Please...' / 'Could you...', still goal-only",
+    "contextful": "goal plus ONE load-bearing context clause -- a recipient, "
+                  "deadline or constraint that changes what correct work looks like",
 }
-VOICE_MIX = (("terse", 0.30), ("polite", 0.25), ("persona", 0.45))
+VOICE_MIX = (("terse", 0.30), ("sloppy", 0.10), ("polite", 0.25), ("contextful", 0.35))
 
 # Which artifacts each intent can plausibly end in. browser_tab is graded by
 # OSWorld's own url matcher (grade=browser), not by a probe.

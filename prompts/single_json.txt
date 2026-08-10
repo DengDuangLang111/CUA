@@ -78,15 +78,19 @@ what to do in the cases the rule does not name.
    Create every directory you write into. Prefer `python3 -c` for anything with
    logic in it, and keep it to one command.
 
-7. Give the instruction the voice of the person who wants the work done.
-   "Our accountant cannot open spreadsheets, so she needs each month as its own
-   CSV" reads like a real request; "Convert each sheet to CSV format" reads like
-   a test case. Name the company, the file and the people the way a colleague
-   would.
+7. Write the instruction as the words a user types AT an assistant.
+   State the goal and the constraints that shape it, the way people actually
+   prompt a computer-use agent: "Export this sheet as a PDF, same name, one
+   page wide." Add one clause of context only when it changes what correct
+   work looks like -- "it goes to the auditors, so round exactly" earns its
+   place; a company name or a backstory does not. Users prompting a tool do
+   not introduce themselves or justify the request.
 
-8. Keep the instruction under 300 characters where the task allows it.
-   Every extra sentence is another thing for the agent to hold while it works.
-   Say what the finished state looks like and let the agent find its own route.
+8. Fit the instruction to its difficulty: d1-d2 within 150 characters,
+   d3 within 250, d4-d5 within 300. The gate enforces these mechanically.
+   Short is authentic -- real prompts to agents are brief -- and every extra
+   sentence is another thing the agent holds while it works. Say what the
+   finished state looks like and let the agent find its own route.
 
 9. Use paths that are lowercase, free of spaces, and under /home/user.
    Write them out in full in both programs: `/home/user/Desktop/report.xlsx`.
@@ -149,16 +153,21 @@ grade=browser) no filename; the gate rejects violations mechanically.
 </ambiguity>
 
 <voice>
-Each coordinate also carries voice, the register the instruction is written in:
+Each coordinate carries voice, the register the user types in:
 
-  terse    a hurried colleague: imperative, no pleasantries. HARD LIMIT:
-           at most two sentences and 40 words -- longer terse specs are
-           rejected mechanically.
-  polite   a considerate request: "Please..." / "Could you...", still concrete.
-  persona  a named person in a real workplace with a reason for the ask.
+  terse       a direct command: the goal and its constraints, nothing else.
+              "Export this sheet as a PDF next to it, same base name."
+  sloppy      a fast typer: lowercase, clipped grammar, abbreviations, no
+              punctuation ceremony -- still unambiguous. "need rfc 2616 on
+              screen, official rfc-editor site not a mirror"
+  polite      a considerate ask, still goal-only. "Please split this workbook
+              into one CSV per sheet, named after the months."
+  contextful  the goal plus ONE load-bearing clause -- a recipient, deadline
+              or constraint that changes the work. "Add the interest column,
+              two decimals -- it goes to the auditors, so exact rounding."
 
-Write the instruction in its assigned voice; the corpus must not drift into a
-single register.
+Write in the assigned register. Every register states the goal plainly; none
+of them introduces the speaker, names an employer, or narrates a scene.
 </voice>
 
 <warm_start>
@@ -181,9 +190,9 @@ and a cold instruction that presumes an open workspace.
 
 <examples>
 <example index="1">
-<coordinates>intent=transform, domain=travel, difficulty=2, apps=1, primary=libreoffice_calc, ambiguity=1, voice=polite</coordinates>
+<coordinates>intent=transform, domain=travel, difficulty=2, apps=1, primary=libreoffice_calc, ambiguity=1, voice=polite, warm=yes</coordinates>
 <slug>tour-bookings-monthly-csv</slug>
-<instruction>The workbook tour_bookings.xlsx on my Desktop has one sheet per month. Our accountant cannot open spreadsheets, so please give her each month as its own CSV named after the month in lowercase, sitting next to the workbook.</instruction>
+<instruction>Please split tour_bookings.xlsx on my Desktop into one CSV per month sheet, named after the month in lowercase, next to the workbook.</instruction>
 <setup>python3 -c "import csv,os,subprocess;os.makedirs('/home/user/Desktop',exist_ok=True);csv.writer(open('/tmp/March.csv','w',newline='')).writerows([['Party','Guests','Total'],['Ellery Vance','4','1180'],['Nils Aaberg','2','590']]);subprocess.run(['soffice','--headless','--convert-to','xlsx','--outdir','/tmp','/tmp/March.csv'],check=True);os.rename('/tmp/March.xlsx','/home/user/Desktop/tour_bookings.xlsx')"</setup>
 <probe>
 import csv, os, sys
@@ -222,9 +231,9 @@ print("PASS" if ok else "FAIL")
 </example>
 
 <example index="3">
-<coordinates>intent=transform, domain=finance, difficulty=2, apps=1, primary=libreoffice_calc, grade=table, ambiguity=1, voice=persona</coordinates>
+<coordinates>intent=transform, domain=finance, difficulty=2, apps=1, primary=libreoffice_calc, grade=table, ambiguity=1, voice=contextful</coordinates>
 <slug>loan-ledger-interest-column</slug>
-<instruction>The ledger loans.xlsx on my Desktop lists our outstanding loans, principal in column B and annual rate in C. Add a column D headed Interest with each loan's yearly interest amount, to two decimals.</instruction>
+<instruction>In loans.xlsx on my Desktop add a column D headed Interest: yearly interest per loan (principal B x rate C), two decimals -- it goes to the auditors, so exact rounding.</instruction>
 <setup>python3 -c "import csv,os,subprocess;os.makedirs('/home/user/Desktop',exist_ok=True);csv.writer(open('/tmp/loans.csv','w',newline='')).writerows([['Borrower','Principal','Rate'],['Ashford Dental','12000','0.045'],['Riverside Cafe','8000','0.06'],['Kemp Logistics','15000','0.05'],['Nolan Print','6000','0.055'],['Vera Floral','9500','0.04']]);subprocess.run(['soffice','--headless','--convert-to','xlsx','--outdir','/tmp','/tmp/loans.csv'],check=True);os.rename('/tmp/loans.xlsx','/home/user/Desktop/loans.xlsx')"</setup>
 <table_target>/home/user/Desktop/loans.xlsx</table_target>
 <table_rules>[
@@ -238,9 +247,9 @@ print("PASS" if ok else "FAIL")
 </example>
 
 <example index="4">
-<coordinates>intent=info_seeking, domain=education, difficulty=1, apps=1, primary=chrome, grade=browser, ambiguity=2, voice=persona</coordinates>
+<coordinates>intent=info_seeking, domain=education, difficulty=1, apps=1, primary=chrome, grade=browser, ambiguity=2, voice=sloppy</coordinates>
 <slug>rfc-2616-official-text</slug>
-<instruction>I teach our intro networking class tomorrow and want the authoritative text of RFC 2616 on screen, from the RFC Editor's own site rather than a mirror.</instruction>
+<instruction>need rfc 2616 on screen, official rfc-editor site not a mirror</instruction>
 <start_url>https://www.rfc-editor.org/</start_url>
 <url_patterns>["rfc-editor\\.org/rfc/rfc2616"]</url_patterns>
 <url_stability>RFC numbers are permanent identifiers and the RFC Editor has served /rfc/rfcNNNN paths unchanged for decades.</url_stability>
@@ -249,7 +258,7 @@ print("PASS" if ok else "FAIL")
 <example index="5">
 <coordinates>intent=repair, domain=logistics, difficulty=3, apps=1, primary=files, ambiguity=4, voice=terse</coordinates>
 <slug>manifest-scans-refile-by-depot</slug>
-<instruction>The depot scans dump in my Documents is unusable again. Get every scan filed under its depot; anything whose depot you can't tell, leave where it sits.</instruction>
+<instruction>Sort the depot scans in my Documents into a folder per depot; leave any scan whose depot you can't tell where it sits.</instruction>
 <setup>python3 -c "import os;d='/home/user/Documents/manifests';os.makedirs(d,exist_ok=True);[open(os.path.join(d,n),'wb').write(b'%PDF-1.4') for n in ['BRISTOL-4471.pdf','BRISTOL-4472.pdf','LEEDS-8810.pdf','CARDIFF-2093.pdf','-9902.pdf','scan_final.pdf']]"</setup>
 <probe>
 import os
