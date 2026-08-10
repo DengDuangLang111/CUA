@@ -37,6 +37,25 @@ def _docker(args, **kw):
                           text=True, **kw)
 
 
+def wanted(path, setup):
+    """Is this produced file part of the task's starting state?
+
+    Running soffice leaves ~40 files of LibreOffice PROFILE behind
+    (~/.config/libreoffice/...). Those are runtime state, not fixtures:
+    embedding them bloats the task by 200 KB and ships the very profile whose
+    creation poisons the compositor. Hidden paths therefore ride along only
+    when the setup deliberately wrote into them -- which is how genuine
+    dotfile fixtures (a .thunderbird profile, a .config preference store)
+    stay intact.
+    """
+    if "/." not in path:
+        return True
+    for part in Path(path).parts:
+        if part.startswith(".") and part in setup:
+            return True
+    return False
+
+
 def _rewrite(files):
     """files: {abs_path: bytes} -> a shell setup that recreates them exactly."""
     dirs = sorted({str(Path(p).parent) for p in files})
@@ -94,17 +113,30 @@ def main(paths):
                           file=sys.stderr)
                     out.append(line)
                     continue
+                keep = [f for f in found if wanted(f, setup)]
+                if not keep:
+                    print("  !! %-34s produced no fixture files (left as-is)"
+                          % s.get("slug", "?"), file=sys.stderr)
+                    out.append(line)
+                    continue
                 files = {}
-                for f in found:
+                for f in keep:
                     b = _docker(["exec", "ostg-prebuild", "base64", "-w0", f])
                     files[f] = base64.b64decode(b.stdout)
+                size = sum(len(v) for v in files.values())
+                if size > 2_000_000:
+                    print("  !! %-34s fixtures %.1f MB -- too big to embed, "
+                          "left as-is" % (s.get("slug", "?"), size / 1e6),
+                          file=sys.stderr)
+                    out.append(line)
+                    continue
                 s["setup"] = _rewrite(files)
                 s.setdefault("ostg", {})["prebuilt"] = True
                 out.append(json.dumps(s, ensure_ascii=False))
                 changed += 1
-                print("  prebuilt %-34s %d file(s), %d bytes"
-                      % (s.get("slug", "?"), len(files),
-                         sum(len(v) for v in files.values())))
+                print("  prebuilt %-34s %d file(s), %d bytes: %s"
+                      % (s.get("slug", "?"), len(files), size,
+                         ", ".join(Path(f).name for f in sorted(files))[:60]))
             if changed:
                 path.write_text("\n".join(out) + "\n", encoding="utf-8")
             print("== %s: %d/%d specs prebuilt" % (path.parent.name, changed,
