@@ -32,9 +32,8 @@ DIFFICULTY = {
     1: ("one application, one requirement -- a single condition, field or "
         "transformation", 1, 1),
     2: ("one application, two or three requirements that must all hold", 1, 2),
-    3: ("one application and four or more requirements, INCLUDING an ordering "
-        "or tie-breaking rule; or two applications and one to three "
-        "requirements", 1, 4),
+    3: ("two applications and one to three requirements -- the work crosses "
+        "an application boundary once", 2, 2),
     4: ("two applications and four or more requirements including an ordering "
         "rule; or three applications and one to three requirements", 2, 4),
     5: ("three or more applications, four or more requirements, including an "
