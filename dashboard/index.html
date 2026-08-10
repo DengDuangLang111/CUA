@@ -98,7 +98,12 @@
 /* live numbers: a WSL daemon recomputes dashboard/status.json every 5 min and
    pushes; Vercel redeploys from GitHub; this fetch patches the page on load. */
 window.LIVE = null;
-fetch("status.json").then(r=>r.ok?r.json():null).then(j=>{ if(j){ window.LIVE=j; render(); } }).catch(()=>{});
+function pullLive(){
+  fetch("status.json", {cache:"no-store"}).then(r=>r.ok?r.json():null).then(j=>{
+    if (j && JSON.stringify(j) !== JSON.stringify(window.LIVE)){ window.LIVE=j; render(); }
+  }).catch(()=>{});
+}
+pullLive(); setInterval(pullLive, 120000);
 function lv(){ const s = window.LIVE && window.LIVE.v11; if(!s || !s.scored) return null;
   return {...s, rate: Math.round(100*s.passed/s.scored)}; }
 /* per-run trajectory hosting (separate vercel projects; ALL scored tasks, screenshots recompressed) */

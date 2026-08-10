@@ -18,7 +18,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from ostg import accept, control
+from ostg import accept, control, scan
 from ostg.gen import gate, task_json
 
 
@@ -71,6 +71,9 @@ def main():
     if fails:
         print("\nSHIP BLOCKED: %d hard gate failure(s)" % fails)
         return 1
+
+    print("\n#### 2.5 grader-defect scan (review, non-blocking)")
+    scan.main([str(d / "specs.jsonl") for d in dirs])
 
     if vm:
         print("\n#### 3 control")
