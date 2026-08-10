@@ -24,10 +24,6 @@ DOMAINS = [
     "finance", "healthcare", "education", "logistics", "human_resources",
     "legal", "marketing", "scientific_research", "retail", "real_estate",
     "travel", "manufacturing", "nonprofit",
-    # 1k-scale expansion (v11.1): more entity/scenario headroom so instruction
-    # similarity saturates later -- the coordinate space grows 1300 -> 2000.
-    "government_services", "hospitality", "construction", "agriculture",
-    "media_publishing", "energy_utilities", "insurance",
 ]
 
 # (gloss, apps, min requirements). Levels 4-5 exist mostly to measure where the
