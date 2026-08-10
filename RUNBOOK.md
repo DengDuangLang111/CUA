@@ -93,18 +93,20 @@ rollout (EXPERIMENTS §3 has the ledger; 8/119 culled in v11):
    finds the toggle already correct (scan: `.get()` calls on preference
    files, check each default against the app's factory state).
 5. *headless-soffice collision* — a setup that runs `soffice --convert-to`
-   followed by a warm-start `open` of a LibreOffice document: the leftover
-   headless instance swallows the open (lock file on disk, process alive,
-   **no window ever maps**) and the agent wanders an empty desktop to the
-   step cap. Cost v11 its whole calc domain (0/15) before diagnosis. The
-   emitter now auto-inserts `pkill -f soffice.bin; sleep 2` between such
-   setups and their open — the guard applies to every emission, so never
-   hand-write task JSONs around the emitter. Control cannot catch this
-   class (setup exits 0; an idle desktop correctly scores 0): when a
-   rollout enters a new domain, eyeball one first-frame screenshot per
-   domain — the bare-desktop signature is unmistakable. Related boundary:
-   bare `--convert-to odp` fails everywhere (gate-rejected), while the
-   filter-qualified `odp:impress8` works.
+   leaves a headless instance that **lingers indefinitely** and swallows
+   every later document open: the config's warm `open` AND the agent's own
+   double-click minutes later (lock file on disk, process alive, **no
+   window ever maps**). Cost v11 its whole calc domain (0/15, warm and
+   cold alike) before diagnosis, and retro-explains v8's 1/33 calc. The
+   emitter now auto-inserts `pkill -f soffice.bin; sleep 2` immediately
+   after ANY setup containing soffice, warm or cold — the guard applies to
+   every emission, so never hand-write task JSONs around the emitter.
+   Control cannot catch this class (setup exits 0; an idle desktop
+   correctly scores 0): when a rollout enters a new domain, eyeball one
+   first-frame screenshot per domain — the bare-desktop signature is
+   unmistakable. Related boundary: bare `--convert-to odp` fails
+   everywhere (gate-rejected), while the filter-qualified `odp:impress8`
+   works.
 
 Cull confirmed hits like duplicates. If the set is oversized, trim to target
 by largest-remainder over difficulty x ambiguity cells, dropping the
