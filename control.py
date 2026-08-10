@@ -90,6 +90,27 @@ def main(argv=None):
                     if orr.status_code != 200:
                         err = err or ("open %s -> HTTP %d"
                                       % (c["parameters"]["path"], orr.status_code))
+            # Warm tasks promise a visible workspace, but no exit code says
+            # whether a window actually mapped -- a lingering headless
+            # process (the soffice collision) or a silently failed open
+            # delivers a bare desktop that only screenshots betray. Count
+            # mapped windows with whichever X tool the image carries;
+            # windows == 0 on a warm task is BAD. None (no tool) skips.
+            windows = None
+            if any(c["type"] in ("open", "launch") for c in cfg):
+                count_cmd = (
+                    "sleep 6; export DISPLAY=:0; "
+                    "if command -v wmctrl >/dev/null; then wmctrl -l | wc -l; "
+                    "elif command -v xdotool >/dev/null; then "
+                    "xdotool search --onlyvisible --name . 2>/dev/null | wc -l; "
+                    "elif command -v xwininfo >/dev/null; then "
+                    "xwininfo -root -children 2>/dev/null | grep -c child:; "
+                    "else echo NA; fi")
+                wr = requests.post(base + "/execute",
+                                   json={"command": count_cmd, "shell": True},
+                                   timeout=60).json()
+                out = (wr.get("output") or "").strip()
+                windows = int(out) if out.isdigit() else None
             env.is_environment_used = True  # manual POSTs bypass the flag
             slug = (task.get("ostg") or {}).get("slug") or task["id"]
             gold_rc = None
@@ -115,11 +136,12 @@ def main(argv=None):
             row = {"slug": slug,
                    "grade": (task.get("ostg") or {}).get("grade", "probe"),
                    "setup_rc": rcs, "setup_err": err, "gold_rc": gold_rc,
-                   "open_rc": open_rc,
+                   "open_rc": open_rc, "windows": windows,
                    "probe_out": probe_out, "probe_err": probe_err,
                    "score": score,
                    "ok": all(rc == 0 for rc in rcs) and score == want
-                         and open_rc in (None, 200)}
+                         and open_rc in (None, 200)
+                         and windows != 0}
             bad += not row["ok"]
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
             fh.flush()
