@@ -386,7 +386,7 @@ def extract(resp, name=TOOL, field="specs"):
                 try:
                     out = json.loads(out)
                 except ValueError:
-                    pass
+                    return []   # unparseable string: nothing recoverable
             if isinstance(out, list):
                 fixed = []
                 for x in out:
