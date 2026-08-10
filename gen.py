@@ -508,6 +508,23 @@ def task_json(spec, batch):
             config.append({"type": "launch", "parameters": {"command": ["vlc", p]}})
         else:
             config.append({"type": "open", "parameters": {"path": p}})
+            if low.endswith((".odt", ".ods", ".odp", ".xlsx", ".docx",
+                             ".pptx", ".csv")):
+                # Verify-and-retry: under 3-env load the LibreOffice window
+                # sometimes never maps even though the process starts and
+                # the lock appears (whole calc domain went 0/15 twice; the
+                # same configs are healthy single-env). Root cause lives in
+                # concurrency timing we could not reproduce in isolation --
+                # so the open PROVES a window or retries, bounded.
+                config.append({"type": "execute", "parameters": {
+                    "command": ("sleep 6; export DISPLAY=:0; "
+                                "for i in 1 2 3 4 5 6; do "
+                                "wmctrl -l 2>/dev/null | grep -qi libreoffice "
+                                "&& break; "
+                                "pkill -f '[s]office.bin'; sleep 2; "
+                                "xdg-open '%s' >/dev/null 2>&1; sleep 8; "
+                                "done; true" % p),
+                    "shell": True}})
     elif spec.get("warm") and grade != "browser" and prim == "thunderbird":
         config.append({"type": "launch", "parameters": {"command": ["thunderbird"]}})
 
