@@ -1,14 +1,14 @@
 # Synthetic task generation for OSWorld — design, experiments, results
 
-Status 2026-08-09. **v9 (§2) is the standard pipeline going forward** — the
-ambiguity and voice axes are part of every future corpus, and the v9 tasks are
-what the next trajectory rollout runs. v8 remains the corpus of the rollout
-currently in flight. Sections 1–4 describe the running system and the design
+Status 2026-08-09 (evening). **v10 (§3) is the standard going forward**: it
+keeps v9's ambiguity axis and adds the warm-start axis, a strictly monotone
+difficulty ladder (60% cross-app), and instructions written as prompts a user
+types at an agent. The v9 corpus (§2) was generated and gated but superseded
+before rollout. v8 remains the corpus of the rollout currently in flight. Sections 1–4 describe the running system and the design
 behind it; sections 5–9 are the experiments that produced it, with sample
 sizes attached so weak evidence can be told from strong.
 
-Code and docs: https://github.com/DengDuangLang111/CUA (private) — default
-branch `v9` is the standard pipeline; `v8`/`v8.4` are the frozen lines the
+Code and docs: https://github.com/DengDuangLang111/CUA (private) — branch `v10` is the standard pipeline (default branch pending its first rollout); `v8`/`v8.4` are the frozen lines the
 current rollout and its tooling run on; earlier branches preserve the v3–v5
 history.
 
@@ -76,8 +76,8 @@ never prepared, and score 0 for reasons indistinguishable from a weak agent.
 
 The two pilots varied the model that *generated* the tasks — Opus 4.6 against
 Opus 5 — holding the solving agent fixed. They were superseded by a full-corpus
-replication (§9) and stopped to free the VMs; their partial numbers stand but
-carry the grader-strictness confound described in §6.
+replication (§10) and stopped to free the VMs; their partial numbers stand but
+carry the grader-strictness confound described in §7.
 
 ---
 
@@ -132,10 +132,68 @@ being server-enforced: a spec arriving as a JSON string, and whole spec
 arrays arriving as JSON strings — one shard silently discarded 17,000
 string fragments before extract learned to parse both shapes back.
 
-The instruction review is in front of the operator now; VM controls and the
-v8-protocol rollout follow approval.
+Postscript: the instruction review surfaced the findings that became v10
+(§3), and v9 was superseded before any VM time was spent. The corpus remains
+on disk, gated and mergeable.
 
-## 3. How a task is specified
+## 3. The v10 corpus — instructions become prompts to an agent
+
+v9 was superseded before it spent a minute of VM time. Three findings, all
+measured the same day, forced a redesign:
+
+**Finding 1 — the official family pre-opens the workspace.** 85% of
+OSWorld-Verified tasks and 82% of OSWorld-V2's 108 task classes launch or
+open the relevant application in their setup (multi_apps included at 77%);
+only the os domain runs cold. Our self-contained tasks made the agent open
+files from a bare desktop — a "first mile" the official family never tests.
+
+**Finding 2 — the first mile was breaking our rollout.** 47% of the v8 run's
+failures were byte-identical response loops burned to the step cap, against
+1% on the same model over the official corpus. Attribution is two-factor:
+the cold start supplies the stall (a double-click that doesn't take), and
+preserve_thinking cements it (identical context re-fed, sampling collapses).
+Two harness bugs surfaced in the same investigation and were fixed: an empty
+model output was parsed as DONE and killed three tasks at step 1 (now WAIT),
+and gate rejections were consuming difficulty quota without producing specs,
+bleeding d4+d5 to 21% of a 35% target (accounting moved to keep-time).
+
+**Finding 3 — instruction length is mostly voice, and length predicts
+failure.** Pass rate falls monotonically with instruction length on BOTH
+corpora — official: 58% at ≤15 words to 16% over 60; v8: 33% to 11% — and at
+matched lengths the two corpora pass at the same rate, so most of the
+45%-vs-22% gap was length mix, not grading. Decomposing v9's lengths at
+fixed difficulty: the persona register carries a stable +18-word premium,
+deictic tasks are no shorter than explicit ones (so the words are not spent
+naming files), and a requirement costs only ~5-8 words. The overage was
+scene-setting the prompt itself demanded.
+
+v10 therefore changes the genre: **the instruction is what a user types AT
+an agent, not a note to a colleague.** Rule 7 was rewritten positively (state
+the goal and its shaping constraints; one load-bearing context clause at
+most; no self-introductions, employers, or backstory), length caps scale
+with difficulty (150/250/300 characters, gate-enforced), and the voice
+registers are now terse 30 / sloppy 10 / polite 25 / contextful 35 — sloppy
+being the lowercase fast-typer register real users produce ("need rfc 2616
+on screen, official rfc-editor site not a mirror"). Persona is retired.
+Deduplication pressure is explicitly forbidden from reintroducing decorative
+variety: instructions stay plain even if similarity gates fire more often.
+
+Structurally, v10 also adds the **warm-start axis** (browser and deictic
+tasks forced warm, files/terminal forced cold, the free stratum drawn warm
+at 65% — landing near the official family's rate, while keeping a deliberate
+cold slice as trainable skill) with app-matched pre-launch (open for
+LibreOffice documents, launch for chrome/gimp/vscode/vlc/thunderbird), and a
+strictly monotone difficulty ladder — d3 becomes two-application, making the
+corpus 40% single-app / 60% cross-app by quota.
+
+First specs off the line: median 29 words (v9: 56), gate rejections zero
+(the previous prompt's 41 rejections came from rules the model had to be
+forced through; positive guidance made compliance the natural writing), all
+four registers flowing. Status at this writing: 100 tasks generating; next
+are the similarity/length audit, VM controls, and a no-preserve qwen
+rollout at the official 50-step budget.
+
+## 4. How a task is specified
 
 Generation does not ask for "a task". It draws a **coordinate** and asks for a
 task at that coordinate, so a run walks a product space instead of returning to
@@ -193,7 +251,7 @@ derives the same partition.
 
 ---
 
-## 4. How duplication is measured
+## 5. How duplication is measured
 
 Generated tasks must not restate what a benchmark already contains, and must not
 restate each other. Three detectors, chosen because each is blind to something
@@ -265,7 +323,7 @@ nothing in yield.
 
 ---
 
-## 5. What each round established
+## 6. What each round established
 
 **v2** (29 tasks) — first end-to-end generation. Established that the four-field
 contract works at all.
@@ -299,7 +357,7 @@ generated a batch. v8 carries the idea into production.
 
 ---
 
-## 6. What the 74-task rollout showed
+## 7. What the 74-task rollout showed
 
 Qwen3.6-27B BF16 on one H200, screenshot observation, pyautogui, 100-step cap,
 1920×1080, temperature 0.6. **26 of 74 solved (35%).**
@@ -357,7 +415,7 @@ comparisons.
 
 ---
 
-## 7. What running it costs
+## 8. What running it costs
 
 Measured over 74 tasks and 3,566 steps.
 
@@ -386,7 +444,7 @@ action's writes land.
 
 ---
 
-## 8. Thinking mode was inert until v8
+## 9. Thinking mode was inert until v8
 
 Every run before v8, **including the official 361-task campaign**, ran without
 thinking despite passing `--enable_thinking`. The agent honours that flag only
@@ -413,10 +471,10 @@ are 1500 and 32768.
 
 ---
 
-## 9. Why the tasks come from Opus 5 rather than Opus 4.6
+## 10. Why the tasks come from Opus 5 rather than Opus 4.6
 
 Two rounds of evidence, one small and one at scale. The small round (20 vs 23
-tasks, §5–6) produced the initial verdict. The 2026-08-09 replication then
+tasks, §6–7) produced the initial verdict. The 2026-08-09 replication then
 regenerated the **entire corpus** with Opus 4.6 under the same seeds — the same
 coordinate walk through the cell product, batch for batch, so the generating
 model is the only variable. 207 specs came back (Opus 5: 206), at half the
@@ -449,7 +507,7 @@ adjudicated. That asymmetry — not the row-by-row scores — is the choice.
 Two findings cut against the choice and are recorded rather than hidden. At
 scale, Opus 4.6's probes are *longer* and carry *more* comparisons; the pilot's
 impression that Opus 5 probes deeper does not survive n = 200 — though length
-is not correctness, and the one paired-rollout anecdote (§6's PDF-export pair)
+is not correctness, and the one paired-rollout anecdote (§7's PDF-export pair)
 had 4.6 checking file existence where Opus 5 verified file content. And 4.6
 generates at half the cost. A bidirectional blind audit — each model reviewing
 the other's corpus for instruction–grader divergence — is in flight as of this
@@ -513,7 +571,7 @@ becomes the false-FAIL rescue list.
 
 ---
 
-## 10. Open
+## 11. Open
 
 - **The main rollout is mid-flight** (13 of 203 at this writing); claims about
   thinking's effect on the solve rate, and the preserve/no-preserve A/B, wait
@@ -535,7 +593,7 @@ becomes the false-FAIL rescue list.
 
 ---
 
-## 11. A note on confidence
+## 12. A note on confidence
 
 Three conclusions here were stated before the evidence supported them and later
 contradicted: a loop-count threshold at n=12, a claim that one prompt style never
