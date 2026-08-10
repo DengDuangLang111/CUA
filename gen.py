@@ -171,11 +171,14 @@ def user_prompt(n, cells, external=None, own=None, per_app=12, own_per_app=8):
     for i, c in enumerate(cells):
         lines.append(
             "  spec %d: intent=%s, domain=%s, difficulty=%d, apps=%d, artifact=%s, "
-            "source=%s, primary=%s, grade=%s, ambiguity=%d, voice=%s, warm=%s"
+            "source=%s, primary=%s, grade=%s, ambiguity=%d, voice=%s, warm=%s, "
+            "limit=%dch(~%dw)"
             % (i + 1, c["intent"], c["domain"], c["difficulty"], c["app_count"],
                c["artifact"], c["source"], c["primary"], c.get("grade", "probe"),
                c["ambiguity"], c["voice"],
-               "yes" if c.get("warm") else "no"))
+               "yes" if c.get("warm") else "no",
+               {1: 150, 2: 150, 3: 250}.get(c["difficulty"], 300),
+               {1: 150, 2: 150, 3: 250}.get(c["difficulty"], 300) // 6))
 
     ints = sorted({c["intent"] for c in cells})
     doms = sorted({c["domain"] for c in cells})
@@ -615,6 +618,45 @@ def _setup_compiles(setup):
     return None
 
 
+REPAIR_TOOL = {
+    "name": "repair_instruction",
+    "description": "Return the rewritten instruction.",
+    "input_schema": {"type": "object",
+                     "properties": {"instruction": {"type": "string"}},
+                     "required": ["instruction"]},
+}
+
+_REPAIRABLE = ("filename in", "absolute path in", "instruction over",
+               "terse/sloppy instruction over")
+
+
+def repair_instruction(spec, why, cfg):
+    """One cheap rewrite instead of discarding the whole spec."""
+    cap = {1: 150, 2: 150, 3: 250}.get(spec.get("difficulty") or 3, 300)
+    ctx = json.dumps({k: spec.get(k) for k in
+                      ("setup", "probe", "table_target", "table_rules",
+                       "start_url", "url_patterns", "open_path")},
+                     ensure_ascii=False)[:1400]
+    user = ("This task instruction was rejected: %s\n\n"
+            "instruction: %s\n\n"
+            "environment (unchangeable, for consistency): %s\n\n"
+            "Rewrite ONLY the instruction. Same task, same meaning, consistent "
+            "with the environment. ambiguity=%s (at levels 2-4 refer to objects "
+            "by what they are -- never a filename or /home/user path). voice=%s. "
+            "At most %d characters."
+            % (why, spec.get("instruction"), ctx,
+               spec.get("ambiguity"), spec.get("voice"), cap))
+    try:
+        res, _, _ = call_and_extract(
+            [{"role": "user", "content": user}],
+            [{"type": "text", "text": "You repair task instructions. "
+                                      "Answer only through the tool."}],
+            cfg, tries=2, tool=REPAIR_TOOL, field=None)
+        return (res.get("instruction") or "").strip() or None
+    except RuntimeError:
+        return None
+
+
 def gate(spec):
     amb = spec.get("ambiguity") or 1
     _instr = spec.get("instruction") or ""
@@ -884,6 +926,14 @@ def main():
                               "grade", "ambiguity", "voice", "warm"):
                         s[k] = c[i][k]
                 why = gate(s)
+                if why and why.startswith(_REPAIRABLE):
+                    fixed = repair_instruction(s, why, cfg)
+                    if fixed:
+                        s["instruction"] = fixed
+                        why2 = gate(s)
+                        if not why2:
+                            print("  repaired %-30s (%s)" % (slug, why[:40]))
+                        why = why2
                 if why:
                     print("  skip %-34s %s" % (slug, why))
                     continue
