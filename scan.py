@@ -19,7 +19,8 @@ CONTENT = (">", "write(", "printf", "curl", "wget", "cp ", "unzip", "tar ",
            "base64", "echo ", "convert", "mv ", "ln -s", "python3 -c",
            "Workbook", "zipfile", "pptx", "docx")
 CONVENTIONAL = ("README.md", "content.xml", "Preferences", "prefs.js",
-                "settings.json", "vlcrc", "bookmarks", "tasks.json")
+                "settings.json", "vlcrc", "bookmarks", "tasks.json",
+                "__init__.py")
 SRC = re.compile(r"\b(my|the|from)\s+\w*\s*(notes?|log|sheet|folder|file|doc"
                  r"|list|records?|inbox|csv)\b", re.I)
 YEARWORD = re.compile(r"\b(this year|today|current year|this month)\b", re.I)
@@ -37,8 +38,11 @@ def scan_spec(s):
     probe = s.get("probe") or ""
     browser = (s.get("grade") == "browser")
 
-    # 1 missing source data: instruction cites content the setup never writes
+    # 1 missing source data: instruction cites content the setup never writes.
+    #   A warm task's open_path delivers the workspace itself, so a bare-mkdir
+    #   setup with "the folder" in the instruction is fine (create-type task).
     if not browser and setup and not any(t in setup for t in CONTENT) \
+            and not (s.get("open_path") or "").strip() \
             and SRC.search(instr):
         yield ("missing-source", "setup writes no content yet instruction "
                "references a source (%r)" % SRC.search(instr).group(0))
