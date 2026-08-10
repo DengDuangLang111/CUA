@@ -51,15 +51,16 @@ def scan_spec(s):
             r"['\"](/home/user/[^'\"]+\.\w{2,4}|[\w-]+\.\w{2,4})['\"]", probe))
         setup_stems = {p.rsplit("/", 1)[-1].rsplit(".", 1)[0].lower()
                        for p in re.findall(r"[\w/.-]+\.\w{2,4}", setup)}
+        samebase = bool(re.search(r"same (base )?name", instr, re.I))
         for x in sorted(names):
             base = x.rsplit("/", 1)[-1]
             stem = base.rsplit(".", 1)[0]
             if base in CONVENTIONAL or base in setup or x in setup:
                 continue
-            if base.lower() in instr.lower() \
+            if base.lower() in instr.lower() or stem.lower() in instr.lower() \
                     or stem.replace("_", " ").replace("-", " ") in instr.lower():
                 continue
-            if stem.lower() in setup_stems:      # same-basename export
+            if stem.lower() in setup_stems or samebase:  # derivable export name
                 continue
             yield ("rigid-name", "probe demands %r; instruction never names "
                    "it and setup never creates it" % x)
