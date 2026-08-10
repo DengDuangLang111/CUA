@@ -171,10 +171,11 @@ def user_prompt(n, cells, external=None, own=None, per_app=12, own_per_app=8):
     for i, c in enumerate(cells):
         lines.append(
             "  spec %d: intent=%s, domain=%s, difficulty=%d, apps=%d, artifact=%s, "
-            "source=%s, primary=%s, grade=%s, ambiguity=%d, voice=%s"
+            "source=%s, primary=%s, grade=%s, ambiguity=%d, voice=%s, warm=%s"
             % (i + 1, c["intent"], c["domain"], c["difficulty"], c["app_count"],
                c["artifact"], c["source"], c["primary"], c.get("grade", "probe"),
-               c["ambiguity"], c["voice"]))
+               c["ambiguity"], c["voice"],
+               "yes" if c.get("warm") else "no"))
 
     ints = sorted({c["intent"] for c in cells})
     doms = sorted({c["domain"] for c in cells})
@@ -197,7 +198,11 @@ def user_prompt(n, cells, external=None, own=None, per_app=12, own_per_app=8):
                        for a in sorted({c["ambiguity"] for c in cells}))
            + "\n\nvoice is the register the instruction is written in:\n"
            + "\n".join("  %s = %s" % (v, T.VOICES[v])
-                       for v in sorted({c["voice"] for c in cells})))
+                       for v in sorted({c["voice"] for c in cells}))
+           + "\n\nwarm says whether the workspace starts already open (see "
+             "<warm_start>): warm=yes tasks SET open_path and may assume the "
+             "document/app is on screen; warm=no tasks set NO open_path and "
+             "their instruction must not presume anything is open.")
 
     def brief_for(app):
         return " ".join(sorted({"%s %s %s %s" % (c["intent"], c["domain"],
@@ -471,15 +476,26 @@ def task_json(spec, batch):
     if (spec.get("setup") or "").strip():
         config.append({"type": "execute",
                        "parameters": {"command": spec["setup"], "shell": True}})
+    prim = apps[0] if apps else ""
     if spec.get("open_path") and grade != "browser":
+        # Warm start, matched to the app the way the official corpus does it.
+        # xdg-open hands html to a browser and 500s; gimp/vlc/code cold starts
+        # are flaky through /setup/open_file -- launch those directly.
         p = spec["open_path"]
-        if p.lower().endswith((".html", ".htm")):
-            # xdg-open on an html file 500s in the VM (browser handoff); give
-            # the intended start state -- the page open in Chrome -- via launch.
+        low = p.lower()
+        if low.endswith((".html", ".htm")):
             config.append({"type": "launch", "parameters": {
                 "command": ["google-chrome", "file://" + p]}})
+        elif prim == "gimp" or low.endswith((".xcf", ".png", ".jpg", ".jpeg")):
+            config.append({"type": "launch", "parameters": {"command": ["gimp", p]}})
+        elif prim == "vscode":
+            config.append({"type": "launch", "parameters": {"command": ["code", p]}})
+        elif prim == "vlc" or low.endswith((".mp4", ".mp3", ".mkv", ".avi")):
+            config.append({"type": "launch", "parameters": {"command": ["vlc", p]}})
         else:
             config.append({"type": "open", "parameters": {"path": p}})
+    elif spec.get("warm") and grade != "browser" and prim == "thunderbird":
+        config.append({"type": "launch", "parameters": {"command": ["thunderbird"]}})
 
     if grade == "browser":
         # The official chrome template: debug port for chrome_open_tabs, socat
@@ -610,6 +626,17 @@ def gate(spec):
         return "filename in an ambiguity>=2 instruction"
     if amb == 3 and spec.get("grade") != "browser" and not (spec.get("open_path") or "").strip():
         return "ambiguity=3 without open_path"
+    prim0 = (spec.get("apps") or [""])[0]
+    if spec.get("grade") != "browser":
+        if spec.get("warm") and prim0 not in ("files", "terminal", "thunderbird") \
+                and not (spec.get("open_path") or "").strip():
+            return "warm task without open_path"
+        if not spec.get("warm") and (spec.get("open_path") or "").strip():
+            return "cold task with open_path"
+        if not spec.get("warm") and re.search(r"\b(is|are) (already )?open\b", _instr):
+            return "cold task whose instruction presumes an open workspace"
+    if spec.get("voice") == "terse" and len(_instr.split()) > 40:
+        return "terse instruction over 40 words"
     """Why this spec cannot become a task, or None. Strict on purpose: a bad
     field that slips through either crashes evaluate() (no result.txt) or
     ships a task that can never score."""
@@ -843,7 +870,7 @@ def main():
                 if i < len(c):
                     for k in ("drawn_from", "intent", "domain", "difficulty",
                               "constraints", "artifact", "source", "app_count",
-                              "grade", "ambiguity", "voice"):
+                              "grade", "ambiguity", "voice", "warm"):
                         s[k] = c[i][k]
                 why = gate(s)
                 if why:

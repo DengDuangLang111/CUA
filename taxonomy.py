@@ -176,12 +176,15 @@ def cells(n, seed, only_apps=None, used=None, shard=None):
         primary = apps[(turn // len(options)) % len(apps)]
         rotation[intent] += 1
 
+        warm = (artifact == "browser_tab" or ambiguity == 3
+                or (primary not in ("files", "terminal") and rng.random() < 0.65))
         out.append({
             "intent": intent,
             "domain": domain,
             "difficulty": difficulty,
             "ambiguity": ambiguity,
             "voice": voice,
+            "warm": warm,
             "constraints": n_reqs,
             "artifact": artifact,
             "primary": primary,
