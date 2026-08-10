@@ -83,6 +83,17 @@ def scan_spec(s):
         yield ("inverted-verdict?", "probe prints FAIL when %r is truthy"
                % INVERTED.search(probe).group(1))
 
+    # 6 fake media bytes: setup fabricates a media file from literal bytes --
+    #   the file exists but no player can open it; an agent that tries to
+    #   play/preview it hits error popups (v11: induction-clip-order-vlc)
+    m = re.search(r"['\"]([\w-]+\.(mp4|mp3|mkv|avi|wav|ogg|webm))['\"]\s*"
+                  r"[^\n]{0,80}?write\(b?['\"\\]", setup) or \
+        re.search(r"write\(b['\"][^)]{0,40}\)\s*for\s+n\s+in\s*"
+                  r"\[[^\]]*\.(mp4|mp3|mkv|avi|wav)", setup)
+    if m:
+        yield ("fake-media", "setup writes literal bytes as %r -- unplayable; "
+               "fine only if no step needs playback" % m.group(1)[:40])
+
 
 def main(paths):
     findings = 0

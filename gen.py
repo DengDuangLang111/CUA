@@ -806,6 +806,21 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
+    # Echo the full invocation and persist it next to the output: the v11
+    # campaign's seed proved unrecoverable from artifacts, which blocks
+    # same-seed reasoning later. Never again.
+    try:
+        from pathlib import Path as _P
+        _outdir = _P(str(args.out)).parent
+        _outdir.mkdir(parents=True, exist_ok=True)
+        (_outdir / "args.json").write_text(
+            json.dumps({k: str(v) for k, v in vars(args).items()}, indent=1),
+            encoding="utf-8")
+    except Exception:
+        pass
+    print("[gen] args: seed=%s n=%s batches=%s shard=%s model=%s out=%s"
+          % (args.seed, args.n, args.batches, args.shard, args.model, args.out))
+
     shard = None
     if args.shard:
         try:
