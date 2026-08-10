@@ -510,18 +510,20 @@ def task_json(spec, batch):
             config.append({"type": "open", "parameters": {"path": p}})
             if low.endswith((".odt", ".ods", ".odp", ".xlsx", ".docx",
                              ".pptx", ".csv")):
-                # Verify-and-retry: under 3-env load the LibreOffice window
-                # sometimes never maps even though the process starts and
-                # the lock appears (whole calc domain went 0/15 twice; the
-                # same configs are healthy single-env). Root cause lives in
-                # concurrency timing we could not reproduce in isolation --
-                # so the open PROVES a window or retries, bounded.
+                # Deliver-and-RAISE: under 3-env load GNOME's focus-stealing
+                # prevention leaves the slow-mapping LibreOffice window
+                # MINIMIZED ("window is ready" fate) -- wmctrl lists it, the
+                # dock shows it, the screen never does, and the agent burns
+                # 50 steps trying to summon it (calc went 0/15 three times;
+                # its own last words: "窗口可能最小化了"). Existence is not
+                # visibility: activate the window or re-open, bounded.
                 config.append({"type": "execute", "parameters": {
                     "command": ("sleep 6; export DISPLAY=:0; "
                                 "for i in 1 2 3 4 5 6; do "
-                                "wmctrl -l 2>/dev/null | grep -qi libreoffice "
-                                "&& break; "
-                                "pkill -f '[s]office.bin'; sleep 2; "
+                                "WID=$(wmctrl -l 2>/dev/null | grep -i "
+                                "libreoffice | head -1 | awk '{print $1}'); "
+                                "if [ -n \"$WID\" ]; then "
+                                "wmctrl -i -a \"$WID\"; sleep 2; break; fi; "
                                 "xdg-open '%s' >/dev/null 2>&1; sleep 8; "
                                 "done; true" % p),
                     "shell": True}})
