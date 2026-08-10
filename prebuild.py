@@ -37,6 +37,18 @@ def _docker(args, **kw):
                           text=True, **kw)
 
 
+def _run_setup(setup):
+    """Run a setup script inside the build container.
+
+    The script arrives on STDIN rather than through a heredoc: setups are
+    multi-kilobyte one-liners full of quotes and backslashes, and wrapping
+    them in a heredoc inside `bash -c` mangled five of them (bash exited 2
+    before the artifact was written, leaving the spec poisoned).
+    """
+    return _docker(["exec", "-i", "-u", "user", "-w", "/home/user",
+                    "ostg-prebuild", "bash", "-s"], input=setup)
+
+
 def wanted(path, setup):
     """Is this produced file part of the task's starting state?
 
@@ -108,15 +120,14 @@ def main(paths):
                          "rm -rf /home/user/* /tmp/* 2>/dev/null; "
                          "mkdir -p /home/user; chown -R user /home/user"],
                         check=False)
-                script = ("cat > /tmp/setup.sh <<'OSTGEOF'\n%s\nOSTGEOF\n"
-                          "runuser -u user -- bash /tmp/setup.sh" % setup)
-                r = _docker(["exec", "ostg-prebuild", "bash", "-c", script])
+                r = _run_setup(setup)
                 listing = _docker(["exec", "ostg-prebuild", "bash", "-c",
                                    "find /home/user -type f 2>/dev/null"])
                 found = [f for f in listing.stdout.splitlines() if f.strip()]
                 if r.returncode != 0 or not found:
-                    print("  !! %-34s setup rc=%s files=%d (left as-is)"
-                          % (s.get("slug", "?"), r.returncode, len(found)),
+                    print("  !! %-34s setup rc=%s files=%d (left as-is): %s"
+                          % (s.get("slug", "?"), r.returncode, len(found),
+                             (r.stderr or "").strip().replace("\n", " ")[-160:]),
                           file=sys.stderr)
                     out.append(line)
                     continue
