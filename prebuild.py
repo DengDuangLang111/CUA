@@ -77,10 +77,17 @@ def main(paths):
         print("cannot start build container:", up.stderr[:200], file=sys.stderr)
         return 1
     try:
+        # The build container must be able to run ANY setup we might rewrite,
+        # not just the soffice call: the same script often draws an image,
+        # writes a workbook or cuts a clip. Missing a tool means the setup
+        # fails here and the spec is left untouched (and stays poisoned), so
+        # the toolbox mirrors what the eval VM offers.
         _docker(["exec", "ostg-prebuild", "bash", "-c",
                  "apt-get update -qq && DEBIAN_FRONTEND=noninteractive "
                  "apt-get install -y -qq --no-install-recommends "
-                 "libreoffice python3 >/dev/null 2>&1 && "
+                 "libreoffice python3 python3-pil python3-openpyxl "
+                 "python3-lxml ffmpeg zip unzip poppler-utils "
+                 ">/dev/null 2>&1; "
                  "useradd -m user 2>/dev/null; mkdir -p /home/user; "
                  "chown -R user /home/user"], check=False)
         total = 0
