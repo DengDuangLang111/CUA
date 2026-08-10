@@ -486,8 +486,10 @@ def task_json(spec, batch):
             # in (lock file appears, no window ever maps; measured: 0/15
             # calc, and cold tasks fail the same way). Kill it right after
             # the setup, warm or cold.
+            # [s]office: the bracket keeps pkill -f from matching its own
+            # shell's command line and SIGTERMing itself (rc -15).
             config.append({"type": "execute", "parameters": {
-                "command": "pkill -f soffice.bin; sleep 2; true", "shell": True}})
+                "command": "pkill -f '[s]office.bin'; sleep 2; true", "shell": True}})
     prim = apps[0] if apps else ""
     if spec.get("open_path") and grade != "browser":
         # Warm start, matched to the app the way the official corpus does it.
