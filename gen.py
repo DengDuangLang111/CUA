@@ -479,18 +479,20 @@ def task_json(spec, batch):
     if (spec.get("setup") or "").strip():
         config.append({"type": "execute",
                        "parameters": {"command": spec["setup"], "shell": True}})
+        if "soffice" in spec["setup"]:
+            # The headless soffice from a setup's --convert-to LINGERS
+            # indefinitely and swallows every later document open -- the
+            # config's warm open AND the agent's own double-click minutes
+            # in (lock file appears, no window ever maps; measured: 0/15
+            # calc, and cold tasks fail the same way). Kill it right after
+            # the setup, warm or cold.
+            config.append({"type": "execute", "parameters": {
+                "command": "pkill -f soffice.bin; sleep 2; true", "shell": True}})
     prim = apps[0] if apps else ""
     if spec.get("open_path") and grade != "browser":
         # Warm start, matched to the app the way the official corpus does it.
         # xdg-open hands html to a browser and 500s; gimp/vlc/code cold starts
         # are flaky through /setup/open_file -- launch those directly.
-        if "soffice" in (spec.get("setup") or ""):
-            # A headless soffice left over from the setup's --convert-to
-            # swallows the subsequent open: the document routes into the
-            # headless instance and no window ever maps (measured: 0/15 calc
-            # in the first v11 rollout). Clear it before opening.
-            config.append({"type": "execute", "parameters": {
-                "command": "pkill -f soffice.bin; sleep 2; true", "shell": True}})
         p = spec["open_path"]
         low = p.lower()
         if low.endswith((".html", ".htm")):
