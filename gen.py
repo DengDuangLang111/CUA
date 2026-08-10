@@ -484,6 +484,13 @@ def task_json(spec, batch):
         # Warm start, matched to the app the way the official corpus does it.
         # xdg-open hands html to a browser and 500s; gimp/vlc/code cold starts
         # are flaky through /setup/open_file -- launch those directly.
+        if "soffice" in (spec.get("setup") or ""):
+            # A headless soffice left over from the setup's --convert-to
+            # swallows the subsequent open: the document routes into the
+            # headless instance and no window ever maps (measured: 0/15 calc
+            # in the first v11 rollout). Clear it before opening.
+            config.append({"type": "execute", "parameters": {
+                "command": "pkill -f soffice.bin; sleep 2; true", "shell": True}})
         p = spec["open_path"]
         low = p.lower()
         if low.endswith((".html", ".htm")):
