@@ -6,9 +6,10 @@ cross-app, instructions written as prompts a user types at an agent) plus a
 repair pipeline that rewrites fixable rejects instead of discarding them and
 inline per-spec constraints in the prompt. Head-to-head on the same seed and
 command, v11 kept 4x more specs per batch than v10 at equal quality gates;
-its 100-task corpus is in the VM chain now (controls, then a no-preserve
-50-step qwen rollout). v10's 70 tasks are retired to a generation-economics
-control group and do not enter the VM. The v9 corpus (§2) was generated and
+its corpus has passed VM controls (100 checked, 8 removed — see §3) and 92
+tasks are rolling now under no-preserve thinking at the official 50-step
+budget. v10's 70 tasks are retired to a generation-economics control group
+and do not enter the VM. The v9 corpus (§2) was generated and
 gated but superseded before rollout. The v8 rollout was stopped at 99/203
 scored (24 solved) to free the VMs — resumable at any time by relaunching
 with the same result directory. Sections 1–4 describe the running system and
@@ -79,7 +80,7 @@ result directory — scored tasks are skipped, unscored ones redo):
 
 | run | status | max steps | thinking | solved |
 |---|---|---|---|---|
-| v11-all (§3), no-preserve | in VM chain: controls, then rollout | 50 | on, history not preserved | — |
+| v11-all (§3), no-preserve | rolling: 92 tasks (8 removed by controls) | 50 | on, history not preserved | — |
 | v8big-all, think-preserve | stopped at 99 / 203 scored | 100 | on, history preserved | 24 (24%) |
 | v8nt-opus46 | stopped at 8 / 23 | 50 | off | 4 |
 | v8nt-opus5 | stopped at 9 / 20 | 50 | off | 3 |
@@ -251,6 +252,61 @@ One more schema monster joined the §4 list during this run: the model
 occasionally returns a spec as one unparseable string rather than an
 object; the extractor now returns an empty batch for those instead of
 char-skipping through 10,000 fragments.
+
+### The retroactive yardstick — v8, v10, v11 and the official corpus on one scale
+
+The acceptance battery is pure text computation, so v8 was re-measured with
+it after the fact (its canonical 192-spec shard files; a first attempt that
+globbed in the opus-4.6 corpora and partial regenerations produced fake
+duplicate pairs — measure only the canonical set). All three generations
+pass the similarity gates; the real movement is in instruction shape:
+
+| metric (threshold) | v8 (192) | v10 (70) | v11 final (100) | official 361 |
+|---|---|---|---|---|
+| internal jaccard max (<0.4) | 0.30 | 0.27 | 0.35 | — |
+| internal tf-idf cosine max (<0.5) | 0.45 | 0.37 | 0.49 | — |
+| vs cua-gym max (<0.5) | 0.41 | 0.43 | 0.47 | — |
+| vs official-361 max (<0.5) | 0.28 | — | 0.28 | — |
+| distinct-bigram ratio | 0.79 | 0.88 | 0.83 | — |
+| words, median | 53 | 29 | 31 | 26 |
+| ≤25 words | 1% | — | 34% | ~half |
+| absolute path in instruction | 87% | — | 8% | 5% |
+| bare-imperative opening | 1% | — | 12% | 18% |
+
+v11's similarity maxima sit a little higher than v8/v10 — the user-prompt
+genre is shorter and lexically denser, so the corpus packs tighter — but
+every value is inside the gates, after the two over-threshold pairs were
+culled. The shape rows are the point: v8 read as a colleague's memo (median
+53 words, an absolute path 87% of the time); v11 lands at official scale on
+all three counts. Given the length-pass law (§3 finding 3), that shift is
+expected to show up directly in rollout pass rate. v10's 0.88 bigram ratio
+is the best of the three, but it is survivorship — 144 rejections distilled
+70 specs; v11 holds 0.83 while keeping 4x as many.
+
+### VM controls on the final 100 — and a second systematic catch
+
+Controls (fresh VM per task: setup exit code, open execution, evaluate on
+the untouched desktop) checked all 100 and removed 8:
+
+- **7 impress tasks, one root cause.** Every deck-building setup converts a
+  generated document through `soffice --headless --convert-to odp`, and that
+  export filter is unavailable inside the VM (LibreOffice reports no export
+  filter; java is absent), so the setup exits 1 and the follow-on move of
+  `/tmp/deck.odp` fails. The class was invisible before the VM because the
+  conversion works on the host. Repair path: build the .odp directly (zip
+  with content.xml — the probes already read it that way), re-control, and
+  top-up the rollout into the same result directory.
+- **1 free-pass** (`course-code-answer-doc`): evaluate returned 1.0 on an
+  untouched desktop — the setup itself satisfies the probe. Exactly the SFT
+  poison controls exist to catch.
+
+The rollout therefore runs 92 tasks. One harness lesson from the handoff:
+the runner's manifest keys tasks by uuid while control reports carry slugs —
+the first "clean" manifest filtered nothing (100 tasks survived their own
+exclusion), and the fix maps slug → uuid through the task JSONs' ostg block.
+And a killed runner can hang for tens of minutes in graceful cleanup
+(recordings, container teardown) while still matching pgrep — bound the
+wait, then SIGKILL and stop containers by hand.
 
 ## 4. How a task is specified
 

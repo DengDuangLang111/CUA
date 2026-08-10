@@ -127,6 +127,12 @@ re-merge. **Never run control concurrently with a rollout** (see §7 memory).
 Known blind spot: control skips `open` config steps, so a task whose start
 state depends on `open` (deictic/a3 tasks) is not fully exercised.
 
+**Excluding BADs without a re-merge** (the autolaunch path): the runner
+manifest keys tasks by **uuid**, control reports carry **slugs** — filtering
+the manifest with slugs silently removes nothing. Map slug → uuid through
+`<set>-all/examples/*/*.json` (each task's `ostg.slug`), then filter.
+Verify the printed task count actually dropped before launching.
+
 ## 4.5 Positive-direction checks: gold injection + audit (v8.4+)
 
 Control only proves "no work scores 0"; these two cover the reverse direction.
@@ -268,6 +274,12 @@ re-runs in the same stroke.
 Screenshot-500 symptom: `Failed to get screenshot. Status code: 500` followed
 by `TypeError: a bytes-like object is required` in the runner log — the task
 has no result.txt; heal it with the §5 same-result_dir relaunch.
+
+**A SIGTERM'd runner dies slowly.** Graceful cleanup (stop recordings, tear
+down containers) can run for tens of minutes — the whole time still matching
+`pgrep -f run_multienv_qwen.py`, which stalls anything waiting on runner
+death (the autolaunch heal loop). Bound the wait (~5 min), then `pkill -9`
+and `docker stop` the leftovers yourself.
 
 Slurm serving chain: the vLLM job self-renews every 24 h (USR1 → successor,
 14-link cap). Each handoff is a ~5–10 minute service gap; up to num_envs
