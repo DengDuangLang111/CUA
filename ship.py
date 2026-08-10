@@ -18,7 +18,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from ostg import accept, control, scan
+from ostg import accept, control, prebuild, scan
 from ostg.gen import gate, task_json
 
 
@@ -62,7 +62,10 @@ def main():
         argv = argv[:i] + argv[i + 2:]
     dirs = [Path(a) for a in argv]
 
-    print("#### 1 re-emit")
+    print("#### 0 prebuild office files (soffice -> embedded blobs)")
+    prebuild.main([str(d / "specs.jsonl") for d in dirs])
+
+    print("\n#### 1 re-emit")
     for d in dirs:
         reemit(d)
 

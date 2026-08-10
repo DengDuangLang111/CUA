@@ -477,17 +477,12 @@ def task_json(spec, batch):
     # counts only HTTP failures toward the cap).
     config = []
     if (spec.get("setup") or "").strip():
+        # ostg.prebuild has already rewritten any soffice-carrying setup into
+        # a base64 blob before this point (ship stage 0); a leftover soffice
+        # here means prebuild was skipped, which the visibility check and the
+        # controls will surface. No in-VM soffice = no compositor poison.
         config.append({"type": "execute",
                        "parameters": {"command": spec["setup"], "shell": True}})
-        if "soffice" in spec["setup"]:
-            # The headless soffice from a setup's --convert-to LINGERS
-            # indefinitely and swallows every later document open -- the
-            # config's warm open AND the agent's own double-click minutes
-            # in (lock file appears, no window ever maps; measured: 0/15
-            # calc, and cold tasks fail the same way). Kill it right after
-            # the setup, warm or cold.
-            config.append({"type": "execute", "parameters": {
-                "command": "pkill -f soffice.bin; sleep 2; true", "shell": True}})
     prim = apps[0] if apps else ""
     if spec.get("open_path") and grade != "browser":
         # Warm start, matched to the app the way the official corpus does it.
@@ -666,6 +661,25 @@ def repair_instruction(spec, why, cfg):
         return None
 
 
+_STRAY_TAG = re.compile(r"\s*</(?:setup|probe|instruction|spec|json|task)>\s*$")
+
+
+def sanitize(spec):
+    """Strip the prompt's own closing tag when the model leaks it into a value.
+
+    The tool schema is not enforced, so a spec occasionally arrives with the
+    surrounding XML tag glued to the end of a field ('...)"</setup>'). In a
+    setup that is a shell syntax error -- the starting state is never built,
+    and nothing downstream notices: the task simply scores 0 for reasons that
+    look like a weak agent (5 such specs in the 472-run, one of which no other
+    check could have caught).
+    """
+    for field in ("setup", "probe", "instruction"):
+        v = spec.get(field)
+        if isinstance(v, str) and _STRAY_TAG.search(v):
+            spec[field] = _STRAY_TAG.sub("", v)
+
+
 def gate(spec):
     amb = spec.get("ambiguity") or 1
     _instr = spec.get("instruction") or ""
@@ -714,6 +728,10 @@ def gate(spec):
 
     if not (spec.get("setup") or "").strip():
         return "no setup"
+    for _f in ("setup", "probe"):
+        if re.search(r"</(setup|probe|instruction|spec|json|task)>",
+                     spec.get(_f) or ""):
+            return "leaked prompt tag inside %s (sanitize did not catch it)" % _f
     if re.search(r"--convert-to'?\s*,?\s*'?(odp|pptx|ppt)\b(?!:)(?!')?", spec["setup"]) and \
        not re.search(r"--convert-to'?\s*,?\s*'?(odp|pptx|ppt):", spec["setup"]):
         # BARE `--convert-to odp` fails everywhere: txt loads into Writer,
@@ -803,6 +821,21 @@ def main():
     ap.add_argument("--avoid-own-per-app", type=int, default=8)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+
+    # Echo the full invocation and persist it next to the output: the v11
+    # campaign's seed proved unrecoverable from artifacts, which blocks
+    # same-seed reasoning later. Never again.
+    try:
+        from pathlib import Path as _P
+        _outdir = _P(str(args.out)).parent
+        _outdir.mkdir(parents=True, exist_ok=True)
+        (_outdir / "args.json").write_text(
+            json.dumps({k: str(v) for k, v in vars(args).items()}, indent=1),
+            encoding="utf-8")
+    except Exception:
+        pass
+    print("[gen] args: seed=%s n=%s batches=%s shard=%s model=%s out=%s"
+          % (args.seed, args.n, args.batches, args.shard, args.model, args.out))
 
     shard = None
     if args.shard:
@@ -941,6 +974,7 @@ def main():
                               "constraints", "artifact", "source", "app_count",
                               "grade", "ambiguity", "voice", "warm"):
                         s[k] = c[i][k]
+                sanitize(s)
                 why = gate(s)
                 if why and why.startswith(_REPAIRABLE):
                     fixed = repair_instruction(s, why, cfg)

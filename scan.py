@@ -19,7 +19,8 @@ CONTENT = (">", "write(", "printf", "curl", "wget", "cp ", "unzip", "tar ",
            "base64", "echo ", "convert", "mv ", "ln -s", "python3 -c",
            "Workbook", "zipfile", "pptx", "docx")
 CONVENTIONAL = ("README.md", "content.xml", "Preferences", "prefs.js",
-                "settings.json", "vlcrc", "bookmarks", "tasks.json")
+                "settings.json", "vlcrc", "bookmarks", "tasks.json",
+                "__init__.py")
 SRC = re.compile(r"\b(my|the|from)\s+\w*\s*(notes?|log|sheet|folder|file|doc"
                  r"|list|records?|inbox|csv)\b", re.I)
 YEARWORD = re.compile(r"\b(this year|today|current year|this month)\b", re.I)
@@ -37,8 +38,11 @@ def scan_spec(s):
     probe = s.get("probe") or ""
     browser = (s.get("grade") == "browser")
 
-    # 1 missing source data: instruction cites content the setup never writes
+    # 1 missing source data: instruction cites content the setup never writes.
+    #   A warm task's open_path delivers the workspace itself, so a bare-mkdir
+    #   setup with "the folder" in the instruction is fine (create-type task).
     if not browser and setup and not any(t in setup for t in CONTENT) \
+            and not (s.get("open_path") or "").strip() \
             and SRC.search(instr):
         yield ("missing-source", "setup writes no content yet instruction "
                "references a source (%r)" % SRC.search(instr).group(0))
@@ -51,15 +55,16 @@ def scan_spec(s):
             r"['\"](/home/user/[^'\"]+\.\w{2,4}|[\w-]+\.\w{2,4})['\"]", probe))
         setup_stems = {p.rsplit("/", 1)[-1].rsplit(".", 1)[0].lower()
                        for p in re.findall(r"[\w/.-]+\.\w{2,4}", setup)}
+        samebase = bool(re.search(r"same (base )?name", instr, re.I))
         for x in sorted(names):
             base = x.rsplit("/", 1)[-1]
             stem = base.rsplit(".", 1)[0]
             if base in CONVENTIONAL or base in setup or x in setup:
                 continue
-            if base.lower() in instr.lower() \
+            if base.lower() in instr.lower() or stem.lower() in instr.lower() \
                     or stem.replace("_", " ").replace("-", " ") in instr.lower():
                 continue
-            if stem.lower() in setup_stems:      # same-basename export
+            if stem.lower() in setup_stems or samebase:  # derivable export name
                 continue
             yield ("rigid-name", "probe demands %r; instruction never names "
                    "it and setup never creates it" % x)
@@ -82,6 +87,17 @@ def scan_spec(s):
     if INVERTED.search(probe):
         yield ("inverted-verdict?", "probe prints FAIL when %r is truthy"
                % INVERTED.search(probe).group(1))
+
+    # 6 fake media bytes: setup fabricates a media file from literal bytes --
+    #   the file exists but no player can open it; an agent that tries to
+    #   play/preview it hits error popups (v11: induction-clip-order-vlc)
+    m = re.search(r"['\"]([\w-]+\.(mp4|mp3|mkv|avi|wav|ogg|webm))['\"]\s*"
+                  r"[^\n]{0,80}?write\(b?['\"\\]", setup) or \
+        re.search(r"write\(b['\"][^)]{0,40}\)\s*for\s+n\s+in\s*"
+                  r"\[[^\]]*\.(mp4|mp3|mkv|avi|wav)", setup)
+    if m:
+        yield ("fake-media", "setup writes literal bytes as %r -- unplayable; "
+               "fine only if no step needs playback" % m.group(1)[:40])
 
 
 def main(paths):
