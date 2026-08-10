@@ -723,6 +723,9 @@ def main():
                          "disjoint coordinates; cross-process duplication is "
                          "held down by the sibling-run avoid list, re-read "
                          "before every batch")
+    ap.add_argument("--spent-from", action="append", default=[],
+                    help="specs.jsonl file(s) whose kept coordinates seed the "
+                         "quota ledger, so a top-up run corrects axis deficits")
     ap.add_argument("--start-batch", type=int, default=0,
                     help="resume: skip the first N batches (seeds stay aligned)")
     ap.add_argument("--refill", type=int, default=2,
@@ -820,6 +823,12 @@ def main():
 
     kept = 0
     spent = set()
+    for pf in args.spent_from:
+        for line in Path(pf).read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                r = json.loads(line)
+                spent.add((r.get("intent"), r.get("domain"),
+                           r.get("difficulty"), r.get("ambiguity")))
     target = args.n * args.batches
     b = args.start_batch
     with args.out.open("a", encoding="utf-8") as fh:
@@ -833,7 +842,6 @@ def main():
             b += 1
             if not c:
                 break
-            spent.update((x["intent"], x["domain"], x["difficulty"], x["ambiguity"]) for x in c)
             seen, own_by_app = priors_now()  # sibling runs may be writing
             print("\nbatch %d/%d%s" % (b, args.batches, label))
             for x in c:
@@ -877,6 +885,11 @@ def main():
                     print("  skip %-34s %s" % (slug, why))
                     continue
                 seen.add(slug)
+                # Quota accounting happens on KEEP: a gate-rejected spec must
+                # return its cell to the pool, or the high-difficulty quotas
+                # bleed out through rejections (measured: d4+d5 at 21% of a
+                # 35% target).
+                spent.add((s["intent"], s["domain"], s["difficulty"], s["ambiguity"]))
                 fh.write(json.dumps(s, ensure_ascii=False) + "\n")
                 fh.flush()
                 domain, tj = task_json(s, batch_name)
