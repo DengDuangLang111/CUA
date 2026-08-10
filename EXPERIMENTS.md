@@ -1,16 +1,24 @@
 # Synthetic task generation for OSWorld — design, experiments, results
 
-Status 2026-08-09 (evening). **v10 (§3) is the standard going forward**: it
-keeps v9's ambiguity axis and adds the warm-start axis, a strictly monotone
-difficulty ladder (60% cross-app), and instructions written as prompts a user
-types at an agent. The v9 corpus (§2) was generated and gated but superseded
-before rollout. v8 remains the corpus of the rollout currently in flight. Sections 1–4 describe the running system and the design
-behind it; sections 5–9 are the experiments that produced it, with sample
-sizes attached so weak evidence can be told from strong.
+Status 2026-08-09 (night). **v11 (§3) is the standard going forward**: the
+v10 design (ambiguity + warm-start axes, monotone difficulty ladder, 60%
+cross-app, instructions written as prompts a user types at an agent) plus a
+repair pipeline that rewrites fixable rejects instead of discarding them and
+inline per-spec constraints in the prompt. Head-to-head on the same seed and
+command, v11 kept 4x more specs per batch than v10 at equal quality gates;
+its 100-task corpus is in the VM chain now (controls, then a no-preserve
+50-step qwen rollout). v10's 70 tasks are retired to a generation-economics
+control group and do not enter the VM. The v9 corpus (§2) was generated and
+gated but superseded before rollout. The v8 rollout was stopped at 99/203
+scored (24 solved) to free the VMs — resumable at any time by relaunching
+with the same result directory. Sections 1–4 describe the running system and
+the design behind it; sections 5–9 are the experiments that produced it,
+with sample sizes attached so weak evidence can be told from strong.
 
-Code and docs: https://github.com/DengDuangLang111/CUA (private) — branch `v10` is the standard pipeline (default branch pending its first rollout); `v8`/`v8.4` are the frozen lines the
-current rollout and its tooling run on; earlier branches preserve the v3–v5
-history.
+Code and docs: https://github.com/DengDuangLang111/CUA (private) — branch
+`v11` is the standard pipeline (default branch pending its first rollout);
+`v8`/`v8.4` are the frozen lines the stopped rollout and its tooling run on;
+earlier branches preserve the v3–v10 history.
 
 ---
 
@@ -65,12 +73,14 @@ command exiting non-zero — which matters because **OSWorld never checks this**
 whose setup silently failed would run to completion against a desktop that was
 never prepared, and score 0 for reasons indistinguishable from a weak agent.
 
-**The main rollout is in flight; two pilots were stopped for it.**
+**Rollout ledger** (the v8 main run was stopped 2026-08-09 to hand the VMs
+to the v11 chain; every stopped run heals by relaunching with the same
+result directory — scored tasks are skipped, unscored ones redo):
 
 | run | status | max steps | thinking | solved |
 |---|---|---|---|---|
-| v8big-all, think-preserve | 32 / 203 scored (07:30) | 100 | on, history preserved | 11 (34%) |
-| v9 corpus (§2) — the tasks the NEXT trajectory rollout will run | complete: 213 specs, under instruction review | — | — | — |
+| v11-all (§3), no-preserve | in VM chain: controls, then rollout | 50 | on, history not preserved | — |
+| v8big-all, think-preserve | stopped at 99 / 203 scored | 100 | on, history preserved | 24 (24%) |
 | v8nt-opus46 | stopped at 8 / 23 | 50 | off | 4 |
 | v8nt-opus5 | stopped at 9 / 20 | 50 | off | 3 |
 
@@ -189,9 +199,58 @@ corpus 40% single-app / 60% cross-app by quota.
 First specs off the line: median 29 words (v9: 56), gate rejections zero
 (the previous prompt's 41 rejections came from rules the model had to be
 forced through; positive guidance made compliance the natural writing), all
-four registers flowing. Status at this writing: 100 tasks generating; next
-are the similarity/length audit, VM controls, and a no-preserve qwen
-rollout at the official 50-step budget.
+four registers flowing.
+
+### v11 — repair instead of reject
+
+At scale, v10's economics broke: its top-up run burned 144 gate rejections
+to keep 1.9 specs per batch, mostly on three mechanical offenses (a filename
+where ambiguity forbids one, an absolute path, an over-cap instruction).
+v11 answers with **R + P**, run under the identical command and seed as v10
+for a paired comparison:
+
+- **R — the repair pipeline.** A spec failing a *repairable* gate (filename,
+  path, length) gets one cheap rewrite call (~200 tokens: rewrite the
+  instruction only, preserving the task's meaning) and is re-gated. Setup,
+  probe, and coordinates are never touched, so repair cannot alter what the
+  grader checks — only how the request is worded.
+- **P — inline constraints.** The per-spec character limit moves into the
+  spec's own brief line; naming guidance becomes description-first ("the
+  rota sheet", not `rota.xlsx`) with a ✓/✗ contrast pair at level 2.
+
+Paired outcome: **v11 kept 7.6 specs per batch against v10's 1.9 (4x)** —
+119 specs from the run v10 got 70 from — with 24 repairs used and only 26
+hard skips, at equal or better gate metrics (quota drift 1% vs 4%; words
+median 31; ≤25 words 34%; cross-app 60%; warm 70%). Repaired instructions
+spot-checked clean against their setups: the rewrite does not drift the
+task's meaning.
+
+**What the final audit caught — three grader-defect classes the mechanical
+gates cannot see.** Before merging, every spec was scanned for coherence
+between instruction, setup, and probe. Eight of 119 were culled:
+
+| class | n | example |
+|---|---|---|
+| near-duplicate pair (similarity gates) | 2 | two "add speaker notes to a deck" tasks, cosine 0.55 |
+| rigid output naming | 4 | instruction says "leave a plain text note naming it"; probe demands exactly `missing.txt` — an agent's reasonable name fails |
+| missing source data | 1 | instruction cites "my onboarding notes"; setup creates only an empty Desktop |
+| dated constant vs. deictic time | 1 | instruction says "this year's viewings"; probe hard-codes `viewings_2025` on a 2026 clock |
+
+The last three classes share a signature: the task *looks* fine, controls
+pass (an idle agent still scores 0), and the rollout would report a model
+failure that is actually a grader defect. They are precisely the coverage of
+the LLM audit (§ positive-direction checks), which this round skipped for
+speed — a mechanical scan (probe paths absent from both setup and
+instruction; deictic time words against hard-coded years) substituted and is
+now part of the ship checklist. The remaining 111 were trimmed to 100 by
+largest-remainder allocation over difficulty × ambiguity cells, dropping the
+latest-generated members, so the trim cannot skew the quotas (final drift
+2%).
+
+One more schema monster joined the §4 list during this run: the model
+occasionally returns a spec as one unparseable string rather than an
+object; the extractor now returns an empty batch for those instead of
+char-skipping through 10,000 fragments.
 
 ## 4. How a task is specified
 

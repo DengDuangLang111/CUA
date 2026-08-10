@@ -72,6 +72,25 @@ newer fixes), then runs the HARD/REVIEW gates (see README). **To cull a
 duplicate**: move its line from `specs.jsonl` to `specs_culled.jsonl` in the
 same run dir and re-run ship (keep the earlier-generated member of a pair).
 
+**Grader-defect scan (before merge, v11+).** Three defect classes pass every
+mechanical gate and control, then surface as fake model failures in the
+rollout (EXPERIMENTS §3 has the ledger; 8/119 culled in v11):
+
+1. *missing source data* — instruction cites content the setup never creates
+   (scan: non-browser specs whose setup writes no file content but whose
+   instruction references a source);
+2. *rigid output naming* — the agent must create an artifact the instruction
+   only describes, but the probe demands one exact filename (scan: probe
+   paths absent from both setup and instruction, no glob in the probe;
+   convention-derivable names — README.md, same-basename exports,
+   `.vscode/tasks.json` — are fine);
+3. *dated constant vs deictic time* — instruction says "this year" while the
+   probe hard-codes a year.
+
+Cull confirmed hits like duplicates. If the set is oversized, trim to target
+by largest-remainder over difficulty x ambiguity cells, dropping the
+latest-generated members.
+
 ## 3 Merge
 
 Directory rule: **one launch = one directory** (parallel shards each write
@@ -181,6 +200,17 @@ cd $OW && setsid nohup .venv/bin/python scripts/python/run_multienv_qwen.py \
   --result_dir $R/<set>-ms100-think-preserve-$(date +%Y%m%d) \
   > $TG/logs/rollout-<set>.log 2>&1 &
 ```
+
+The **no-preserve variant** (v11 standard: official-comparable budget, and
+preserve_thinking is implicated in loop-lock — EXPERIMENTS §3 finding 2):
+drop `--preserve_thinking`, set `--max_steps 50`, name the result dir
+`<set>-ms50-think-nopreserve-<date>`. Thinking is still generated and
+captured per step; it just isn't re-fed as context.
+
+The whole chain (wait for control lanes → build `manifest_clean.json` minus
+BAD slugs → tunnel check → rollout → memory medic at <1G → heal passes →
+traj_html) is scripted: `autolaunch_v11.sh` in the execution repo — copy and
+rename per set.
 
 **Re-running with the same `--result_dir` is the recovery mechanism**: tasks
 with a result.txt are skipped, tasks without one are redone (screenshot-500
