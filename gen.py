@@ -661,6 +661,25 @@ def repair_instruction(spec, why, cfg):
         return None
 
 
+_STRAY_TAG = re.compile(r"\s*</(?:setup|probe|instruction|spec|json|task)>\s*$")
+
+
+def sanitize(spec):
+    """Strip the prompt's own closing tag when the model leaks it into a value.
+
+    The tool schema is not enforced, so a spec occasionally arrives with the
+    surrounding XML tag glued to the end of a field ('...)"</setup>'). In a
+    setup that is a shell syntax error -- the starting state is never built,
+    and nothing downstream notices: the task simply scores 0 for reasons that
+    look like a weak agent (5 such specs in the 472-run, one of which no other
+    check could have caught).
+    """
+    for field in ("setup", "probe", "instruction"):
+        v = spec.get(field)
+        if isinstance(v, str) and _STRAY_TAG.search(v):
+            spec[field] = _STRAY_TAG.sub("", v)
+
+
 def gate(spec):
     amb = spec.get("ambiguity") or 1
     _instr = spec.get("instruction") or ""
@@ -709,6 +728,10 @@ def gate(spec):
 
     if not (spec.get("setup") or "").strip():
         return "no setup"
+    for _f in ("setup", "probe"):
+        if re.search(r"</(setup|probe|instruction|spec|json|task)>",
+                     spec.get(_f) or ""):
+            return "leaked prompt tag inside %s (sanitize did not catch it)" % _f
     if re.search(r"--convert-to'?\s*,?\s*'?(odp|pptx|ppt)\b(?!:)(?!')?", spec["setup"]) and \
        not re.search(r"--convert-to'?\s*,?\s*'?(odp|pptx|ppt):", spec["setup"]):
         # BARE `--convert-to odp` fails everywhere: txt loads into Writer,
@@ -951,6 +974,7 @@ def main():
                               "constraints", "artifact", "source", "app_count",
                               "grade", "ambiguity", "voice", "warm"):
                         s[k] = c[i][k]
+                sanitize(s)
                 why = gate(s)
                 if why and why.startswith(_REPAIRABLE):
                     fixed = repair_instruction(s, why, cfg)
