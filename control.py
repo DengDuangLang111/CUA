@@ -13,7 +13,9 @@ never pass (stale-store reads, impossible constants). It cannot catch a gold
 whose world-beliefs are wrong; audit.py owns that direction.
 """
 import argparse
+import io
 import json
+import time
 from pathlib import Path
 
 
@@ -35,6 +37,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     import requests
+    from PIL import Image
     from desktop_env.desktop_env import DesktopEnv
 
     manifest = json.loads((args.tasks / "manifest.json").read_text(encoding="utf-8"))
@@ -90,27 +93,28 @@ def main(argv=None):
                     if orr.status_code != 200:
                         err = err or ("open %s -> HTTP %d"
                                       % (c["parameters"]["path"], orr.status_code))
-            # Warm tasks promise a visible workspace, but no exit code says
-            # whether a window actually mapped -- a lingering headless
-            # process (the soffice collision) or a silently failed open
-            # delivers a bare desktop that only screenshots betray. Count
-            # mapped windows with whichever X tool the image carries;
-            # windows == 0 on a warm task is BAD. None (no tool) skips.
+            # Warm tasks promise a visible workspace. Do NOT ask the window
+            # manager whether a window exists: a setup that ran soffice
+            # leaves the compositor unable to PAINT the window it later
+            # opens, and wmctrl/xprop happily report it mapped and focused
+            # while the agent's screen stays bare (measured 2026-08-10 --
+            # this lane passed the whole calc domain that then scored 0/15).
+            # Judge the only surface the agent has: its own screenshot.
             windows = None
             if any(c["type"] in ("open", "launch") for c in cfg):
-                count_cmd = (
-                    "sleep 6; export DISPLAY=:0; "
-                    "if command -v wmctrl >/dev/null; then wmctrl -l | wc -l; "
-                    "elif command -v xdotool >/dev/null; then "
-                    "xdotool search --onlyvisible --name . 2>/dev/null | wc -l; "
-                    "elif command -v xwininfo >/dev/null; then "
-                    "xwininfo -root -children 2>/dev/null | grep -c child:; "
-                    "else echo NA; fi")
-                wr = requests.post(base + "/execute",
-                                   json={"command": count_cmd, "shell": True},
-                                   timeout=60).json()
-                out = (wr.get("output") or "").strip()
-                windows = int(out) if out.isdigit() else None
+                time.sleep(8)
+                try:
+                    shot = env.controller.get_screenshot()
+                    im = Image.open(io.BytesIO(shot)).convert("RGB")
+                    im = im.resize((160, 90))
+                    px = list(im.getdata())
+                    bare = sum(1 for r, g, b in px
+                               if r > 60 and b > 60 and g < min(r, b) * 0.75)
+                    # the stock wallpaper is the giveaway: a mapped, painted
+                    # application covers most of it
+                    windows = 0 if bare / len(px) > 0.55 else 1
+                except Exception:
+                    windows = None
             env.is_environment_used = True  # manual POSTs bypass the flag
             slug = (task.get("ostg") or {}).get("slug") or task["id"]
             gold_rc = None
