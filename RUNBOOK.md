@@ -86,6 +86,12 @@ rollout (EXPERIMENTS §3 has the ledger; 8/119 culled in v11):
    `.vscode/tasks.json` — are fine);
 3. *dated constant vs deictic time* — instruction says "this year" while the
    probe hard-codes a year.
+4. *absent-key default* — a probe reading app config with
+   `.get(key, default)` must default to the app's real out-of-box behavior.
+   Chrome's `prompt_for_download` is absent-and-off on a fresh profile; a
+   probe defaulting it to True makes the task unwinnable for an agent that
+   finds the toggle already correct (scan: `.get()` calls on preference
+   files, check each default against the app's factory state).
 
 Cull confirmed hits like duplicates. If the set is oversized, trim to target
 by largest-remainder over difficulty x ambiguity cells, dropping the

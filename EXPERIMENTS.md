@@ -301,6 +301,35 @@ the untouched desktop) checked all 100 and removed 8:
   'PASS')` — the ternary inverted, so an empty desktop passed and correct
   work would have failed. Exactly the SFT poison controls exist to catch.
 
+**Mid-rollout failure adjudication** (first 26 scored, 13 passed): every
+failure classifies — 6 loop-locked + 3 step-cap (model capability; the
+tasks are sound), 1 environment flake (Calc did not open; agent reported it
+honestly), and 3 "agent claimed done, scored 0" cases that were adjudicated
+frame-by-frame from the screenshots:
+
+- *court-portal* — genuine agent error: the note says the browser must NOT
+  ask where to save; the agent read the toggle's correct OFF state and
+  reasoned itself into switching it ON. A clean negation-comprehension
+  failure, correctly scored 0.
+- *hr-handbook-bookmark* — **harness wrongful conviction**: the step-1
+  screenshot shows a bare New Tab; the `chrome_open_tabs` warm-start never
+  delivered the promised page (OSWorld logs such failures without raising),
+  and the agent did everything right against what it saw. Requeued.
+- *depot-router* — **probe world-belief defect**: the final screenshot
+  shows the exact demanded state (download dir set, ask-toggle off), but
+  the probe read `prefs.get('prompt_for_download', True)` — Chrome's
+  out-of-box state is that the key is absent and the UI is off, so an agent
+  who finds the toggle already correct and leaves it alone can never
+  materialize the key. Absent-key-default bugs are exactly the audit's
+  world_assumptions class (the audit was skipped this round). A corpus-wide
+  scan found precisely this one instance (its sibling probe had chosen the
+  correct default); patched and requeued.
+
+One preliminary science note: loop-lock persists at 6 of 13 failures under
+**no-preserve** — close to v8's preserve-mode share — which weakens the
+"preserve cements the loop" half of the §3 attribution. Full-run numbers
+will settle it.
+
 **The v11.1 repair** adopts the official corpus's essence for presentation
 fixtures — decks are prebuilt real files, never constructed in the VM
 (official ships them via cloud `download`; all 47 official impress tasks
