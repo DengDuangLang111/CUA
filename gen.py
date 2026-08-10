@@ -705,6 +705,11 @@ def gate(spec):
 
     if not (spec.get("setup") or "").strip():
         return "no setup"
+    if re.search(r"--convert-to'?\s*,?\s*'?(odp|pptx|ppt)\b", spec["setup"]):
+        # txt loads into Writer, and Writer has no presentation export --
+        # this conversion chain fails on every machine (v11 control caught 7).
+        # Deck fixtures must arrive as prebuilt binaries (see RUNBOOK).
+        return "setup converts to a presentation format via soffice (no such filter path)"
     why = _setup_compiles(spec["setup"])
     if why:
         return why

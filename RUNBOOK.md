@@ -91,6 +91,24 @@ Cull confirmed hits like duplicates. If the set is oversized, trim to target
 by largest-remainder over difficulty x ambiguity cells, dropping the
 latest-generated members.
 
+**Deck fixtures (v11.1 rule).** `soffice --convert-to` cannot produce odp or
+pptx from text (txt loads into Writer; Writer has no presentation export) —
+a gate now rejects such setups. When a task needs a pre-existing deck, build
+it host-side and embed it:
+
+```bash
+mkdir -p /tmp/dockercfg && echo '{}' > /tmp/dockercfg/config.json   # dodge the Docker Desktop credential helper
+DOCKER_CONFIG=/tmp/dockercfg docker run --rm -v /tmp/deckbuild:/data ubuntu:22.04 bash -c \
+  "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends libreoffice-impress python3-pip && pip -q install python-pptx && python3 /data/build_pptx.py && cd /data && for f in *.pptx; do soffice --headless --convert-to odp \$f; done"
+```
+
+then set the spec's setup to
+`mkdir -p <dir> && printf %s <base64 of the .odp> | base64 -d > <path>` (a
+15–20 KB deck is ~25 KB of base64 — fine in a task JSON). Probes keep
+reading content.xml as usual; the file is genuine LibreOffice output.
+`tools/deck_fixtures_v11.py` holds the v11 deck contents as the worked
+example.
+
 ## 3 Merge
 
 Directory rule: **one launch = one directory** (parallel shards each write

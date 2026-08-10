@@ -288,17 +288,33 @@ is the best of the three, but it is survivorship — 144 rejections distilled
 Controls (fresh VM per task: setup exit code, open execution, evaluate on
 the untouched desktop) checked all 100 and removed 8:
 
-- **7 impress tasks, one root cause.** Every deck-building setup converts a
-  generated document through `soffice --headless --convert-to odp`, and that
-  export filter is unavailable inside the VM (LibreOffice reports no export
-  filter; java is absent), so the setup exits 1 and the follow-on move of
-  `/tmp/deck.odp` fails. The class was invisible before the VM because the
-  conversion works on the host. Repair path: build the .odp directly (zip
-  with content.xml — the probes already read it that way), re-control, and
-  top-up the rollout into the same result directory.
+- **7 impress tasks, one root cause.** Every deck-building setup wrote a
+  text outline and converted it through `soffice --headless --convert-to
+  odp`. That chain fails on every machine, not just the VM: a `.txt` loads
+  into the Writer module, and Writer has no presentation export — verified
+  by reproducing the failure in a fresh full-package LibreOffice container.
+  The generator had extrapolated a conversion pattern the prompt's own
+  examples teach (csv→xlsx, txt→odt — both real filter paths) one format
+  too far, to a path that does not exist.
 - **1 free-pass** (`course-code-answer-doc`): evaluate returned 1.0 on an
-  untouched desktop — the setup itself satisfies the probe. Exactly the SFT
-  poison controls exist to catch.
+  untouched desktop. The probe's last line was `print('FAIL' if hit else
+  'PASS')` — the ternary inverted, so an empty desktop passed and correct
+  work would have failed. Exactly the SFT poison controls exist to catch.
+
+**The v11.1 repair** adopts the official corpus's essence for presentation
+fixtures — decks are prebuilt real files, never constructed in the VM
+(official ships them via cloud `download`; all 47 official impress tasks
+do). Ours stay self-contained instead of URL-dependent: the seven decks
+were built as .pptx via python-pptx and converted to .odp by a real
+LibreOffice in a one-shot container, verified (page counts and text against
+the intended outlines), and embedded in each setup as a base64 → file
+write. Probes are untouched — they read the same content.xml, now written
+by LibreOffice itself. The inverted probe got its one-line flip. Guards so
+the class cannot return: a gate rejects any setup converting to a
+presentation format, and prompt rule 6 now states the filter boundary
+explicitly. The eight repaired tasks await re-control after the current
+rollout (controls and rollouts never share the machine), then a top-up into
+the same result directory restores the corpus to 100.
 
 The rollout therefore runs 92 tasks. One harness lesson from the handoff:
 the runner's manifest keys tasks by uuid while control reports carry slugs —
