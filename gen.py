@@ -477,19 +477,12 @@ def task_json(spec, batch):
     # counts only HTTP failures toward the cap).
     config = []
     if (spec.get("setup") or "").strip():
+        # ostg.prebuild has already rewritten any soffice-carrying setup into
+        # a base64 blob before this point (ship stage 0); a leftover soffice
+        # here means prebuild was skipped, which the visibility check and the
+        # controls will surface. No in-VM soffice = no compositor poison.
         config.append({"type": "execute",
                        "parameters": {"command": spec["setup"], "shell": True}})
-        if "soffice" in spec["setup"]:
-            # The headless soffice from a setup's --convert-to LINGERS
-            # indefinitely and swallows every later document open -- the
-            # config's warm open AND the agent's own double-click minutes
-            # in (lock file appears, no window ever maps; measured: 0/15
-            # calc, and cold tasks fail the same way). Kill it right after
-            # the setup, warm or cold.
-            # [s]office: the bracket keeps pkill -f from matching its own
-            # shell's command line and SIGTERMing itself (rc -15).
-            config.append({"type": "execute", "parameters": {
-                "command": "pkill -f '[s]office.bin'; sleep 2; true", "shell": True}})
     prim = apps[0] if apps else ""
     if spec.get("open_path") and grade != "browser":
         # Warm start, matched to the app the way the official corpus does it.
@@ -508,25 +501,6 @@ def task_json(spec, batch):
             config.append({"type": "launch", "parameters": {"command": ["vlc", p]}})
         else:
             config.append({"type": "open", "parameters": {"path": p}})
-            if low.endswith((".odt", ".ods", ".odp", ".xlsx", ".docx",
-                             ".pptx", ".csv")):
-                # Deliver-and-RAISE: under 3-env load GNOME's focus-stealing
-                # prevention leaves the slow-mapping LibreOffice window
-                # MINIMIZED ("window is ready" fate) -- wmctrl lists it, the
-                # dock shows it, the screen never does, and the agent burns
-                # 50 steps trying to summon it (calc went 0/15 three times;
-                # its own last words: "窗口可能最小化了"). Existence is not
-                # visibility: activate the window or re-open, bounded.
-                config.append({"type": "execute", "parameters": {
-                    "command": ("sleep 6; export DISPLAY=:0; "
-                                "for i in 1 2 3 4 5 6; do "
-                                "WID=$(wmctrl -l 2>/dev/null | grep -i "
-                                "libreoffice | head -1 | awk '{print $1}'); "
-                                "if [ -n \"$WID\" ]; then "
-                                "wmctrl -i -a \"$WID\"; sleep 2; break; fi; "
-                                "xdg-open '%s' >/dev/null 2>&1; sleep 8; "
-                                "done; true" % p),
-                    "shell": True}})
     elif spec.get("warm") and grade != "browser" and prim == "thunderbird":
         config.append({"type": "launch", "parameters": {"command": ["thunderbird"]}})
 
