@@ -330,6 +330,28 @@ One preliminary science note: loop-lock persists at 6 of 13 failures under
 "preserve cements the loop" half of the §3 attribution. Full-run numbers
 will settle it.
 
+**The headless-soffice collision — the biggest mid-run catch.** When the
+runner reached the calc domain the pass rate collapsed: 0 of 15, every
+failure burning the full 50 steps. Screenshots told the story — Calc's
+process alive, the lock file on disk, and no window anywhere: a headless
+soffice left over from the setup's `--convert-to` swallows the subsequent
+warm-start `open`; the document routes into the headless instance and no
+window ever maps. Official calc (32% on the same VM) never trips this
+because official setups `download` files rather than convert them. 23
+tasks carried the pattern (13 calc, 5 writer, 5 cross-app); the emitter
+now inserts `pkill -f soffice.bin; sleep 2` between such setups and their
+open, and the 17 already-burned victims were requeued for the heal pass —
+including tasks previously misclassified as model CAP-WANDER failures. A
+first fix over-reached: the new presentation-conversion gate also killed
+two healthy control-passed decks that convert via `odp:impress8` — the
+filter-qualified form works; only the bare `--convert-to odp` is
+impossible. The gate now distinguishes them.
+
+Corollary for pass-rate reads mid-run: the runner walks domains in order,
+so the running average swings with each domain's health — 43% at the
+chrome-heavy front, 35% after the poisoned calc block. Judge the corpus on
+the final number, per-domain.
+
 **The v11.1 repair** adopts the official corpus's essence for presentation
 fixtures — decks are prebuilt real files, never constructed in the VM
 (official ships them via cloud `download`; all 47 official impress tasks
