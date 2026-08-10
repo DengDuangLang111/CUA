@@ -36,26 +36,29 @@ over stdin and the binary corrupts the script. Two steps, always.
 
 ## 1 Generate
 
-Non-thinking is the default (5x cheaper, dodges the gateway 504); `--thinking`
-only when you want deeper probes on d4/d5 cells. Two shards in parallel (same
-seed gives disjoint coordinate slices; write to different dirs):
+**The standard invocation** (v10 onward — keep future runs consistent with
+this shape; only seed, batch count and output set name change):
 
 ```bash
-cd /mnt/d/research/ostg-v9          # cwd MUST be the versioned worktree:
-                                    # python -m puts cwd ahead of PYTHONPATH,
-                                    # and a stale ostg/ elsewhere wins
+cd /mnt/d/research/ostg-v10         # cwd MUST be the current versioned
+                                    # worktree: python -m puts cwd ahead of
+                                    # PYTHONPATH, and a stale ostg/ elsewhere
+                                    # silently wins
+P=$OW/.venv/bin/python
 for i in 0 1; do
-  setsid nohup $P -m ostg.gen --n 5 --batches 20 --seed <S> --stream \
-    --shard $i/2 --env $TG/.env --out $TG/out/runs/<set>-s$i/specs.jsonl \
-    --avoid-corpus /mnt/d/research/cua-gym/tasks.jsonl \
-    > $TG/logs/<set>-s$i.log 2>&1 &
+  setsid nohup $P -m ostg.gen --n 5 --batches 13 --seed <S> --shard $i/2 --stream     --model claude-opus-5 --env $TG/.env     --out $TG/out/runs/<set>-s$i/specs.jsonl     --avoid-corpus /mnt/d/research/cua-gym/tasks.jsonl     > $TG/logs/<set>-s$i.log 2>&1 &
 done
 ```
 
-Batch losses are re-drawn by `--refill` (default 2). After a crash, resume
-with `--start-batch N` — seeds stay aligned, finished batches are not redone.
-Check the tail of the log for the closing axis summary.
+Anatomy: `--n 5` specs per API call x `--batches 13` x 2 shards = 130 draws,
+landing near 100 kept after gate rejections. Defaults that matter and are
+deliberately NOT overridden: `--refill 2` (lost batches redraw), thinking off
+(5x cheaper, dodges the gateway 504). `--start-batch N` resumes a crashed
+shard with seeds aligned; `--spent-from <specs.jsonl>` seeds the quota ledger
+so a top-up run overdraws whatever axis is in deficit.
 
+Batch losses are re-drawn by refill; check the tail of the log for the
+closing axis summary.
 ## 2 Ship (accept gates)
 
 ```bash
