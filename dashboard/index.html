@@ -127,9 +127,31 @@ const tbl = (heads,rows)=>`<div class="tablewrap"><table><tr>${heads.map(h=>`<th
 
 const VIEWS = [
 {id:"all", group:"Results", title:"All Results", rate:"", design:overviewDesign, traj:null},
-{id:"v11", group:"Current", title:"v11 Rollout", rate:"live",
- head:{t:"v11 Rollout", pills:[P.good("live"),P.dim("ms50 · think, no preserve")],
-   lede:"The standard corpus: 100 tasks, four verification layers, rolling now on the official 50-step budget. Numbers below refresh from the lab machine every few minutes."},
+{id:"v500", group:"Current", title:"v500 Corpus", rate:"—",
+ head:{t:"v500 — 450 tasks, in verification", pills:[P.good("control running")],
+   lede:"The scale-up corpus: 472 generated, 450 shipped after prebuild, sanitising and similarity culls. VM controls are running now; the rollout follows."},
+ design:()=>{ const s = window.LIVE && window.LIVE.v500; return `
+  <div class="seclabel">Verification progress${s?` · as of ${window.LIVE.updated}`:""}</div>
+  <div class="cards">${(s?[[s.corpus,"tasks shipped"],[s.control_checked+"/"+s.corpus,"controls checked"],[s.control_bad,"failed control so far"]]
+      :[["450","tasks shipped"],["—","controls checked"],["—","failed control"]]).map(card).join("")}</div>
+  <div class="seclabel">How it was built</div>
+  ${tbl([["step"],["outcome"]],[
+   "<td><b>generation</b></td><td>4 shards × 28 batches, seed 20260810, quota ledger seeded from v11 so no cell repeats → <b>472 kept</b></td>",
+   "<td><b>prebuild</b></td><td>160 setups converted office files inside the VM — all rewritten to base64 fixtures built host-side, which is what makes LibreOffice windows paintable</td>",
+   "<td><b>sanitise</b></td><td>5 specs had the prompt's own <code>&lt;/setup&gt;</code> tag glued into the setup — a shell syntax error that builds no starting state and looks exactly like a weak agent. One carried no soffice, so no other check could have seen it</td>",
+   "<td><b>similarity culls</b></td><td>17 removed over two iterative rounds; 1 removed for a setup that could not build its own fixture</td>",
+   "<td><b>grader-defect repair</b></td><td>2 instructions rewritten (probe pinned a filename the agent was never told), 1 task blocked (fabricated media in a media-player task)</td>"])}
+  <div class="seclabel">Corpus profile</div>
+  ${tbl([["axis"],["distribution"]],[
+   "<td><b>coverage</b></td><td><b>450 tasks in 450 distinct coordinate cells</b> — no two share (intent × domain × difficulty × ambiguity)</td>",
+   "<td><b>similarity</b></td><td>internal jaccard 0.38 · cosine 0.49 · vs CUA-Gym 0.47 · vs official-361 0.46 — every gate green</td>",
+   "<td><b>shape</b></td><td>median 32 words · 32% ≤25 words · 8% carry an absolute path (official: 5%)</td>",
+   "<td><b>structure</b></td><td>63% cross-application · 68% warm start · 151 tasks ship prebuilt fixtures</td>",
+   "<td><b>grading</b></td><td>probe 374 · table 63 · browser 14</td>"])}`},
+ traj:null},
+{id:"v11", group:"Current", title:"v11 Rollout", rate:"39%",
+ head:{t:"v11 Rollout", pills:[P.good("complete 100/100"),P.dim("ms50 · think, no preserve")],
+   lede:"The first corpus rolled end to end: 100 tasks, 39 solved. Its calc domain also produced the run's most expensive lesson — a setup-side compositor bug that made documents invisible to the agent while every window-manager check reported them open."},
  design:()=>{ const s = lv(); return `
   <div class="seclabel">Results so far${s?` · as of ${window.LIVE.updated}`:""}</div>
   <div class="cards">${(s?[[s.rate+"%","pass ("+s.passed+"/"+s.scored+" scored, of "+s.total+")"],
@@ -170,8 +192,15 @@ const VIEWS = [
    ["<td><b>2 · grader-defect scan</b></td><td>117 specs</td><td>4 rigid output names · 1 missing source data · 1 dated constant; then quota trim 11 → 100</td>"],
    ["<td><b>3 · VM controls</b></td><td>100 tasks · fresh VM each</td><td>7 impress decks (impossible txt→odp chain → rebuilt as embedded real binaries) · 1 inverted probe passing an empty desktop</td>"],
    ["<td><b>4 · rollout adjudication</b></td><td>every fail, frame-by-frame</td><td>1 agent negation error (legit 0) · 1 harness wrongful conviction (page never opened) · 1 probe world-belief bug — last two patched &amp; requeued</td>"]])}
+  <div class="seclabel">The calc incident — worth reading before trusting any green check</div>
+  ${tbl([["stage"],["what happened"]],[
+   "<td><b>symptom</b></td><td>the whole calc domain scored 0/15, every failure burning the full 50 steps</td>",
+   "<td><b>false all-clear</b></td><td>control's window lane reported the documents open: <code>wmctrl</code> and <code>xprop</code> both listed the window as mapped and focused</td>",
+   "<td><b>reality</b></td><td>the agent's own screenshot showed a bare desktop. A setup that ran <code>soffice --convert-to</code> leaves the compositor unable to PAINT the window it later opens — existence is not visibility</td>",
+   "<td><b>fix</b></td><td>office fixtures are now built host-side and shipped as base64 blobs (no soffice in the VM); control judges visibility from the agent's screenshot</td>",
+   "<td><b>proof</b></td><td>after the fix 10/10 rechecked calc tasks showed the document on screen, and the domain scored its first pass</td>"])}
   <div class="seclabel">Domain mix</div>
-  <p class="note" style="margin-top:0">vs_code 24 · chrome 20 · calc 15 · os 13 · writer 7 · thunderbird 4 · vlc 4 · gimp 3 · impress 2 (+7 repaired, queued)</p>`},
+  <p class="note" style="margin-top:0">vs_code 24 · chrome 20 · calc 15 · os 13 · impress 9 · writer 8 · thunderbird 4 · vlc 4 · gimp 3</p>`},
  traj:{url:T.v11, n:"all scored tasks (refreshed as the run progresses)", note:"Step player per task: the model's verbatim thinking, tool calls, executed pyautogui and the VM screenshot at every step. Recordings stay on the lab machine."}},
 {id:"off361", group:"Baseline", title:"OSWorld-Verified 361", rate:"45%",
  head:{t:"OSWorld-Verified 361", pills:[P.warn("312/361 · proxy pending"),P.dim("2026-07-31")],
@@ -263,7 +292,8 @@ const VIEWS = [
 function conds(o){return Object.entries(o).map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}
 function overviewDesign(){
   const rows = [
-   ["v11 rollout","v11 · 100 (92 rolling)","ms50 · think, no preserve","30","13","43%","live"],
+   ["v11 rollout","v11 · 100","ms50 · think, no preserve","100","39","39%","complete"],
+   ["v500 corpus","v500 · 450","not rolled yet","—","—","—","controls running"],
    ["OSWorld-Verified 361","official · 361","ms50 · thinking inert · sleep 3","312","141","45%","proxy pending"],
    ["Proxy-49 direct","official subset · 49","ms50 · no proxy (deliberate)","45","5","11%","experiment"],
    ["v8big","v8 · 203","ms100 · think, preserve","99","24","24%","stopped · resumable"],
@@ -280,7 +310,7 @@ function overviewDesign(){
   const s = lv();
   return `
   <div class="seclabel">Headline${s?` · live as of ${window.LIVE.updated}`:""}</div>
-  <div class="cards">${[[s?s.rate+"%":"43%", s?`v11 live — ${s.passed}/${s.scored} scored (vs 24% v8, same solver)`:"v11 live (vs 24% v8, same solver)"],["45%","official anchor (312 scored)"],["4×","v11 generation yield vs v10"],["18","runs on record"]].map(card).join("")}</div>
+  <div class="cards">${[[s?s.rate+"%":"39%", s?`v11 complete — ${s.passed}/${s.scored} solved (vs 24% for v8, same solver)`:"v11 complete (vs 24% for v8)"],["45%","official anchor (312 scored)"],["4×","v11 generation yield vs v10"],["450","v500 tasks in verification"],["18","runs on record"]].map(card).join("")}</div>
   <div class="seclabel">Every run · conditions · results</div>
   ${tbl([["run"],["corpus"],["conditions"],["scored",'class="num"'],["passed",'class="num"'],["rate",'class="num"'],["status"]],rows)}
   <div class="seclabel">Instruction-shape yardstick</div>
