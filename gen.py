@@ -720,6 +720,14 @@ def gate(spec):
     """Why this spec cannot become a task, or None. Strict on purpose: a bad
     field that slips through either crashes evaluate() (no result.txt) or
     ships a task that can never score."""
+    # Grade-agnostic defect classes, before any grade-specific early return --
+    # browser tasks return early below, and used to escape the scan entirely.
+    for _cls, _sev, _why in scan.scan_spec(spec):
+        if _sev == scan.REPAIR:
+            return "repairable: %s -- %s" % (_cls, _why)
+        if _sev == scan.BLOCK:
+            return "%s -- %s" % (_cls, _why)
+
     grade = spec.get("grade") or "probe"
 
     if grade == "browser":
@@ -752,11 +760,6 @@ def gate(spec):
     # predicate (one implementation, two call sites) and REPAIR it here: the
     # rewrite adds a naming rule to the instruction, which keeps the ambiguity
     # level (a rule is a description, not a path) and restores winnability.
-    for _cls, _sev, _why in scan.scan_spec(spec):
-        if _sev == scan.REPAIR:
-            return "repairable: %s -- %s" % (_cls, _why)
-        if _sev == scan.BLOCK:
-            return "%s -- %s" % (_cls, _why)
     if re.search(r"--convert-to'?\s*,?\s*'?(odp|pptx|ppt)\b(?!:)(?!')?", spec["setup"]) and \
        not re.search(r"--convert-to'?\s*,?\s*'?(odp|pptx|ppt):", spec["setup"]):
         # BARE `--convert-to odp` fails everywhere: txt loads into Writer,
