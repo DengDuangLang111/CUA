@@ -118,7 +118,7 @@ lives in the run directory name, not in a git branch.
 
 Also reported, not gated: distinct-bigram ratio (phrasing variety) and
 grader-signature pairs. **The grader-signature list is noise** — 1355 pairs
-on a 451-corpus, never acted on; treat it as verbose output.
+on a 450-corpus, never acted on; treat it as verbose output.
 
 ### 2.3 scan — the defect classes that pass every mechanical gate
 
@@ -221,7 +221,7 @@ requeued victims in one stroke.
    whether a *working* agent can score 1 — the absent-key probe passed
    control and was unwinnable.
 
-## Cost model (measured, 451-task scale)
+## Cost model (measured, 450-task scale)
 
 | stage | wall clock | resource |
 |---|---|---|
@@ -231,19 +231,22 @@ requeued victims in one stroke.
 | control | ~1 day at 3 lanes | VM |
 | rollout | ~3–4 days at 3 envs | VM + served model |
 
-## Corpus health, v500 (451 tasks, 2026-08-10)
+## Corpus health, v11-500 (450 tasks, 2026-08-10)
 
 Every gate green: jaccard 0.38 · cosine 0.49 · vs CUA-Gym 0.47 · vs
 official-361 0.46 · quota drift 2% · entity reuse 0 · bigram 0.69.
 
-**451 tasks occupy 451 distinct coordinate cells** — no two share an
+**450 tasks occupy 450 distinct coordinate cells** — no two share an
 (intent × domain × difficulty × ambiguity) combination. Median 32 words,
 32% at ≤25 words, 8% carry an absolute path (official: 5%), 63% cross an
 application boundary, 68% warm start, 151 tasks carry prebuilt fixtures.
 Intent, difficulty and ambiguity all within 2% of quota; 13 business
 domains; 9 applications; grading routes probe 374 / table 63 / browser 14.
 
+The corpus is named **v11-500**: it is the v11 pipeline unchanged, drawing 500 more
+coordinates from the same 1300-cell taxonomy, with every v11 fix already in force.
+
 From 472 generated: 5 sanitized (leaked tags), 1 culled (broken setup that
-could never build its own fixture), 17 culled by similarity, 2 rounds of
-iterative culling to clear the gates. 12 scan review items remain to
-adjudicate before control.
+could never build its own fixture), 17 culled by similarity over two iterative rounds, 2 instructions repaired
+and 1 task blocked by the severity-aware scan. 3 review items remain, all
+adjudicated benign.
