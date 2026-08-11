@@ -25,6 +25,7 @@ import urllib.request
 import uuid
 from pathlib import Path
 
+from ostg import scan
 from ostg import taxonomy as T
 
 HERE = Path(__file__).resolve().parent
@@ -631,7 +632,8 @@ REPAIR_TOOL = {
 }
 
 _REPAIRABLE = ("filename in", "absolute path in", "instruction over",
-               "terse/sloppy instruction over")
+               "terse/sloppy instruction over",
+               "repairable:")   # anything ostg.scan marks scan.REPAIR
 
 
 def repair_instruction(spec, why, cfg):
@@ -647,7 +649,12 @@ def repair_instruction(spec, why, cfg):
             "Rewrite ONLY the instruction. Same task, same meaning, consistent "
             "with the environment. ambiguity=%s (at levels 2-4 refer to objects "
             "by what they are -- never a filename or /home/user path). voice=%s. "
-            "At most %d characters."
+            "At most %d characters.\n"
+            "If the rejection says the probe pins an output name: state how the "
+            "output is named as a RULE the agent can follow -- 'named after the "
+            "log', 'same base name as the sheet', 'called <the exact word the "
+            "probe expects>' when that word is a plain noun -- so the probe's "
+            "expectation is reachable without writing a path."
             % (why, spec.get("instruction"), ctx,
                spec.get("ambiguity"), spec.get("voice"), cap))
     try:
@@ -732,6 +739,19 @@ def gate(spec):
         if re.search(r"</(setup|probe|instruction|spec|json|task)>",
                      spec.get(_f) or ""):
             return "leaked prompt tag inside %s (sanitize did not catch it)" % _f
+
+    # The ambiguity gate forbids naming files in the instruction, and the probe
+    # must still decide alone -- so the model resolves the squeeze by inventing
+    # a name in the probe that the agent was never told. The task then cannot be
+    # won by anyone who named their output anything else. Reuse ship's tuned
+    # predicate (one implementation, two call sites) and REPAIR it here: the
+    # rewrite adds a naming rule to the instruction, which keeps the ambiguity
+    # level (a rule is a description, not a path) and restores winnability.
+    for _cls, _sev, _why in scan.scan_spec(spec):
+        if _sev == scan.REPAIR:
+            return "repairable: %s -- %s" % (_cls, _why)
+        if _sev == scan.BLOCK:
+            return "%s -- %s" % (_cls, _why)
     if re.search(r"--convert-to'?\s*,?\s*'?(odp|pptx|ppt)\b(?!:)(?!')?", spec["setup"]) and \
        not re.search(r"--convert-to'?\s*,?\s*'?(odp|pptx|ppt):", spec["setup"]):
         # BARE `--convert-to odp` fails everywhere: txt loads into Writer,

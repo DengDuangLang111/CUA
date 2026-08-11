@@ -123,8 +123,26 @@ on a 451-corpus, never acted on; treat it as verbose output.
 ### 2.3 scan — the defect classes that pass every mechanical gate
 
 Static heuristics for grader defects that controls structurally cannot see.
-Findings are **review items, not blocks**, because every heuristic has benign
-look-alikes.
+
+**Each class declares a severity next to its rule**, and the two consumers act
+on the severity alone — adding a class needs no change anywhere else:
+
+| severity | gen's gate does | ship's report does |
+|---|---|---|
+| `REVIEW` | nothing | print for adjudication |
+| `REPAIR` | reject as repairable → the instruction is rewritten and re-gated | print |
+| `BLOCK` | reject outright (the fixture is wrong; words cannot fix it) | print |
+
+The `rigid-name` class is `REPAIR` for a structural reason worth stating:
+the ambiguity gate forbids the instruction from naming files, while the probe
+must still decide alone — so the model relieves the squeeze by inventing a
+name in the probe that the agent was never told, and the task becomes
+unwinnable. Repair resolves it in the direction that keeps both invariants:
+the instruction gains a naming *rule* ("named after the log"), which is a
+description, not a path, so the ambiguity level is preserved. The principle
+generalizes: **a grader may only be as strict as the instruction is
+explicit** — if the user did not say what to call it, the grader must not
+care.
 
 | class | signature | caught in practice |
 |---|---|---|

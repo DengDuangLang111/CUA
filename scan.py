@@ -14,6 +14,13 @@ import json
 import re
 import sys
 
+# What the pipeline should DO when a class fires. Declared here, next to the
+# rule, so a new defect class needs no change in gen or ship: the gate repairs
+# or blocks by severity, and the ship report prints everything.
+REVIEW = "review"   # needs human judgment; print, never block
+REPAIR = "repair"   # the instruction can be rewritten to resolve it
+BLOCK = "block"     # the fixture itself is wrong; words cannot fix it
+
 FLEX = ("glob", "listdir", "walk(", "iglob", "scandir", "rglob", "fnmatch")
 CONTENT = (">", "write(", "printf", "curl", "wget", "cp ", "unzip", "tar ",
            "base64", "echo ", "convert", "mv ", "ln -s", "python3 -c",
@@ -44,7 +51,7 @@ def scan_spec(s):
     if not browser and setup and not any(t in setup for t in CONTENT) \
             and not (s.get("open_path") or "").strip() \
             and SRC.search(instr):
-        yield ("missing-source", "setup writes no content yet instruction "
+        yield ("missing-source", REVIEW, "setup writes no content yet instruction "
                "references a source (%r)" % SRC.search(instr).group(0))
 
     # 2 rigid output naming: probe demands an exact name for an artifact the
@@ -66,26 +73,26 @@ def scan_spec(s):
                 continue
             if stem.lower() in setup_stems or samebase:  # derivable export name
                 continue
-            yield ("rigid-name", "probe demands %r; instruction never names "
+            yield ("rigid-name", REPAIR, "probe demands %r; instruction never names "
                    "it and setup never creates it" % x)
             break
 
     # 3 dated constant vs deictic time
     if YEARWORD.search(instr) and HARDDATE.search(probe):
-        yield ("dated-constant", "instruction says %r, probe hard-codes %s"
+        yield ("dated-constant", REVIEW, "instruction says %r, probe hard-codes %s"
                % (YEARWORD.search(instr).group(0),
                   sorted(set(HARDDATE.findall(probe)))))
 
     # 4 absent-key default: .get(key, True) on an app config read judges the
     #   app's factory state (key absent) as a failure
     if CONFIGPATH.search(probe) and GET_TRUE.search(probe):
-        yield ("absent-key-default", "probe reads app config with %s -- "
+        yield ("absent-key-default", REVIEW, "probe reads app config with %s -- "
                "verify the app's factory state really is True"
                % GET_TRUE.search(probe).group(0))
 
     # 5 inverted verdict suspicion
     if INVERTED.search(probe):
-        yield ("inverted-verdict?", "probe prints FAIL when %r is truthy"
+        yield ("inverted-verdict?", REVIEW, "probe prints FAIL when %r is truthy"
                % INVERTED.search(probe).group(1))
 
     # 6 fake media bytes: setup fabricates a media file from literal bytes --
@@ -96,8 +103,15 @@ def scan_spec(s):
         re.search(r"write\(b['\"][^)]{0,40}\)\s*for\s+n\s+in\s*"
                   r"\[[^\]]*\.(mp4|mp3|mkv|avi|wav)", setup)
     if m:
-        yield ("fake-media", "setup writes literal bytes as %r -- unplayable; "
-               "fine only if no step needs playback" % m.group(1)[:40])
+        # Harmless when nothing opens the file (a probe counting playlist
+        # entries never decodes it). Not harmless when the task drives a
+        # media player: the agent loads the clip and meets an error dialog.
+        player = "vlc" in (s.get("apps") or []) or s.get("domain") == "vlc"
+        yield ("fake-media", BLOCK if player else REVIEW,
+               "setup writes literal bytes as %r -- unplayable%s"
+               % (m.group(1)[:40],
+                  "; the task drives a media player" if player
+                  else "; fine only if no step needs playback"))
 
 
 def main(paths):
@@ -107,10 +121,10 @@ def main(paths):
             if not line.strip():
                 continue
             s = json.loads(line)
-            for cls, why in scan_spec(s):
+            for cls, sev, why in scan_spec(s):
                 findings += 1
-                print("  REVIEW %-16s %-38s %s"
-                      % (cls, s.get("slug", "?"), why[:90]))
+                print("  %-6s %-18s %-38s %s"
+                      % (sev.upper(), cls, s.get("slug", "?"), why[:86]))
     print("[scan] grader-defect review items: %d "
           "(adjudicate each; none block the ship)" % findings)
     return findings
