@@ -25,9 +25,13 @@ FLEX = ("glob", "listdir", "walk(", "iglob", "scandir", "rglob", "fnmatch")
 CONTENT = (">", "write(", "printf", "curl", "wget", "cp ", "unzip", "tar ",
            "base64", "echo ", "convert", "mv ", "ln -s", "python3 -c",
            "Workbook", "zipfile", "pptx", "docx")
-CONVENTIONAL = ("README.md", "content.xml", "Preferences", "prefs.js",
-                "settings.json", "vlcrc", "bookmarks", "tasks.json",
-                "__init__.py")
+CONVENTIONAL = ("README.md", "content.xml", "meta.xml", "styles.xml",
+                "Preferences", "prefs.js", "settings.json", "keybindings.json",
+                "vlcrc", "bookmarks", "tasks.json", "__init__.py")
+# A name the instruction supplies as a RULE rather than a literal: the agent
+# can derive it, so pinning it is legitimate.
+NAME_RULE = re.compile(r"named after|same (base )?name|name it after|<[\w-]+>"
+                       r"|lower ?case|called after", re.I)
 SRC = re.compile(r"\b(my|the|from)\s+\w*\s*(notes?|log|sheet|folder|file|doc"
                  r"|list|records?|inbox|csv)\b", re.I)
 YEARWORD = re.compile(r"\b(this year|today|current year|this month)\b", re.I)
@@ -62,7 +66,7 @@ def scan_spec(s):
             r"['\"](/home/user/[^'\"]+\.\w{2,4}|[\w-]+\.\w{2,4})['\"]", probe))
         setup_stems = {p.rsplit("/", 1)[-1].rsplit(".", 1)[0].lower()
                        for p in re.findall(r"[\w/.-]+\.\w{2,4}", setup)}
-        samebase = bool(re.search(r"same (base )?name", instr, re.I))
+        rule_given = bool(NAME_RULE.search(instr))
         for x in sorted(names):
             base = x.rsplit("/", 1)[-1]
             stem = base.rsplit(".", 1)[0]
@@ -71,7 +75,9 @@ def scan_spec(s):
             if base.lower() in instr.lower() or stem.lower() in instr.lower() \
                     or stem.replace("_", " ").replace("-", " ") in instr.lower():
                 continue
-            if stem.lower() in setup_stems or samebase:  # derivable export name
+            if stem.lower() in setup_stems or rule_given:  # derivable name
+                continue
+            if re.fullmatch(r"[\d.,]+", base):   # '110.00' is a value, not a file
                 continue
             yield ("rigid-name", REPAIR, "probe demands %r; instruction never names "
                    "it and setup never creates it" % x)
