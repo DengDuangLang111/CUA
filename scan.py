@@ -119,6 +119,21 @@ def scan_spec(s):
                   "; the task drives a media player" if player
                   else "; fine only if no step needs playback"))
 
+    # 7 browser free pass: the landing page already satisfies every URL
+    #   pattern, so an agent that does nothing scores 1.0. Control catches it
+    #   in a VM; this catches it for free, and names the reason.
+    if browser:
+        url = s.get("start_url") or ""
+        pats = s.get("url_patterns") or []
+        if url and pats:
+            try:
+                if all(re.search(p, url) for p in pats):
+                    yield ("browser-free-pass", BLOCK,
+                           "start_url already matches every url_pattern (%s) -- "
+                           "an idle agent scores 1.0" % ", ".join(pats)[:60])
+            except re.error:
+                pass
+
 
 def main(paths):
     findings = 0

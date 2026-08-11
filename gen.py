@@ -491,7 +491,12 @@ def task_json(spec, batch):
         # are flaky through /setup/open_file -- launch those directly.
         p = spec["open_path"]
         low = p.lower()
-        if low.endswith((".html", ".htm")):
+        if low.startswith(("chrome://", "http://", "https://")):
+            # xdg-open cannot resolve a chrome:// scheme (the open endpoint
+            # 404s); the browser has to be handed the URL directly.
+            config.append({"type": "launch", "parameters": {
+                "command": ["google-chrome", p]}})
+        elif low.endswith((".html", ".htm")):
             config.append({"type": "launch", "parameters": {
                 "command": ["google-chrome", "file://" + p]}})
         elif prim == "gimp" or low.endswith((".xcf", ".png", ".jpg", ".jpeg")):
