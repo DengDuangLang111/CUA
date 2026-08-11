@@ -69,7 +69,15 @@ def main(argv=None):
             # they would in a real rollout; execute steps run by hand so their
             # exit codes are observable. `open` is dropped: it needs the files
             # the execute steps have not created yet, and grading never reads it.
-            rest = [c for c in cfg if c["type"] not in ("execute", "open")]
+            # A `launch` that opens a file the setup creates must run AFTER the
+            # setup, exactly as it does in a rollout (config is ordered). Left
+            # in reset it fires against a file that does not exist yet and the
+            # app comes up empty -- which the visibility check then reports as
+            # a broken task. Browser-grade launches stay in reset: they are
+            # chrome's debug harness, and chrome_open_tabs needs it running.
+            browser = (task.get("ostg") or {}).get("grade") == "browser"
+            deferred = ("execute", "open") if browser else ("execute", "open", "launch")
+            rest = [c for c in cfg if c["type"] not in deferred]
             env.reset(task_config=dict(task, config=rest))
             base = "http://%s:%s" % (env.vm_ip, env.server_port)
             rcs, err = [], ""
@@ -93,6 +101,16 @@ def main(argv=None):
                     if orr.status_code != 200:
                         err = err or ("open %s -> HTTP %d"
                                       % (c["parameters"]["path"], orr.status_code))
+                elif c["type"] == "launch" and "launch" in deferred:
+                    p = c["parameters"]
+                    lr = requests.post(base + "/setup/launch",
+                                       json={"command": p.get("command"),
+                                             "shell": p.get("shell", False)},
+                                       timeout=180)
+                    open_rc = lr.status_code
+                    if lr.status_code != 200:
+                        err = err or ("launch %s -> HTTP %d"
+                                      % (p.get("command"), lr.status_code))
             # Warm tasks promise a visible workspace. Do NOT ask the window
             # manager whether a window exists: a setup that ran soffice
             # leaves the compositor unable to PAINT the window it later
