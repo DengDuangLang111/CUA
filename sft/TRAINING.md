@@ -424,13 +424,24 @@ consecutive identical actions ⇒ terminate, N ≥ 10 — which CLAUDE.md §3.1 
 recommends. It cannot make a task pass, but it reclaims ~44 wasted steps per
 locked task and would roughly halve attempt wall-clock.
 
-### THE HEADLINE RESULT: SFT regressed the model, 4/9 → 1/9
+### THE HEADLINE RESULT: SFT regressed the model, 4/9 → 1/9 (both variants)
 
 | arm | passes | which tasks |
 |---|---|---|
 | teacher Qwen3.6-27B | **9/9** | (panel is built from its passes) |
 | **stock Qwen3.5-4B** | **4/9** | arxiv(5 steps), exam-kiosk(28), vscode-telemetry(10), store-hours(54) |
-| **SFT v2 (pilotS3)** | **1/9** | arxiv(6) |
+| **SFT v1** (history think stripped) | **1/9** | spectra-loader(9) |
+| **SFT v2** (history think kept) | **1/9** | arxiv(6) |
+
+**`preserve_thinking` is exonerated as the cause.** Both SFT variants land on
+exactly 1/9 — identical magnitude of damage with and without history reasoning
+in the training context. The regression is caused by SFT itself at this recipe
+and data scale, not by that flag (which remains the correct train/serve
+alignment fix: v2's eval_loss is far better, 0.273 vs v1's flat 0.52).
+
+The two SFT arms keep *different* residual tasks — v2 holds the easiest one
+(arxiv, 6 steps) while v1 burns 50 steps failing it yet passes spectra-loader,
+which base failed and v2 locked on. Same level, different debris.
 
 Every proxy metric said the training was healthy: eval_loss fell monotonically
 0.294→0.273 (v1 recipe was flat at ~0.52), token_acc reached 0.95+, and on the

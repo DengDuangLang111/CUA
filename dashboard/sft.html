@@ -70,7 +70,7 @@
       data for Qwen3.5-4B. Rollout status lives on the <a href="index.html">main dashboard</a>;
       this page tracks the data &rarr; train &rarr; exam loop. Hand-updated; stamp below.</p>
     </div>
-    <span class="pill dim">updated 2026-08-13 16:50 PT</span>
+    <span class="pill dim">updated 2026-08-13 17:00 PT</span>
   </div>
 
   <div class="flow">
@@ -219,9 +219,16 @@
     <tr><th>arm</th><th>model</th><th>what it isolates</th><th>result</th></tr>
     <tr><td>teacher</td><td>Qwen3.6-27B</td><td>ceiling (these are its passing tasks)</td><td class="good">9 / 9</td></tr>
     <tr><td>base</td><td>stock Qwen3.5-4B</td><td>does the stock 4B loop too? &rArr; is SFT the cause at all</td><td class="good">4 / 9</td></tr>
-    <tr><td>v1</td><td>SFT, history thinking <b>stripped</b></td><td>did <code>preserve_thinking</code> amplify the copying?</td><td><span class="pill warn">running</span></td></tr>
+    <tr><td>v1</td><td>SFT, history thinking <b>stripped</b></td><td>did <code>preserve_thinking</code> amplify the copying?</td><td class="bad">1 / 9</td></tr>
     <tr><td>v2</td><td>SFT, history thinking <b>kept</b></td><td>—</td><td class="bad">1 / 9</td></tr>
   </table></div>
+  <p class="note"><b><code>preserve_thinking</code> is exonerated.</b> Both SFT variants land on
+  exactly 1/9 — identical damage with and without history reasoning in the training context. The
+  regression comes from SFT itself at this recipe and data scale. The flag remains the correct
+  train/serve alignment fix (v2's held-out loss is 0.273 against v1's flat 0.52); it simply is not
+  what broke the policy. The two arms keep different residual tasks — v2 holds the easiest one,
+  v1 burns 50 steps failing that same one but passes another that base failed. Same level,
+  different debris.</p>
   <p class="note">Also training: a clean single 3-epoch schedule (one warmup, one cosine over 345
   steps, checkpoints at every epoch boundary) to test the "too little optimization" hypothesis.
   It replaced a warm-restart continuation whose fresh warmup confounded the epoch comparison —
