@@ -360,6 +360,30 @@ exam (same-exam rule). Old pilot2 exams: acc/MAE columns remain valid
 | **227714 serve-35s** | 08-13 | vLLM serve pilotS3 ckpt-115, ckpt's own template, 1 GPU 8h | — | QUEUED (job name eval35; tunnel WSL:18002) | `qwen-serve/serve-35s.sbatch` |
 | **tier-3 valpanel driver** | 08-13 | student rollout: 9 held-out val tasks × 3 attempts, 3 envs, **ms50** (user), temp 0.6, WAIT-break 10 | merged exam dir `OSWorld/eval_valpanel_tasks` (2 tasks from v11-500-final + 7 from **v11-all** — the corpus the legacy teacher run actually read; note: discharge-summary has 3 divergent versions across run dirs, we use v11-all's = the version the teacher's pass was judged under) | RUNNING (444 rollout paused for it — teacher serve had died at its 12h wall anyway, replacement 227448 queued; driver auto-restores the 444 runner @3 envs once :18001 answers) | `osworld-verified-control/valpanel_driver.sh` + logs/valpanel_driver.log |
 
+| 227304 evalpilotS3 | 08-13 | fixed two-panel exam on ckpt-115 | pilot2 snapshot panels | ✓ v500: acc 0.577 · MAE 311.3 · think 0.918 (n=26) / legacy: **acc 0.800** · MAE 130.3 · think 1.00 (n=40). See reading below | pilotS3-eval-* |
+
+### pilotS3 exam reading (per-sample forensics, 08-13 evening)
+
+- **Legacy panel: clean.** Best acc of any model (0.800 vs base 0.775), MAE
+  130 vs base 123 = inside the ±9 noise floor, thinking intact. v1s's
+  format-mismatch damage on this panel (182) fully recovered.
+- **v500 acc 0.577 is a metric artifact of PHASE LAG, not lost competence.**
+  Per-sample: on the 18-step chrome-downloads trajectory the student runs
+  exactly one step behind the teacher (its step-k answer = teacher's step
+  k−1: re-issues the previous action when the screen shows no change, then
+  trails the whole way). Nearly the same action SEQUENCE, shifted by one —
+  every shifted step scores a type mismatch. The baseline's higher acc
+  (0.731) on this panel is partly free type-matches from near-constant
+  left_click spam (10/10 sampled steps), which coincides with the teacher's
+  modal action type. Meanwhile MAE — computed only on type-matched pairs —
+  improved 372→311 (7× the noise floor): when in phase, the student points
+  closer than the base model does.
+- **Panel caveat**: v500 val = only 2 tasks, so errors are correlated and
+  a single de-sync poisons many samples.
+- **Arbiter**: phase lag is self-correcting in closed loop (the model sees
+  its own action's effect next step) — whether it matters at all is exactly
+  what the running tier-3 9-task rollout measures.
+
 Teacher-serve template note (found while cloning the serve script): the teacher
 is served with `--chat-template chat_template_think.jinja`, which differs from
 stock ONLY in the generation prompt: `<|im_start|>assistant\n<think>\nOkay, `
