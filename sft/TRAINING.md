@@ -56,7 +56,15 @@ AutoProcessor on the student, open one dataset row and one image. It converts
 | 226598 | 24 s | missing `qwen_vl_utils` |
 | 226601 | 56 s | missing `torchvision` |
 | 226607 | 44 s | swift 4.4.2 ↔ transformers 5.15 incompatible (`logging_dir`) |
-| 226619 | — | first round to reach the training loop |
+| 226619 | 9 min | reached training; step-2 OOM (fp32 Adam states on-GPU); 1-GPU sdpa = 322 s/it |
+| 226647 | 8 min | 2×GPU zero2: still OOM at step 2; but 85 s/it (3.8× from data parallel) |
+| 226652 | 42 s | zero2_offload needs nvcc (DeepSpeedCPUAdam JIT) — no toolkit anywhere on the cluster |
+| **226656** | 14 min | **SMOKE_EXIT 0** — micromamba user-space CUDA 13 unblocked cpu_adam; loss 0.82→0.08 over 8 steps |
+
+**The proven full-run stack**: 2×H200 · `NPROC_PER_NODE=2` · `--deepspeed
+zero2_offload` (CPU Adam via the micromamba toolchain) · sdpa (~90 s/it;
+flash-attn deferred — no wheel for torch2.13+cu130, compile now unblocked if
+needed) · `IMAGE_MAX_TOKEN_NUM=2048` · `max_length 65536`.
 
 Lesson recorded at user's insistence, deservedly: rounds 2–4 were
 one-missing-package-per-round whack-a-mole. The complete dependency set was
@@ -79,3 +87,24 @@ chmod 600 /gpfs/scrubbed/jy050706/sft/wandb.env
 
 Runs then appear under project `cua-sft`, named `smoke-<jobid>` /
 `<run name>`.
+
+## Observability (added after the smoke, before the full run)
+
+- **Task-level val split** — `build.py --val-ratio 0.15` holds out whole
+  slugs (never steps of a training trajectory); a requested split can never
+  come back empty. Export emits `val_swift.jsonl`; train.sbatch passes
+  `--val_dataset`.
+- **Per-domain loss** — every exported row carries `channel` = task domain;
+  `--enable_channel_loss true` gives one loss curve per application in wandb.
+- **Truncation counter** — `over_length_estimate` in report.json counts
+  samples whose estimated tokens exceed `--length-budget` (65536): those
+  targets get trainer-truncated and should stay ~0.
+- **Action metrics** — `eval_actions.py CKPT SAMPLES_DIR --wandb-project
+  cua-sft`: greedy generation on the val panel, reports
+  `action_type_acc` / `coord_mae` (0–999 space) / `think_len_ratio` plus a
+  teacher-vs-student wandb Table. Zero-shot baseline of the untouched student
+  logged as run `eval-base-qwen3.5-4b`.
+- **Provenance** — train.sbatch writes the dataset name + report.json digest
+  into `WANDB_NOTES`.
+
+Full-run entrypoint: `sbatch train.sbatch /gpfs/scrubbed/jy050706/sft/data/<full-set>`.
