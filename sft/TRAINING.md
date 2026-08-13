@@ -473,6 +473,21 @@ Where it locks, from the frames (two distinct modes):
   misses "Privacy and security" by a few pixels 18×. Base passed exam-kiosk by
   varying its clicks.
 
+**Ruled out: image budget / resolution.** Measured on the shipped training set —
+images per sample 1–20 (cap exactly 20, matching the agent's `image_max`),
+on-disk resolution 1920×1088 (native 1080p; 1088 is smart_resize's 32px-patch
+alignment, not compression), and 60×34 = **2040 visual tokens per image**, which
+is the full native token count at the model's 16px patch × 2 merge. The training
+env's `IMAGE_MAX_TOKEN_NUM=2048` never clipped anything (2040 < 2048), and the
+label dump's `[248056 * 2040]` confirms it. vLLM serves from the checkpoint's own
+preprocessor (`longest_edge` 16.7M pixels ≫ 2.09M), so serving matches training.
+More decisively: **the base arm ran through the identical image pipeline** —
+same agent, same `process_image`, same 20 images at 2040 tokens — and scored
+4/9. Image configuration is a constant across arms and cannot explain a
+between-arm difference. (The 32px effective patch IS coarse for 12–16px UI text,
+which plausibly caps how well *any* arm can do here — a separate question from
+the regression, and one bounded by the 1080p source.)
+
 Fix directions, in the order worth trying:
 1. **Weight the coordinate span in the loss** (swift `loss_scale` accepts a
    regex→weight config; the same mechanism `ignore_empty_think` uses). Give
