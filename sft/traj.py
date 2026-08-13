@@ -64,14 +64,16 @@ def load_steps(task_dir):
             except json.JSONDecodeError:
                 continue
 
-    # last episode only: cut at the final step_num reset
+    # Last episode only. Two boundary signals, both against the PREVIOUS row:
+    # a step_num decrease, or the same step_num with a different response --
+    # multi-action lines of one step are byte-identical in `response`
+    # (verified 200/200 in v11), so a changed response at the same number is
+    # a re-run starting over, not another action of the same step.
     start = 0
-    last = 0
-    for i, r in enumerate(rows):
-        n = r.get("step_num") or 0
-        if n < last:
+    for i in range(1, len(rows)):
+        n, pn = rows[i].get("step_num") or 0, rows[i - 1].get("step_num") or 0
+        if n < pn or (n == pn and rows[i].get("response") != rows[i - 1].get("response")):
             start = i
-        last = max(last, n)
     rows = rows[start:]
 
     steps = {}
