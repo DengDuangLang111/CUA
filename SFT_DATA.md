@@ -8,6 +8,14 @@ The unit of data: one sample = (rendered context, step-k response). The
 response is trained verbatim — thinking, tool_call syntax, coordinates as the
 model wrote them.
 
+**The on-disk format is deliberately left as the runner writes it** — one
+line per pyautogui action, so a multi-action step spans several lines with
+the same `step_num` and a byte-identical `response`. This is lossless
+(aggregation reconstructs steps exactly; verified 200/200 groups identical),
+and changing the writer mid-campaign would break the trajectory viewer, the
+dashboard daemon, and comparability with v11 data. All correction happens in
+the builder, governed by the rules below.
+
 ## 1 Reconstructing steps from traj.jsonl
 
 | rule | receipt |
@@ -34,7 +42,16 @@ model wrote them.
 | **History must be rendered by the model's own chat template with the same kwargs the campaign sent.** The client does NOT strip thinking (`ensure_empty_think_prefix` only prepends an empty block when missing) and under `nopreserve` it sends `chat_template_kwargs={"enable_thinking": true}` — no `preserve_thinking` key at all. The template (chat_template.jinja, 7764 B) then strips `<think>` from every assistant turn at or before the last user query: `{%- if (preserve_thinking is defined and preserve_thinking is true) or (loop.index0 > ns.last_query_index) %}` keeps thinking, else drops it. So: render history through `apply_chat_template` with the campaign's kwargs — hand-stripping in the builder duplicates template logic and WILL drift. | template read from Tillicum model dir 2026-08-13; client code `mm_agents/qwen/main.py:278-284`, `history.py:90-94` |
 | The current step's target keeps its full `<think>` block — that is what the model emitted under `enable_thinking` and what generation-time distribution looks like. | — |
 
-## 4 Provenance to record per sample
+## 4 Final verification before training (pending)
+
+After the campaign: replay ONE task offline with a client patched to dump
+the exact `messages` payload it sends, and byte-diff that against the
+builder's rendering of the same history. This upgrades rule 3.2 from
+"derived from the template source" to "measured end to end". Not done during
+the campaign because each step's payload embeds base64 screenshots — dumping
+all of them would exhaust the disk for no extra signal.
+
+## 5 Provenance to record per sample
 
 run id (`v11-500-ms100-think-nopreserve-20260813`), task slug + id, step_num,
 screen size (1920×1080), coordinate convention (`relative 0–999`), template
