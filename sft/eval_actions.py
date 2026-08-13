@@ -23,16 +23,39 @@ from pathlib import Path
 
 ACTION = re.compile(r"<parameter=action>\s*([a-z_]+)\s*</parameter>", re.S)
 COORD = re.compile(r"<parameter=coordinate>\s*\[?\s*(\d+)\s*,\s*(\d+)", re.S)
-THINK = re.compile(r"<think>(.*?)</think>", re.S)
+
+
+def think_len(text):
+    """Reasoning length of the FIRST round only, tag-position agnostic.
+
+    The chat template puts the opening <think> in the generation prompt, so a
+    generated continuation has no opening tag (job 227162 raw probe). Requiring
+    one scored every trained model 0 while crediting the base model for <think>
+    blocks inside its hallucinated post-turn rounds. So: measure text before
+    the first </think>, but only if no <tool_call> precedes it (a close-tag
+    after the action started is a later round, not first-round reasoning).
+    """
+    text = text or ""
+    end = text.find("</think>")
+    if end < 0:
+        return 0
+    tc = text.find("<tool_call>")
+    if 0 <= tc < end:
+        return 0
+    start = text.find("<think>")
+    if 0 <= start < end:
+        start += len("<think>")
+    else:
+        start = 0
+    return len(text[start:end].strip())
 
 
 def parse_action(text):
     a = ACTION.search(text or "")
     c = COORD.search(text or "")
-    t = THINK.search(text or "")
     return (a.group(1) if a else None,
             (int(c.group(1)), int(c.group(2))) if c else None,
-            len(t.group(1)) if t else 0)
+            think_len(text))
 
 
 def main(argv=None):
@@ -91,8 +114,11 @@ def main(argv=None):
             maes.append(abs(t_xy[0] - s_xy[0]) + abs(t_xy[1] - s_xy[1]))
         if t_think:
             think_ratios.append(s_think / t_think)
+        # raw text goes into the table: parsed-only logging is why the 08-13
+        # think=0 artifact took a forensic dig instead of one glance
         table.append((s["meta"]["slug"], s["meta"]["step"],
-                      "%s %s" % (t_act, t_xy or ""), "%s %s" % (s_act, s_xy or "")))
+                      "%s %s" % (t_act, t_xy or ""), "%s %s" % (s_act, s_xy or ""),
+                      student[:1500]))
         print("%-28s step %-3s teacher=%s%s student=%s%s"
               % (s["meta"]["slug"][:28], s["meta"]["step"],
                  t_act, t_xy or "", s_act, s_xy or ""))
@@ -112,7 +138,7 @@ def main(argv=None):
                          config={"ckpt": str(args.ckpt), "n": len(rows)})
         run.log({k: v for k, v in metrics.items() if v is not None})
         run.log({"eval/examples": wandb.Table(
-            columns=["slug", "step", "teacher", "student"],
+            columns=["slug", "step", "teacher", "student", "student_raw"],
             data=[list(r) for r in table])})
         run.finish()
     return 0

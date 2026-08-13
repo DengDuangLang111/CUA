@@ -261,12 +261,101 @@ Smoke ladder rounds (226592-226656) are tabulated in their own section above.
 | 226802 pilot0b | 08-13 | v1s full 2-GPU | v1 filters | cancelled: superseded by 1-GPU arms | — |
 | 226860 pilotL / 226862 pilotS | 08-13 | v1L / v1s, 1-GPU | v1 filters, live dirs | ✗ **killed by in-place data reship at ~26 min** — origin of the isolation rule | — |
 | 226915 pilot1 | 08-13 | v1 full 2-GPU (chain) | v2 но live dirs | cancelled: redundant + pre-isolation | — |
-| **226918 pilotS** | 08-13 | **v1s full 1-GPU, lr 1e-5, offload** | **v2 snapshots: 916+151 (56 traj)** | RUNNING | [runs/mk2kibr5](https://wandb.ai/yanjiayuan/cua-sft/runs/mk2kibr5) · ckpts `out/pilotS/v*/checkpoint-{40,80,115}` |
-| **226920 pilotL** | 08-13 | **v1L LoRA r32, lr 1e-4** | same snapshots | RUNNING | [runs/0f02foqj](https://wandb.ai/yanjiayuan/cua-sft/runs/0f02foqj) · adapters `out/pilotL/v*/checkpoint-*` |
-| 226919 / 226921 evals | 08-13 | fixed two-panel exam | v2 snapshot panels | dependency-armed | pilotS-eval-* / pilotL-eval-* |
+| **226918 pilotS** | 08-13 | **v1s full 1-GPU, lr 1e-5, offload** | **v2 snapshots: 916+151 (56 traj)** | ✗ scancelled: deepspeed preset silently set eff. batch 16 (approved: 8) → replaced by 226922 | [runs/mk2kibr5](https://wandb.ai/yanjiayuan/cua-sft/runs/mk2kibr5) |
+| **226920 pilotL** | 08-13 | **v1L LoRA r32, lr 1e-4** | same snapshots | ✓ — outcome row below | [runs/0f02foqj](https://wandb.ai/yanjiayuan/cua-sft/runs/0f02foqj) · adapters `out/pilotL/v*/checkpoint-*` |
+| 226919 / 226921 evals | 08-13 | fixed two-panel exam | v2 snapshot panels | 226919 fell with 226918; 226921 ran — outcome row below | pilotS-eval-* / pilotL-eval-* |
 
-| 226922 pilotS | 08-13 | v1s + explicit accum 8 | v2 snapshots | RUNNING — replaces 226918 (deepspeed silently set eff. batch 16, violating approved 8) | run pilotS-226922 |
-| 226927 eval-base2 | 08-13 | zero-shot exam, v2 snapshot panels | 26+40 samples | RUNNING — **the old baseline (226724) took a v1-era panel; deltas must compare same-exam only**, so the base model retakes the exact panels the pilot evals use | eval-base2-* |
+| 226922 pilotS | 08-13 | v1s + explicit accum 8 | v2 snapshots | ✓ EXIT 0, 115 steps, final eval_loss 0.513 — replaces 226918 (deepspeed silently set eff. batch 16, violating approved 8) | run pilotS-226922 · `out/pilotS/v2-20260813-090458/checkpoint-115` |
+| 226920 pilotL | 08-13 | v1L LoRA r32 lr 1e-4 | v2 snapshots | ✓ EXIT 0, 115 steps, final eval_loss 0.459 | run pilotL-226920 · `out/pilotL/v1-20260813-085916/checkpoint-115{,-merged}` |
+| 226927 eval-base2 | 08-13 | zero-shot exam, v2 snapshot panels | 26+40 samples | ✓ v500: acc 0.731 · MAE 380.3 · think 1.10 / legacy: 0.775 · 123.3 · 0.925 — **the old baseline (226724) took a v1-era panel; deltas must compare same-exam only** | eval-base2-* |
+| 226921 evalpilotL | 08-13 | two-panel exam on ckpt-115-merged | v2 snapshot panels | v500: acc 0.654 · MAE 414.1 · think 0.0 / legacy: 0.800 · 192.2 · 0.0 — **numbers unreliable, see forensics below** | pilotL-eval-* |
+| 226923 evalpilotS | 08-13 | two-panel exam on ckpt-115 | v2 snapshot panels | v500: acc 0.731 · MAE 389.9 · think 0.0 / legacy: 0.775 · 182 · 0.0 — **numbers unreliable, see forensics below** | pilotS-eval-* |
+| 227162 probe | 08-13 | raw-generation forensics, 3 models x 4 samples | v2 snapshot panels | ✓ all three models reason fully; see forensics | `proberaw_227162.out` |
+
+## Pilot-2 forensics (2026-08-13 afternoon): think=0.0 was the exam, not the model
+
+Symptom: both trained arms scored think_len_ratio 0.0 on all panels; coord_mae
+flat-or-worse vs baseline. Full-chain investigation (swift source + training
+label dumps + jinja rendering + raw-generation probe 227162), receipts:
+
+1. **Training was healthy.** pilotS label dump (`pilotS_226922.out`, [LABELS]):
+   `[-100 * 5492]` then `<think>\n...full reasoning...</think>\n\n<tool_call>...
+   <|im_end|>` — last round only, think fully supervised, no image-pad leakage.
+   `ignore_empty_think` only zeroes EMPTY think (`^<think>\s*</think>`), never
+   fires on our non-empty targets. (Beware reading these logs with Python
+   `readlines()`: tqdm `\r`s split lines differently than sed/grep — extract by
+   marker, not line number.)
+2. **But swift and the HF jinja disagree on two conventions.**
+   (a) History think: swift's `_get_preserve_thinking` (template/base.py:171)
+   forces preserve=False under is_thinking + last_round + training, so
+   `_remove_history_thinking` STRIPS `<think>` from history assistant turns;
+   the model's own jinja (= eval AND future student rollout) KEEPS them
+   (verified: real val sample renders 4 `<think>`, 3 from history).
+   NOTE the campaign runner did NOT pass `--preserve_thinking` (live cmdline;
+   dir is even named `think-nopreserve`) — and it made no difference: both
+   3.5/3.6 jinjas compute `last_query_index` by skipping user turns that are
+   pure `<tool_response>` blobs, so in our instruction-then-tool_responses
+   structure every assistant turn sits after the last real query and the
+   keep-branch fires unconditionally. The teacher DID see full history think;
+   the flag only matters for mid-conversation human queries, which we never
+   have. (Agent side keeps it too: `_response_transform =
+   ensure_empty_think_prefix`, history.py:90 — preserves existing think,
+   only pads an empty one when absent.)
+   (b) Open tag: swift trains it target-side (first supervised token); the
+   jinja generation prompt appends `<think>\n` prompt-side.
+3. **think=0.0 on trained models = artifact of (b).** The exam regex demanded
+   an opening `<think>` inside the generated text; trained models don't re-emit
+   it (it's in the prompt). Probe 227162: both arms produce full coherent
+   reasoning then `</think>` then a well-formed tool_call, and stop cleanly.
+4. **Baseline think 0.93-1.10 = a different artifact.** Base fails to
+   terminate its turn in 3/4 probes and hallucinates fake `user`/`assistant`
+   continuation rounds; the literal `<think>` the regex matched lives in those
+   hallucinated rounds. The trained models' clean turn-ends are an
+   IMPROVEMENT the old metric scored as collapse.
+5. **coord_mae comparisons are void**: trained models sat an out-of-format
+   exam (history think present at eval, absent in training); base sat an
+   in-format one. Regression is unproven either way until re-exam.
+
+Fixes: `eval_actions.py` think parsing is now tag-position-agnostic (first
+`</think>`, guarded against post-action rounds) and the wandb Table stores
+raw student text — parsed-only logging is why this took a dig instead of a
+glance. Training fix = RECIPE v2 below (`--preserve_thinking true`), aligning
+training context with the jinja that both the exam and the deployed student
+will use.
+
+## RECIPE v2 — FROZEN 2026-08-13 (user-approved, full arm only)
+
+Delta vs v1s/v1L, everything else byte-identical:
+
+```
+  --preserve_thinking true      # keep history <think> in training encoding;
+                                # matches teacher context + jinja rendering
+                                # at eval + rollout
+```
+
+Naming trap, for the record: this swift flag is NOT the runner's
+`--preserve_thinking`. The runner flag (OFF in the campaign) asks the vLLM
+template to keep history think — a no-op for our message shape, where the
+template's multi-step-tool branch keeps it unconditionally. The swift flag
+controls training encoding, whose default STRIPS. Align the rendered
+behavior (keep), not the flag values.
+
+Approved scope: full-FT arm only ("跑一个全量的微调, 数据保持和之前一样").
+LoRA v2 arm not launched. Data = the frozen pilot-2 snapshots verbatim —
+no rebuild, no reship; they are read-only with no writer (rebuilds only
+ever touch live dirs), which honors the isolation rule's intent.
+
+Re-exam: same two v2 snapshot panels, FIXED eval_actions (think parsing is
+tag-position-agnostic + raw text logged); baseline retakes the same fixed
+exam (same-exam rule). Old pilot2 exams: acc/MAE columns remain valid
+(ACTION/COORD parsing unchanged), think column void.
+
+| job | date | recipe | data (version) | outcome | wandb / artifacts |
+|---|---|---|---|---|---|
+| 227162 probe | 08-13 | raw-gen forensics | pilot2 snapshot panels | ✓ see forensics section | proberaw_227162.out |
+| **227303 pilotS3** | 08-13 | **v2 full 1-GPU (v1s + preserve_thinking)** | frozen pilot2 snapshots verbatim | SUBMITTED (on g001 within a minute) | run pilotS3-227303 · `out/pilotS3/` |
+| 227304 evalpilotS3 | 08-13 | fixed two-panel exam | pilot2 snapshot panels | armed, afterok:227303 | pilotS3-eval-* |
+| 227305 eval-base3 | 08-13 | baseline retake, fixed exam | pilot2 snapshot panels | SUBMITTED | base3-eval-* |
 
 Ledger row contract: job id, recipe version, data version (filter version +
 sample counts + snapshot name), outcome (incl. failures and WHY), wandb link,
