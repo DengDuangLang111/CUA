@@ -362,8 +362,67 @@ exam (same-exam rule). Old pilot2 exams: acc/MAE columns remain valid
 
 | 227304 evalpilotS3 | 08-13 | fixed two-panel exam on ckpt-115 | pilot2 snapshot panels | ✓ v500: acc 0.577 · MAE 311.3 · think 0.918 (n=26) / legacy: **acc 0.800** · MAE 130.3 · think 1.00 (n=40). See reading below | pilotS3-eval-* |
 
-| **227829 pilotS3e23** | 08-13 | continue-train from pilotS3 ckpt-115: **+2 epochs** (cum 2,3), fresh warmup+cosine over the new 230 steps (warm-restart style — NOT one 3-epoch schedule), RECIPE v2 otherwise byte-identical | same frozen pilot2 snapshots | QUEUED (user-ordered) | `out/pilotS3e23/` · ckpts at epoch bounds 115/230 |
-| 227830 eval-pS3e23 | 08-13 | fixed exam on BOTH epoch-boundary ckpts × both panels → epoch-response curve (cum-e2, cum-e3 vs pilotS3's e1) | pilot2 snapshot panels | armed, afterok:227829 | pilotS3e2-eval-* / pilotS3e3-eval-* |
+| 227829 pilotS3e23 | 08-13 | continue-train from ckpt-115 +2 epochs, **warm restart** (fresh warmup+cosine) | same snapshots | ✗ cancelled at step 32: the fresh warmup (8.3e-7→1e-5 over 12 steps) confounds the epoch comparison — grad_norm rise and eval_loss 0.273→0.325 are partly restart artifacts, not epoch effects. Replaced by a single 3-epoch schedule | — |
+| **228092 pilotS3x3** | 08-13 | **RECIPE v2, single 3-epoch schedule from base** (one warmup + one cosine over 345 steps), ckpts at every epoch boundary 115/230/345 | same frozen pilot2 snapshots | RUNNING g002 (interactive QOS) | `out/pilotS3x3/` |
+| 228093 eval-pS3x3 | 08-13 | fixed exam on all three epoch ckpts × both panels → clean epoch-response curve | pilot2 snapshot panels | armed, afterok:228092 | pilotS3x3-ep{1,2,3}-eval-* |
+| **tier-3 attempt 1** | 08-13 | pilotS3 ckpt-115 served on vLLM (own template), 9 held-out val tasks, ms50, temp 0.6, 3 envs | `eval_valpanel_tasks` (9 tasks the teacher passed 9/9) | **1/9 pass (arxiv-listing, 6 steps)** — see failure-mode table below | `results_generated/qwen35-4b-pilotS3/valpanel-a1` |
+
+### Tier-3 first result: 1/9, and 7 of the 8 failures are ONE pathology
+
+| task | score | steps | distinct actions | max repeat | teacher steps |
+|---|---|---|---|---|---|
+| arxiv-listing | **1.0** | 6 | 5 | 2 | 4 |
+| chrome-downloads | 0 | 50 | **1** | 50 | 27 |
+| spectra-loader | 0 | 50 | **1** | 50 | 14 |
+| vscode-telemetry | 0 | 50 | 2 | 48 | 50 |
+| discharge-summary | 0 | 50 | 7 | 42 | 24 |
+| exam-kiosk | 0 | 50 | 10 | 18 | 34 |
+| gdpr-art17 | 0 | 50 | 4 | 17 | 8 |
+| depot-bookmark | 0 | 50 | 6 | 11 | 33 |
+| store-hours | 0 | 12 | 10 | 3 | 13 |
+
+**The pathology: the model copies its own previous response instead of reading the
+current screenshot.** Receipt (chrome-downloads): the response at steps 1, 2, 3
+and 25 is byte-identical — same `<think>` text ("屏幕左侧有一个Chrome图标，点击它
+应该可以启动浏览器"), same coordinate — while the screenshots demonstrably change
+(3 distinct screens among the sampled steps; Chrome had already opened).
+
+Mechanism: the teacher's step 2 on this task is `wait` (let Chrome load); the
+student clicks again instead. An unchanged screen produces an identical
+response, two identical assistant turns enter the history, and in-context
+pattern lock makes every later step a copy — even after the screen changes.
+
+**This is the same defect the action exam saw as "phase lag"** (student's step-k
+answer = teacher's step k−1 = the last assistant turn in its context). In
+teacher-forced mode it copies the teacher's last turn; in closed loop it copies
+its own. My exam-time reading — "phase lag self-corrects in closed loop" — was
+WRONG, and the rollout is what proved it. Recording that: single-step exams
+cannot see compounding; only tier 3 can.
+
+**It is NOT taught by repeated-action training data.** Measured on the shipped
+training set: of 873 samples with a previous assistant turn, only **15 (1.7%)**
+have a target identical (action + coordinate) to the previous step; 290 (33%)
+share only the action *type*, which is normal GUI behavior. The
+`identical_runs` / `low_diversity_tail` filters did their job. Alignment is not
+off-by-one either: `lib_run_single.py` writes `screenshot_file` AFTER
+`env.step()`, and build.py uses `[initial] + steps[:-1]` screenshots, so the
+last image of a step-k sample is exactly the screen that step k acts on.
+
+Live hypotheses, in order, each testable:
+1. **Too little data / undertrained** — 916 samples, 115 steps. Copying gives
+   perfect format + the right action type 33% of the time; it is a cheap local
+   optimum. 228092 (3 epochs) tests the "more optimization" half.
+2. **`preserve_thinking` may have made copying easier** — history now carries
+   full prior reasoning, a richer copy source. Testable with the retained v1s
+   checkpoint on the same 9 tasks.
+3. **Base-model behavior** — unknown whether stock Qwen3.5-4B loops the same way;
+   needs a base rollout on the same panel (VM-bound, queued behind attempts 2-3).
+
+Engineering stopgap (not yet enabled, would change termination semantics
+mid-campaign so deferred to the next one): a generic repeat-breaker — N
+consecutive identical actions ⇒ terminate, N ≥ 10 — which CLAUDE.md §3.1 already
+recommends. It cannot make a task pass, but it reclaims ~44 wasted steps per
+locked task and would roughly halve attempt wall-clock.
 
 ### pilotS3 exam reading (per-sample forensics, 08-13 evening)
 

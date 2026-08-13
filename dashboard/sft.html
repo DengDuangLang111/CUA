@@ -70,7 +70,7 @@
       data for Qwen3.5-4B. Rollout status lives on the <a href="index.html">main dashboard</a>;
       this page tracks the data &rarr; train &rarr; exam loop. Hand-updated; stamp below.</p>
     </div>
-    <span class="pill dim">updated 2026-08-13 15:40 PT</span>
+    <span class="pill dim">updated 2026-08-13 16:00 PT</span>
   </div>
 
   <div class="flow">
@@ -79,7 +79,7 @@
     <span class="n">56 passing trajectories</span><span class="a">&rarr;</span>
     <span class="n">916 train + 151 val samples</span><span class="a">&rarr;</span>
     <span class="n">Qwen3.5-4B SFT</span><span class="a">&rarr;</span>
-    <span class="n">3-tier eval</span>
+    <span class="n">3-tier eval <span class="pill good">tier 3 live</span></span>
   </div>
 
   <h2>This week's headline: the evidence chain caught a real training bug on day one</h2>
@@ -142,6 +142,40 @@
   is partly free type-matches from near-constant left_click output coinciding with the teacher's
   modal action. MAE — scored on type-matched pairs only — improved 372&rarr;311, 7&times; the
   noise floor. Phase lag self-corrects in closed loop; the tier-3 rollout arbitrates.</p>
+
+  <h2>Tier 3 — the arbiter: the student drives the VM itself</h2>
+  <p class="lede">9 held-out tasks the teacher passes 9/9, run end-to-end in real VMs, scored by
+  the task's own checker. First result for the v2 model, and the failure mode is one specific
+  pathology rather than diffuse incompetence.</p>
+  <div class="tblwrap"><table>
+    <tr><th>task</th><th>score</th><th>steps</th><th>distinct actions</th><th>max repeat</th><th>teacher steps</th></tr>
+    <tr><td>arxiv-listing</td><td class="good">1.0</td><td>6</td><td>5</td><td>2</td><td>4</td></tr>
+    <tr><td>chrome-downloads</td><td class="bad">0</td><td>50</td><td class="bad">1</td><td>50</td><td>27</td></tr>
+    <tr><td>spectra-loader</td><td class="bad">0</td><td>50</td><td class="bad">1</td><td>50</td><td>14</td></tr>
+    <tr><td>vscode-telemetry</td><td class="bad">0</td><td>50</td><td>2</td><td>48</td><td>50</td></tr>
+    <tr><td>discharge-summary</td><td class="bad">0</td><td>50</td><td>7</td><td>42</td><td>24</td></tr>
+    <tr><td>exam-kiosk</td><td class="bad">0</td><td>50</td><td>10</td><td>18</td><td>34</td></tr>
+    <tr><td>gdpr-art17</td><td class="bad">0</td><td>50</td><td>4</td><td>17</td><td>8</td></tr>
+    <tr><td>depot-bookmark</td><td class="bad">0</td><td>50</td><td>6</td><td>11</td><td>33</td></tr>
+    <tr><td>store-hours</td><td class="bad">0</td><td>12</td><td>10</td><td>3</td><td>13</td></tr>
+  </table></div>
+  <p class="note"><b>1/9 vs the teacher's 9/9 — and 7 of the 8 failures are the same defect:
+  the model copies its own previous response instead of reading the current screenshot.</b>
+  Receipt: on chrome-downloads the responses at steps 1, 2, 3 and 25 are byte-identical (same
+  reasoning text, same coordinate) while the screenshots demonstrably change. Mechanism: the
+  teacher's step 2 there is <code>wait</code> (let the app load); the student clicks again, an
+  unchanged screen yields an identical response, two identical turns enter the history, and
+  in-context pattern lock does the rest. This is the same defect the action exam registered as
+  "phase lag" — and the exam-time reading that it would self-correct in closed loop was wrong.
+  Single-step exams cannot see compounding; only this tier can.</p>
+  <p class="note">It is <b>not</b> taught by repeated-action training data: of 873 samples with a
+  previous assistant turn, only 15 (1.7%) have a target identical to the previous step — the loop
+  filters worked. Nor is it an off-by-one: the runner writes each screenshot after
+  <code>env.step()</code>, so a sample's last image is exactly the screen its target action acts
+  on. Live hypotheses, each testable: too little data (916 samples, 1 epoch — a 3-epoch run is
+  training now), <code>preserve_thinking</code> making the copy source richer (testable against
+  the retained v1 checkpoint), and stock-model behavior (a base-model control on this same panel
+  is running).</p>
 
   <h2>How the exam scores</h2>
   <div class="tblwrap"><table>
