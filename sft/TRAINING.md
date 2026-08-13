@@ -249,3 +249,22 @@ on snapshots of 916 train + 151 val (56 trajectories), effective batch 8,
 1 epoch = 115 steps, ckpt every 40 keep 3, dependent action-metric evals
 armed. The chain-submitted 2-GPU pilot1 (226915) was cancelled: redundant
 with pilotS and predates the snapshot-isolation rule.
+
+## RUN LEDGER — standing rule: every launch appends a row here, no exceptions
+
+Smoke ladder rounds (226592-226656) are tabulated in their own section above.
+
+| job | date | recipe | data (version) | outcome | wandb / artifacts |
+|---|---|---|---|---|---|
+| 226724 eval-base | 08-13 | zero-shot exam | v500 val panel (29) | **baseline: type_acc 0.759 · coord_mae 239 · think 0.99** | runs/53bxw0e5 |
+| 226788 pilot0 | 08-13 | v1 full 2-GPU | v1 filters, 1004 | ✗ Slurm scattered GPUs across nodes (fix: `--nodes=1`) | — |
+| 226802 pilot0b | 08-13 | v1s full 2-GPU | v1 filters | cancelled: superseded by 1-GPU arms | — |
+| 226860 pilotL / 226862 pilotS | 08-13 | v1L / v1s, 1-GPU | v1 filters, live dirs | ✗ **killed by in-place data reship at ~26 min** — origin of the isolation rule | — |
+| 226915 pilot1 | 08-13 | v1 full 2-GPU (chain) | v2 но live dirs | cancelled: redundant + pre-isolation | — |
+| **226918 pilotS** | 08-13 | **v1s full 1-GPU, lr 1e-5, offload** | **v2 snapshots: 916+151 (56 traj)** | RUNNING | [runs/mk2kibr5](https://wandb.ai/yanjiayuan/cua-sft/runs/mk2kibr5) · ckpts `out/pilotS/v*/checkpoint-{40,80,115}` |
+| **226920 pilotL** | 08-13 | **v1L LoRA r32, lr 1e-4** | same snapshots | RUNNING | [runs/0f02foqj](https://wandb.ai/yanjiayuan/cua-sft/runs/0f02foqj) · adapters `out/pilotL/v*/checkpoint-*` |
+| 226919 / 226921 evals | 08-13 | fixed two-panel exam | v2 snapshot panels | dependency-armed | pilotS-eval-* / pilotL-eval-* |
+
+Ledger row contract: job id, recipe version, data version (filter version +
+sample counts + snapshot name), outcome (incl. failures and WHY), wandb link,
+checkpoint path.
