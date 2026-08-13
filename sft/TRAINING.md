@@ -109,6 +109,24 @@ Runs then appear under project `cua-sft`, named `smoke-<jobid>` /
 
 Full-run entrypoint: `sbatch train.sbatch /gpfs/scrubbed/jy050706/sft/data/<full-set>`.
 
+## Zero-shot baseline (eval-base, job 226724)
+
+The untouched Qwen3.5-4B on the 29-sample v500 val panel:
+**action_type_acc 0.759 · coord_mae 239 (0–999 space, ~a quarter of the
+screen) · think_len_ratio 0.99**. Reading: the base model already knows WHAT
+to do; it does not know WHERE — grounding is the gap SFT must close. Run:
+wandb `eval-base-qwen3.5-4b` (53bxw0e5).
+
+## Pilot-0 = debug dry-run (job 226788 + dependent eval 226789)
+
+Same config as pilot-1, fired immediately on the material available at 07:05
+(v11-legacy 706 + v11-500-partial 298 ≈ 1000 samples, 47 traj) against a
+hard-linked snapshot `v11-500-partial-debug` — isolation from pilot-1's
+08:45 rebuild, which rm-rf's the live partial dir while this run would still
+be lazily reading images from it. Purpose: debug the first real outing of
+multi-dataset + `--val_dataset` + `--enable_channel_loss` two hours before
+the run that counts. Its dependent eval doubles as an early Δ reading.
+
 ## Pilot-1 (2026-08-13, scheduled 08:45 PT)
 
 Material: `v11-legacy` (39 traj → 706 train + 127 val) + `v11-500-partial`
@@ -126,3 +144,12 @@ takes both val panels (29-sample v500 panel + 40-sample legacy panel) and
 logs `pilot1-eval-*` runs next to the `eval-base-qwen3.5-4b` zero-shot
 baseline. Expected wall clock: rebuild 08:45 → train done ~11:00 → eval done
 ~11:45 PT, all in wandb project `cua-sft`.
+
+Curation calibration vs OpenWebRL §4.2 (read 2026-08-13): they teacher-roll
+Qwen3-VL-235B×4 per task, judge with GPT-4.1, then keep only the SHORTEST
+success per task group, capped per website → 412 trajectories for a 4B
+student. Ours differs by design: programmatic judging, within-trajectory
+cleaning instead of between-trajectory selection, diversity engineered at
+generation time. Borrow list when we do multi-rollouts: keep-shortest-pass
+curation switch; stronger teacher for failed tasks; few epochs (their
+"avoid excessive imitation" warning).
