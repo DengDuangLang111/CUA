@@ -1,6 +1,6 @@
 """Coverage audit: does the grader check what the instruction promises?
 
-    python -m ostg.audit out/runs/<set>/specs.jsonl [...] --out audit.jsonl \
+    python -m ostg.taskgen.audit out/runs/<set>/specs.jsonl [...] --out audit.jsonl \
         [--model claude-opus-4-6] [--limit N]
 
 One API call per spec. The auditor sees the instruction and the grader
@@ -19,7 +19,7 @@ import json
 import sys
 from pathlib import Path
 
-from ostg.gen import call_and_extract, load_env
+from ostg.llm import call_and_extract, load_env
 
 AUDIT_TOOL = {
     "name": "audit",

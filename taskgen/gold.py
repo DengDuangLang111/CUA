@@ -1,7 +1,7 @@
 """Write a gold script per spec: shell that turns the post-setup VM into the
 completed state, so control --gold can assert the grader awards 1.0.
 
-    python -m ostg.gold out/runs/<set>/specs.jsonl [...] --out gold.jsonl
+    python -m ostg.taskgen.gold out/runs/<set>/specs.jsonl [...] --out gold.jsonl
 
 Blind spot, by construction: the script comes from the same model family that
 wrote the task, so a gold whose world-beliefs are wrong (a URL assumed dead)
@@ -13,7 +13,7 @@ import os
 import sys
 from pathlib import Path
 
-from ostg.gen import call_and_extract, load_env
+from ostg.llm import call_and_extract, load_env
 
 GOLD_TOOL = {
     "name": "gold",

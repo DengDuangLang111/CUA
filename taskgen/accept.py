@@ -10,7 +10,7 @@
     to transfer across grader styles (sig.py's own verdict), and OSWorld's
     tasks have no probes to sign anyway.
 
-    python -m ostg.accept <specs.jsonl> [...] --ref cua=<tasks.jsonl> --ref osworld=<examples dir>
+    python -m ostg.taskgen.accept <specs.jsonl> [...] --ref cua=<tasks.jsonl> --ref osworld=<examples dir>
 """
 import collections
 import glob

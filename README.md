@@ -41,13 +41,13 @@ The v9 axes (see EXPERIMENTS.md section 2 for the measurements):
     #    --start-batch resumes after a crash with seeds aligned.
     #    RUN FROM THE VERSIONED WORKTREE as cwd: python -m puts the working
     #    directory ahead of PYTHONPATH, and a stale ostg/ there wins.
-    python -m ostg.gen --n 5 --batches 40 --seed S --stream \
+    python -m ostg.taskgen.gen --n 5 --batches 40 --seed S --stream \
       --out out/runs/<set>/specs.jsonl \
       --avoid-corpus /mnt/d/research/cua-gym/tasks.jsonl
 
     # 2. ship: everything between generation and rollout, one command,
     #    stops at the first failing stage.
-    python -m ostg.ship out/runs/<set> [more sets ...] \
+    python -m ostg.taskgen.ship out/runs/<set> [more sets ...] \
       --ref cua-gym=/mnt/d/research/cua-gym/tasks.jsonl \
       --ref osworld=/mnt/d/research/OSWorld/evaluation_examples/examples \
       --path_to_vm /mnt/d/research/OSWorld/docker_vm_data/Ubuntu.qcow2
@@ -85,7 +85,7 @@ specs_culled.jsonl in the same run dir and re-run ship.
 Numbers match the tool's output labels. HARD gates block the ship; REVIEW
 gates print worklists. Standalone:
 
-    python -m ostg.accept out/runs/<set>/specs.jsonl [more specs.jsonl ...] \
+    python -m ostg.taskgen.accept out/runs/<set>/specs.jsonl [more specs.jsonl ...] \
       --ref cua-gym=... --ref osworld=...
 
     1  HARD    instruction jaccard, all    none >= 0.4. Real duplicates measure

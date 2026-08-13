@@ -1,13 +1,13 @@
 """Pre-rollout controls, on the real evaluation path. Needs the OSWorld venv.
 
-    python -m ostg.control --tasks out/runs/v8 --path_to_vm .../Ubuntu.qcow2
+    python -m ostg.taskgen.control --tasks out/runs/v8 --path_to_vm .../Ubuntu.qcow2
 
 Per task: boot a fresh VM, run the setup by hand and check its exit code
 (OSWorld never does), then env.evaluate() on the untouched desktop -- an idle
 agent must score 0. Catches a broken setup, a probe that crashes, and a probe
 that passes without work, each before any rollout minutes are spent.
 
-With --gold gold.jsonl (from ostg.gold) the check inverts: after setup the
+With --gold gold.jsonl (from ostg.taskgen.gold) the check inverts: after setup the
 gold script runs and the grader must award 1.0 -- catching probes that can
 never pass (stale-store reads, impossible constants). It cannot catch a gold
 whose world-beliefs are wrong; audit.py owns that direction.

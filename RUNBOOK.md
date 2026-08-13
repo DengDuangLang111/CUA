@@ -46,7 +46,7 @@ cd /mnt/d/research/ostg-v10         # cwd MUST be the current versioned
                                     # silently wins
 P=$OW/.venv/bin/python
 for i in 0 1; do
-  setsid nohup $P -m ostg.gen --n 5 --batches 13 --seed <S> --shard $i/2 --stream     --model claude-opus-5 --env $TG/.env     --out $TG/out/runs/<set>-s$i/specs.jsonl     --avoid-corpus /mnt/d/research/cua-gym/tasks.jsonl     > $TG/logs/<set>-s$i.log 2>&1 &
+  setsid nohup $P -m ostg.taskgen.gen --n 5 --batches 13 --seed <S> --shard $i/2 --stream     --model claude-opus-5 --env $TG/.env     --out $TG/out/runs/<set>-s$i/specs.jsonl     --avoid-corpus /mnt/d/research/cua-gym/tasks.jsonl     > $TG/logs/<set>-s$i.log 2>&1 &
 done
 ```
 
@@ -62,7 +62,7 @@ closing axis summary.
 ## 2 Ship (accept gates)
 
 ```bash
-PYTHONPATH=. $P -m ostg.ship out/runs/<set>-s0 out/runs/<set>-s1 \
+PYTHONPATH=. $P -m ostg.taskgen.ship out/runs/<set>-s0 out/runs/<set>-s1 \
   --ref cua-gym=/mnt/d/research/cua-gym/tasks.jsonl \
   --ref osworld-361=$OW/evaluation_examples/examples
 ```
@@ -139,7 +139,7 @@ their own; two processes appending one jsonl would interleave). **One task set
 sharding needs a single ordered manifest, so assembly is a standard step:
 
 ```bash
-PYTHONPATH=. $P -m ostg.merge out/runs/<set>-s0 out/runs/<set>-s1 --out out/runs/<set>-all
+PYTHONPATH=. $P -m ostg.taskgen.merge out/runs/<set>-s0 out/runs/<set>-s1 --out out/runs/<set>-all
 ```
 
 Exits loudly on id collisions; sources are untouched. Re-merge after any cull.
@@ -154,7 +154,7 @@ each:
 ```bash
 L=69
 for i in 0 1 2; do
-  setsid nohup env PYTHONPATH=.:$OW $P -m ostg.control \
+  setsid nohup env PYTHONPATH=.:$OW $P -m ostg.taskgen.control \
     --tasks out/runs/<set>-all --path_to_vm $OW/docker_vm_data/Ubuntu.qcow2 \
     --start $((i*L)) --limit $L --report out/runs/<set>-all/control_report_$i.jsonl \
     > logs/control-<set>-$i.log 2>&1 &
@@ -195,15 +195,15 @@ across corpora so rates stay comparable (judge severities differ measurably).
 
 ```bash
 # 1) LLM coverage audit (API only, no VM, report-only)
-PYTHONPATH=. $P -m ostg.audit out/runs/<set>-s0/specs.jsonl [...] \
+PYTHONPATH=. $P -m ostg.taskgen.audit out/runs/<set>-s0/specs.jsonl [...] \
   --out out/runs/audit-<set>.jsonl --model claude-sonnet-4-6 --stream
 
 # 2) gold scripts (API only; the answer key must be computed accurately)
-PYTHONPATH=. $P -m ostg.gold out/runs/<set>-s0/specs.jsonl [...] \
+PYTHONPATH=. $P -m ostg.taskgen.gold out/runs/<set>-s0/specs.jsonl [...] \
   --out out/runs/gold-<set>.jsonl --model claude-opus-5 --stream
 
 # 3) gold injection (VM; control's mirror mode: must score 1.0 after injection)
-PYTHONPATH=.:$OW $P -m ostg.control --tasks out/runs/<set>-all \
+PYTHONPATH=.:$OW $P -m ostg.taskgen.control --tasks out/runs/<set>-all \
   --path_to_vm $OW/docker_vm_data/Ubuntu.qcow2 --gold out/runs/gold-<set>.jsonl
 ```
 

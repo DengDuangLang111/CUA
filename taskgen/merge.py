@@ -1,6 +1,6 @@
 """Merge several run dirs into one rollout set.
 
-    python -m ostg.merge out/runs/a out/runs/b --out out/runs/all
+    python -m ostg.taskgen.merge out/runs/a out/runs/b --out out/runs/all
 
 The runner takes ONE --test_config_base_dir and ONE manifest, and control's
 --start/--limit sharding needs one ordered manifest -- but sharded generation

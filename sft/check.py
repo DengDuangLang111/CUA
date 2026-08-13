@@ -2,7 +2,7 @@
 what earns top marks is deliberately undecided, so the judge reports flaws
 and strengths and a provisional rating -- thresholds come later, from data.
 
-    python -m ostg.sft_check RESULT_DIR --tasks out/runs/<set> --out sft_review.jsonl \
+    python -m ostg.sft.check RESULT_DIR --tasks out/runs/<set> --out sft_review.jsonl \
         [--reference OTHER_RESULT_DIR] [--model claude-opus-4-6] [--limit N]
 
 Only score==1.0 trajectories are reviewed (the probe already owns correctness;
@@ -18,7 +18,7 @@ import os
 import sys
 from pathlib import Path
 
-from ostg.gen import call_and_extract, load_env
+from ostg.llm import call_and_extract, load_env
 
 REVIEW_TOOL = {
     "name": "review",

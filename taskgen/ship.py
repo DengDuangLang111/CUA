@@ -1,7 +1,7 @@
 """One command from finished specs to a shippable set. Orchestration only --
 every check lives in the module that owns it.
 
-    python -m ostg.ship out/runs/v8big-s0 out/runs/v8big-s1 \
+    python -m ostg.taskgen.ship out/runs/v8big-s0 out/runs/v8big-s1 \
         --ref cua-gym=/mnt/d/research/cua-gym/tasks.jsonl \
         --ref osworld=/mnt/d/research/OSWorld/evaluation_examples/examples \
         [--path_to_vm .../Ubuntu.qcow2]
@@ -9,8 +9,8 @@ every check lives in the module that owns it.
     1 re-emit   examples/ + manifest.json rebuilt from specs.jsonl with the
                 CURRENT emitter and gate, so emit fixes (flush postconfig) and
                 gate tightenings (setup compile) reach sets generated earlier
-    2 accept    the six gates (ostg.accept); any hard failure stops here
-    3 control   only with --path_to_vm: the VM negative checks (ostg.control)
+    2 accept    the six gates (ostg.taskgen.accept); any hard failure stops here
+    3 control   only with --path_to_vm: the VM negative checks (ostg.taskgen.control)
 """
 import collections
 import json
@@ -18,8 +18,8 @@ import shutil
 import sys
 from pathlib import Path
 
-from ostg import accept, control, prebuild, scan
-from ostg.gen import gate, task_json
+from ostg.taskgen import accept, control, prebuild, scan
+from ostg.taskgen.gen import gate, task_json
 
 
 def reemit(setdir):

@@ -26,7 +26,7 @@ Two rules shape the whole thing:
 
 ## 1 gen — draw a coordinate, ask for a task
 
-`ostg.gen` draws from the taxonomy product **intent(5) × domain(13) ×
+`ostg.taskgen.gen` draws from the taxonomy product **intent(5) × domain(13) ×
 difficulty(5) × ambiguity(4)** = 1300 cells, and asks the generator model
 (Opus 5) for one task per cell: an instruction, a setup script, a probe.
 
@@ -72,7 +72,7 @@ file. `wmctrl` and `xprop` report the window mapped and focused; the agent's
 screenshot shows a bare desktop. The agent then burns 50 steps trying to
 summon a window that, to it, does not exist.
 
-`ostg.prebuild` runs each soffice-carrying setup once in a throwaway
+`ostg.taskgen.prebuild` runs each soffice-carrying setup once in a throwaway
 container with a real LibreOffice, snapshots the files it produced, and
 rewrites the setup to materialize them via `base64 -d`. The starting state is
 byte-identical; only the route changes, from "convert at eval time" to
@@ -188,11 +188,11 @@ requeued victims in one stroke.
 
 ## 5 optional positive checks
 
-- **gold injection** (`ostg.gold` + `control --gold`): inject a known-good
+- **gold injection** (`ostg.taskgen.gold` + `control --gold`): inject a known-good
   end state and require 1.0, proving the grader *can* pass. **Redundant when
   a rollout follows immediately** — the rollout is a stronger positive test.
   Worth running only when shipping a corpus without rolling it.
-- **LLM audit** (`ostg.audit`): a third-party model reads instruction +
+- **LLM audit** (`ostg.taskgen.audit`): a third-party model reads instruction +
   grader and reports coverage gaps and **world assumptions** (beliefs about
   the live web or an app's defaults baked into grader constants). This is the
   only layer that covers wrong-world-belief defects in general; `scan` covers

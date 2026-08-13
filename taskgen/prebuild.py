@@ -15,7 +15,7 @@ MATERIALIZE that tree via base64 -- mkdir + `base64 -d`, no soffice, no logic.
 The task's starting state is byte-identical; only the way it is reached
 changes, from "convert at eval time" to "decode a prebuilt blob".
 
-    python -m ostg.prebuild out/runs/set-s0/specs.jsonl [more...]
+    python -m ostg.taskgen.prebuild out/runs/set-s0/specs.jsonl [more...]
 
 Idempotent: specs whose setup no longer mentions soffice are skipped.
 """
