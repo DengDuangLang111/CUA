@@ -265,6 +265,10 @@ Smoke ladder rounds (226592-226656) are tabulated in their own section above.
 | **226920 pilotL** | 08-13 | **v1L LoRA r32, lr 1e-4** | same snapshots | RUNNING | [runs/0f02foqj](https://wandb.ai/yanjiayuan/cua-sft/runs/0f02foqj) · adapters `out/pilotL/v*/checkpoint-*` |
 | 226919 / 226921 evals | 08-13 | fixed two-panel exam | v2 snapshot panels | dependency-armed | pilotS-eval-* / pilotL-eval-* |
 
+| 226922 pilotS | 08-13 | v1s + explicit accum 8 | v2 snapshots | RUNNING — replaces 226918 (deepspeed silently set eff. batch 16, violating approved 8) | run pilotS-226922 |
+| 226927 eval-base2 | 08-13 | zero-shot exam, v2 snapshot panels | 26+40 samples | RUNNING — **the old baseline (226724) took a v1-era panel; deltas must compare same-exam only**, so the base model retakes the exact panels the pilot evals use | eval-base2-* |
+
 Ledger row contract: job id, recipe version, data version (filter version +
 sample counts + snapshot name), outcome (incl. failures and WHY), wandb link,
-checkpoint path.
+checkpoint path. Corollary learned today: an eval baseline is only valid for
+deltas if it took the SAME exam — re-baseline whenever the panel changes.
