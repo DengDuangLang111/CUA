@@ -356,6 +356,18 @@ exam (same-exam rule). Old pilot2 exams: acc/MAE columns remain valid
 | **227303 pilotS3** | 08-13 | **v2 full 1-GPU (v1s + preserve_thinking)** | frozen pilot2 snapshots verbatim | SUBMITTED (on g001 within a minute) | run pilotS3-227303 · `out/pilotS3/` |
 | 227304 evalpilotS3 | 08-13 | fixed two-panel exam | pilot2 snapshot panels | armed, afterok:227303 | pilotS3-eval-* |
 | 227305 eval-base3 | 08-13 | baseline retake, fixed exam | pilot2 snapshot panels | ✓ v500: acc 0.731 · MAE 371.6 · think 1.02 (n=26) / legacy: 0.775 · 123.0 · 1.00 (n=40). acc identical to the broken-parser run (cross-check ✓); think now measures real first-round reasoning; **MAE 380.3→371.6 across two identical zero-shot runs = the ±9 run-to-run noise floor** | base3-eval-* |
+| — pilotS3 train outcome | 08-13 | v2 | frozen pilot2 snapshots | ✓ EXIT clean, 115 steps, ~44s/step. eval_loss 0.294/0.290/0.279/0.273 @ 20/40/60/80 — monotone, vs v1s flat 0.528→0.513. best = checkpoint-115 | `out/pilotS3/v0-20260813-125631/` |
+| **227714 serve-35s** | 08-13 | vLLM serve pilotS3 ckpt-115, ckpt's own template, 1 GPU 8h | — | QUEUED (job name eval35; tunnel WSL:18002) | `qwen-serve/serve-35s.sbatch` |
+| **tier-3 valpanel driver** | 08-13 | student rollout: 9 held-out val tasks × 3 attempts, 3 envs, **ms50** (user), temp 0.6, WAIT-break 10 | merged exam dir `OSWorld/eval_valpanel_tasks` (2 tasks from v11-500-final + 7 from **v11-all** — the corpus the legacy teacher run actually read; note: discharge-summary has 3 divergent versions across run dirs, we use v11-all's = the version the teacher's pass was judged under) | RUNNING (444 rollout paused for it — teacher serve had died at its 12h wall anyway, replacement 227448 queued; driver auto-restores the 444 runner @3 envs once :18001 answers) | `osworld-verified-control/valpanel_driver.sh` + logs/valpanel_driver.log |
+
+Teacher-serve template note (found while cloning the serve script): the teacher
+is served with `--chat-template chat_template_think.jinja`, which differs from
+stock ONLY in the generation prompt: `<|im_start|>assistant\n<think>\nOkay, `
+— thinking force-opened and seeded with "Okay, ". History-think keeping is
+byte-identical to stock, so the forensics conclusions stand. Corollary: the
+seeded "Okay, " is prompt-side, which is why no recorded teacher think starts
+with it — and the student (trained without it) is correctly served WITHOUT
+this override, on the checkpoint's own template.
 
 ## The action exam — protocol and how to read it (2026-08-13)
 
