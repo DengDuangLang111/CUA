@@ -127,34 +127,43 @@ const tbl = (heads,rows)=>`<div class="tablewrap"><table><tr>${heads.map(h=>`<th
 
 const VIEWS = [
 {id:"all", group:"Results", title:"All Results", rate:"", design:overviewDesign, traj:null},
-{id:"v11-500", group:"Current", title:"v11-500 Corpus", rate:"—",
- head:{t:"v11-500 — the same pipeline, 450 more tasks", pills:[P.good("control running")],
-   lede:"Same v11 pipeline, scaled: 472 generated, 450 shipped after prebuild, sanitising and similarity culls. Not a new design — a bigger draw from the same 1300-cell taxonomy, with every v11 fix already in force. VM controls are running now; the rollout follows."},
- design:()=>{ const s = window.LIVE && window.LIVE.v11_500; return `
-  <div class="seclabel">Rollout${s?` · as of ${window.LIVE.updated}`:""}</div>
-  <div class="cards">${(s && s.scored ?
-      [[Math.round(100*s.passed/s.scored)+"%", "pass rate so far"],
-       [s.scored+"/"+s.corpus, "scored"],
-       [s.passed, "solved"],
-       ...Object.entries(s.domains||{}).sort((a,b)=>b[1][1]-a[1][1]).slice(0,4).map(([d,v])=>[v[0]+"/"+v[1], d])]
-      : [["—","rollout not started"],[s?s.corpus:"444","tasks ready"]]).map(card).join("")}</div>
-  <div class="seclabel">Verification</div>
-  <div class="cards">${(s?[[s.corpus,"tasks shipped"],[s.control_checked+"/"+s.corpus,"controls checked"],[s.control_bad,"failed control"]]
-      :[["444","tasks shipped"],["—","controls checked"],["—","failed control"]]).map(card).join("")}</div>
-  <div class="seclabel">How it was built</div>
-  ${tbl([["step"],["outcome"]],[
-   "<td><b>generation</b></td><td>4 shards × 28 batches, seed 20260810, quota ledger seeded from v11 so no cell repeats → <b>472 kept</b></td>",
-   "<td><b>prebuild</b></td><td>160 setups converted office files inside the VM — all rewritten to base64 fixtures built host-side, which is what makes LibreOffice windows paintable</td>",
-   "<td><b>sanitise</b></td><td>5 specs had the prompt's own <code>&lt;/setup&gt;</code> tag glued into the setup — a shell syntax error that builds no starting state and looks exactly like a weak agent. One carried no soffice, so no other check could have seen it</td>",
-   "<td><b>similarity culls</b></td><td>17 removed over two iterative rounds; 1 removed for a setup that could not build its own fixture</td>",
-   "<td><b>grader-defect repair</b></td><td>2 instructions rewritten (probe pinned a filename the agent was never told), 1 task blocked (fabricated media in a media-player task)</td>"])}
-  <div class="seclabel">Corpus profile</div>
-  ${tbl([["axis"],["distribution"]],[
-   "<td><b>coverage</b></td><td><b>450 tasks in 450 distinct coordinate cells</b> — no two share (intent × domain × difficulty × ambiguity)</td>",
-   "<td><b>similarity</b></td><td>internal jaccard 0.38 · cosine 0.49 · vs CUA-Gym 0.47 · vs official-361 0.46 — every gate green</td>",
-   "<td><b>shape</b></td><td>median 32 words · 32% ≤25 words · 8% carry an absolute path (official: 5%)</td>",
-   "<td><b>structure</b></td><td>63% cross-application · 68% warm start · 151 tasks ship prebuilt fixtures</td>",
-   "<td><b>grading</b></td><td>probe 371 · table 61 · browser 12</td>"])}`},
+{id:"v11-500", group:"Current", title:"v11-500 Rollout", rate:"live",
+ head:{t:"v11-500 Rollout", pills:[P.good("live"),P.dim("ms50 · think, no preserve")],
+   lede:"The same v11 pipeline, scaled: 444 tasks drawn from the same 1300-cell taxonomy with every v11 fix already in force. Numbers below refresh from the lab machine every few minutes."},
+ design:()=>{ const s = window.LIVE && window.LIVE.v11_500; const r = s && s.scored; return `
+  <div class="seclabel">Results so far${s?` · as of ${window.LIVE.updated}`:""}</div>
+  <div class="cards">${(r
+     ? [[Math.round(100*s.passed/s.scored)+"%", "pass ("+s.passed+"/"+s.scored+" scored, of "+s.corpus+")"],
+        ...Object.entries(s.domains||{}).sort((a,b)=>b[1][1]-a[1][1]).map(([d,v])=>[v[0]+"/"+v[1], d])]
+     : [["—","rollout starting"],[s?s.corpus:"444","tasks ready"]]).map(card).join("")}</div>
+  <div class="seclabel">Conditions</div>
+  <dl class="conds">${conds({corpus:"v11-500 · 444 tasks", generator:"claude-opus-5", "max steps":"50",
+      thinking:"on · not preserved", "temp / top-p":"0.6 / 0.95", sleep:"1 s", envs:"3 docker VMs",
+      screen:"1920×1080", "result dir":"v11-500-ms50-think-nopreserve"})}</dl>
+  <div class="seclabel">How the corpus is designed</div>
+  ${tbl([["axis"],["design"]],[
+   "<td><b>coordinate draw</b></td><td>intent (5) × domain (13) × difficulty (5) × ambiguity (4); <b>444 tasks in 444 distinct cells</b>, quota charged on keep</td>",
+   "<td><b>difficulty</b></td><td>monotone ladder, d3+ crosses an application boundary → 60% cross-app (single 177 · two 206 · three 61)</td>",
+   "<td><b>ambiguity</b></td><td>43 explicit · 130 functional · 137 deictic · 134 outcome-only</td>",
+   "<td><b>warm start</b></td><td>68% open their workspace in config, near the official family's rate</td>",
+   "<td><b>voice</b></td><td>contextful 186 · terse 125 · polite 101 · sloppy 32</td>",
+   "<td><b>R + P</b></td><td>fixable gate failures get one ~200-token instruction rewrite then re-gate (setup/probe untouched)</td>"])}
+  <div class="seclabel">Pre-run verification — what each layer caught</div>
+  ${tbl([["layer"],["scope"],["caught / removed"]],[
+   "<td><b>0 · prebuild</b></td><td>160 soffice setups</td><td>all rewritten to host-built base64 fixtures — the compositor bug that cost v11 its calc domain cannot occur here</td>",
+   "<td><b>1 · sanitise + gates</b></td><td>472 specs</td><td>5 leaked <code>&lt;/setup&gt;</code> tags (a shell syntax error that builds nothing), 2 browser free-passes, 1 unbuildable fixture</td>",
+   "<td><b>2 · similarity</b></td><td>whole corpus</td><td>17 near-duplicates over two iterative rounds</td>",
+   "<td><b>3 · defect scan</b></td><td>7 classes, severity-aware</td><td>2 instructions repaired (probe pinned a name the agent was never told), 1 media fixture blocked</td>",
+   "<td><b>4 · VM controls</b></td><td>444 tasks, fresh VM each</td><td><b>0 failures</b> — every task builds its start state, shows its workspace, and scores 0 when idle</td>"])}
+  <div class="seclabel">Similarity &amp; contamination</div>
+  ${tbl([["test"],["worst",'class="num"'],["gate",'class="num"']],[
+   `<td>internal jaccard</td><td class="num">0.38</td><td class="num">&lt; 0.40</td>`,
+   `<td>internal tf-idf cosine</td><td class="num">0.49</td><td class="num">&lt; 0.50</td>`,
+   `<td>vs CUA-Gym (10,909 refs)</td><td class="num">0.47</td><td class="num">&lt; 0.50</td>`,
+   `<td>vs official OSWorld-361</td><td class="num">0.46</td><td class="num">&lt; 0.50</td>`,
+   `<td>quota drift</td><td class="num">2%</td><td class="num">≤ 2%</td>`])}
+  <div class="seclabel">Domain mix</div>
+  <p class="note" style="margin-top:0">vs_code 112 · calc 70 · os 63 · impress 55 · chrome 47 · writer 35 · thunderbird 29 · gimp 23 · vlc 10 &nbsp;·&nbsp; grading: probe 371 · table 61 · browser 12</p>`},
  traj:{url:"traj/v11-500/index.html", n:"every scored task, refreshed with the run",
        note:"Step player per task: the model's verbatim thinking, tool calls, executed pyautogui and the VM screenshot at each step."}},
 {id:"v11", group:"Current", title:"v11 Rollout", rate:"39%",
