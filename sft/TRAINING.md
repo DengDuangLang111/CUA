@@ -362,6 +362,9 @@ exam (same-exam rule). Old pilot2 exams: acc/MAE columns remain valid
 
 | 227304 evalpilotS3 | 08-13 | fixed two-panel exam on ckpt-115 | pilot2 snapshot panels | ✓ v500: acc 0.577 · MAE 311.3 · think 0.918 (n=26) / legacy: **acc 0.800** · MAE 130.3 · think 1.00 (n=40). See reading below | pilotS3-eval-* |
 
+| **227829 pilotS3e23** | 08-13 | continue-train from pilotS3 ckpt-115: **+2 epochs** (cum 2,3), fresh warmup+cosine over the new 230 steps (warm-restart style — NOT one 3-epoch schedule), RECIPE v2 otherwise byte-identical | same frozen pilot2 snapshots | QUEUED (user-ordered) | `out/pilotS3e23/` · ckpts at epoch bounds 115/230 |
+| 227830 eval-pS3e23 | 08-13 | fixed exam on BOTH epoch-boundary ckpts × both panels → epoch-response curve (cum-e2, cum-e3 vs pilotS3's e1) | pilot2 snapshot panels | armed, afterok:227829 | pilotS3e2-eval-* / pilotS3e3-eval-* |
+
 ### pilotS3 exam reading (per-sample forensics, 08-13 evening)
 
 - **Legacy panel: clean.** Best acc of any model (0.800 vs base 0.775), MAE
