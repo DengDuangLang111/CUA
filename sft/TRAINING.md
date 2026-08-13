@@ -108,3 +108,21 @@ Runs then appear under project `cua-sft`, named `smoke-<jobid>` /
   into `WANDB_NOTES`.
 
 Full-run entrypoint: `sbatch train.sbatch /gpfs/scrubbed/jy050706/sft/data/<full-set>`.
+
+## Pilot-1 (2026-08-13, scheduled 08:45 PT)
+
+Material: `v11-legacy` (39 traj → 706 train + 127 val) + `v11-500-partial`
+(rebuilt at fire time from whatever the live rollout has passed — ~10 traj
+expected). Scale check: OpenWebRL-4B initialized from **0.4K trajectories**
+before RL (arXiv 2606.02031), so ~50 trajectories is a legitimate pilot, an
+order below their init, two below CUA-Gym's 3,578-trajectory warm-up.
+The pilot's deliverable is the evidence chain, not the best model.
+
+Automation: `pilot_chain.sh` (WSL) sleeps 2 h to let the rollout accumulate,
+rebuilds + ships the partial set, submits `pilot.sbatch` (1 epoch, ~70 steps,
+eval every 20, checkpoints every 40), and arms `evalpilot.sbatch` as a Slurm
+`--dependency=afterok` job: when training succeeds, the newest checkpoint
+takes both val panels (29-sample v500 panel + 40-sample legacy panel) and
+logs `pilot1-eval-*` runs next to the `eval-base-qwen3.5-4b` zero-shot
+baseline. Expected wall clock: rebuild 08:45 → train done ~11:00 → eval done
+~11:45 PT, all in wandb project `cua-sft`.
