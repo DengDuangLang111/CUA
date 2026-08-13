@@ -224,3 +224,28 @@ effective batch 8, 1 epoch (~130 steps), eval every 20, checkpoints every
 40 keep 3, wandb + channel loss, dependent action-metric evals on both
 fixed panels. Sources backing each value: swift Qwen3.5 best-practices,
 Unsloth Qwen3.5 guide, OpenWebRL released SFT config.
+
+## Data persistence on Tillicum (standing policy)
+
+Datasets LIVE on `/gpfs/scrubbed/jy050706/sft/data/` — the shared parallel
+FS every compute node mounts, so training reads them in place; nothing is
+ever re-shipped for a new run. Layout and lifecycle:
+
+- `v11-legacy/` — **frozen forever** (its campaign is closed; 39 traj,
+  609+125 samples). Never rebuilt.
+- `v11-500-partial/` — refreshed as the rollout produces passes, via
+  `refresh_partial.sh` (WSL): rebuild -> ONE tar -> rsync single stream with
+  visible progress -> md5 + file-count verify -> `.staging` -> atomic swap.
+  Replaced by `v11-500-full/` when the 444-task rollout completes.
+- `*-snap-<run>/` — per-run hardlink snapshots (`cp -al`, instant, ~zero
+  disk). Every training job reads ONLY its snapshot; live dirs are free to
+  refresh at any time. Snapshots are deleted only after their run's jobs
+  finish.
+
+## Pilot-2 launch record (2026-08-13 ~09:00 PT, user-approved)
+
+pilotS=226918 (full, RECIPE v1s) and pilotL=226920 (LoRA, RECIPE v1L), both
+on snapshots of 916 train + 151 val (56 trajectories), effective batch 8,
+1 epoch = 115 steps, ckpt every 40 keep 3, dependent action-metric evals
+armed. The chain-submitted 2-GPU pilot1 (226915) was cancelled: redundant
+with pilotS and predates the snapshot-isolation rule.
