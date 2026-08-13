@@ -36,6 +36,10 @@ the builder, governed by the rules below.
 
 ## 3 Rendering the training context
 
+The full context anatomy — message layout, folding, wrapper strings,
+knob values — lives in [sft/CONTEXT.md](sft/CONTEXT.md); it is the
+builder's specification. The rules below are the summary.
+
 | rule | receipt |
 |---|---|
 | **Labels come from `response`, never from `action`.** The model emits relative 0–999 coordinates; `action` holds pyautogui code already scaled to 1920×1080 (`[180,257]` → `doubleClick(345,277)`). Training on `action` shifts the coordinate distribution ~2×. | cross-checked v11 rows |
