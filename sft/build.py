@@ -110,6 +110,26 @@ def main(argv=None):
 
     task_dirs = sorted(p for p in args.result_dir.glob("*/*") if p.is_dir())
     run_id = args.result_dir.name
+    # A requested split must never come back empty (a hash draw over few
+    # tasks can miss everyone): reserve the lexicographically first passing
+    # slug as guaranteed val when the draw selects none.
+    fallback_val_slug = None
+    if args.val_ratio > 0:
+        for td in task_dirs:
+            if traj.score(td) == 1.0:
+                _, o = load_task_meta(args.tasks, td.parent.name, td.name)
+                s = o.get("slug") or td.name
+                if (fallback_val_slug is None or s < fallback_val_slug) and \
+                   int(hashlib.md5(s.encode()).hexdigest(), 16) % 1000 \
+                   >= args.val_ratio * 1000:
+                    fallback_val_slug = s
+        drawn = any(
+            int(hashlib.md5((load_task_meta(args.tasks, td.parent.name, td.name)[1].get("slug")
+                             or td.name).encode()).hexdigest(), 16) % 1000
+            < args.val_ratio * 1000
+            for td in task_dirs if traj.score(td) == 1.0)
+        if drawn:
+            fallback_val_slug = None
     for td in task_dirs:
         if args.limit and rep["tasks_passed"] >= args.limit:
             break
@@ -127,8 +147,9 @@ def main(argv=None):
         # deterministic task-level split: stable across rebuilds, no
         # step-of-same-trajectory leakage between train and val
         is_val = (args.val_ratio > 0 and
-                  int(hashlib.md5(slug.encode()).hexdigest(), 16) % 1000
-                  < args.val_ratio * 1000)
+                  (slug == fallback_val_slug or
+                   int(hashlib.md5(slug.encode()).hexdigest(), 16) % 1000
+                   < args.val_ratio * 1000))
         if is_val:
             rep["val_tasks"] += 1
 
