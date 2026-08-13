@@ -424,6 +424,68 @@ consecutive identical actions ⇒ terminate, N ≥ 10 — which CLAUDE.md §3.1 
 recommends. It cannot make a task pass, but it reclaims ~44 wasted steps per
 locked task and would roughly halve attempt wall-clock.
 
+### THE HEADLINE RESULT: SFT regressed the model, 4/9 → 1/9
+
+| arm | passes | which tasks |
+|---|---|---|
+| teacher Qwen3.6-27B | **9/9** | (panel is built from its passes) |
+| **stock Qwen3.5-4B** | **4/9** | arxiv(5 steps), exam-kiosk(28), vscode-telemetry(10), store-hours(54) |
+| **SFT v2 (pilotS3)** | **1/9** | arxiv(6) |
+
+Every proxy metric said the training was healthy: eval_loss fell monotonically
+0.294→0.273 (v1 recipe was flat at ~0.52), token_acc reached 0.95+, and on the
+legacy exam panel v2 scored the best action-type accuracy of any model (0.800 vs
+base 0.775). **The rollout is the only tier that saw the damage.** Record this:
+loss and single-step exams cannot detect a policy that has stopped looking at
+its observation, because teacher forcing hands it the correct history anyway.
+
+Why the model stopped using the screenshot — measured, not guessed:
+
+1. **Only 0.61% of the training signal strictly requires the pixels.** Over 916
+   targets (mean 587 chars): `<think>` prose 59%, action names + format
+   boilerplate ~35%, coordinate tags 4.9%, and the coordinate DIGITS — the only
+   tokens that cannot be produced without looking — **0.61%**. Cross-entropy is
+   averaged over tokens, so in 115 optimizer steps the cheapest loss reduction
+   is text modeling. The model did not forget how to see; it learned that
+   seeing is worth 0.6% of the reward.
+2. **`preserve_thinking` makes the text half even more predictable** (the next
+   reasoning paragraph often continues the previous one), which is the honest
+   cost of that otherwise-correct fix.
+3. **It is NOT vision damage**: `freeze_vit: True`, `freeze_aligner: True`,
+   `freeze_parameters: ['model.visual', 'model.visual.merger']` — the vision
+   tower and merger were never updated. Only the LLM moved.
+4. **Sharpening removes the accidental escape route.** Base, with a flatter
+   output distribution, varies its clicks and stumbles out of dead ends — that
+   is how it passed exam-kiosk (difficulty 5) and vscode-telemetry. The SFT
+   model emits the same peaked answer for the same screen, so a stuck state is
+   absorbing.
+
+Where it locks, from the frames (two distinct modes):
+
+- **Never engaged**: chrome-downloads and spectra-loader repeat step 1's action
+  50×. The step-25 screenshot shows Chrome fully open, Google new-tab filling
+  the screen, cursor on the dock icon — while the response still reads "I see a
+  Chrome icon on the left sidebar, click it to open the browser". Byte-identical
+  to step 1.
+- **Engaged, then stuck on a fine-grained operation**: discharge-summary opens
+  the document correctly, then clicks (720,401) 42× trying to drag-select the
+  "Ramipril" line; exam-kiosk reaches Chrome's Autofill settings page, then
+  misses "Privacy and security" by a few pixels 18×. Base passed exam-kiosk by
+  varying its clicks.
+
+Fix directions, in the order worth trying:
+1. **Weight the coordinate span in the loss** (swift `loss_scale` accepts a
+   regex→weight config; the same mechanism `ignore_empty_think` uses). Give
+   `<parameter=coordinate>` spans 5–10× weight so grounding carries gradient
+   proportional to its importance rather than to its token count.
+2. **Do not over-sharpen**: LoRA, or a lower LR, to keep enough entropy that a
+   repeated state can be escaped.
+3. **More and more diverse data** — the text half saturates fast (token_acc
+   0.97 by epoch 2); the marginal value of new trajectories lands mostly on the
+   grounding 0.6%. Recovery behaviour is nearly absent from the corpus: `wait`
+   is 3.4% of target actions and `terminate` 3.6%, and every trajectory is a
+   teacher SUCCESS, so "you are stuck, do something else" is never demonstrated.
+
 ### The three-arm tier-3 control (2026-08-13 evening)
 
 Same 9 tasks, same settings (ms50, temp 0.6, 3 envs, own chat template per

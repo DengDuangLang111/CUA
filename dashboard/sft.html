@@ -70,7 +70,7 @@
       data for Qwen3.5-4B. Rollout status lives on the <a href="index.html">main dashboard</a>;
       this page tracks the data &rarr; train &rarr; exam loop. Hand-updated; stamp below.</p>
     </div>
-    <span class="pill dim">updated 2026-08-13 16:15 PT</span>
+    <span class="pill dim">updated 2026-08-13 16:40 PT</span>
   </div>
 
   <div class="flow">
@@ -82,21 +82,25 @@
     <span class="n">3-tier eval <span class="pill good">tier 3 live</span></span>
   </div>
 
-  <h2>This week's headline: the evidence chain caught a real training bug on day one</h2>
+  <h2>Headline: every proxy metric improved, and the model got worse at the job</h2>
   <div class="cards">
-    <div class="card"><div class="k">eval loss, same val tasks</div>
-      <div class="v">0.528 &rarr; 0.294</div>
-      <div class="d">v1 recipe vs v2 (<code>preserve_thinking</code>), step 20. &minus;44%</div></div>
-    <div class="card"><div class="k">step-1 train loss</div>
-      <div class="v">0.834 &rarr; 0.449</div>
-      <div class="d">before any learning: the information value of history reasoning</div></div>
-    <div class="card"><div class="k">external corroboration</div>
-      <div class="v">&minus;14.6 ~ &minus;23.7</div>
-      <div class="d">points lost when OpenWebRL ablated history reasoning (their Table 4)</div></div>
-    <div class="card"><div class="k">fix size</div>
-      <div class="v">1 flag</div>
-      <div class="d">everything else in the recipe byte-identical</div></div>
+    <div class="card"><div class="k">real tasks solved</div>
+      <div class="v">4/9 &rarr; 1/9</div>
+      <div class="d">stock Qwen3.5-4B vs the same model after SFT. Teacher: 9/9</div></div>
+    <div class="card"><div class="k">eval loss said</div>
+      <div class="v">0.528 &rarr; 0.273</div>
+      <div class="d">monotone improvement on held-out tasks, the whole run</div></div>
+    <div class="card"><div class="k">action exam said</div>
+      <div class="v">0.775 &rarr; 0.800</div>
+      <div class="d">best action-type accuracy of any model, legacy panel</div></div>
+    <div class="card"><div class="k">why</div>
+      <div class="v">0.61%</div>
+      <div class="d">share of training tokens that strictly require looking at the screen</div></div>
   </div>
+  <p class="note">This is the week's real finding, and it is a methods finding: <b>loss curves and
+  teacher-forced exams cannot detect a policy that has stopped reading its observation</b>, because
+  teacher forcing hands it a correct history regardless. Only driving the actual VM exposed it.
+  Every number above is from the same checkpoint on the same held-out tasks.</p>
 
   <h2>What happened, in five steps</h2>
   <ol class="story">
@@ -148,17 +152,21 @@
   the task's own checker. First result for the v2 model, and the failure mode is one specific
   pathology rather than diffuse incompetence.</p>
   <div class="tblwrap"><table>
-    <tr><th>task</th><th>score</th><th>steps</th><th>distinct actions</th><th>max repeat</th><th>teacher steps</th></tr>
-    <tr><td>arxiv-listing</td><td class="good">1.0</td><td>6</td><td>5</td><td>2</td><td>4</td></tr>
-    <tr><td>chrome-downloads</td><td class="bad">0</td><td>50</td><td class="bad">1</td><td>50</td><td>27</td></tr>
-    <tr><td>spectra-loader</td><td class="bad">0</td><td>50</td><td class="bad">1</td><td>50</td><td>14</td></tr>
-    <tr><td>vscode-telemetry</td><td class="bad">0</td><td>50</td><td>2</td><td>48</td><td>50</td></tr>
-    <tr><td>discharge-summary</td><td class="bad">0</td><td>50</td><td>7</td><td>42</td><td>24</td></tr>
-    <tr><td>exam-kiosk</td><td class="bad">0</td><td>50</td><td>10</td><td>18</td><td>34</td></tr>
-    <tr><td>gdpr-art17</td><td class="bad">0</td><td>50</td><td>4</td><td>17</td><td>8</td></tr>
-    <tr><td>depot-bookmark</td><td class="bad">0</td><td>50</td><td>6</td><td>11</td><td>33</td></tr>
-    <tr><td>store-hours</td><td class="bad">0</td><td>12</td><td>10</td><td>3</td><td>13</td></tr>
+    <tr><th>task</th><th>difficulty</th><th>stock 4B</th><th>after SFT</th><th>SFT steps</th><th>distinct actions</th><th>max repeat</th></tr>
+    <tr><td>arxiv-listing</td><td>1</td><td class="good">1.0</td><td class="good">1.0</td><td>6</td><td>5</td><td>2</td></tr>
+    <tr><td>exam-kiosk</td><td>5</td><td class="good">1.0</td><td class="bad">0</td><td>50</td><td>10</td><td>18</td></tr>
+    <tr><td>vscode-telemetry</td><td>1</td><td class="good">1.0</td><td class="bad">0</td><td>50</td><td>2</td><td>48</td></tr>
+    <tr><td>store-hours</td><td>3</td><td class="good">1.0</td><td class="bad">0</td><td>12</td><td>10</td><td>3</td></tr>
+    <tr><td>chrome-downloads</td><td>2</td><td class="bad">0</td><td class="bad">0</td><td>50</td><td class="bad">1</td><td>50</td></tr>
+    <tr><td>spectra-loader</td><td>1</td><td class="bad">0</td><td class="bad">0</td><td>50</td><td class="bad">1</td><td>50</td></tr>
+    <tr><td>discharge-summary</td><td>4</td><td class="bad">0</td><td class="bad">0</td><td>50</td><td>7</td><td>42</td></tr>
+    <tr><td>gdpr-art17</td><td>2</td><td class="bad">0</td><td class="bad">0</td><td>50</td><td>4</td><td>17</td></tr>
+    <tr><td>depot-bookmark</td><td>5</td><td class="bad">0</td><td class="bad">0</td><td>50</td><td>6</td><td>11</td></tr>
   </table></div>
+  <p class="note">The three tasks SFT lost include the hardest one on the panel (exam-kiosk,
+  difficulty 5: disable autofill, block camera, add an allowlist). The stock model passed it in 28
+  actions by varying its clicks when one missed; the SFT model reached the same settings page and
+  then clicked the same wrong spot 18 times.</p>
   <p class="note"><b>1/9 vs the teacher's 9/9 — and 7 of the 8 failures are the same defect:
   the model copies its own previous response instead of reading the current screenshot.</b>
   Receipt: on chrome-downloads the responses at steps 1, 2, 3 and 25 are byte-identical (same
@@ -172,10 +180,28 @@
   previous assistant turn, only 15 (1.7%) have a target identical to the previous step — the loop
   filters worked. Nor is it an off-by-one: the runner writes each screenshot after
   <code>env.step()</code>, so a sample's last image is exactly the screen its target action acts
-  on. Live hypotheses, each testable: too little data (916 samples, 1 epoch — a 3-epoch run is
-  training now), <code>preserve_thinking</code> making the copy source richer (testable against
-  the retained v1 checkpoint), and stock-model behavior (a base-model control on this same panel
-  is running).</p>
+  on. And it is not damaged vision: <code>freeze_vit</code>, <code>freeze_aligner</code> and
+  <code>freeze_parameters=['model.visual','model.visual.merger']</code> were all on — the vision
+  tower never moved. The eyes are fine; the policy learned that using them is worth 0.6% of the
+  reward.</p>
+
+  <h2>Why the screenshot stopped mattering — measured, not guessed</h2>
+  <div class="tblwrap"><table>
+    <tr><th>share of a training target (mean 587 chars)</th><th>portion</th><th>needs the pixels?</th></tr>
+    <tr><td><code>&lt;think&gt;</code> reasoning prose</td><td>59%</td><td>no — continues the previous turn</td></tr>
+    <tr><td>action names + tool-call boilerplate</td><td>~35%</td><td>no — format and task priors</td></tr>
+    <tr><td>coordinate tags (with XML wrapper)</td><td>4.9%</td><td>wrapper no</td></tr>
+    <tr><td><b>coordinate digits</b></td><td class="bad"><b>0.61%</b></td><td class="bad"><b>yes — only these</b></td></tr>
+  </table></div>
+  <p class="note">Cross-entropy is averaged over tokens, so across 115 optimizer steps the cheapest
+  way down is to model the 99.4% that text context already predicts. Grounding is both the hardest
+  skill and the smallest share of the reward. Two consequences follow: <code>preserve_thinking</code>
+  — correct as a train/serve alignment fix — makes the text half even more predictable, and
+  sharpening the output distribution removes the accidental escape route the stock model uses to
+  get out of dead ends. Next: weight the coordinate span in the loss (5–10&times;), keep entropy
+  (LoRA or lower LR), and add recovery behaviour to the corpus — <code>wait</code> is 3.4% of target
+  actions, <code>terminate</code> 3.6%, and every trajectory is a teacher success, so "you are
+  stuck, try something else" is never demonstrated.</p>
 
   <h2>The three-arm control — running now</h2>
   <p class="lede">1/9 alone cannot say whether SFT helped or hurt. Two more arms on the identical
@@ -183,9 +209,9 @@
   <div class="tblwrap"><table>
     <tr><th>arm</th><th>model</th><th>what it isolates</th><th>result</th></tr>
     <tr><td>teacher</td><td>Qwen3.6-27B</td><td>ceiling (these are its passing tasks)</td><td class="good">9 / 9</td></tr>
-    <tr><td>base</td><td>stock Qwen3.5-4B</td><td>does the stock 4B loop too? &rArr; is SFT the cause at all</td><td><span class="pill warn">running</span></td></tr>
-    <tr><td>v1</td><td>SFT, history thinking <b>stripped</b></td><td>did <code>preserve_thinking</code> amplify the copying?</td><td><span class="pill dim">queued behind base</span></td></tr>
-    <tr><td>v2</td><td>SFT, history thinking <b>kept</b></td><td>—</td><td>1 / 9</td></tr>
+    <tr><td>base</td><td>stock Qwen3.5-4B</td><td>does the stock 4B loop too? &rArr; is SFT the cause at all</td><td class="good">4 / 9</td></tr>
+    <tr><td>v1</td><td>SFT, history thinking <b>stripped</b></td><td>did <code>preserve_thinking</code> amplify the copying?</td><td><span class="pill warn">running</span></td></tr>
+    <tr><td>v2</td><td>SFT, history thinking <b>kept</b></td><td>—</td><td class="bad">1 / 9</td></tr>
   </table></div>
   <p class="note">Also training: a clean single 3-epoch schedule (one warmup, one cosine over 345
   steps, checkpoints at every epoch boundary) to test the "too little optimization" hypothesis.
