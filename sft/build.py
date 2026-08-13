@@ -103,7 +103,7 @@ def main(argv=None):
     rep = {k: 0 for k in ("tasks_seen", "tasks_passed", "steps_total",
                           "samples", "dropped_hallucinated_target",
                           "dropped_tail_steps", "dropped_missing_initial",
-                          "tasks_initial_from_mp4", "images_written",
+                          "tasks_initial_from_mp4", "images_written", "dropped_mid_loop",
                           "val_tasks", "val_samples", "over_length_estimate")}
     samples_f = (out / "samples.jsonl").open("w", encoding="utf-8")
     val_f = (out / "val_samples.jsonl").open("w", encoding="utf-8")
@@ -170,10 +170,12 @@ def main(argv=None):
         obs_files = [init] + [td / s.screenshot for s in steps[:-1]]
 
         keep = len(steps)
-        t = traj.tail_run(steps)
-        if t >= args.tail_run:
+        cap_hit = len(steps) >= 50
+        t = traj.low_diversity_tail(steps) if cap_hit else traj.tail_run(steps)
+        if t >= (8 if cap_hit else args.tail_run):
             keep = len(steps) - t
             rep["dropped_tail_steps"] += t
+        mid_drops = traj.identical_runs(steps[:keep])
 
         written = {}   # obs index -> relative path, copied on first reference
 
@@ -191,6 +193,9 @@ def main(argv=None):
             step = steps[k - 1]
             if step.hallucinated:
                 rep["dropped_hallucinated_target"] += 1
+                continue
+            if (k - 1) in mid_drops:
+                rep["dropped_mid_loop"] += 1
                 continue
             fold = update_folding_state(k, 0, agent.image_max, agent.fold_size)
             msgs = build_messages(

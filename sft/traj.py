@@ -108,3 +108,41 @@ def tail_run(steps):
         else:
             break
     return n
+
+
+def identical_runs(steps, min_run=8):
+    """Target-drop indices for mid-episode grinding: in any maximal run of
+    >= min_run consecutive steps with identical action lists, every step
+    after the FIRST is dropped as a training target (attempting once is
+    legitimate behavior; repeating it 54 times is not). History keeps them.
+    Calibrated 2026-08-13 on 51 passing trajectories: longest legitimate
+    identical run observed was 6 (file-drag cycles), pathological ones 15-55.
+    """
+    drops = set()
+    i = 0
+    while i < len(steps):
+        j = i
+        while j + 1 < len(steps) and steps[j + 1].actions == steps[i].actions:
+            j += 1
+        if j - i + 1 >= min_run:
+            drops.update(range(i + 1, j + 1))
+        i = j + 1
+    return drops
+
+
+def low_diversity_tail(steps, max_distinct=3, min_len=8):
+    """Length of the maximal trailing segment made of <= max_distinct
+    distinct action lists (>= min_len, else 0). Catches oscillating tails
+    (click/WAIT/click cycles) that byte-identity misses. ONLY sound for
+    cap-hitting trajectories: a normally-terminated episode ends with
+    varied, meaningful steps and must never be gated on this."""
+    seen = []
+    n = 0
+    for s in reversed(steps):
+        key = tuple(s.actions)
+        if key not in seen:
+            if len(seen) == max_distinct:
+                break
+            seen.append(key)
+        n += 1
+    return n if n >= min_len else 0
