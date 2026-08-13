@@ -46,11 +46,21 @@ def initial_png_from_mp4(task_dir, out_png):
     trajectory is unbuildable, not just step 1's. Callers must flag the
     approximation in sample meta.
     """
-    r = subprocess.run(
-        ["ffmpeg", "-y", "-loglevel", "error", "-i",
-         str(Path(task_dir) / "recording.mp4"), "-frames:v", "1", str(out_png)],
-        capture_output=True)
+    try:
+        r = subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-i",
+             str(Path(task_dir) / "recording.mp4"), "-frames:v", "1", str(out_png)],
+            capture_output=True)
+    except FileNotFoundError:
+        if not initial_png_from_mp4.warned:
+            print("[build] --initial-fallback mp4 requested but ffmpeg is not "
+                  "installed; affected trajectories are dropped instead")
+            initial_png_from_mp4.warned = True
+        return False
     return r.returncode == 0 and Path(out_png).is_file()
+
+
+initial_png_from_mp4.warned = False
 
 
 def main(argv=None):
