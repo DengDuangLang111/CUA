@@ -74,6 +74,16 @@ Design points worth keeping when this graduates from test version:
 
 First real output: 3 passed ms100 tasks → 43 samples, 14 MB images.
 
+**Dialect (decided 2026-08-14): ms-swift, student Qwen3.5-4B** (natively
+multimodal; inference stays on our harness, so relative-0–999 coordinates
+carry over). `ostg/sft/export.py` reshapes samples.jsonl into swift's
+messages+images JSONL next to the images dir; 43/43 converted, one `<image>`
+marker per path, order-aligned. Qwen3.5-4B's chat template was fetched and
+checked: it strips history `<think>` by the same last-query rule as the
+teacher's serving template and has no preserve_thinking kwarg — the student's
+default rendering equals the teacher's rollout distribution. Train with loss
+on the final round only; verify the exact ms-swift flag at install time.
+
 ## 5 Final verification before training
 
 No replay needed — the client already dumps every step's payload (text
