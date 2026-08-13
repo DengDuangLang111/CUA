@@ -197,3 +197,30 @@ python $B/eval_actions.py <CKPT> <SAMPLES_DIR> --limit N \
 ```
 against the SAME two panels every time (v500 val, legacy val), so numbers
 line up across runs and against `eval-base-qwen3.5-4b`.
+
+## Pilot-2 prep (2026-08-13, awaiting user approval to launch)
+
+**Builder v2 filters** (calibrated as-judge on all 51 passing trajectories,
+zero false positives on clean ones): mid-episode identical runs >=8 drop all
+but the first attempt; cap-hitting trajectories get a low-diversity-tail cut
+(<=3 distinct actions, >=8 steps). Result: 841 train + 133 val samples
+(legacy 609+125, partial 232+8); 413 loop-junk steps removed (~30%).
+
+**Data transfer standard** (after two failed patterns): pack ONE tar,
+`rsync --partial --inplace --info=progress2` the single file (608 MB in
+44 s), untar into `.staging/`, verify file counts, atomic `mv`, then
+`cp -al` frozen per-run snapshots. Progress must always be visible
+(`tail -f logs/...`). Never mutate a dataset dir a queued/running job
+references; jobs point only at snapshots (`*-snap-<run>`).
+
+**Shipped-data audit** (run on the snapshots, 2026-08-13): zero hallucinated
+actions left in targets; all referenced images exist at 1920x1088; zero
+duplicate (task, step) pairs; train/val task overlap zero in both sets;
+legacy's 39 initial frames from recording.mp4 flagged in meta.
+
+Params for approval: pilotS = RECIPE v1s (full, 1 GPU, zero2_offload,
+lr 1e-5) and pilotL = RECIPE v1L (LoRA r32 a64, 1 GPU, lr 1e-4), both:
+effective batch 8, 1 epoch (~130 steps), eval every 20, checkpoints every
+40 keep 3, wandb + channel loss, dependent action-metric evals on both
+fixed panels. Sources backing each value: swift Qwen3.5 best-practices,
+Unsloth Qwen3.5 guide, OpenWebRL released SFT config.
