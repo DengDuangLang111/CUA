@@ -424,6 +424,36 @@ consecutive identical actions ⇒ terminate, N ≥ 10 — which CLAUDE.md §3.1 
 recommends. It cannot make a task pass, but it reclaims ~44 wasted steps per
 locked task and would roughly halve attempt wall-clock.
 
+### The three-arm tier-3 control (2026-08-13 evening)
+
+Same 9 tasks, same settings (ms50, temp 0.6, 3 envs, own chat template per
+checkpoint), run strictly one arm at a time so they never contend for the 3 VMs:
+
+| arm | model | what it isolates | serve | result |
+|---|---|---|---|---|
+| **base** | stock Qwen3.5-4B | does the stock 4B loop the same way? ⇒ is SFT the cause at all | 228108 (debug QOS, g003) | running |
+| **v1** | pilotS ckpt-115 (`preserve_thinking` unset ⇒ history think stripped) | did preserve_thinking amplify the copying? | 228158 (normal QOS, g019) | queued behind base |
+| **v2** | pilotS3 ckpt-115 (`preserve_thinking: true`) | — | done | **1/9** |
+
+Teacher on this panel: 9/9 (these are val tasks split out of passing
+trajectories). Sequencing is enforced in `v1_driver.sh`, whose first action is
+to block on `BASE_DONE` in the base driver's log.
+
+**Operational lesson — killing a runner leaks its containers.** The base arm
+sat 10 minutes in an `EnvProcess-Restart` loop ("Checking if virtual machine is
+ready…") with zero task dirs. Cause: `pkill`-ing the previous driver skipped
+its own `stop_runner`, so 11 containers from the student arm survived and ate
+RAM down to 4 GB free — new VMs starved at boot. `docker rm -f $(docker ps -aq)`
+restored 17 GB and the arm ran normally. **Any manual `pkill` of a runner must
+be followed by `docker rm -f $(docker ps -aq)`** before the next arm starts;
+the result dir is resume-safe (`get_unfinished`), so a restart costs nothing.
+
+Also noted, cluster mechanics that cost time today: two serve jobs landed on the
+same node and both wanted `127.0.0.1:8000` — the second cannot bind. When
+several serve jobs may be in flight, either give them distinct ports or ensure
+only one is alive per node. And a nested `ssh` inside a heredoc-fed script eats
+the remaining script lines unless invoked with `-n`.
+
 ### pilotS3 exam reading (per-sample forensics, 08-13 evening)
 
 - **Legacy panel: clean.** Best acc of any model (0.800 vs base 0.775), MAE
