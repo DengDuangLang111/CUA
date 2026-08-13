@@ -398,6 +398,18 @@ Reading rules (each one learned the hard way):
   few tens as tentative.
 - Only the FIRST action of a multi-action response is compared.
 
+### Which number decides what
+
+Four numbers, strictly ordered by authority. A lower row always overrides a
+higher one when they disagree.
+
+| number | what it can decide | what it can NEVER decide |
+|---|---|---|
+| train loss | did optimization move at all; batch-level health | success of anything — it falls under pure memorization too |
+| eval_loss (held-out tasks, during training) | is the model learning transferable structure (falls) or memorizing (plateaus while train falls — v1's signature) | whether actions are usable |
+| action exam (type acc / coord MAE / think) | format health; relative progress between recipes on the same panel | task capability — it scores agreement with the teacher, and a different-but-correct action scores badly |
+| **rollout success rate** (tier 3: our tasks, then OSWorld-Verified) | **whether training worked. This is the acceptance criterion; everything above is a proxy for this row** | — |
+
 Ledger row contract: job id, recipe version, data version (filter version +
 sample counts + snapshot name), outcome (incl. failures and WHY), wandb link,
 checkpoint path. Corollary learned today: an eval baseline is only valid for
