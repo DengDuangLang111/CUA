@@ -19,6 +19,7 @@ Output: OUT_DIR/samples.jsonl  (messages end with the user turn of step k;
 """
 import argparse
 import base64
+import hashlib
 import json
 import shutil
 import subprocess
@@ -75,6 +76,13 @@ def main(argv=None):
     ap.add_argument("--initial-fallback", choices=["none", "mp4"], default="none",
                     help="mp4: approximate a missing initial_state.png from "
                          "recording frame 0 (old runs); flagged in meta")
+    ap.add_argument("--val-ratio", type=float, default=0.0,
+                    help="fraction of TASKS (not samples) held out to "
+                         "val_samples.jsonl -- split at slug level so no "
+                         "trajectory leaks its prefix into training")
+    ap.add_argument("--length-budget", type=int, default=65536,
+                    help="token estimate above which a sample is counted as "
+                         "at risk of trainer-side truncation")
     args = ap.parse_args(argv)
 
     sys.path.insert(0, str(args.osworld))
@@ -95,8 +103,10 @@ def main(argv=None):
     rep = {k: 0 for k in ("tasks_seen", "tasks_passed", "steps_total",
                           "samples", "dropped_hallucinated_target",
                           "dropped_tail_steps", "dropped_missing_initial",
-                          "tasks_initial_from_mp4", "images_written")}
+                          "tasks_initial_from_mp4", "images_written",
+                          "val_tasks", "val_samples", "over_length_estimate")}
     samples_f = (out / "samples.jsonl").open("w", encoding="utf-8")
+    val_f = (out / "val_samples.jsonl").open("w", encoding="utf-8")
 
     task_dirs = sorted(p for p in args.result_dir.glob("*/*") if p.is_dir())
     run_id = args.result_dir.name
@@ -114,6 +124,13 @@ def main(argv=None):
         domain, task_id = td.parent.name, td.name
         instruction, ost = load_task_meta(args.tasks, domain, task_id)
         slug = ost.get("slug") or task_id
+        # deterministic task-level split: stable across rebuilds, no
+        # step-of-same-trajectory leakage between train and val
+        is_val = (args.val_ratio > 0 and
+                  int(hashlib.md5(slug.encode()).hexdigest(), 16) % 1000
+                  < args.val_ratio * 1000)
+        if is_val:
+            rep["val_tasks"] += 1
 
         # obs_files[i] is what the model saw before step i+1: the initial
         # observation, then each step's LAST screenshot (SFT_DATA.md 1.2/1.3)
@@ -171,7 +188,13 @@ def main(argv=None):
                      "path": obs_path(int(p["image_url"]["url"].split(SENTINEL, 1)[1]))}
                     if p.get("type") == "image_url" else p
                     for p in m["content"]]
-            samples_f.write(json.dumps({
+            n_imgs = sum(1 for m in msgs for p in m["content"]
+                         if p.get("type") == "image")
+            n_chars = sum(len(p.get("text", "")) for m in msgs
+                          for p in m["content"]) + len(step.response)
+            if n_imgs * 2040 + n_chars / 3.5 > args.length_budget:
+                rep["over_length_estimate"] += 1
+            (val_f if is_val else samples_f).write(json.dumps({
                 "messages": msgs,
                 "response": step.response,
                 "meta": {"run": run_id, "domain": domain, "slug": slug,
@@ -183,9 +206,10 @@ def main(argv=None):
                          "initial_from": initial_from,
                          "chat_template_kwargs": {"enable_thinking": True}},
             }, ensure_ascii=False) + "\n")
-            rep["samples"] += 1
+            rep["val_samples" if is_val else "samples"] += 1
 
     samples_f.close()
+    val_f.close()
     (out / "report.json").write_text(json.dumps(rep, indent=1))
     print(json.dumps(rep, indent=1))
     return 0

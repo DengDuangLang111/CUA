@@ -32,7 +32,9 @@ def to_swift(sample):
                 text += p.get("text", "")
         msgs.append({"role": m["role"], "content": text})
     msgs.append({"role": "assistant", "content": sample["response"]})
-    return {"messages": msgs, "images": images}
+    # channel -> per-domain loss curves in wandb (swift --enable_channel_loss)
+    return {"messages": msgs, "images": images,
+            "channel": (sample.get("meta") or {}).get("domain") or "unknown"}
 
 
 DIALECTS = {"swift": to_swift}
@@ -45,15 +47,19 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     conv = DIALECTS[args.dialect]
-    src = args.samples_dir / "samples.jsonl"
-    dst = args.samples_dir / ("train_%s.jsonl" % args.dialect)
-    n = 0
-    with src.open(encoding="utf-8") as fin, dst.open("w", encoding="utf-8") as fout:
-        for line in fin:
-            if line.strip():
-                fout.write(json.dumps(conv(json.loads(line)), ensure_ascii=False) + "\n")
-                n += 1
-    print("%d sample(s) -> %s" % (n, dst))
+    for src_name, dst_name in (("samples.jsonl", "train_%s.jsonl"),
+                               ("val_samples.jsonl", "val_%s.jsonl")):
+        src = args.samples_dir / src_name
+        if not src.is_file():
+            continue
+        dst = args.samples_dir / (dst_name % args.dialect)
+        n = 0
+        with src.open(encoding="utf-8") as fin, dst.open("w", encoding="utf-8") as fout:
+            for line in fin:
+                if line.strip():
+                    fout.write(json.dumps(conv(json.loads(line)), ensure_ascii=False) + "\n")
+                    n += 1
+        print("%d sample(s) -> %s" % (n, dst))
     return 0
 
 
