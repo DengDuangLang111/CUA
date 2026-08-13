@@ -153,3 +153,47 @@ cleaning instead of between-trajectory selection, diversity engineered at
 generation time. Borrow list when we do multi-rollouts: keep-shortest-pass
 curation switch; stronger teacher for failed tasks; few epochs (their
 "avoid excessive imitation" warning).
+
+## RECIPE v1 — the frozen command template (2026-08-13)
+
+**Rule: every training run uses this template verbatim.** The only things
+that vary are the lines marked `# VARIES`. Changing anything else requires a
+new `RECIPE v2` block here with a rationale — never an in-place edit, or
+runs stop being comparable.
+
+```bash
+#SBATCH --account=video --partition=gpu-h200
+#SBATCH --nodes=1                      # REQUIRED: --gpus alone lets Slurm
+#SBATCH --gpus=2                       # scatter GPUs across nodes (killed a run)
+#SBATCH --cpus-per-gpu=8 --mem=200G
+
+source $B/venv/bin/activate
+export CUDA_HOME=$B/cuda13 PATH="$B/cuda13/bin:$PATH"
+
+PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True' \
+IMAGE_MAX_TOKEN_NUM=2048 \
+NPROC_PER_NODE=2 \
+swift sft \
+  --model $B/models/Qwen3.5-4B \
+  --dataset <TRAIN_JSONL...>           # VARIES: dataset files \
+  --val_dataset <VAL_JSONL...>         # VARIES: matching val files \
+  --enable_channel_loss true \
+  --tuner_type full --loss_scale last_round \
+  --attn_impl sdpa --deepspeed zero2_offload \
+  --torch_dtype bfloat16 \
+  --num_train_epochs 1 --per_device_train_batch_size 1 \
+  --learning_rate 1e-5 --warmup_ratio 0.05 \
+  --max_length 65536 --gradient_checkpointing true \
+  --eval_steps 20 --save_steps 40 --save_total_limit 2 \
+  --logging_steps 2 \
+  --report_to wandb --run_name <RUN_NAME>   # VARIES \
+  --output_dir $B/out/<RUN_NAME>       # VARIES
+```
+
+Evaluation pairs with it, always both:
+```bash
+python $B/eval_actions.py <CKPT> <SAMPLES_DIR> --limit N \
+    --wandb-project cua-sft --run-name <RUN_NAME>-eval-<panel>
+```
+against the SAME two panels every time (v500 val, legacy val), so numbers
+line up across runs and against `eval-base-qwen3.5-4b`.
