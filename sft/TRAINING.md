@@ -355,7 +355,48 @@ exam (same-exam rule). Old pilot2 exams: acc/MAE columns remain valid
 | 227162 probe | 08-13 | raw-gen forensics | pilot2 snapshot panels | ✓ see forensics section | proberaw_227162.out |
 | **227303 pilotS3** | 08-13 | **v2 full 1-GPU (v1s + preserve_thinking)** | frozen pilot2 snapshots verbatim | SUBMITTED (on g001 within a minute) | run pilotS3-227303 · `out/pilotS3/` |
 | 227304 evalpilotS3 | 08-13 | fixed two-panel exam | pilot2 snapshot panels | armed, afterok:227303 | pilotS3-eval-* |
-| 227305 eval-base3 | 08-13 | baseline retake, fixed exam | pilot2 snapshot panels | SUBMITTED | base3-eval-* |
+| 227305 eval-base3 | 08-13 | baseline retake, fixed exam | pilot2 snapshot panels | ✓ v500: acc 0.731 · MAE 371.6 · think 1.02 (n=26) / legacy: 0.775 · 123.0 · 1.00 (n=40). acc identical to the broken-parser run (cross-check ✓); think now measures real first-round reasoning; **MAE 380.3→371.6 across two identical zero-shot runs = the ±9 run-to-run noise floor** | base3-eval-* |
+
+## The action exam — protocol and how to read it (2026-08-13)
+
+What `sft/eval_actions.py` does, exactly:
+
+1. **Panel** = a snapshot's `val_samples.jsonl` (task-level held-out; v500
+   n=26, legacy n=40). Same panels for every model, forever (same-exam rule).
+2. **Per sample**: rebuild the exact context the teacher saw at that step,
+   render with the model's own chat template (`add_generation_prompt=True`),
+   greedy decode (`do_sample=False`), `IMAGE_MAX_TOKEN_NUM=2048` for rollout
+   parity.
+3. **Parse teacher and student identically**: action = first
+   `<parameter=action>` name; coordinate = first `<parameter=coordinate>`
+   `[x, y]`; think length = chars before the first `</think>`, invalid if a
+   `<tool_call>` precedes it (tag-position-agnostic: the chat template may
+   supply the opening `<think>` prompt-side — the 08-13 forensics).
+4. **Metrics**:
+   - `action_type_acc` — student's action name equals the teacher's.
+   - `coord_mae` — mean L1 distance `|dx| + |dy|`, computed ONLY over samples
+     where both sides produced coordinates AND the action types match, so
+     type errors never pollute coordinate error.
+   - `think_len_ratio` — median of student/teacher think length where the
+     teacher thought.
+
+Reading rules (each one learned the hard way):
+
+- **Space**: the model-native 0–999 relative grid (the runner scales
+  ×1920/999, ×1080/999 at execution). 1 unit ≈ 1.9 px horizontal / 1.1 px
+  vertical; 100 units ≈ 10% of the screen span.
+- **It measures agreement with the teacher, not correctness.** On an open
+  step (menu vs shortcut, A-then-B vs B-then-A) a reasonable-but-different
+  choice scores a huge distance. Task difficulty is tier-3 rollout success;
+  MAE is a grounding-agreement proxy. Corollary: a cross-panel score gap
+  (base 123 legacy vs 372 v500) proves the panels differ in composition
+  (element geometry, step openness, domain mix) — NOT that one panel's
+  tasks are "harder". Compare models within a panel only.
+- **Noise floor: ±9 MAE units** (measured: same model, same panel, two
+  independent runs → 380.3 vs 371.6; GPU nondeterminism). Under ~10 is
+  noise; with n=26/40 and an outlier-sensitive mean, treat differences of a
+  few tens as tentative.
+- Only the FIRST action of a multi-action response is compared.
 
 Ledger row contract: job id, recipe version, data version (filter version +
 sample counts + snapshot name), outcome (incl. failures and WHY), wandb link,
