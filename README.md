@@ -1,4 +1,27 @@
-# ostg v9
+# ostg
+
+LLM-generated OSWorld desktop tasks whose successful teacher rollouts become
+SFT data for a small student model.
+
+## Repo map
+
+| where | what | current doc |
+|---|---|---|
+| `taskgen/` | task generation pipeline (taxonomy → gen → accept → ship) | TASKGEN_PIPELINE.md · RUNBOOK.md |
+| `sft/` | trajectory → training-sample pipeline + the action exam | SFT_DATA.md · sft/TRAINING.md · sft/CONTEXT.md |
+| `llm.py` | LLM client shared by both sides | — |
+| `dashboard/` + `traj_html.py` | live rollout monitor (auto-pushed by the WSL daemon) | DASHBOARD.md |
+| corpus history | design, experiments, per-version results | EXPERIMENTS.md · V11.md |
+| `outdated/` | superseded historical docs | its README |
+
+Data and weights never enter this repo: built SFT sets + checkpoints live on
+Tillicum `/gpfs/scrubbed/jy050706/sft/`, raw trajectories on the lab machine
+(`results_generated/`), task sources in `os-simple-taskgen-v8` (WSL).
+
+---
+
+The sections below describe the task generator (axes frozen at v9;
+per-version deltas in EXPERIMENTS.md).
 
 LLM-generated OSWorld tasks, one self-contained JSON each. Every task is drawn
 at a coordinate in the product intent x domain x difficulty x ambiguity (1300
