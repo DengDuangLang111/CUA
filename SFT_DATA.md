@@ -22,8 +22,8 @@ the builder, governed by the rules below.
 |---|---|
 | **One line ≠ one step.** The runner writes one line per pyautogui action; a multi-action response repeats the same `step_num` with an identical `response`. Aggregate by `step_num`: one sample per step. | v11: 3770 lines / 3470 steps (8.6% inflation); all 200 multi-action groups byte-identical in `response`, 0 diverged |
 | **The observation for step k is step k−1's LAST screenshot.** `screenshot_file` on a row is taken AFTER that action executes. With multi-action steps, take the final row's screenshot of the previous step — `setdefault`/first-row pairing is systematically wrong. | runner source: `obs` overwritten per action inside the step loop |
-| **Step 1's observation is `initial_state.png`.** Runs before 2026-08-13 never saved it (patched since, copied from the `_human` variant). For older runs, drop step-1 samples — do NOT extract from recording.mp4: `start_recording()` fires after `_get_obs()`, so the first frame is not the step-1 observation. | source lines 27 vs 30; v11: 39 passed trajs lack it |
-| **Take only the last episode in a file.** `traj.jsonl` opens in append mode: a healed/re-run task stacks episodes; cut where `step_num` resets. | mode `"a"` in source; v11 incidence: 0/100 — guard is cheap, keep it |
+| **The initial observation is history for EVERY sample, not just step 1's input.** Step k's context contains screenshot 1 = `initial_state.png`; without it the whole trajectory is unbuildable. New runs save it (patched 2026-08-13). For older runs `--initial-fallback mp4` takes recording frame 0 — between `_get_obs()` and `start_recording()` nothing touches the VM, so the gap is ambient-only; the approximation is flagged in `meta.initial_from`. Needs ffmpeg; degrades to dropping the trajectory when absent. | builder test on v11: 0 samples buildable without it (75/75 steps dropped) |
+| **Take only the last episode in a file.** `traj.jsonl` opens in append mode: a healed/re-run task stacks episodes. Boundary = step_num decrease OR same step_num with a changed `response` (multi-action lines are byte-identical, so a changed response at the same number is a restart). | mode `"a"` in source; the second signal exists because the smoke test caught a single-step re-run being merged into its successor |
 
 ## 2 Filtering steps and trajectories
 
@@ -46,7 +46,35 @@ builder's specification. The rules below are the summary.
 | **History must be rendered by the model's own chat template with the same kwargs the campaign sent.** The client does NOT strip thinking (`ensure_empty_think_prefix` only prepends an empty block when missing) and under `nopreserve` it sends `chat_template_kwargs={"enable_thinking": true}` — no `preserve_thinking` key at all. The template (chat_template.jinja, 7764 B) then strips `<think>` from every assistant turn at or before the last user query: `{%- if (preserve_thinking is defined and preserve_thinking is true) or (loop.index0 > ns.last_query_index) %}` keeps thinking, else drops it. So: render history through `apply_chat_template` with the campaign's kwargs — hand-stripping in the builder duplicates template logic and WILL drift. | template read from Tillicum model dir 2026-08-13; client code `mm_agents/qwen/main.py:278-284`, `history.py:90-94` |
 | The current step's target keeps its full `<think>` block — that is what the model emitted under `enable_thinking` and what generation-time distribution looks like. | — |
 
-## 4 Final verification before training
+## 4 The builder (test version, 2026-08-13)
+
+`ostg/sft/traj.py` (rules 1–2) + `ostg/sft/build.py` (rule 3):
+
+```
+PYTHONPATH=.:/mnt/d/research/OSWorld python -m ostg.sft.build RESULT_DIR \
+    --tasks TASKS_DIR --out OUT [--limit N] [--tail-run 5] [--initial-fallback mp4]
+```
+
+Emits `samples.jsonl` (messages ending at step k's user turn; `response` =
+verbatim target; `meta` = provenance), `images/` (screenshots re-encoded with
+the agent's own `process_image`, so disk pixels = seen pixels), and
+`report.json` (kept/dropped counts per rule — the audit trail).
+
+Design points worth keeping when this graduates from test version:
+
+- **The message structure is assembled by the agent's own code** —
+  `build_messages`, the tools def, the system prompt, `update_folding_state`
+  imported from `mm_agents.qwen` — so it cannot drift from the rollout.
+  Verified against live `message_cache` payloads: system text, tool_response
+  wrappers, and turn shape identical.
+- **Hallucinated steps are dropped as TARGETS but kept in HISTORY**: the
+  model really saw them in its context, so removing them from history would
+  itself be a train/inference mismatch.
+- Collapsed screenshots are never copied (lazy image writing).
+
+First real output: 3 passed ms100 tasks → 43 samples, 14 MB images.
+
+## 5 Final verification before training
 
 No replay needed — the client already dumps every step's payload (text
 verbatim, image base64 truncated) to
@@ -56,7 +84,7 @@ against a handful of those dumps and rule 3.2 is measured, not derived. The
 dir is shared across envs and keyed by step index only, so treat it as a
 rolling sample, not an archive.
 
-## 5 Provenance to record per sample
+## 6 Provenance to record per sample
 
 run id (`v11-500-ms100-think-nopreserve-20260813`), task slug + id, step_num,
 screen size (1920×1080), coordinate convention (`relative 0–999`), template
