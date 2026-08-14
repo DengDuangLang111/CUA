@@ -424,6 +424,48 @@ consecutive identical actions ⇒ terminate, N ≥ 10 — which CLAUDE.md §3.1 
 recommends. It cannot make a task pass, but it reclaims ~44 wasted steps per
 locked task and would roughly halve attempt wall-clock.
 
+### DATA DEFECT found 2026-08-13 evening: a third of the corpus never trained
+
+Every pilot so far (pilotS, pilotL, pilotS3, pilotS3x3) passed **two** dataset
+files whose `images` entries are RELATIVE (`images/<slug>/obs_NNN.png`), and the
+sbatch `cd`s into the first dataset's directory. swift resolves relative media
+paths against the process CWD (`ROOT_IMAGE_DIR: None` in the startup log), so
+the second dataset's images resolve to nonexistent paths. swift's
+`vision_utils.load_file` then treats an unresolvable path as **base64**, decodes
+it to garbage bytes and hands them to PIL:
+
+```
+PIL.UnidentifiedImageError: cannot identify image file <_io.BytesIO object ...>
+[WARNING:swift] There are errors in the template.encode, and another piece of
+data will be randomly selected.
+```
+
+Evidence chain:
+- functional test on the login node, cwd = the legacy snapshot:
+  `os.path.exists("images/onboarding-handouts-single-pdf/obs_001.png")` → False,
+  and `load_image()` on it raises exactly the logged error;
+- the slug sets of the two datasets are disjoint (32 vs 15 slugs, 0 overlap), so
+  **3419/3419** v500 image references miss when resolved from the legacy dir;
+- swift reports `train_dataset: 916 rows` — nothing is filtered at startup, so
+  the failures happen per draw, and the warning count grows during the run
+  (63 at step 76 → 80 at step 121 of pilotS3x3; 70 in pilotS3's whole run).
+
+Consequence: the **307 v500 training samples (33% of the corpus — the newest
+campaign's trajectories) and 26 of the 151 val samples could not be loaded**;
+each draw was dropped and replaced by a random other sample. Effectively every
+result reported today was trained on the ~609 legacy samples. (The logged
+warning count is lower than the 1/3 share; the per-draw bookkeeping behind that
+gap is not established, but the load failure itself is proven and total.)
+
+Fix: **absolute image paths in the emitted jsonl** — a single `ROOT_IMAGE_DIR`
+cannot serve two datasets with different roots. Built as `data/abs-pilot2/`
+(916 train + 151 val rows, 0 missing files verified), written to a NEW directory
+so the running job's snapshots stay untouched. `ostg/sft/export.py` should emit
+absolute paths, or the runner should pass one dataset root.
+
+This also means the epoch-response experiment and every arm comparison should be
+re-run on the fixed data before being treated as measurements of "916 samples".
+
 ### THE HEADLINE RESULT: SFT regressed the model, 4/9 → 1/9 (both variants)
 
 | arm | passes | which tasks |
