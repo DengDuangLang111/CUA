@@ -654,6 +654,37 @@ consecutive identical actions ⇒ terminate, N ≥ 10 — which CLAUDE.md §3.1 
 recommends. It cannot make a task pass, but it reclaims ~44 wasted steps per
 locked task and would roughly halve attempt wall-clock.
 
+### Single-episode reads are treacherous — a correction (2026-08-13 23:35)
+
+On exam-kiosk (difficulty 5, stock passed in 28 steps, `more` failed at 50) the
+two episodes take nearly identical opening moves — click the Chrome dock icon,
+WAIT, WAIT — and then diverge **in the environment, not in the model**: Chrome
+launched for the stock run and did not launch for `more`. The step-4 screenshot
+shows only the task's pre-opened text editor.
+
+I first read `more`'s reasoning ("the previous attempt did not open Chrome,
+the text editor is in the way") as a hallucination about an open browser. **The
+screenshot says otherwise: its perception was correct.** What actually fails is
+the remedy — it clicks (1896, 44), the top-right corner, apparently aiming at a
+close button, but the editor is not maximised and its close button is at
+(947, 133). The miss leaves the screen unchanged, it returns to the Chrome icon,
+and a three-action cycle forms.
+
+Two lessons, both mine:
+1. **Do not narrate a trajectory without opening its frames.** This is the
+   second over-read of the day (the first was "phase lag self-corrects").
+2. **A single episode cannot separate model behaviour from environment
+   variance.** The stock model never faced the adverse branch here. Claims of
+   the form "model A handles X worse" need pass@k or many more tasks; at 9
+   tasks × 1 attempt we can see gross differences (4/9 vs 1/9) and nothing
+   finer.
+
+The defect this does support: **no recovery strategy under an adverse branch.**
+When an action has no effect, the SFT model repeats it, and its corrective
+action is itself mis-grounded. That is consistent with a corpus of teacher
+successes in which "the action did nothing, try something else" is never
+demonstrated.
+
 ### e1 result (2026-08-13 21:21): fixing the data bug did NOT fix the regression
 
 | arm | passes | mean distinct actions | trajectories locked (≥10× repeat) | mean steps |
