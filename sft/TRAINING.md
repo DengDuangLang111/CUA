@@ -927,6 +927,35 @@ the extra 372 trajectories are lower quality.
 
 Until that runs, "more data hurt" is not a supported claim.
 
+#### Result: `more3` scored **0/9** — the lowest of any arm (2026-08-14)
+
+| arm | data | epochs | steps | **solved** | terminated | hit the 50-step cap | mean steps |
+|---|---|---:|---:|---:|---:|---:|---:|
+| stock Qwen3.5-4B | — | — | — | **4/9** | 7/9 | 2/9 | 24.3 |
+| e3 | abs-pilot2 916 | 3 | 345 | **3/9** | 4/9 | 5/9 | 32.9 |
+| e1 | abs-pilot2 916 | 1 | 115 | 1/9 | 0/9 | 9/9 | 50.0 |
+| **more3** | abs-pilot3 1288 | 3 | **483** | **0/9** | 3/9 | 6/9 | 44.9 |
+
+**It fit the data better than e3 and solved nothing.** Final train loss 0.0335
+vs e3's 0.0373; token_acc 0.9906 vs 0.9861; fully annealed. The sharpest single
+frame: on `arxiv-listing`, the easiest task on the panel, **e3 and the stock
+model both finish in 5 steps and emit `terminate`; more3 burns all 50 and never
+terminates.**
+
+The degradation runs along the same axis e1 established — terminate rate falls
+(4/9 → 3/9), cap-hits rise (5/9 → 6/9), mean steps rise (32.9 → 44.9).
+**Termination is the first capability to go**, and it is the one that
+`eval_loss` and `token_acc` are blindest to.
+
+**State it as "1288 samples at 3 epochs gives 0/9", not "more data is worse".**
+The 40%-more-steps confound above is unresolved, and both runs sit past the
+overfitting knee. `more3/checkpoint-322` settles it and is already on disk.
+
+Third time this project has hit the same wall: proxy metrics improve, the real
+metric degrades. First the action exam, then eval_loss, now train loss and token
+accuracy. Every one of them is computed without letting the policy choose its
+own next observation.
+
 
 ### Eval policy: final checkpoints only (2026-08-14 01:40, user decision)
 
