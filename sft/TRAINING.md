@@ -726,6 +726,60 @@ Consequences for reading the epoch curve:
 
 Every checkpoint in the results table should carry the LR it was saved at.
 
+### Why SFT is slow — measured 2026-08-14, nothing applied yet
+
+**Baseline (job 229277, live):** `46.28 s/it`, 805 steps → **10.3 h**. One epoch
+of abs-pilot3 is 35.3 M tokens over 161 optimizer steps, so throughput is
+**4,740 tokens/s** on one H200.
+
+**Where the tokens are** (1288 samples):
+
+| | value |
+|---|---|
+| tokens/sample, mean | 27,421 |
+| p50 / p90 / p99 | 29,600 / 43,878 / 50,389 |
+| images/sample, mean | 11.2 (max 20) |
+| **share of tokens that are screenshots** | **84%** (11.2 × 2040 = 22.8k of 27.4k) |
+
+**Model shape that decides which lever matters** (`config.json`):
+
+| | value |
+|---|---|
+| layers | 32 = **24 linear-attention + 8 full-attention** (`full_attention_interval: 4`) |
+| hidden | 2560 |
+| **vocab** | **248,320** |
+
+Two consequences. Quadratic attention only exists in **8 of 32 layers**, so
+FlashAttention is worth much less here than the usual advice assumes. And that
+vocabulary is enormous: the logits tensor for one 27k-token sample is
+`27k × 248,320` = **13.4 GB in bf16**, more when cross-entropy upcasts, plus its
+gradient. That single tensor is the likeliest reason this config needs both
+`zero2_offload` and `gradient_checkpointing`.
+
+**Current config** (`sft-ep5pt.sbatch`): 1 GPU, `per_device_train_batch_size 1`,
+`gradient_accumulation_steps 8`, `--attn_impl sdpa`, `--deepspeed zero2_offload`,
+`--gradient_checkpointing true`, `--max_length 65536`. `freeze_vit` and
+`freeze_aligner` are `True` by swift default — confirmed, the vision tower is
+forward-only.
+
+**Levers, ranked by expected value / cost. All VERIFIED AS AVAILABLE, none
+applied — the four runs in flight must not be disturbed.**
+
+| # | lever | status | why it should help |
+|---|---|---|---|
+| 1 | `--use_liger_kernel true` | **installed, flag exists, defaults `False`, we never pass it** | fused linear+CE never materialises the 13.4 GB logits tensor. Modest speed on its own; the prize is the memory headroom that unlocks 2 and 3 |
+| 2 | `zero2_offload` → `zero2` | config change | DeepSpeedCPUAdam runs the optimizer step on CPU every 8 micro-batches. 4B params on GPU needs ~64 GB of 141 — should fit once (1) frees the logits memory |
+| 3 | `--gradient_checkpointing false` | config change | recompute-in-backward is a 30–40% tax; only affordable after 1+2 |
+| 4 | install `causal_conv1d` | **MISSING** (`fla` is present, `causal_conv1d` is not) | 24 of 32 layers are linear attention and use a short causal conv; without the fused kernel there is a slower fallback |
+| 5 | 2 GPUs | scheduling | halves wall-clock (grad-accum 8 → 4/GPU). The original smoke ladder measured 322 → 85 s/it going 1 → 2 GPU, *superlinear* — consistent with the 1-GPU config thrashing on exactly the memory (1) targets |
+| 6 | `flash_attn` | MISSING, ~20 min build | only reaches 8 of 32 layers here. Lowest priority of the kernel work, contrary to the usual first instinct |
+| 7 | `--packing` / `--padding_free` | flags exist, unused | at batch size 1 there is no intra-batch padding, so the win is filling the 65k window instead of 8 sequential micro-batches. **Risky on this arch**: packed samples must not leak across sequence boundaries, and linear-attention layers carry state differently from full attention. Verify correctness before speed |
+| 8 | shrink the image window | **not a config change** | 84% of training tokens are screenshots. `image_max=20` / `fold_size=10` come from the agent, so cutting it changes what the model sees at *inference* too. Biggest lever by far and the only one that also speeds up rollout — but it is an accuracy experiment, not a free win |
+
+**How to test it**: the same smoke ladder that established this environment — a
+short job on a fixed subset, ~20 steps, measuring `s/it` under one change at a
+time. Each is minutes and well under $1. Do not benchmark by editing a real run.
+
 ### Runs in flight (2026-08-14 01:10)
 
 All on abs-pilot3 (1288 samples, 161 steps/epoch) unless noted; every arm keeps

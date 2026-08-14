@@ -511,6 +511,27 @@ const VIEWS = [
    `<td><code>--max_length</code></td><td>65536</td><td class="why">late-step samples carry up to 20 images ≈ 50k+ tokens</td>`,
    `<td>vision tower</td><td>frozen</td><td class="why"><code>freeze_vit</code> + <code>freeze_aligner</code> + explicit <code>freeze_parameters</code></td>`,
    `<td>preflight</td><td>mandatory</td><td class="why">opens every referenced media file from the job's own working directory and exits non-zero on any miss — the fix for the 33% silent drop</td>`])}
+  <div class="seclabel">Why training is slow — measured, nothing applied yet</div>
+  <p class="note">Baseline: <b>46.3 s per optimizer step</b>, 805 steps = <b>10.3 h</b> for a
+  5-epoch run. One epoch is 35.3 M tokens over 161 steps — <b>4,740 tokens/s</b> on one H200.
+  <b>84% of those tokens are screenshots</b> (11.2 images per sample × 2040 visual tokens = 22.8k
+  of a 27.4k-token mean).</p>
+  ${tbl([["what decides the fix"],["measured"]],[
+   `<td>layers</td><td>32 = <b>24 linear-attention + 8 full-attention</b> — so FlashAttention only reaches a quarter of the model, contrary to the usual first instinct</td>`,
+   `<td><b>vocabulary</b></td><td><b>248,320</b> — the logits tensor for one 27k-token sample is <b>13.4 GB in bf16</b>, more when cross-entropy upcasts, plus its gradient. Very likely why this config needs both CPU-offloaded Adam and gradient checkpointing</td>`,
+   `<td>vision tower</td><td>frozen (<code>freeze_vit</code>/<code>freeze_aligner</code> default true) — forward cost only</td>`])}
+  ${tbl([["lever"],["status"],["why"]],[
+   `<td><b>1 · <code>--use_liger_kernel true</code></b></td><td class="hl">installed, flag exists, never passed</td><td class="why">fused linear+CE never materialises the 13.4 GB logits tensor. The prize is the memory headroom that unlocks 2 and 3</td>`,
+   `<td><b>2 · drop the CPU offload</b></td><td>config</td><td class="why">the optimizer step currently runs on CPU every 8 micro-batches; 4B on GPU needs ~64 GB of 141, which should fit once 1 lands</td>`,
+   `<td><b>3 · gradient checkpointing off</b></td><td>config</td><td class="why">a 30–40% recompute tax, affordable only after 1+2</td>`,
+   `<td><b>4 · install <code>causal_conv1d</code></b></td><td class="hl">missing</td><td class="why">24 of 32 layers are linear attention and use a short causal conv; without it there is a slower fallback</td>`,
+   `<td><b>5 · two GPUs</b></td><td>scheduling</td><td class="why">halves wall-clock. The original smoke ladder went 322 → 85 s/it on 1 → 2 GPUs — superlinear, consistent with the 1-GPU config thrashing on exactly the memory lever 1 targets</td>`,
+   `<td>6 · <code>flash_attn</code></td><td>missing, 20-min build</td><td class="why">reaches only 8 of 32 layers here — lower priority than it looks</td>`,
+   `<td>7 · packing / padding-free</td><td>flags exist, unused</td><td class="why">at batch size 1 there is no padding to save; the win is filling the 65k window. <b>Risky on a hybrid arch</b> — verify sequences cannot leak across packed boundaries before chasing speed</td>`,
+   `<td><b>8 · shrink the image window</b></td><td>not a config change</td><td class="why">the 84%. It comes from the agent, so cutting it changes what the model sees at inference too — biggest lever, and the only one that also speeds up rollout, but an accuracy experiment rather than a free win</td>`])}
+  <p class="note">Nothing has been applied: four runs are in flight and must not be disturbed. The
+  test is the same smoke ladder that established this environment — a short job on a fixed subset,
+  ~20 steps, one change at a time, minutes and well under $1 each.</p>
   <div class="seclabel">Scale, honestly stated</div>
   <p class="note">The trained arms span 609 → 1288 samples: a 2× range, all of it below the outside
   reference point this line is measured against (412 teacher trajectories / 3,085 turn-level
