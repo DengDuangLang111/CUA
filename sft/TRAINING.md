@@ -606,6 +606,60 @@ steps it calls pathological. Both are minutes of work. **Verify, then execute.**
   entries are the same CWD defect in a second guise (both named slugs belong to
   the v500 dataset), not a separate problem.
 
+### Official sampling for Qwen3.5 / 3.6 / 3.8 — and we are on the wrong profile
+
+Read from the three model cards on 2026-08-14, not from memory. **Every one of
+them publishes two different thinking-mode profiles**, and this file had only
+ever recorded one of them.
+
+| model | thinking · **general** | thinking · precise coding | instruct / non-thinking |
+|---|---|---|---|
+| **Qwen3.5-4B** (our student) | **temp 1.0**, top_p 0.95, top_k 20, min_p 0, **presence 1.5** | temp 0.6, top_p 0.95, top_k 20, presence 0.0 | temp 0.7, top_p 0.80, top_k 20, presence 1.5 · *reasoning:* temp 1.0, top_p 1.0, **top_k 40**, presence 2.0 |
+| **Qwen3.6-27B** (our teacher) | **temp 1.0**, top_p 0.95, top_k 20, min_p 0, presence 0.0 | temp 0.6, top_p 0.95, top_k 20, presence 0.0 | temp 0.7, top_p 0.80, top_k 20, presence 1.5 |
+| **Qwen3.8-27B** (candidate) | **temp 1.0**, top_p 0.95, top_k 20, min_p 0, presence 0.0 | — (card lists one thinking profile) | temp 0.7, top_p 0.80, top_k 20, presence 1.5 |
+
+All three recommend an output length of **32,768** for most queries, and 81,920
+only for competition-grade maths and programming. We run `--max_tokens 81920`
+everywhere, which is the benchmark setting, not the general one.
+
+**What we actually run, teacher and student alike:**
+
+```
+temperature 0.6 · top_p 0.95 · top_k 20 · presence 0.0 · thinking ON
+```
+
+That is the **precise-coding** thinking profile. The general thinking profile is
+**temperature 1.0**. Qwen's own label for the 0.6 row is "precise coding tasks
+(e.g. WebDev)" — code *generation*. Driving a desktop GUI is agentic control,
+which sits much closer to "general".
+
+**Why this is not a footnote.** The failure mechanism measured on 2026-08-14 is
+that SFT arms get stuck because, after an action that changes nothing, they
+repeat it (67–99% of the time) where the stock model varies (82%). **Temperature
+is the variance knob, and we are running 0.6 where the vendor recommends 1.0 for
+this class of use.** Lower temperature makes exactly the failure worse.
+
+This yields a falsifiable prediction, and a cheap experiment:
+
+> Raising the student serve from temp 0.6 → 1.0 should reduce the
+> repeat-after-dead-end rate and help the **SFT arms more than it helps the
+> stock model**, because the stock model already has the variance it needs.
+
+If that holds, part of the "SFT made it worse" result is a serving choice rather
+than a training outcome.
+
+**A second connection this table explains.** `qwen35-4b-pp15` — the arm run with
+`presence_penalty 1.5` — scored 2/9 against v2's 1/9, and it was treated at the
+time as an ad-hoc ablation. **presence_penalty 1.5 is exactly Qwen3.5's official
+general-thinking recommendation.** One task on a nine-task panel is noise, but
+the arm was closer to the vendor's setting than the baseline it was compared
+against, and that was not known when it was read.
+
+**Do not carry 0.6 over to Qwen3.8 by default** (plan: `CUA/EXPERIMENTS.md` §11).
+Whichever profile is chosen, record it next to the score — the campaigns to date
+do not state which of the two thinking profiles they used, and the answer is the
+precise-coding one.
+
 ### Sampling and action-chunk audit (2026-08-13 late)
 
 **There is no action-chunk parameter** — the agent executes every action a
