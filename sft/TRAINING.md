@@ -323,7 +323,52 @@ glance. Training fix = RECIPE v2 below (`--preserve_thinking true`), aligning
 training context with the jinja that both the exam and the deployed student
 will use.
 
-## RECIPE v2 — FROZEN 2026-08-13 (user-approved, full arm only)
+## RECIPE v3 — FROZEN 2026-08-13 evening (supersedes v2)
+
+v2 plus the two changes that make the 08-13 silent-data-drop impossible:
+
+```
+  --dataset     $B/data/abs-pilot2/train_swift.jsonl     # ONE file, ABSOLUTE image paths
+  --val_dataset $B/data/abs-pilot2/val_swift.jsonl
+  cd $B/runcwd                                           # neutral CWD, never a dataset dir
+```
+
+and a **preflight block that aborts the job** before any GPU time is spent:
+
+```bash
+python - "$DS" <<'PY' || { echo "PREFLIGHT FAILED — aborting"; exit 1; }
+import json, os, sys
+ds = sys.argv[1]; bad = tot = 0
+for split in ("train_swift", "val_swift"):
+    for line in open(os.path.join(ds, split + ".jsonl"), encoding="utf-8"):
+        if not line.strip(): continue
+        for p in json.loads(line).get("images", []):
+            tot += 1
+            if not os.path.isabs(p) or not os.path.exists(p):
+                bad += 1
+                if bad < 4: print("UNRESOLVED:", p)
+print(f"preflight: {tot} image refs, {bad} unresolved")
+sys.exit(1 if bad else 0)
+PY
+```
+
+First run under v3 (job 228622) printed `preflight: 11194 image refs, 0
+unresolved`. **Non-negotiable rules this encodes:**
+
+1. **Media paths in an emitted dataset are ABSOLUTE.** A relative path is only
+   meaningful next to a CWD, and two datasets cannot share one CWD.
+2. **Never `cd` into a dataset directory.** It made image paths appear to work
+   for whichever dataset happened to be first, and it let wandb write run
+   directories into a "frozen" snapshot.
+3. **Every training job proves its data loads before it trains.** Row counts
+   prove nothing: swift reported `train_dataset: 916 rows` while a third of
+   them could not produce an image.
+4. **Grep the training log for `template.encode` warnings after every run.**
+   swift's response to an unloadable sample is one warning line and a random
+   substitution — a defect that costs a third of the corpus looks exactly like
+   normal training otherwise.
+
+## RECIPE v2 — superseded by v3 (kept for provenance of runs 227303/228092)
 
 Delta vs v1s/v1L, everything else byte-identical:
 
