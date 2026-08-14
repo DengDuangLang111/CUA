@@ -471,6 +471,43 @@ Three arms now in flight, one recipe, one variable each:
 | 228623 `sft-e3` | abs-pilot2 (916) | 3 | more optimization |
 | 228667 `sft-more` | abs-pilot3 (1288) | 1 | more data |
 
+### Serve port allocation — the collision that bit three times (2026-08-13)
+
+Every serve sbatch hardcodes `--port 8000`, and Slurm freely puts two of our
+jobs on one node, so a second serve dies instantly with
+`OSError: [Errno 98] Address already in use`. It happened three times in one
+evening (base-backup vs v1; the `more` arm vs a leftover smoke-test serve).
+The failure is silent from the driver's side: the driver only polls for an HTTP
+endpoint, so a serve that died at startup looks exactly like a serve that is
+still loading, and the driver waits out its entire timeout (up to 2h).
+
+**Rule until the fix lands: exactly one eval serve alive at a time.** The tier-3
+queue is already sequential; every collision so far came from an ad-hoc serve
+left running by hand.
+
+**The fix, to apply when no driver is mid-flight** (editing a running bash
+script corrupts its execution, and the drivers hold `RPORT=8000` internally, so
+this cannot be hot-swapped):
+
+| serve | remote port |
+|---|---|
+| teacher (Qwen3.6) | 8000 (unchanged) |
+| tier-3 queue arms | 8731 |
+| base / base-topk | 8732 |
+| v1 | 8733 |
+| sampler ablations | 8734 |
+| external checkpoints (OpenWebRL etc.) | 8735 |
+
+Each serve script sets its own `--port`; each driver starts its tunnel with the
+matching `RPORT`. Unusual numbers are deliberate — ports are per-node and shared
+with other users, so 8010-style values are likelier to be occupied by someone
+else.
+
+Meanwhile `serve_watchdog.sh` runs continuously: it greps every serve log for
+`Address already in use` and reports within two minutes, and warns whenever more
+than one eval serve is alive. It caught the `more` collision retroactively on
+its first cycle.
+
 ## RECIPE v3 — FROZEN 2026-08-13 evening (supersedes v2)
 
 v2 plus the two changes that make the 08-13 silent-data-drop impossible:
