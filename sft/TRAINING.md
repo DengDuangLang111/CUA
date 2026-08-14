@@ -617,6 +617,41 @@ consecutive identical actions ⇒ terminate, N ≥ 10 — which CLAUDE.md §3.1 
 recommends. It cannot make a task pass, but it reclaims ~44 wasted steps per
 locked task and would roughly halve attempt wall-clock.
 
+### e1 result (2026-08-13 21:21): fixing the data bug did NOT fix the regression
+
+| arm | passes | mean distinct actions | trajectories locked (≥10× repeat) | mean steps |
+|---|---|---|---|---|
+| stock 4B | **4/9** | 13.3 | 3/9 | 24 |
+| pilotS3 (broken data, 609 effective samples) | 1/9 | 5.1 | 7/9 | 41 |
+| pp15 (sampler ablation) | 2/9 | 6.6 | 7/9 | 42 |
+| **e1 (data fixed, 916 samples)** | **1/9** | **4.4** | **9/9** | **50 — every task hit the cap** |
+
+Restoring the silently-dropped third of the corpus raised training data by 50%
+and made the pathology **worse**: lock-ups went 7/9 → 9/9, distinct actions
+5.1 → 4.4, and every single task burned the full step budget. So the regression
+is not explained by data volume, data integrity, or sampling — all three have
+now been tested and eliminated.
+
+What remains is the **kind** of data, and the OpenWebRL comparison sharpens it:
+
+| | OpenWebRL | ours |
+|---|---|---|
+| trajectories | 412 | 68 |
+| turn-level samples | 3,085 | 1,288 |
+| **mean steps per trajectory** | **7.5** | **19** |
+| selection | **keep only the shortest successful trajectory per task group**, tie-broken by shorter total response | keep every passing trajectory, then trim degenerate tails |
+| epochs | 3 | 1 (e3 arm testing 3) |
+| history masking | `mask_history: true` | `loss_scale last_round` — same thing |
+
+We demonstrate "wandered, retried, eventually succeeded"; they demonstrate "no
+wasted move". Our filters remove the degenerate *tails* but keep every
+mid-trajectory retry, and at 19 steps per trajectory there are many. More of
+that data teaches the retry habit harder — which is exactly the e1 result.
+
+Falsifiable prediction for the `more` arm (1288 samples, same data philosophy):
+1–2/9 with lock-ups at 8–9/9. If it lands there, **shortest-trajectory
+selection becomes the only remaining evidence-backed lever** to try next.
+
 ### DATA DEFECT found 2026-08-13 evening: a third of the corpus never trained
 
 Every pilot so far (pilotS, pilotL, pilotS3, pilotS3x3) passed **two** dataset
