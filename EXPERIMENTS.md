@@ -758,13 +758,35 @@ becomes the false-FAIL rescue list.
 Proposed 2026-08-14. **Not started.** Written down before any work because
 step 0 is verification, and because the sequencing matters more than the run.
 
-### Honest starting point
+### What Qwen3.8-27B actually is (read from the model card 2026-08-14, not assumed)
 
-Qwen3.8 was released after this assistant's knowledge cutoff. **Its size range,
-architecture, vision support, dependencies and recommended sampling are all
-unknown here and must be read from the model card, not assumed.** Nothing below
-depends on a guess about the model; every specific number is either from our own
-measurements or flagged as needing verification.
+Released 2026-08-14 15:00 UTC. https://huggingface.co/Qwen/Qwen3.8-27B
+
+| | |
+|---|---|
+| parameters / licence | 27.78 B, Apache 2.0 |
+| **modality** | **text + image + video** — usable by this screenshot-driven pipeline |
+| context | 262,144 native — matches the `--max-model-len` already in the serve |
+| architecture | 64 layers = **48 Gated DeltaNet (linear) + 16 Gated Attention**, a 3:1 ratio — structurally the same shape as Qwen3.5-4B's 24:8 |
+| vocab | **248,320 — identical to Qwen3.5-4B** |
+| reported OSWorld | **84.3%** |
+
+**Two operational catches, both easy to get wrong by carrying over 3.6's setup:**
+
+1. **The recommended sampling differs.** Thinking mode is
+   `temperature=1.0, top_p=0.95, top_k=20, presence_penalty=0.0`. The current
+   campaign runs Qwen3.6 at **temperature 0.6**, and we run with
+   `--enable_thinking`. Carrying 0.6 over is an unverified deviation from the
+   vendor's recommendation — decide deliberately, and record which was used.
+2. **No official FP8 is advertised** (218 community quantisations exist). FP8
+   bought 1.39–1.51× on Qwen3.6; here it may need a community checkpoint or a
+   self-made quantisation, and that needs its own verification.
+
+**Do not read 84.3% as a prediction for our corpus.** Our Qwen3.6 number
+(45.2% on OSWorld-Verified) comes from our harness at a 50-step budget over 312
+non-proxy tasks; vendor OSWorld figures generally use larger budgets and their
+own scaffolding. The two are not the same measurement. It is a strong signal,
+not a forecast.
 
 ### Why it is worth the ~42 hours
 
@@ -845,9 +867,36 @@ variance problem on the 9-task panel:
 plus serve GPU hours. It occupies all three VMs for that whole time, so tier-3
 evals and any other rollout must be scheduled around it.
 
-**Statistically this is a far better comparison than anything on the 9-task
-panel**: 544 tasks makes a few-percent difference meaningful, where the panel
-cannot resolve 3 tasks out of 9.
+### The statistics, done rather than asserted
+
+An earlier draft said "544 tasks makes a few-percent difference meaningful".
+That was loose, and pooling the two corpora was wrong — v11 runs at 39% and
+v11-500 at 24%, so they are two populations and must be reported separately.
+
+Standard error of a single arm's pass rate, `sqrt(p(1-p)/n)`:
+
+| comparison | n | p | SE | 95% CI |
+|---|---:|---:|---:|---|
+| the 9-task tier-3 panel | 9 | ~0.25 | **14.4%** | **±2.5 tasks** |
+| v11 | 100 | 0.39 | 4.9% | ±9.6% |
+| v11-500 | 444 | 0.24 | **2.0%** | **±4.0%** |
+
+The panel's ±2.5 tasks is exactly the 0/1/2 spread measured across three seeds
+on 2026-08-14. That is not bad luck, it is what n=9 gives.
+
+**Unpaired** comparison of two models on v11-500: SE of the difference is
+`sqrt(2)·2.0% ≈ 2.9%`, so a gap needs to exceed **~5.6 points (≈25 tasks)** to
+reach two standard errors. Not "a few percent".
+
+**Paired is the design we actually have** — both models run the identical task
+set — so use McNemar on the discordant tasks and the task-difficulty variance
+drops out. If 3.6 scores 24% and 3.8 scores substantially higher, the discordant
+count will be large and the test decisive. Report the paired result; the
+unpaired figure above is the conservative floor.
+
+**What 42 hours buys is n=544 once.** Run-to-run variance is not eliminated by
+task count, and repeating a full campaign is expensive — the paired design is
+what makes a single pass informative, because both models meet the same tasks.
 
 ### One open question it raises
 
