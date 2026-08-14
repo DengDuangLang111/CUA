@@ -110,13 +110,21 @@ def tail_run(steps):
     return n
 
 
-def identical_runs(steps, min_run=8):
+def identical_runs(steps, min_run=7):
     """Target-drop indices for mid-episode grinding: in any maximal run of
     >= min_run consecutive steps with identical action lists, every step
     after the FIRST is dropped as a training target (attempting once is
     legitimate behavior; repeating it 54 times is not). History keeps them.
     Calibrated 2026-08-13 on 51 passing trajectories: longest legitimate
     identical run observed was 6 (file-drag cycles), pathological ones 15-55.
+
+    min_run was 8 until 2026-08-14. The audit that lowered it found
+    libreoffice_calc/768f4c21 grinding `moveTo(743,697)+scroll(-10)` exactly
+    SEVEN times -- one short of the gate, so all seven became targets and the
+    model was trained to scroll again seven times over. 7 is the tight value:
+    it catches that and can never fire on the longest run the calibration
+    calls legitimate (6). The 72-trajectory corpus contains no 5- or 6-runs at
+    all, so the change costs nothing beyond the case it was made for.
     """
     drops = set()
     i = 0
@@ -127,6 +135,50 @@ def identical_runs(steps, min_run=8):
         if j - i + 1 >= min_run:
             drops.update(range(i + 1, j + 1))
         i = j + 1
+    return drops
+
+
+def low_diversity_runs(steps, max_distinct=3, min_len=8):
+    """Target-drop indices for mid-episode OSCILLATION -- the shape
+    identical_runs is blind to, because its steps are not consecutive-identical.
+
+    In any maximal window of >= min_len consecutive steps drawn from
+    <= max_distinct distinct action lists, keep the FIRST occurrence of each
+    distinct action and drop the rest as targets. Same philosophy as
+    identical_runs: trying a thing is legitimate, cycling it is not. History
+    keeps every step -- the surviving target after such a window is a RECOVERY
+    demonstration and is the most valuable sample shape in this corpus.
+
+    Why this is separate from low_diversity_tail rather than a parameter of it:
+    that function trims steps off the trajectory entirely, and is gated on the
+    episode having hit the step cap because a normally-terminated episode ends
+    with meaningful finishing actions that must never be cut. That argument is
+    about the TAIL. It says nothing about a window in the middle, so this one
+    carries no cap gate. Found gimp/e16448e3 (37 steps, ended normally) cycling
+    typewrite("DONE") / press("return") four times in its middle -- invisible to
+    both existing filters.
+    """
+    keys = [tuple(s.actions) for s in steps]
+    drops = set()
+    i, n = 0, len(keys)
+    while i < n:
+        seen, j = [], i
+        while j < n:
+            if keys[j] not in seen:
+                if len(seen) == max_distinct:
+                    break
+                seen.append(keys[j])
+            j += 1
+        if j - i >= min_len:
+            first = {}
+            for x in range(i, j):
+                if keys[x] in first:
+                    drops.add(x)
+                else:
+                    first[keys[x]] = x
+            i = j
+        else:
+            i += 1
     return drops
 
 

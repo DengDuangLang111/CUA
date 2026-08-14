@@ -418,15 +418,83 @@ produced 0.5%, and the blind spots that let it through (oscillation off the tail
 the `>= 50` gate, `min_run` with no margin) get exercised far more at 10× the
 data. Cheap to close now, expensive to discover later.
 
-Candidate fixes, cheapest first — **v4 recipe, applied at the next data rebuild,
-not retro-applied** (that would change the dataset under a comparison in flight):
-(1) after `identical_runs` marks a run, collapse it in the rendered history too
-(keep the first, drop the rest); (2) lower `min_run` 8 → 6 to match the
-calibration band, costing at most the one 7-run seen here; (3) apply
-`low_diversity_tail`'s ≤3-distinct test as a sliding window over the whole
-trajectory rather than the tail, and drop the `>= 50` gate — it exists because a
-normally-terminated episode ends with varied steps, which is an argument about
-the *tail*, not about mid-episode windows.
+#### What was implemented, and the one proposal the data killed (2026-08-14)
+
+**Proposal (1) — collapse a caught run in the rendered history — is WITHDRAWN.**
+It was wrong, and reading the labels of the samples it would have removed is
+what showed it. The 7 surviving samples of `sec-edgar-berkshire-cik` are:
+
+| step | context turns | label |
+|---:|---:|---|
+| 62 | 61 | `left_click [48, 81]` — **a different place**, breaking the loop |
+| 63–67 | 62–66 | redo the search properly: the same click/type/click sequence that worked at steps 3–6 |
+| 69 | 68 | **`terminate`** |
+
+That is a **recovery demonstration**: *you have clicked the same spot 55 times
+and it is not working, so go somewhere else, redo the thing that worked, and
+finish*. This file records elsewhere that recovery is **never** demonstrated in
+this corpus, because every trajectory is a teacher success — and that
+`terminate` is the rare token e1 never learned. Proposal (1) would have deleted
+the seven best samples in the dataset. The long repetitive context is not
+poison; it is the *setup* that makes the recovery label meaningful.
+
+Corpus-wide there are **100 such samples** (a target whose action differs from
+an action already repeated ≥8 times in its own context). `build.py` now counts
+them as `recovery_samples` in `report.json` — they are scarce, they are what the
+student demonstrably lacks, and a filter proposal already came close to
+destroying them once.
+
+**Implemented (2) and (3).** Both address the opposite case, where the
+*label itself* is the pathology:
+
+| | change | code |
+|---|---|---|
+| (2) | `min_run` 8 → **7** | `traj.identical_runs` default; `build.py --min-run` |
+| (3) | new mid-episode oscillation filter | `traj.low_diversity_runs`; `build.py --no-drop-oscillation` to disable |
+
+`low_diversity_runs` finds any window of ≥8 consecutive steps drawn from ≤3
+distinct action lists, keeps the **first occurrence of each distinct action**,
+and drops the rest as targets — same philosophy as `identical_runs` (trying a
+thing is legitimate, cycling it is not), and history keeps every step so the
+recovery sample after the window survives. It carries **no cap gate**:
+`low_diversity_tail`'s `>= 50` condition exists because a normally-terminated
+episode ends with meaningful finishing actions that must not be cut, which is an
+argument about the *tail* and says nothing about a window in the middle.
+
+**Blast radius, measured on all 72 passing trajectories before the change:**
+
+| | targets | removed |
+|---|---:|---:|
+| before | 1594 | — |
+| + `min_run` 7 | 1588 | 6 (1 trajectory: `libreoffice_calc/768f4c21`) |
+| + oscillation filter | 1581 | 7 more (`gimp/e16448e3`, `libreoffice_calc/768f4c21`) |
+| **total** | | **13 of 1594 = 0.82%** |
+
+Three trajectories touched, no others. Both filters are off the same mechanism
+that already existed (a target-drop index set), add one function and one flag,
+and change no message, no image, and no context — so the format parity the
+pipeline is built on is untouched. **Applies to future rebuilds only**; nothing
+is retro-applied to arms already trained, which would move the dataset under a
+comparison in flight.
+
+**One documented semantic worth knowing before reading a report.** In
+`low_diversity_runs`, `max_distinct=3` means a *neighbouring* action can join
+the window and push it to `min_len`: `xyxyxyx` followed by a single `e` is 8
+steps over 3 distinct actions and does fire. Nothing unique is lost — the first
+occurrence of every distinct action always survives, so only repeats are ever
+dropped — but the window is slightly wider than "just the oscillation". This is
+pinned as a test case rather than left to be rediscovered.
+
+**Tests: `ostg/sft/test_filters.py`**, 11 cases including both thresholds, the
+window-extension semantic above, the empty input, an ordinary varied trajectory,
+and the invariant that `identical_runs`'s drops are a subset of
+`low_diversity_runs`'s (so enabling both can never produce a contradiction).
+Run it after touching `traj.py`:
+
+```
+cd /mnt/d/research/ostg-v11.1 && PYTHONPATH=. \
+  /mnt/d/research/OSWorld/.venv/bin/python -m ostg.sft.test_filters
+```
 - **Every legacy trajectory's first frame is an approximation**:
   `tasks_initial_from_mp4: 39` out of 39 passing tasks. Those runs predate
   `initial_state.png`, so step-1 samples use recording frame 0. Flagged in

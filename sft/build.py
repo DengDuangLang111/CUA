@@ -19,6 +19,7 @@ Output: OUT_DIR/samples.jsonl  (messages end with the user turn of step k;
 """
 import argparse
 import base64
+import collections
 import hashlib
 import json
 import shutil
@@ -80,6 +81,14 @@ def main(argv=None):
                     help="fraction of TASKS (not samples) held out to "
                          "val_samples.jsonl -- split at slug level so no "
                          "trajectory leaks its prefix into training")
+    ap.add_argument("--min-run", type=int, default=7,
+                    help="mid-episode identical-action run length that stops being a "
+                         "training target; 7 is the tight value against a calibrated "
+                         "legitimate maximum of 6 (was 8 until 2026-08-14)")
+    ap.add_argument("--no-drop-oscillation", dest="drop_oscillation",
+                    action="store_false", default=True,
+                    help="keep mid-episode oscillation (<=3 distinct actions over >=8 "
+                         "steps) as training targets; on by default since 2026-08-14")
     ap.add_argument("--length-budget", type=int, default=65536,
                     help="token estimate above which a sample is counted as "
                          "at risk of trainer-side truncation")
@@ -104,6 +113,7 @@ def main(argv=None):
                           "samples", "dropped_hallucinated_target",
                           "dropped_tail_steps", "dropped_missing_initial",
                           "tasks_initial_from_mp4", "images_written", "dropped_mid_loop",
+                          "dropped_mid_oscillation", "recovery_samples",
                           "val_tasks", "val_samples", "over_length_estimate")}
     samples_f = (out / "samples.jsonl").open("w", encoding="utf-8")
     val_f = (out / "val_samples.jsonl").open("w", encoding="utf-8")
@@ -175,7 +185,8 @@ def main(argv=None):
         if t >= (8 if cap_hit else args.tail_run):
             keep = len(steps) - t
             rep["dropped_tail_steps"] += t
-        mid_drops = traj.identical_runs(steps[:keep])
+        mid_drops = traj.identical_runs(steps[:keep], args.min_run)
+        osc_drops = traj.low_diversity_runs(steps[:keep]) - mid_drops if args.drop_oscillation else set()
 
         written = {}   # obs index -> relative path, copied on first reference
 
@@ -197,6 +208,18 @@ def main(argv=None):
             if (k - 1) in mid_drops:
                 rep["dropped_mid_loop"] += 1
                 continue
+            if (k - 1) in osc_drops:
+                rep["dropped_mid_oscillation"] += 1
+                continue
+            # A surviving target whose context already contains a long run of
+            # one action, and which does something else, is the corpus's only
+            # demonstration of getting unstuck. Counted because it is scarce
+            # and because an earlier filter proposal would have deleted it.
+            if k > 1:
+                _c = collections.Counter(tuple(s.actions) for s in steps[:k - 1])
+                _top, _n = _c.most_common(1)[0]
+                if _n >= 8 and tuple(step.actions) != _top:
+                    rep["recovery_samples"] += 1
             fold = update_folding_state(k, 0, agent.image_max, agent.fold_size)
             msgs = build_messages(
                 system_prompt=system_prompt,
