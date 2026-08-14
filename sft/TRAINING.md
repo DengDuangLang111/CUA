@@ -5,6 +5,15 @@ Everything here was established empirically on 2026-08-13 by a ladder of
 of it lives at `/gpfs/scrubbed/jy050706/sft/smoke.sbatch` and doubles as the
 template for real runs.
 
+> **Published live at** https://cua-dashboard-theta.vercel.app → sidebar group
+> **SFT** (Overview · Tier-3 Panel · Training runs). The panel view refreshes
+> itself from `sft.json` and every cell of its task × arm matrix opens that
+> arm's step player for that task. This file stays the source of truth for
+> *why*; the dashboard is the source of truth for *what the numbers are right
+> now*. Operating manual for the two publishing daemons: `CUA/DASHBOARD.md` §3.
+> **A new arm is not reported until it is on that panel** — a number in a chat
+> message is not a result anyone else can check.
+
 ## Layout
 
 ```
