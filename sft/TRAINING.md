@@ -341,11 +341,16 @@ failures that change a conclusion without announcing themselves.
 
 **Worth knowing, not defects:**
 
-- **The tail filter is cutting a lot**: `dropped_tail_steps` 204/946 steps in
-  legacy (22%) and 245/636 in v500 (38%), plus 54 mid-loop drops in v500. These
-  are the teacher's own degenerate endings, so dropping them is the intent —
-  but 38% is high enough that the calibration deserves a re-check when the
-  corpus grows.
+- **The tail filter is NOT over-cutting** — the aggregate percentage misleads.
+  Re-audited on the 29 passing trajectories of the current campaign (1204
+  steps): the 34% of cut steps is concentrated in **6 trajectories; the other 23
+  lose nothing**, and 5 of the 6 are 100-step cap-hitters losing 58–97 steps
+  each. The worst (d3b966ba) has 97 of its 100 steps cut, and that tail contains
+  exactly three distinct action-lists: `moveTo(960,600)` ×48 alternating with
+  `scroll(-3)` ×48. The evaluator passed the task anyway — the teacher had
+  finished and then scrolled forever. Those steps are precisely what must not
+  enter SFT. Report the split (how many trajectories affected), never the bare
+  aggregate.
 - **Every legacy trajectory's first frame is an approximation**:
   `tasks_initial_from_mp4: 39` out of 39 passing tasks. Those runs predate
   `initial_state.png`, so step-1 samples use recording frame 0. Flagged in
@@ -353,6 +358,53 @@ failures that change a conclusion without announcing themselves.
 - The `FileNotFoundError: 'images/court-docket-numbers-lookup/obs_021.png'`
   entries are the same CWD defect in a second guise (both named slugs belong to
   the v500 dataset), not a separate problem.
+
+### Sampling and action-chunk audit (2026-08-13 late)
+
+**There is no action-chunk parameter** — the agent executes every action a
+response contains. Measured on real trajectories:
+
+| model | mean actions/step | distribution | max |
+|---|---|---|---|
+| teacher 27B | 1.20 | 80% single, 20% double | 7 |
+| stock 4B | 1.28 | 90% single | 24 |
+| **SFT v2** | **1.00** | **100% single** | **1** |
+
+SFT collapsed multi-action responses entirely. Under a 50-step cap the teacher
+effectively gets ~60 actions and the SFT student exactly 50 — a second, quieter
+narrowing of behaviour to add to the copy-previous pathology.
+
+**A real teacher/student sampling mismatch:**
+
+| | temperature | top_p | top_k | presence_penalty |
+|---|---|---|---|---|
+| teacher serve (data generation) | 0.6 (client) | 0.95 | **20** (serve `--override-generation-config`) | 0 |
+| student & base serves | 0.6 | 0.95 | **unset ⇒ disabled** | 0 |
+
+The student checkpoint's `generation_config.json` carries only `eos_token_id`,
+and the downloaded `models/Qwen3.5-4B/` has **no `generation_config.json` at
+all**, so vLLM fell back to its own defaults and `top_k` never applied. Student
+and base shared this, so the 4/9-vs-1/9 comparison stays fair, but both differ
+from the distribution the training data was generated under.
+
+**Against Qwen3.5's official recommendations** (model card): thinking mode,
+general — temp 1.0 / top_p 0.95 / **top_k 20** / presence_penalty 1.5; thinking
+mode, precise-coding — temp 0.6 / top_p 0.95 / **top_k 20** / presence_penalty
+0.0. Our temp 0.6 + top_p 0.95 lands exactly on the precise-coding profile,
+which is a defensible choice; **`top_k=20` is recommended in both profiles and
+we omitted it**. Fix for the next rollout: give every serve
+`--override-generation-config '{"temperature":0.6,"top_p":0.95,"top_k":20,
+"repetition_penalty":1.0}'` so teacher, student and base share one declared
+sampler.
+
+Also noted: the official card advises that for multi-turn history "the
+historical model output should only include the final output part and does not
+need to include the thinking content" — the opposite of what `preserve_thinking`
+does. That guidance is for plain multi-turn chat; the chat template's
+tool-use branch keeps interleaved thinking unconditionally, and the teacher
+generated every trajectory under that branch. Matching the teacher is what SFT
+parity requires, so v3 keeps it — but the tension is worth remembering if a
+future arm serves the student in a non-tool-use shape.
 
 ### Rebuilt corpus + third arm (2026-08-13 19:20)
 
