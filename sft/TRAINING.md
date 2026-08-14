@@ -780,6 +780,69 @@ applied — the four runs in flight must not be disturbed.**
 short job on a fixed subset, ~20 steps, measuring `s/it` under one change at a
 time. Each is minutes and well under $1. Do not benchmark by editing a real run.
 
+### The acceleration A/B, run 2026-08-14 (jobs 229685 / 229709 / 229710)
+
+Same data (abs-pilot3), same 5 epochs, same `preserve_thinking true`, same LR
+schedule, **same effective batch 8** — so job **229277** is a same-parameter
+control and the loss curves must overlay.
+
+**Getting the kernels built took three attempts, each failing for a reason worth
+keeping:**
+
+| build | died after | cause |
+|---|---|---|
+| 229671 | 2 min | the venv is `uv venv`, which installs **no pip**, so a bare `pip` fell through PATH to the system python 3.9 and tried to build a torch extension against an interpreter with no torch. Never trust a bare `pip` here — use `uv pip install --python <venv python>` |
+| 229672 | 8 min | `fatal error: cuda_runtime_api.h`. `CUDA_HOME` is a conda-layout toolkit whose `$CUDA_HOME/include` holds conda's generic headers (`bfd.h`, `bzlib.h`, `X11`); the CUDA headers are under `targets/x86_64-linux/include`. nvcc finds its own, the **host compiler does not** — set `CPATH` |
+| **229676** | **succeeded, 1 h** | `causal_conv1d 1.6.2.post1` + `flash_attn 2.8.3.post1`, both into `$B/ext` via `--target`, never into `venv/` (four jobs were importing from it) |
+
+Also learned: flash-attn first tries to download a prebuilt wheel and gets a
+**404** for torch 2.13/cu130, then compiles from source (~35 min at `MAX_JOBS=8`,
+**154 GB peak RSS** — the 200 GB request was necessary, 120 GB would have OOMed).
+
+**`--deepspeed zero2` (dropping the CPU offload) does not fit. Measured twice:**
+
+| job | config | result |
+|---|---|---|
+| 229685 | 4 changes | 28.8 → 24.0 → **22.4 s/it**, then **OOM at step 3** |
+| 229709 | 4 + `--use_liger_kernel true` | **59.2 s/it**, **OOM at the same step 3** |
+
+Removing the offload puts ~48 GB of optimizer state back on the GPU, and a
+65536-token sample needs a `65536 × 248320` logits tensor — 32.5 GB in bf16,
+~65 GB once cross-entropy upcasts, plus its gradient. **The one thing that would
+erase that is liger's fused linear+CE, and swift refuses to apply it here**:
+
+```
+[WARNING:swift] The cross_entropy loss function defined in Liger Kernel
+                will not take effect, potentially leading to increased
+                GPU memory consumption.
+```
+
+`--loss_scale last_round` + `--enable_channel_loss` make swift compute the loss
+itself from logits, outside the model, which is exactly the path liger's fused
+CE replaces. **The two are mutually exclusive** — this is not a flag that was
+tuned wrong. 229709 being *slower* than 229685 is the same story: it survived a
+step longer by thrashing at 139 of 139.79 GiB, and the allocator paid for it.
+
+**So the usable configuration is 3 of 4** (job 229710): 2 GPUs + `flash_attn` +
+`causal_conv1d`, keeping `zero2_offload`. It cleared step 3 — the sample that
+killed both `zero2` runs — and is running.
+
+**Read the result per micro-batch, not per step.** Two GPUs alone halve the
+micro-batches each GPU handles (8 → 4), so wall-clock improves even if nothing
+else does:
+
+| | baseline 229277 | 229710 (early) |
+|---|---|---|
+| per optimizer step | 46.28 s | ~32 s |
+| micro-batches per GPU | 8 | 4 |
+| **per micro-batch** | **5.79 s** | **~8 s** |
+
+If that survives to steady state it means **the GPU count is doing all the work
+and the two kernels contribute nothing net**, plausibly eaten by DeepSpeed's
+cross-GPU gradient reduction. Early steps are not steady state (the baseline's
+46.28 is a step-144 reading), so this is the number to check at step 50+, not a
+conclusion. Report the per-micro-batch figure alongside any speedup claim.
+
 ### Runs in flight (2026-08-14 01:10)
 
 All on abs-pilot3 (1288 samples, 161 steps/epoch) unless noted; every arm keeps
