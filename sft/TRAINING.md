@@ -1061,6 +1061,63 @@ in the loss is now the best-motivated open change in this file.
 and the evaluation before reporting the score.** It was not checked before this
 run, and it explains more of the result than anything else measured.
 
+#### WHY SFT makes it worse — measured, and it is not about grounding tokens
+
+The token-share argument explains why SFT fails to *teach* much. It does not
+explain why the model ends up **worse than untrained**. This does.
+
+**Measurement: after an action that changed nothing on screen, what happens next?**
+
+| model | dead-end steps | repeats the action | tries something else | solved |
+|---|---:|---:|---:|---|
+| **stock Qwen3.5-4B** | **11** | 18% | **82%** | **4/9** |
+| teacher Qwen3.6-27B | 41 | 85% | 15% | 9/9 (selection) |
+| e3 | 78 | 90% | 10% | 3/9 |
+| more3np | 67 | 67% | 33% | 1/9 |
+| more3 | 114 | 81% | 19% | 0/9 |
+| e1 | **195** | **99%** | 1% | 1/9 |
+
+**The teacher repeats too — 85% of the time — and it is right to.** In a
+successful trajectory a click that produced no visible change usually just needs
+a moment: the dialog is still opening, the app is still repainting. Repeating is
+correct behaviour *for a model that rarely mis-clicks*. And since every training
+trajectory is a success, **repetition is the only failure response the data can
+teach.**
+
+The student inherits the habit without the accuracy behind it:
+
+```
+teacher    41 dead ends x 85% repeat  -> still finishes
+e3         78           x 90%         -> 3/9
+more3     114           x 81%         -> 0/9
+e1        195           x 99%         -> the entire budget spent in place
+```
+
+The stock model has the opposite profile: **equally inaccurate, but its response
+to a dead end is to vary (82%)** — not because it is smarter, but because
+nothing has sharpened its output distribution. On this panel, flailing works:
+try enough different things and one lands. That is where its 4/9 comes from.
+
+**So the regression has a single sentence: the correct policy is conditional on
+your own accuracy, and SFT copies the policy without the accuracy.** It also
+removes the exploration that was covering for the inaccuracy.
+
+Two corollaries this explains that nothing else did:
+
+- **Why e3 beats e1**: 78 dead ends vs 195. The extra epochs mainly bought
+  *fewer wasted actions*, not better recovery — e3's repeat rate (90%) is barely
+  under e1's (99%).
+- **Why the stock model is hard to beat here**: the panel rewards variance, and
+  SFT's first effect is to destroy variance.
+
+**What follows for the recipe.** Adding more successful trajectories cannot fix
+this — every one of them teaches "repeat" as the failure response. The data
+needs episodes where an action fails and the model does something *else*, and
+the corpus contains only 100 such samples (`recovery_samples` in `report.json`).
+Candidates: keep failed-then-recovered teacher episodes rather than only
+`score == 1.0` trajectories; or accept that behaviour cloning alone cannot fix
+it and the recovery policy has to come from RL on the generated tasks.
+
 #### All six arms on the identical nine tasks (2026-08-14, complete)
 
 | arm | data | epochs | steps | preserve | **solved** | terminated | hit cap |
