@@ -972,6 +972,34 @@ metric degrades. First the action exam, then eval_loss, now train loss and token
 accuracy. Every one of them is computed without letting the policy choose its
 own next observation.
 
+#### All six arms on the identical nine tasks (2026-08-14, complete)
+
+| arm | data | epochs | steps | preserve | **solved** | terminated | hit cap |
+|---|---|---:|---:|---|---:|---:|---:|
+| **stock Qwen3.5-4B** | — | — | — | — | **4/9** | 7/9 | 2/9 |
+| **e3** | 916 | 3 | 345 | true | **3/9** | 4/9 | 5/9 |
+| e1 | 916 | 1 | 115 | true | 1/9 | 0/9 | 9/9 |
+| more | 1288 | 1 | 161 | true | 1/9 | 2/9 | 6/9 |
+| more3np | 1288 | 3 | 483 | **false** | 1/9 | 4/9 | 5/9 |
+| more3 | 1288 | 3 | 483 | true | **0/9** | 3/9 | 6/9 |
+
+**No SFT arm has reached the stock model.** The best is still e3 at 3/9.
+
+Three readings that hold:
+
+1. **`preserve_thinking` off beat on at a clean annealed point** — 1/9 vs 0/9,
+   identical in every other respect. One task on a nine-task panel is not
+   evidence of much, but it is enough to retract this file's earlier
+   "exonerated" verdict, which rested on two 1-epoch runs over defective data.
+2. **1288 samples at 3 epochs is clearly worse than 916 at 3 epochs** (0–1/9 vs
+   3/9) — with the attribution still open between volume and the +40% steps.
+   `checkpoint-322` settles it.
+3. **Termination tracks success**, not monotonically but unmistakably:
+   base 7/9 terminated → 4/9 solved; e3 4/9 → 3/9; more3np 4/9 → 1/9;
+   more3 3/9 → 0/9; e1 0/9 → 1/9. **A model that cannot stop cannot finish.**
+   `terminate` is 3.6% of target actions and invisible to every token-level
+   metric in this file.
+
 
 ### Eval policy: final checkpoints only (2026-08-14 01:40, user decision)
 
@@ -1398,6 +1426,14 @@ re-run on the fixed data before being treated as measurements of "916 samples".
 | **stock Qwen3.5-4B** | **4/9** | arxiv(5 steps), exam-kiosk(28), vscode-telemetry(10), store-hours(54) |
 | **SFT v1** (history think stripped) | **1/9** | spectra-loader(9) |
 | **SFT v2** (history think kept) | **1/9** | arxiv(6) |
+
+> **Superseded 2026-08-14.** The paragraph below concluded `preserve_thinking`
+> had no effect, from two arms that both scored 1/9. Both were 1-epoch runs on
+> the defective 609-sample data. At a properly annealed 3-epoch point the flag
+> does separate them — `more3np` (off) 1/9 vs `more3` (on) 0/9 — so "exonerated"
+> is too strong. See the six-arm table below. It is a one-task difference on a
+> nine-task panel and proves little on its own; what it does is reopen a
+> question this file had closed.
 
 **`preserve_thinking` is exonerated as the cause.** Both SFT variants land on
 exactly 1/9 — identical magnitude of damage with and without history reasoning
