@@ -14,6 +14,91 @@ template for real runs.
 > **A new arm is not reported until it is on that panel** — a number in a chat
 > message is not a result anyone else can check.
 
+---
+
+# READ THIS FIRST — the arm registry, and what the numbers can and cannot support
+
+This file grew chronologically and now holds fifteen arms across three datasets.
+This section is the map; everything below it is the dated record, including
+claims this section retracts.
+
+## The finding that governs how to read every score below
+
+**The 9-task panel has a variance of ±2 tasks.** Same checkpoint, same settings
+(temp 0.6, top_p 0.95, top_k 20, ms50, 3 VMs), vLLM unseeded, three runs:
+
+| arm | seed 1 | seed 2 | seed 3 |
+|---|---|---|---|
+| `more3` | **0/9** | **1/9** | **2/9** |
+| `e3` | **3/9** | 0/6 (running) | queued |
+
+**No individual task pass has ever reproduced.** `arxiv-listing` passed on e3
+seed 1 and more3 seed 3 and nowhere else; `exam-kiosk` passed only on more3
+seed 2. e3's seed 2 lost all three tasks its seed 1 had passed.
+
+Consequence: **a difference of 1–3 tasks between arms is not a result.** Every
+single-seed comparison in this file is therefore suspect, and the ones that
+mattered are retracted below.
+
+## Dataset registry — three datasets, easily confused
+
+| name | rows | trajectories | what it is |
+|---|---:|---:|---|
+| `pilot2` (defective) | 916 declared, **609 loaded** | — | relative media paths; a third silently never trained. Used by v1/pilotS, v2/pilotS3, pp15 |
+| `abs-pilot2` | 916 | 47 | the same corpus with absolute paths and a preflight. Used by e1, e3 |
+| `abs-pilot3` | 1288 | 58 | `abs-pilot2` **plus 11 trajectories, none removed** — 10 `libreoffice_calc` + 1 `gimp`. Used by more, more3, more3np, ep5pt, ep5np, fast |
+
+`abs-pilot3`'s added trajectories have **zero domain overlap with the 9-task
+panel** (which is 5 chrome, 3 vs_code, 1 writer).
+
+## Arm registry — every trained arm, exactly
+
+Steps = optimizer steps at effective batch 8. Sample count sets steps/epoch, so
+equal epochs do **not** mean equal optimization.
+
+| arm | dataset | samples | epochs | steps | preserve | tier-3 (seeds) |
+|---|---|---:|---:|---:|---|---|
+| teacher Qwen3.6-27B | — | — | — | — | — | 9/9 *(selection, not a score)* |
+| stock Qwen3.5-4B | — | — | — | — | — | 4/9 (1) |
+| stock + top_k 20 | — | — | — | — | — | 4/9 (1) |
+| OpenWebRL-4B-SFT | theirs | 3085 | 3 | — | — | 2/9 (1) |
+| v1 · pilotS | pilot2 | 609 | 1 | 115 | unset | 1/9 (1) |
+| v2 · pilotS3 | pilot2 | 609 | 1 | 115 | true | 1/9 (1) |
+| v2 + presence 1.5 | pilot2 | 609 | 1 | 115 | true | 2/9 (1) |
+| e1 | abs-pilot2 | 916 | 1 | 115 | true | 1/9 (1) |
+| **e3** | abs-pilot2 | 916 | 3 | 345 | true | **3/9, 0/6…** (2 of 3) |
+| more | abs-pilot3 | 1288 | 1 | 161 | true | 1/9 (1) |
+| **more3** | abs-pilot3 | 1288 | 3 | 483 | true | **0/9, 1/9, 2/9** (3) |
+| more3np | abs-pilot3 | 1288 | 3 | 483 | **false** | 1/9 (1) |
+| ep5pt | abs-pilot3 | 1288 | 5 | 805 | true | 1/9 (1) |
+| ep5np | abs-pilot3 | 1288 | 5 | 805 | **false** | 2/9 (1) |
+| `fast` | abs-pilot3 | 1288 | 5 | 805 | true | **not evaluated** — a speed A/B twin of ep5pt (2 GPU · flash_attn · causal_conv1d), loss curves overlay ep5pt at 202 points |
+
+## Retracted — claims this file made from single-seed comparisons
+
+| claim | why it is withdrawn |
+|---|---|
+| "1288 samples at 3 epochs is clearly worse than 916 at 3 epochs" (0/9 vs 3/9) | more3 is 0/1/2 across seeds and e3's seed 2 is 0/6 so far — the gap is inside the noise |
+| "the added calc data caused the regression" | the *facts* stand (zero domain overlap, 29% dilution, longer trajectories); the **gap they were invoked to explain does not exist yet** |
+| "`preserve_thinking` off beats on" (1/9 vs 0/9 and 2/9 vs 1/9) | one task on a nine-task panel, twice. Inside the noise |
+| "epochs are the one lever that moved the real metric" (e1 1/9 → e3 3/9) | both single-seed; e3's second seed undercuts it |
+
+## Not retracted — what survives, and why
+
+| finding | why variance does not touch it |
+|---|---|
+| **SFT arms sit below the stock model** | every one of 11 trained arms scored ≤3/9 against 4/9; the stock number should still be re-run for seeds |
+| **The failure mechanism** (below, "WHY SFT makes it worse") | measured over thousands of steps, not nine binary outcomes: dead-end steps 11 (stock) vs 78 (e3) vs 114 (more3) vs 195 (e1), and repeat-rate 18% vs 90% vs 81% vs 99% |
+| **Termination rate tracks success** | same — counted over every step of every episode |
+| **`zero2` without CPU offload does not fit** | two OOMs at the same step, with a mechanical cause (swift's custom loss excludes liger's fused CE) |
+| **The acceleration is quality-neutral** | 202 aligned logging points, sign split 106/96 |
+
+**The standing lesson: score comparisons on this panel need ≥3 seeds, or they
+are not comparisons.** Behavioural counts do not — they aggregate thousands of
+decisions and separate cleanly where the scores cannot.
+
+---
+
 ## Layout
 
 ```
@@ -943,6 +1028,9 @@ the extra 372 trajectories are lower quality.
 
 Until that runs, "more data hurt" is not a supported claim.
 
+> **RETRACTED as a comparison.** 0/9 was the worst of three seeds (0/1/2). The
+> behavioural counts in this section still hold; the ranking does not.
+
 #### Result: `more3` scored **0/9** — the lowest of any arm (2026-08-14)
 
 | arm | data | epochs | steps | **solved** | terminated | hit the 50-step cap | mean steps |
@@ -971,6 +1059,10 @@ Third time this project has hit the same wall: proxy metrics improve, the real
 metric degrades. First the action exam, then eval_loss, now train loss and token
 accuracy. Every one of them is computed without letting the policy choose its
 own next observation.
+
+> **The facts here stand; the conclusion does not.** The domain overlap is
+> genuinely zero and the dilution genuinely 29%, but the score gap these were
+> invoked to explain has not survived seeding.
 
 #### Why `more3` is worse: the added data has zero domain overlap with the panel
 
@@ -1417,6 +1509,10 @@ When an action has no effect, the SFT model repeats it, and its corrective
 action is itself mis-grounded. That is consistent with a corpus of teacher
 successes in which "the action did nothing, try something else" is never
 demonstrated.
+
+> **RETRACTED — see READ THIS FIRST.** Both arms here are single-seed. `more3`
+> later scored 0/1/2 across three seeds and `e3`'s second seed lost all three of
+> its passes, so a 1/9 → 3/9 gap is inside the panel's ±2 noise.
 
 ### Epochs are the one lever that moved the real metric (2026-08-14 00:40)
 
