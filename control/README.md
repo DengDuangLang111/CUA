@@ -35,6 +35,17 @@ monitor probes, and anything under `logs/`.
 
 - **Kill the supervisor before the runner.** Killing only the runner makes the
   supervisor relaunch it, and then two things fight over the 3 VMs.
+- **Restarting the rollout supervisor leaks a tunnel.** `v11_500_fp8.sh` starts
+  `tunnel_qwen36_auto.sh` unconditionally, so anything that restarts it — such
+  as `eval_more3_pair.sh` resuming the campaign — adds a second tunnel while the
+  first is still bound to `:18001`. Observed 2026-08-14: the loser logged
+  `cannot listen to port: 18001` every 30 s while the winner kept serving.
+  Harmless here, and it self-heals when the old serve's wall expires (the loser
+  grabs the freed port and connects to the chained successor), but a supervisor
+  restart should kill any existing tunnel for its port first. Diagnose with
+  `ss -ltnp | grep 18001` and then check whether that ssh's PPID still exists —
+  a dead parent means the working forwarder is an orphan with nothing to restart
+  it.
 - **A bare `pkill` leaks the containers.** Always follow with
   `docker rm -f $(docker ps -aq)` — skipping it once starved the box to 4 GB
   free and made every new VM fail to boot.
