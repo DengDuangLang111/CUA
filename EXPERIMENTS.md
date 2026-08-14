@@ -753,7 +753,111 @@ becomes the false-FAIL rescue list.
 
 ---
 
-## 11. Open
+## 11. PLANNED — run Qwen3.8-27B over the same 544 tasks
+
+Proposed 2026-08-14. **Not started.** Written down before any work because
+step 0 is verification, and because the sequencing matters more than the run.
+
+### Honest starting point
+
+Qwen3.8 was released after this assistant's knowledge cutoff. **Its size range,
+architecture, vision support, dependencies and recommended sampling are all
+unknown here and must be read from the model card, not assumed.** Nothing below
+depends on a guess about the model; every specific number is either from our own
+measurements or flagged as needing verification.
+
+### Why it is worth the ~42 hours
+
+Three separate questions, and the third is the one that would change the SFT
+line:
+
+1. **Do these tasks discriminate?** Qwen3.6-27B scores 39% on v11-100 and ~24%
+   on v11-500. If a stronger model scores substantially higher, the corpus is
+   measuring capability. If it scores the same, the tasks are gated on something
+   else — environment flakiness, instruction ambiguity, grader strictness — and
+   that is a finding about the generator, not the model.
+2. **A better teacher means more and cleaner SFT data.** At 24% the v11-500
+   rollout yields ~107 usable trajectories from 444 tasks. A higher pass rate
+   raises the corpus without generating a single new task.
+3. **Does the failure mechanism change?** This is the important one.
+   `sft/TRAINING.md` measures that after an action that changes nothing on
+   screen, Qwen3.6 repeats it **85%** of the time — and since only successful
+   trajectories become training data, *repetition is the only failure response
+   the data can teach*. The student inherits the habit without the accuracy and
+   loops. **If a stronger teacher recovers instead of repeating, its
+   trajectories would carry the one behaviour the corpus currently cannot
+   teach.** Measure this before pass rate.
+
+### Step 0 — verify, before allocating anything
+
+| check | why it can stop the plan |
+|---|---|
+| does a ~27B variant exist, and is it **vision-language**? | the whole rollout is screenshot-driven; a text-only model is unusable here |
+| weights available / licence / gated? | — |
+| vLLM version required; does the current serve env support the arch? | Qwen3.5 needed `transformers>=5.9`; a new arch may need newer still |
+| new kernels? | Qwen3.5 needed `flash-linear-attention` + `causal_conv1d`. Budget a build job; ours took three attempts and an hour (`TRAINING.md`) |
+| official FP8 checkpoint? | FP8 measured **1.39–1.51×** on Qwen3.6 (`logs/fp8_ab.log`); worth having from the start |
+| **official sampling recommendation** | Qwen3.5's is temp 0.6 / top_p 0.95 / top_k 20. Do **not** carry that over by assumption |
+
+Disk is not a constraint: `/gpfs/scrubbed` has 523 T free.
+
+### Step 1 — the dialect check, on 5 tasks, before the campaign
+
+The single most likely silent failure. The rollout depends on
+`mm_agents/qwen/`'s `build_internal_tools_def` + `parse_internal_response`, and
+a different model may emit a different tool-call dialect or hallucinate
+undeclared actions. Qwen3.6 hallucinated `answer` and `screenshot`, both of
+which fell into the empty-response fallback and became `WAIT` — **an infinite
+loop that looked like the model being slow**, and it cost 106 wasted steps
+before anyone noticed.
+
+Run 5 tasks and check:
+- `grep "unhandled action" runtime.log` — the warning added to `actions.py`
+- whether `OSTG_PARAM_DIALECT=inline` is needed (the shim already exists)
+- that `terminate` actually appears
+
+### Step 2 — sequencing: do NOT switch mid-corpus
+
+Qwen3.6's v11-500 pass is at 237/444. **Finish it first**, so the 3.6 column is
+a complete reference, then run 3.8 as a clean second pass into its own result
+dir. Mixing two models inside one result directory repeats the mistake that
+`PRECISION_BOUNDARY.json` exists to record, and this time the difference would
+be the thing under study rather than a footnote.
+
+Record a `MODEL_BOUNDARY.json` in the new run alongside the args.
+
+### Step 3 — what to measure, and why not just pass rate
+
+Report these *before* the headline number, because they are what survived the
+variance problem on the 9-task panel:
+
+| metric | why |
+|---|---|
+| **dead-end rate** — steps whose screenshot equals the previous one | Qwen3.6: measured on the eval panel; the driver of the student's collapse |
+| **repeat-after-dead-end** | Qwen3.6 = 85%. **The number that decides whether a better teacher fixes SFT** |
+| **terminate rate** | Qwen3.6 = 85% (v11) / 81% (v11-500) of passing trajectories |
+| **state revisitation** | separates looping from working: 0.02 on passed vs 0.56 on failed tasks for one arm |
+| steps to solve | shorter demonstrations are better training data |
+
+### Cost and what it blocks
+
+544 tasks (v11 100 + v11-500 444) at the measured **13 tasks/h on 3 VMs ≈ 42 h**,
+plus serve GPU hours. It occupies all three VMs for that whole time, so tier-3
+evals and any other rollout must be scheduled around it.
+
+**Statistically this is a far better comparison than anything on the 9-task
+panel**: 544 tasks makes a few-percent difference meaningful, where the panel
+cannot resolve 3 tasks out of 9.
+
+### One open question it raises
+
+The student is Qwen3.5-4B. Moving the teacher to 3.8 widens the
+teacher→student capability gap, and distillation across a wider gap is not
+automatically better. If a 3.8-4B exists, whether the student should move too is
+a separate decision — and it would invalidate every arm in the current registry
+for comparison purposes.
+
+## 12. Open
 
 - **The main rollout is mid-flight** (13 of 203 at this writing); claims about
   thinking's effect on the solve rate, and the preserve/no-preserve A/B, wait
@@ -775,7 +879,7 @@ becomes the false-FAIL rescue list.
 
 ---
 
-## 12. A note on confidence
+## 13. A note on confidence
 
 Three conclusions here were stated before the evidence supported them and later
 contradicted: a loop-count threshold at n=12, a claim that one prompt style never
