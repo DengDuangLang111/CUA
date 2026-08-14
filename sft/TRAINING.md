@@ -381,20 +381,52 @@ trims it 50 → 5). Three trajectories escape, each through a different hole:
 | `calc/768f4c21` (63 steps) | `…gg`**`hhhhhhh`**`ij…` | a run of **7**, one short of `min_run=8`, kept whole. Calibration recorded the longest *legitimate* run as 6 — so 7 is already outside the legitimate band and the threshold has zero margin |
 | `gimp/e16448e3` (37 steps) | `…vv`**`wxyxyxyxy`**`za` | a 2-cycle oscillation. `identical_runs` needs consecutive byte-identical steps; `low_diversity_tail` would catch it but only fires on cap-hitters and only at the tail. **Mid-episode oscillation under 50 steps is modelled by nothing** |
 
-**The one to fix first is `eadbe7a5`'s class**, because it is not a missed loop —
-it is a caught loop that still reaches the model. Dropping a step as a *target*
-while keeping it as *context* trains "after 55 identical turns, here is the next
-action", which is the exact in-context pattern lock the student was measured
-failing at. Candidate fixes, cheapest first: (1) after `identical_runs` marks a
-run, collapse it in the rendered history too (keep the first, drop the rest);
-(2) lower `min_run` 8 → 6 to match the calibration band, costing at most the one
-7-run seen here; (3) apply `low_diversity_tail`'s ≤3-distinct test as a sliding
-window over the whole trajectory rather than the tail, and drop the `>= 50` gate
-— it exists because a normally-terminated episode ends with varied steps, which
-is an argument about the *tail*, not about mid-episode windows.
+#### What the escape actually looks like in a shipped sample
 
-None of this is retro-applied to arms already trained; it would change the
-dataset under a comparison in flight. It is a v4 recipe change.
+`eadbe7a5` = slug `sec-edgar-berkshire-cik`. **14 of its samples are in
+`abs-pilot2` and `abs-pilot3` `train_swift.jsonl`** — the data all four running
+jobs read. The worst of them:
+
+```
+step 62 of 69 · 61 assistant turns in context · 6 distinct
+                one response repeated 56x, and the label says "produce turn 62"
+```
+
+That repeated response is the model observing *"the current page is showing an
+error… a previous search failed"* — fifty-six consecutive times. `identical_runs`
+removed 54 of those steps as **targets**, which means "do not score the model for
+producing this". It does **not** mean "do not show it to the model".
+
+#### Sizing it before believing it (measured, and it lowers the priority)
+
+Across the whole 1288-sample training set:
+
+| context's most-repeated assistant turn | samples | share |
+|---|---:|---:|
+| no repeat | 1100 | 85.4% |
+| 2–3× | 71 | 5.5% |
+| 4–7× | 58 | 4.5% |
+| **≥ 8×** | **7** | **0.5%** |
+| (no assistant turn yet — step 1) | 52 | 4.0% |
+
+**All 7 of the ≥8× samples come from that one trajectory.** So this is
+**hygiene, not the explanation** — 0.5% of samples cannot account for 4/9 → 1/9,
+and an earlier note in this file calling it "the one to fix first" overstated it.
+
+Where it *does* matter is **before scaling the corpus**: one bad trajectory in 71
+produced 0.5%, and the blind spots that let it through (oscillation off the tail,
+the `>= 50` gate, `min_run` with no margin) get exercised far more at 10× the
+data. Cheap to close now, expensive to discover later.
+
+Candidate fixes, cheapest first — **v4 recipe, applied at the next data rebuild,
+not retro-applied** (that would change the dataset under a comparison in flight):
+(1) after `identical_runs` marks a run, collapse it in the rendered history too
+(keep the first, drop the rest); (2) lower `min_run` 8 → 6 to match the
+calibration band, costing at most the one 7-run seen here; (3) apply
+`low_diversity_tail`'s ≤3-distinct test as a sliding window over the whole
+trajectory rather than the tail, and drop the `>= 50` gate — it exists because a
+normally-terminated episode ends with varied steps, which is an argument about
+the *tail*, not about mid-episode windows.
 - **Every legacy trajectory's first frame is an approximation**:
   `tasks_initial_from_mp4: 39` out of 39 passing tasks. Those runs predate
   `initial_state.png`, so step-1 samples use recording frame 0. Flagged in
@@ -1146,6 +1178,41 @@ Fix directions, in the order worth trying:
    grounding 0.6%. Recovery behaviour is nearly absent from the corpus: `wait`
    is 3.4% of target actions and `terminate` 3.6%, and every trajectory is a
    teacher SUCCESS, so "you are stuck, do something else" is never demonstrated.
+
+### What the 9-task panel is for, and what it is not (decided 2026-08-14)
+
+**The panel is an instrument for ranking recipes, not a measure of the model.**
+It exists to answer "which training setup works" and "how much data is needed to
+beat the stock model" cheaply — 9 tasks, ~1 h per arm — and it has done that
+(e1 1/9 → e3 3/9 identified epochs as the lever when loss saw nothing).
+
+It cannot answer "did the model get better at desktop work", because it is
+**in-distribution by construction**: same generator, same 1300-cell taxonomy,
+and the tasks are literally the validation split of the training corpus.
+
+**Real evaluation is on benchmarks the line has never trained toward** —
+OSWorld-Verified first, then others. Contamination is already gated, which is
+what makes this valid: the generated corpus scores max cosine **0.46 vs
+official-361** against a `< 0.50` gate, so the student has never trained on a
+paraphrase of it.
+
+**The blocking prerequisite: there is no stock Qwen3.5-4B number on
+OSWorld-Verified.** Only the teacher has one (45.2%, 141/312 non-proxy,
+`results/qwen36-27b-bf16-local/osworld-verified-361-…20260731`). Without the
+stock-4B baseline an SFT number on that benchmark is unreadable — "SFT helped"
+and "a 4B is simply weak here" produce the same number. That baseline runs first.
+
+**Measured cost** (2026-08-14, from the v11-500 rate): **13 tasks/h on 3 VMs**,
+so 312 non-proxy tasks ≈ **24 h per arm**; the other 49 still need residential
+proxy credentials. At that price not every arm can be run, so:
+
+- run **stock 4B** and **the single best SFT arm** first — 2 days, and that pair
+  is the only comparison that answers the actual question;
+- for wider sweeps use a **stratified subset** (balanced by the 11 domains).
+  A subset costs nothing in comparability against the teacher: its per-task
+  results already exist for all 312, so it can be re-scored on any subset for
+  free. A subset number is *not* comparable to the published 45.2% until the
+  teacher is re-scored the same way — do that, do not quote across subsets.
 
 ### Where the 9 tier-3 tasks come from, and why they are not contaminated
 

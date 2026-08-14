@@ -401,8 +401,13 @@ const VIEWS = [
   trims it 50 → 5 steps. The gap is narrower than "loops get through": it is
   <b>(a) oscillation is not modelled at all off the tail, (b) the 50-step gate makes the strongest
   filter inapplicable to normally-ending trajectories, and (c) removing a target does not remove
-  it from the next sample's context.</b> (c) is the one worth fixing first, because context is
-  exactly where the observed failure lives.</p>
+  it from the next sample's context.</b></p>
+  <p class="note">(c) has a receipt: 14 samples of <code>sec-edgar-berkshire-cik</code> are in the
+  training data every current run reads, and the worst carries <b>61 assistant turns of which 6 are
+  distinct, one repeated 56×</b>, with the label "produce turn 62". But <b>sized against the whole
+  set it is 7 samples in 1288 — 0.5%</b>, all from that one trajectory (4–7× repeats: another 4.5%;
+  no repeat at all: 85%). That is <b>hygiene, not the explanation</b>: 0.5% cannot account for
+  4/9 → 1/9. It is worth closing before the corpus scales, not as a lever to pull now.</p>
   <div class="seclabel">Discipline that made the catch possible</div>
   ${tbl([["rule"],["what it does"]],[
    `<td>samples via the agent's own code</td><td class="why">context assembled by the rollout agent's message builder — format parity by construction, labels are the verbatim teacher response</td>`,
@@ -413,8 +418,8 @@ const VIEWS = [
  traj:null},
 
 {id:"sft-panel", group:"SFT", title:"Tier-3 Panel", rate:"live",
- head:{t:"Tier-3 — the student drives the VM itself", pills:[P.good("live"),P.dim("9 held-out tasks · ms50 · 3 VMs")],
-   lede:"The only arbiter in this project. Nine held-out tasks the teacher passes 9/9, run end to end in real VMs and scored by each task's own checker. Every cell in the matrix opens that arm's step player for that task."},
+ head:{t:"Tier-3 — the student drives the VM itself", pills:[P.good("live"),P.warn("recipe ranking, not a model score"),P.dim("9 held-out tasks · ms50 · 3 VMs")],
+   lede:"An instrument for choosing a training recipe, not a measure of the model. Nine tasks held out of the training corpus, run end to end in real VMs and scored by each task's own checker. Every cell in the matrix opens that arm's step player for that task."},
  design:()=>{ const A=sftArms(), S=window.SFT; return `
   <div class="seclabel">Every arm on the same nine tasks${S?` · as of ${S.updated}`:""}${
     S&&S.panel_id?` · panel <code>${S.panel_n}/${S.panel_id}</code>`:""}</div>
@@ -439,6 +444,20 @@ const VIEWS = [
   Some of what SFT is being asked to imitate is itself loop-locked; that is what the tail filters
   exist to strip, and it is an argument for scoring teacher trajectories on more than the final
   checker verdict before they become training data.</p>
+  <div class="seclabel">What this panel is for — and what it cannot tell you</div>
+  <p class="note">These nine tasks are <b>in-distribution by construction</b>: same generator, same
+  1300-cell taxonomy, and they are literally the validation split of the training corpus. That makes
+  them a cheap, sharp instrument for <b>ranking recipes</b> — ~1 h per arm, and it is what found the
+  epoch lever when loss saw nothing. It does <b>not</b> make them a measure of whether the model got
+  better at desktop work.</p>
+  <p class="note"><b>Real evaluation moves to benchmarks the line has never trained toward</b>,
+  OSWorld-Verified first. That is valid precisely because contamination was gated up front: the
+  generated corpus scores max cosine <b>0.46 against official-361</b> under a &lt; 0.50 gate, so the
+  student has never seen a paraphrase of it. The blocking prerequisite is a baseline that does not
+  exist yet — <b>there is no stock Qwen3.5-4B number on OSWorld-Verified</b>; only the teacher has
+  one (45.2%, 141/312 non-proxy). Without it, "SFT helped" and "a 4B is simply weak here" are the
+  same number. Measured cost at the current rate (13 tasks/h on 3 VMs): <b>~24 h per arm</b> for the
+  312 non-proxy tasks.</p>
   <div class="seclabel">Where these nine tasks come from — nobody picked them</div>
   ${tbl([["property"],["detail"]],[
    `<td><b>the split</b></td><td><code>int(md5(slug),16) % 1000 &lt; val_ratio*1000</code> in the dataset builder — the same task-level split that produces the validation set</td>`,
