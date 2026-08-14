@@ -858,7 +858,7 @@ higher one when they disagree.
 |---|---|---|
 | train loss | did optimization move at all; batch-level health | success of anything — it falls under pure memorization too |
 | eval_loss (held-out tasks, during training) | is the model learning transferable structure (falls) or memorizing (plateaus while train falls — v1's signature) | whether actions are usable |
-| action exam (type acc / coord MAE / think) | format health; relative progress between recipes on the same panel | task capability — it scores agreement with the teacher, and a different-but-correct action scores badly |
+| action exam (type acc / coord MAE / think) | **demoted 2026-08-13 to a cheap format smoke-test only** — does the model still emit parseable actions | task capability, and in practice not even relative quality: it ranked the checkpoint that scored 1/9 as the best model on the panel (0.800 acc, above stock 4B's 0.775), and rendered the fatal copy-previous defect as a benign "phase lag". Teacher forcing hands the model a correct history, so a policy that has stopped reading its observation still scores well |
 | **rollout success rate** (tier 3: our tasks, then OSWorld-Verified) | **whether training worked. This is the acceptance criterion; everything above is a proxy for this row** | — |
 
 Ledger row contract: job id, recipe version, data version (filter version +
