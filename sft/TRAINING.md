@@ -508,6 +508,70 @@ Meanwhile `serve_watchdog.sh` runs continuously: it greps every serve log for
 than one eval serve is alive. It caught the `more` collision retroactively on
 its first cycle.
 
+## The commands actually in use (2026-08-14)
+
+**Training — the epoch-curve pair.** Identical except `--preserve_thinking`;
+`--save_steps 161` = one epoch on abs-pilot3 (1288 samples ÷ effective batch 8),
+so checkpoints land at 161/322/483/644/805 = epochs 1–5. `--qos=normal` because
+805 steps × ~47 s ≈ 10.5 h exceeds the interactive QOS's 8-hour cap.
+
+```bash
+cd $B/runcwd                       # neutral CWD, never a dataset dir
+PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True' IMAGE_MAX_TOKEN_NUM=2048 NPROC_PER_NODE=1 \
+swift sft \
+  --model $B/models/Qwen3.5-4B \
+  --dataset     $B/data/abs-pilot3/train_swift.jsonl \
+  --val_dataset $B/data/abs-pilot3/val_swift.jsonl \
+  --enable_channel_loss true \
+  --tuner_type full --loss_scale last_round --gradient_accumulation_steps 8 \
+  --preserve_thinking true|false \
+  --attn_impl sdpa --deepspeed zero2_offload --torch_dtype bfloat16 \
+  --num_train_epochs 5 --per_device_train_batch_size 1 \
+  --learning_rate 1e-5 --warmup_ratio 0.05 \
+  --max_length 65536 --gradient_checkpointing true \
+  --eval_steps 40 --save_steps 161 --save_total_limit 6 --logging_steps 4 \
+  --report_to wandb --run_name <name>-$SLURM_JOB_ID \
+  --output_dir $B/out/<name>
+```
+
+Preceded in every job by the RECIPE v3 preflight (below), which aborts before
+any GPU time if a single image path fails to resolve.
+
+**Serving a checkpoint for the rollout** (one serve alive at a time):
+
+```bash
+vllm serve $CK --served-model-name <name> \
+  --tensor-parallel-size 1 --max-model-len 262144 --reasoning-parser qwen3 \
+  --override-generation-config '{"temperature":0.6,"top_p":0.95,"top_k":20,"repetition_penalty":1.0}' \
+  --limit-mm-per-prompt '{"image": 20}' --host 127.0.0.1 --port 8000
+```
+
+**The 9-task rollout** (`run_arm.sh` wraps this; `OSTG_PARAM_DIALECT=inline`
+only for foreign checkpoints such as OpenWebRL's):
+
+```bash
+OSTG_WAIT_BREAK=10 OSTG_LOOP_LOG=12 .venv/bin/python scripts/python/run_multienv_qwen.py \
+  --provider_name docker --path_to_vm .../Ubuntu.qcow2 --headless \
+  --observation_type screenshot --action_space pyautogui \
+  --model <name> --base_url http://127.0.0.1:<port>/v1 \
+  --temperature 0.6 --top_p 0.95 --max_tokens 81920 --max_steps 50 \
+  --sleep_after_execution 1 --enable_thinking --num_envs 3 --simple_path \
+  --screen_width 1920 --screen_height 1080 \
+  --test_config_base_dir  .../eval_valpanel_tasks \
+  --test_all_meta_path    .../eval_valpanel_tasks/manifest.json \
+  --result_dir .../results_generated/<name>/valpanel-a1
+```
+
+**Pipelining evaluation into training** (`ckpt_pipeline.sh`): training runs
+~10.5 h and evaluating ten checkpoints costs ~6.7 h of VM time; run serially
+that is 17 h, pipelined it is ~11 h. The pipeline polls both output dirs, treats
+a checkpoint as ready only when `config.json` and the weight shards exist **and
+the directory has been untouched for 180 s** (swift writes shards
+progressively — serving a half-written checkpoint is the failure this guards
+against), then runs one arm at a time and appends the tag to a `.done` ledger so
+a restart never re-evaluates. It exits when no `sft-ep5` job remains and no
+checkpoint is unevaluated.
+
 ## RECIPE v3 — FROZEN 2026-08-13 evening (supersedes v2)
 
 v2 plus the two changes that make the 08-13 silent-data-drop impossible:
