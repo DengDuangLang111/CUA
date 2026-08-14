@@ -397,6 +397,26 @@ we omitted it**. Fix for the next rollout: give every serve
 "repetition_penalty":1.0}'` so teacher, student and base share one declared
 sampler.
 
+**Applied 2026-08-13**: all three student/base/v1 serve scripts now carry
+`--override-generation-config '{"temperature":0.6,"top_p":0.95,"top_k":20,
+"repetition_penalty":1.0}'`. **No retraining is implied** — `top_k` is a
+sampling parameter and never touches a cross-entropy fit on fixed targets. It
+affects exactly two things: the teacher rollout that produced the data (already
+baked in, top_k=20) and tier-3 rollouts (today's 4/9 and 1/9, which ran without
+it). Both of today's arms shared the omission, so their comparison stands; the
+absolute numbers were measured under a wider sampler than the data was
+generated with.
+
+Do not expect `top_k=20` to cure the lock-ups — it *narrows* the distribution,
+making the policy more deterministic, which if anything makes an absorbing
+repeated state more likely. The parameter aimed at repetition is
+**`presence_penalty`**, which the official card sets to 1.5 for general thinking
+mode (and 0.0 for the precise-coding profile we adopted). A cheap, high-value
+ablation is therefore: same checkpoint, same 9 tasks, `presence_penalty` 0 vs
+1.5 — it separates "the weights lost the behaviour" from "the sampler let it
+loop", and if the latter carries weight, it is a one-flag deployment fix rather
+than a retrain.
+
 Also noted: the official card advises that for multi-turn history "the
 historical model output should only include the final output part and does not
 need to include the thinking content" — the opposite of what `preserve_thinking`
