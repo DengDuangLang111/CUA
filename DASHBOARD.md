@@ -104,10 +104,20 @@ cycle and regenerate, so a reset can never lose anything.
 
 ### Publishing trajectories
 
-Once per arm, not on a timer: a tier-3 arm is frozen the moment its ninth
-`result.txt` lands, unlike the live rollout. A `.fingerprint` file (result count
-+ newest `traj.jsonl` mtime) inside the published directory is the check, so a
-re-run republishes and a finished arm never does.
+A `.fingerprint` file (result count + newest `traj.jsonl` mtime) inside the
+published directory decides:
+
+- **complete arm** (all 9 scored) → published once and never again. A tier-3 arm
+  is frozen the moment its ninth `result.txt` lands, unlike the live rollout.
+- **arm still rolling** → refreshed at most every 30 minutes, so the arm the
+  machine is currently running is watchable while it runs.
+- **re-run of an arm** → fingerprint changes, republishes.
+
+The 30-minute floor is not politeness, it is the same lesson as the rollout
+viewer: **JPEGs do not delta-compress**, so republishing on every 5-minute cycle
+adds the arm's full weight to git history each time. One arm at a time is
+guaranteed by the 3-VM ceiling, so the throttle bounds the cost at ~4
+republishes per arm.
 
 Screenshots are recompressed (JPEG q30, 1000 px) **and then deduped by content
 hash**, with the surviving filename substituted into `viewer.html`. This matters
