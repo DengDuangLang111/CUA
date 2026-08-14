@@ -894,14 +894,39 @@ a checkpoint at each epoch boundary.
 |---|---|---|---|---|---|
 | 229277 | `ep5pt` | 5 | **true** | snapshots | epoch curve, preserve on |
 | 229278 | `ep5np` | 5 | **false** | snapshots | epoch curve, preserve off |
-| 229348 | `more3` | 3 | true | **yes** | data×epoch interaction vs e3 (916, 3ep, 3/9) |
+| 229348 | `more3` | 3 | true | **yes** | vs e3 — but confounds volume with +40% steps, see correction below |
 | 229354 | `more3np` | 3 | **false** | **yes** | the preserve_thinking question at 3 epochs |
 
 The pairs answer distinct questions. `ep5pt` vs `ep5np` gives the flag's effect
 along a whole 5-epoch curve; `more3` vs `more3np` gives it at a single properly
-annealed 3-epoch point. `more3` vs `e3` isolates data volume (1288 vs 916) now
-that epochs are sufficient — the 1-epoch comparison (more vs e1) showed nothing,
-but that was before the model had learned to terminate at all.
+annealed 3-epoch point.
+
+**Correction (2026-08-14): `more3` vs `e3` does NOT isolate data volume.** This
+file said it did. At a fixed effective batch of 8, sample count sets steps per
+epoch, so holding *epochs* equal does not hold *optimization* equal:
+
+| | samples | steps/epoch | 3 epochs = |
+|---|---:|---:|---:|
+| e3 | 916 | 115 | **345 steps** |
+| more3 | 1288 | 161 | **483 steps** |
+
+`more3` takes **40% more optimizer steps**. The comparison moves data volume and
+total optimization together, and cannot attribute a difference to either.
+
+That matters here because both runs are already **past the point of
+overfitting** — `eval_loss` rises through training in both (e3 0.3110 → 0.3445,
+more3 0.3440 → 0.3571). Another 40% of steps *inside the overfitting regime* is
+on its own a sufficient explanation for a worse model, with no need to suppose
+the extra 372 trajectories are lower quality.
+
+**The experiment that separates them already exists on disk.** `more3` saved
+`checkpoint-322` — 322 steps, the nearest match to e3's 345. Run the panel on it:
+
+- `more3@322` ≈ e3's 3/9 → **steps were the cause, volume is exonerated**
+- `more3@322` still poor → **volume (or the quality of the added trajectories) is implicated**
+
+Until that runs, "more data hurt" is not a supported claim.
+
 
 ### Eval policy: final checkpoints only (2026-08-14 01:40, user decision)
 
