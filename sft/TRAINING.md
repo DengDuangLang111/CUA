@@ -508,6 +508,101 @@ Meanwhile `serve_watchdog.sh` runs continuously: it greps every serve log for
 than one eval serve is alive. It caught the `more` collision retroactively on
 its first cycle.
 
+### What 1 → 3 epochs actually bought: the model learned to stop
+
+Comparing e1 and e3 step by step on the same 9 tasks (same 916 samples, same
+recipe, epochs the only difference):
+
+| | e1 (1 epoch) | e3 (3 epochs) |
+|---|---|---|
+| tasks that burned the full 50 steps | **9 / 9** | 5 / 9 |
+| tasks that emitted `terminate` | **0 / 9** | **4 / 9** |
+| mean steps per task | 50 | 33 |
+| `mouse_move` share of actions | **32%** | 15% |
+| `left_click` share | 54% | 75% |
+| `terminate` in 450 / 296 actions | **never once** | present |
+
+**e1 never emitted `terminate` in 450 actions.** It could not tell that a task
+was finished — including the one it passed. On arxiv both models do the same
+correct thing in the first four steps; e3 then emits `DONE` at step 5, while e1
+oscillates between the address bar and the result link for another 46 steps:
+
+```
+e3:  click(226,87) → type "1207.7214" → click(207,130) → click(590,353) → DONE
+e1:  click(257,87) → type "1207.7214" → press return → click(576,357)
+     → click(92,87) → click(576,357) → click(92,87) → click(576,357) → ...  (×23)
+```
+
+It passed only because the checker reads the final state. The same behaviour is
+fatal elsewhere: on chrome-downloads e3 sustains an 18-step multi-stage plan
+(file manager → wait → Chrome → settings → change dir → Ctrl+S → DONE) while e1
+falls into the `moveTo(960,600) + scroll(-3)` loop by step 8 — the very pattern
+the tail filter strips from teacher trajectories.
+
+**Interpretation.** One epoch is enough to learn the output *format* — legal
+tool calls, plausible click targets — which is 99.4% of the target tokens. It is
+not enough to learn the task's *temporal structure*: when a task is complete,
+which actions advance it, how a plan survives across stages. Those live in rare
+tokens (`terminate` is 3.6% of target actions, `wait` 3.4%), and rare signals
+need repetition. It also explains why eval_loss saw nothing: the loss is
+dominated by the 99.4%, so it "converged" at step 20 while the behaviour that
+decides task success was still being learned.
+
+**Falsifiable**: terminate-rate should keep rising with epochs until
+overfitting. It is now a first-class metric in this ledger — it moved when
+loss did not.
+
+### An epoch-k checkpoint is not a k-epoch model
+
+The cosine schedule spans the run's **total** steps, so "epoch 3" means
+different things in different runs. Measured from the logs:
+
+| | total steps | LR at the end of epoch 3 |
+|---|---|---|
+| e3 (a 3-epoch run) | 345 | **0.0** — annealed; the log shows 1e-8 at step 340, 0.0 by 342 |
+| ep5pt/ep5np (5-epoch runs) | 805 | **3.77e-6 = 38% of peak** — still moving |
+
+e3's final checkpoint is a finished product; the 5-epoch run's epoch-3
+checkpoint is a mid-flight snapshot. Expect the snapshot to look worse, and do
+**not** read that as a contradiction — it is the schedule, the same trap that
+made the warm-restart run (227829) uninterpretable earlier the same day.
+
+Consequences for reading the epoch curve:
+- The five checkpoints of one run are comparable **to each other** (one
+  schedule, five points along it) — good for trend, terminate-rate, behaviour.
+- They are **not** answers to "what would a k-epoch run produce". That needs k
+  independent runs, each annealing its own cosine — 15 epochs of compute for
+  k = 1..5 instead of 5.
+- We have two annealed products already (e1 = 1 epoch, e3 = 3 epochs) plus
+  more3 (229348: 1288 samples, 3 epochs, its own full cosine). Where a snapshot
+  differs from the matching annealed product, **that difference is the value of
+  annealing** and is worth recording rather than explaining away.
+
+Every checkpoint in the results table should carry the LR it was saved at.
+
+### Runs in flight (2026-08-14 01:10)
+
+All on abs-pilot3 (1288 samples, 161 steps/epoch) unless noted; every arm keeps
+a checkpoint at each epoch boundary.
+
+| job | arm | epochs | preserve_thinking | annealed? | purpose |
+|---|---|---|---|---|---|
+| 229277 | `ep5pt` | 5 | **true** | snapshots | epoch curve, preserve on |
+| 229278 | `ep5np` | 5 | **false** | snapshots | epoch curve, preserve off |
+| 229348 | `more3` | 3 | true | **yes** | data×epoch interaction vs e3 (916, 3ep, 3/9) |
+| 229354 | `more3np` | 3 | **false** | **yes** | the preserve_thinking question at 3 epochs |
+
+The pairs answer distinct questions. `ep5pt` vs `ep5np` gives the flag's effect
+along a whole 5-epoch curve; `more3` vs `more3np` gives it at a single properly
+annealed 3-epoch point. `more3` vs `e3` isolates data volume (1288 vs 916) now
+that epochs are sufficient — the 1-epoch comparison (more vs e1) showed nothing,
+but that was before the model had learned to terminate at all.
+
+Evaluation is pipelined, not batched: `ckpt_pipeline.sh` picks up each
+checkpoint as it lands and runs the 9-task panel, one arm at a time.
+`more3_eval.sh` and `more3np_eval.sh` chain behind it so the three drivers never
+contend for the 3 VMs.
+
 ## The commands actually in use (2026-08-14)
 
 **Training — the epoch-curve pair.** Identical except `--preserve_thinking`;
