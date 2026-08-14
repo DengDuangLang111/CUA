@@ -457,28 +457,44 @@ It is not grinding. **It is paging down a spreadsheet**, which is exactly what
 scrolling is for. The change would have deleted 6 correct training targets, and
 the oscillation filter would have taken a 7th from the same trajectory.
 
-**The rule that came out of it:** a repeated action is only pathological if the
-world did not respond. Count says nothing.
+**The rule that came out of it — and its replacement (2026-08-14 evening).**
+The first attempt was: *a repeated action is pathological only if the world did
+not respond* (`action(k+1)==action(k)` and `shot(k)==shot(k-1)`). Measured at 8
+targets, 0.49%, and it correctly spared the productive 7x scroll.
 
-```
-step k did nothing visible    <=>  shot(k) == shot(k-1)
-step k+1 is grinding          <=>  action(k+1) == action(k) and shot(k) == shot(k-1)
-```
+**Then `more3`'s failure showed that criterion is too weak.** On
+`arxiv-listing` it alternates `click(215,280)` / `typewrite("1207.7214")` for 50
+steps — 2 distinct actions, one repeated 27 times — and **the screen changes on
+28 of 49 transitions**. The clicks open and close something; the state cycles.
+An unchanged-screen test sees a no-op; this is a live 2-cycle between policy and
+environment, and that test would miss it entirely.
 
-First attempt legitimate; repeating something that visibly did nothing is not.
-**Measured, not implemented** (73 trajectories, 1621 targets under the shipped
-filters):
+**The signal that does catch it is state revisitation** — the fraction of steps
+whose screenshot hash has been seen before in the same episode:
 
-| | value |
-|---|---|
-| additional targets it would drop | **8 (0.49%)**, across 7 trajectories |
-| does it spare the productive 7× scroll? | **yes** — `768f4c21` untouched |
-| largest single contributor | `e16448e3`, 2 targets |
+| | passing tasks | failing tasks |
+|---|---:|---:|
+| e3 | **0.02** | **0.56** |
+| stock 4B | 0.09 | 0.16 |
+| more3 | (none) | 0.37 |
 
-At 0.49% this is not worth a recipe change on its own. It is recorded as the
-*correct shape* of the filter should the corpus ever scale to where 0.49% is a
-number that matters — and as the criterion any future loop filter must use
-instead of a count.
+On the arxiv trajectory: more3 **76%** revisited, 12 distinct screens across 50
+steps; e3 **0%**, 5 screens in 5 steps.
+
+Read it as a **loop detector, not a failure predictor** — the stock model's
+separation is weak (0.09 vs 0.16) because it fails by doing the wrong thing
+rather than by cycling. Where it is sharp is exactly where the SFT arms are
+broken.
+
+Two uses, both cheap and neither implemented:
+- **runtime circuit breaker.** `OSTG_WAIT_BREAK` and `OSTG_LOOP_LOG` are both
+  action-based and blind to this shape; a state-revisitation threshold would
+  have ended more3's arxiv episode around step 10 instead of 50.
+- **training-data filter.** This is what the withdrawn oscillation filter was
+  groping at, done on *states* instead of *actions* — and unlike a repeat count,
+  it does not mistake seven productive scrolls for grinding.
+
+Both need calibration before use, on the same 72-trajectory corpus.
 
 **Tests: `ostg/sft/test_filters.py`**, 10 cases covering only the shipped
 filters, including one asserting that a run of 7 is deliberately NOT caught and
