@@ -85,6 +85,29 @@
   a.btn.ghost{background:var(--chip); color:var(--ink);}
   .trajframe{width:100%; height:78vh; border:1px solid var(--line); border-radius:10px; background:#fff; margin-top:12px;}
   .note{font-size:12.3px; color:var(--muted); margin-top:8px; max-width:84ch;}
+  code{background:var(--code); border-radius:5px; padding:1px 6px; font-size:12.4px;}
+  select.arm{font:650 13px/1 inherit; color:var(--ink); background:var(--surface);
+    border:1px solid var(--line); border-radius:8px; padding:8px 11px; max-width:100%;}
+  /* tier-3 matrix: one row per trained arm, one column per held-out task */
+  th.task{text-align:center; padding:7px 6px 6px; font-size:10px; letter-spacing:.04em;}
+  th.task small{display:block; font-weight:650; letter-spacing:0; text-transform:none; opacity:.8;}
+  td.cell{text-align:center; padding:5px 6px;}
+  td.cell a,td.cell span{display:block; border-radius:7px; padding:5px 2px 4px; font-weight:800;
+    font-size:13px; text-decoration:none; line-height:1.15;}
+  td.cell a:hover{outline:2px solid var(--accent); outline-offset:-2px;}
+  .cpass{background:var(--good-bg); color:var(--good);}
+  .cfail{background:var(--bad-bg); color:var(--bad);}
+  .cnone{background:var(--chip); color:var(--muted);}
+  td.cell small{display:block; font-weight:650; font-size:10px; opacity:.75;
+    font-variant-numeric:tabular-nums;}
+  .story{counter-reset:s; margin:10px 0 0; padding:0; list-style:none;}
+  .story li{position:relative; padding:0 0 13px 38px; max-width:82ch; font-size:13.4px;}
+  .story li::before{counter-increment:s; content:counter(s); position:absolute; left:0; top:0;
+    width:25px; height:25px; border-radius:99px; background:var(--sel); color:var(--accent-ink);
+    font-weight:800; font-size:12.5px; display:flex; align-items:center; justify-content:center;}
+  .flow{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:2px 0 0; font-size:12.8px; font-weight:650;}
+  .flow .n{background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:5px 11px;}
+  .flow .a{color:var(--muted);}
   @media (max-width:800px){
     .shell{grid-template-columns:1fr;}
     aside{position:static; height:auto; border-right:none; border-bottom:1px solid var(--line); padding-bottom:10px;}
@@ -97,10 +120,15 @@
 <script>
 /* live numbers: a WSL daemon recomputes dashboard/status.json every 5 min and
    pushes; Vercel redeploys from GitHub; this fetch patches the page on load. */
-window.LIVE = null;
+window.LIVE = null; window.SFT = null;
 function pullLive(){
   fetch("status.json", {cache:"no-store"}).then(r=>r.ok?r.json():null).then(j=>{
     if (j && JSON.stringify(j) !== JSON.stringify(window.LIVE)){ window.LIVE=j; render(); }
+  }).catch(()=>{});
+  /* sft.json is written by a second daemon in its own clone: two writers, two
+     files, so neither can ever clobber the other's keys on a raced push. */
+  fetch("sft.json", {cache:"no-store"}).then(r=>r.ok?r.json():null).then(j=>{
+    if (j && JSON.stringify(j) !== JSON.stringify(window.SFT)){ window.SFT=j; render(); }
   }).catch(()=>{});
 }
 pullLive(); setInterval(pullLive, 120000);
@@ -124,6 +152,54 @@ const P = {good:s=>`<span class="pill good">${s}</span>`, bad:s=>`<span class="p
            warn:s=>`<span class="pill warn">${s}</span>`, dim:s=>`<span class="pill dim">${s}</span>`};
 const card = c=>`<div class="card"><div class="k">${c[0]}</div><div class="l">${c[1]}</div></div>`;
 const tbl = (heads,rows)=>`<div class="tablewrap"><table><tr>${heads.map(h=>`<th ${h[1]||""}>${h[0]}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r}</tr>`).join("")}</table></div>`;
+const esc = s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ---- SFT: the tier-3 panel, live from sft.json ------------------------- */
+const sftArms  = ()=> (window.SFT && window.SFT.arms)  || [];
+const sftPanel = ()=> (window.SFT && window.SFT.panel) || [];
+const sftBest  = ()=> sftArms().reduce((m,a)=>Math.max(m,a.passed),0);
+const shortSlug = s=> String(s).split("-").slice(0,2).join("-");
+/* one row per arm, one column per held-out task; every cell is a link into
+   that arm's own step player for that task. */
+function sftMatrix(){
+  const P = sftPanel(), A = sftArms();
+  if (!A.length) return `<p class="note">waiting for the first sft.json push…</p>`;
+  const heads = [["arm"],["solved",'class="num"'],
+    ...P.map(t=>[`${shortSlug(t.slug)}<small>d${t.diff} · ${t.dom.replace("libreoffice_","")}</small>`,
+                 `class="task" title="${esc(t.slug)} — ${esc(t.instr)}"`])];
+  const rows = A.map(a=>{
+    const cells = P.map(t=>{
+      const r = a.tasks[t.id];
+      if (!r) return `<td class="cell"><span class="cnone">—</span></td>`;
+      const cls  = r.score===1 ? "cpass" : "cfail";
+      const mark = r.score===1 ? "✓" : "·";
+      const tip  = `${a.label} · ${t.slug}: ${r.score===1?"pass":"fail"}, ${r.steps} steps, `
+                 + `${r.distinct} distinct actions, longest repeat ${r.maxrep}`
+                 + `${r.term?", emitted terminate":", never terminated"}`;
+      const body = `${mark}<small>${r.steps}</small>`;
+      return a.traj
+        ? `<td class="cell"><a class="${cls}" title="${esc(tip)}" target="_blank" rel="noopener"
+             href="traj/sft/${a.key}/${r.dom}/${t.id}/viewer.html">${body}</a></td>`
+        : `<td class="cell"><span class="${cls}" title="${esc(tip)}">${body}</span></td>`;
+    }).join("");
+    return `<td><b>${esc(a.label)}</b><div class="why">${esc(a.data)} · ${esc(a.samples)} samples `
+         + `· ${esc(a.epochs)} ep · preserve ${esc(a.preserve)}</div></td>`
+         + `<td class="num hl">${a.passed}/${a.scored}</td>` + cells;
+  });
+  return tbl(heads, rows);
+}
+function sftArmTable(){
+  const A = sftArms();
+  if (!A.length) return `<p class="note">waiting for the first sft.json push…</p>`;
+  return tbl([["arm"],["isolates"],["solved",'class="num"'],["terminated",'class="num"'],
+              ["hit the 50-step cap",'class="num"'],["steps"]],
+    A.map(a=>`<td><b>${esc(a.label)}</b><div class="why">${esc(a.group)}</div></td>`
+      + `<td class="why">${esc(a.note)}</td>`
+      + `<td class="num hl">${a.passed}/${a.scored}</td>`
+      + `<td class="num">${a.term}/${a.scored}</td>`
+      + `<td class="num">${a.capped}/${a.scored}</td>`
+      + `<td class="num why">${Object.values(a.tasks).reduce((s,t)=>s+t.steps,0)}</td>`));
+}
 
 const VIEWS = [
 {id:"all", group:"Results", title:"All Results", rate:"", design:overviewDesign, traj:null},
@@ -219,6 +295,160 @@ const VIEWS = [
   <div class="seclabel">Domain mix</div>
   <p class="note" style="margin-top:0">vs_code 24 · chrome 20 · calc 15 · os 13 · impress 9 · writer 8 · thunderbird 4 · vlc 4 · gimp 3</p>`},
  traj:{url:T.v11, n:"all scored tasks (refreshed as the run progresses)", note:"Step player per task: the model's verbatim thinking, tool calls, executed pyautogui and the VM screenshot at every step. Recordings stay on the lab machine."}},
+
+/* ---------------------------- SFT ------------------------------------- */
+{id:"sft", group:"SFT", title:"Overview", rate:"",
+ head:{t:"SFT — teacher to student", pills:[P.warn("SFT still below the stock model"),P.dim("Qwen3.6-27B → Qwen3.5-4B")],
+   lede:"Successful teacher rollouts on the generated tasks become training data for Qwen3.5-4B. This half of the project has produced one solid negative result and one lever that works — both measured by driving real VMs, because nothing else could see them."},
+ design:()=>{ const A=sftArms(), best=sftBest(), base=A.find(a=>a.key==="qwen35-4b-base"); return `
+  <div class="seclabel">The loop${window.SFT?` · live as of ${window.SFT.updated}`:""}</div>
+  <div class="flow">
+    <span class="n">generated tasks</span><span class="a">→</span>
+    <span class="n">teacher rollout</span><span class="a">→</span>
+    <span class="n">passing trajectories only</span><span class="a">→</span>
+    <span class="n">step samples (context = the agent's own message builder)</span><span class="a">→</span>
+    <span class="n">Qwen3.5-4B SFT</span><span class="a">→</span>
+    <span class="n">9 held-out tasks in real VMs</span></div>
+  <div class="seclabel">Headline — every proxy metric improved and the model got worse at the job</div>
+  <div class="cards">${[
+    [(base?base.passed:4)+"/9 → 1/9", "stock Qwen3.5-4B vs the same model after 1 epoch of SFT. Teacher: 9/9 by construction"],
+    ["0.528 → 0.273", "held-out eval loss over the same run — monotone improvement, start to finish"],
+    ["0.775 → 0.800", "best action-type accuracy of any model on the teacher-forced exam (now archived)"],
+    ["0.61%", "share of training tokens that strictly require looking at the screen"],
+    [best+"/9", "best any trained arm has reached so far"]].map(card).join("")}</div>
+  <p class="note">This is the section's real finding, and it is a methods finding:
+  <b>loss curves and teacher-forced exams cannot detect a policy that has stopped reading its
+  observation</b>, because teacher forcing hands it a correct history no matter what it does.
+  Only driving the actual VM exposed it. The action exam was archived for exactly this reason —
+  it ranked the checkpoint that solved 1 of 9 real tasks as the best model on its panel.</p>
+  <div class="seclabel">Epochs are the one lever that has moved the real metric</div>
+  ${tbl([["e1 → e3, same 916 samples, same recipe"],["e1 · 1 epoch",'class="num"'],["e3 · 3 epochs",'class="num"']],[
+   `<td>tasks solved</td><td class="num">1 / 9</td><td class="num hl">3 / 9</td>`,
+   `<td>tasks that emitted <code>terminate</code></td><td class="num">0 / 9</td><td class="num hl">4 / 9</td>`,
+   `<td>tasks that burned the full 50 steps</td><td class="num">9 / 9</td><td class="num">5 / 9</td>`,
+   `<td>mean steps per task</td><td class="num">50</td><td class="num">33</td>`,
+   `<td><code>mouse_move</code> share of actions</td><td class="num">32%</td><td class="num">15%</td>`])}
+  <p class="note"><b>e1 never emitted <code>terminate</code> once in 450 actions</b> — including on
+  the task it passed, where it kept oscillating between the address bar and the result link for 46
+  steps after finishing. e3 emits <code>DONE</code> at step 5 on the same task. One epoch is enough
+  to learn the output <i>format</i> (99.4% of the target tokens); it is not enough to learn the
+  task's <i>temporal structure</i>, which lives in rare tokens — <code>terminate</code> is 3.6% of
+  target actions, <code>wait</code> 3.4%. That also explains why eval loss saw nothing: it is
+  dominated by the 99.4%, so it "converged" around step 20 while the behaviour that decides success
+  was still being learned. <b>Terminate rate is now a first-class metric here — it moved when loss
+  did not.</b></p>
+  <div class="seclabel">Why the screenshot stopped mattering — measured, not guessed</div>
+  ${tbl([["share of a training target (mean 587 chars)"],["portion",'class="num"'],["needs the pixels?"]],[
+   `<td><code>&lt;think&gt;</code> reasoning prose</td><td class="num">59%</td><td class="why">no — continues the previous turn</td>`,
+   `<td>action names + tool-call boilerplate</td><td class="num">~35%</td><td class="why">no — format and task priors</td>`,
+   `<td>coordinate tags (XML wrapper)</td><td class="num">4.9%</td><td class="why">wrapper no</td>`,
+   `<td><b>coordinate digits</b></td><td class="num hl">0.61%</td><td class="why"><b>yes — only these</b></td>`])}
+  <p class="note">Cross-entropy is averaged over tokens, so across ~115 optimizer steps the cheapest
+  way down is to model the 99.4% that text context already predicts. Grounding is both the hardest
+  skill and the smallest share of the reward.</p>
+  <div class="seclabel">Ruled out, with the evidence that ruled it out</div>
+  ${tbl([["hypothesis"],["verdict"],["evidence"]],[
+   `<td><b>damaged vision</b></td><td class="hl">no</td><td class="why"><code>freeze_vit</code>, <code>freeze_aligner</code> and <code>freeze_parameters=['model.visual','model.visual.merger']</code> all on — the vision tower never moved</td>`,
+   `<td><b>image budget</b></td><td class="hl">no</td><td class="why">1920×1088 → 60×34 = 2040 visual tokens; the <code>IMAGE_MAX_TOKEN_NUM=2048</code> cap never clipped. And the stock arm ran the identical pipeline for 4/9 — a constant cannot explain a difference</td>`,
+   `<td><b>repeated-action training data</b></td><td class="hl">no</td><td class="why">of 873 samples with a previous assistant turn, 15 (1.7%) repeat the previous target — the loop filters worked</td>`,
+   `<td><b>image/response misalignment</b></td><td class="hl">no</td><td class="why">the runner writes each screenshot after <code>env.step()</code>, so a sample's last image is exactly the screen its target acts on</td>`,
+   `<td><b>sampling</b></td><td class="hl">no</td><td class="why">top_k 20 (Qwen3.5's official setting) left the stock model at 4/9; presence_penalty 1.5 moved an SFT arm 1→2 without touching the loop rate (7/9 either way)</td>`,
+   `<td><b><code>preserve_thinking</code></b></td><td class="hl">no</td><td class="why">both variants landed on exactly 1/9 — identical damage with and without history reasoning in the training context</td>`,
+   `<td><b>data integrity</b></td><td class="hl">fixed</td><td class="why">a third of the corpus had silently never loaded (below); every arm since is preflighted</td>`,
+   `<td><b>data volume</b></td><td class="warn">open</td><td class="why">only a 2× span has been tested (609 → 1288), all of it below the 412-trajectory / 3,085-sample outside reference. Not a settled question</td>`])}
+  <div class="seclabel">The defect that cost a day — and the rule that replaced it</div>
+  ${tbl([["stage"],["what happened"]],[
+   `<td><b>symptom</b></td><td>four pilot arms trained and evaluated normally; every cheap check passed — files present, row counts matched, md5s matched, the trainer printed <code>train_dataset: 916 rows</code></td>`,
+   `<td><b>reality</b></td><td>two dataset files carried <i>relative</i> image paths and the job ran from a different working directory. ms-swift falls back to base64-decoding an unresolvable path, throws <code>UnidentifiedImageError</code>, drops the sample with one warning line and substitutes a random other one. <b>307 of 916 samples (33%) could never load</b></td>`,
+   `<td><b>fix</b></td><td>datasets emit absolute media paths; jobs never <code>cd</code> into a data directory; a preflight opens every referenced file and exits non-zero before any GPU time; every run's log is grepped for the silent-skip warning afterwards</td>`,
+   `<td><b>proof</b></td><td>the first arm under the new recipe logged <b>zero</b> <code>template.encode</code> errors, against 70 and 130 for the two arms it replaced</td>`])}
+  <div class="seclabel">Discipline that made the catch possible</div>
+  ${tbl([["rule"],["what it does"]],[
+   `<td>samples via the agent's own code</td><td class="why">context assembled by the rollout agent's message builder — format parity by construction, labels are the verbatim teacher response</td>`,
+   `<td>judge-then-mechanize filtering</td><td class="why">an LLM judge found 4 loop patterns; they were mechanized as calibrated filters (29.5% of steps cut, zero false positives on a 51-trajectory calibration)</td>`,
+   `<td>frozen recipes + a run ledger</td><td class="why">every run appends a row — job id, recipe version, data snapshot, outcome including failures; changes only ever land as versioned recipe blocks</td>`,
+   `<td>snapshot isolation</td><td class="why">every training run reads its own frozen hardlink snapshot; a live data directory is never touched by a running job</td>`,
+   `<td>same-exam rule</td><td class="why">a baseline is only valid for deltas if it took the identical exam; a panel or parser change means everyone retakes</td>`])}`},
+ traj:null},
+
+{id:"sft-panel", group:"SFT", title:"Tier-3 Panel", rate:"live",
+ head:{t:"Tier-3 — the student drives the VM itself", pills:[P.good("live"),P.dim("9 held-out tasks · ms50 · 3 VMs")],
+   lede:"The only arbiter in this project. Nine held-out tasks the teacher passes 9/9, run end to end in real VMs and scored by each task's own checker. Every cell in the matrix opens that arm's step player for that task."},
+ design:()=>{ const A=sftArms(); return `
+  <div class="seclabel">Every arm on the same nine tasks${window.SFT?` · as of ${window.SFT.updated}`:""}</div>
+  ${sftArmTable()}
+  <div class="seclabel">Task × arm — click any cell to watch that run</div>
+  ${sftMatrix()}
+  <p class="note">Cell = pass (✓) or fail (·) with the number of steps it took; the tooltip carries
+  distinct-action count, longest repeated action and whether the run ever emitted
+  <code>terminate</code>. A cell is a link once that arm's trajectories have been published;
+  publishing happens once per arm, because an arm freezes the moment its ninth result lands.</p>
+  <div class="seclabel">Where these nine tasks come from — nobody picked them</div>
+  ${tbl([["property"],["detail"]],[
+   `<td><b>the split</b></td><td><code>int(md5(slug),16) % 1000 &lt; val_ratio*1000</code> in the dataset builder — the same task-level split that produces the validation set</td>`,
+   `<td><b>task-level, not sample-level</b></td><td>one trajectory yields many step samples sharing a long context prefix; splitting by sample would put a held-out sample's own prefix into training. Splitting by slug keeps every step and every frame of a task on one side</td>`,
+   `<td><b>deterministic</b></td><td>the hash depends only on the slug, so a task that is validation in one build is validation in every later build — rebuilding from 17 → 29 passing trajectories moved nothing across the line</td>`,
+   `<td><b>composition</b></td><td>the union of both corpora's val tasks: 7 from v11-legacy, 2 from v11-500</td>`,
+   `<td><b>teacher 9/9</b></td><td>by construction — SFT data is built only from <code>score == 1.0</code> trajectories, so every val task is one the teacher solved. That is the ceiling line, not an achievement</td>`])}
+  <div class="seclabel">Contamination check (run 2026-08-14)</div>
+  ${tbl([["dataset"],["train rows",'class="num"'],["exam slugs in train",'class="num"'],["exam slugs in val",'class="num"']],[
+   `<td>abs-pilot2</td><td class="num">916</td><td class="num hl">0 / 9</td><td class="num">9 / 9</td>`,
+   `<td>abs-pilot3</td><td class="num">1288</td><td class="num hl">0 / 9</td><td class="num">9 / 9</td>`])}
+  <p class="note">Not "the task was seen but not its answer" — the entire task, all of its steps and
+  frames, never entered training.</p>
+  <div class="seclabel">Conditions (identical for every arm)</div>
+  <dl class="conds">${conds({panel:"9 held-out tasks","max steps":"50", "temp / top-p":"0.6 / 0.95",
+    sampler:"top_k 20 where noted", envs:"3 docker VMs — one arm at a time", screen:"1920×1080",
+    serving:"vLLM, each checkpoint's own chat template", scoring:"the task's own evaluator, pass = 1.0"})}</dl>
+  <p class="note">One arm at a time is a hard constraint, not a preference: three VMs is the
+  machine's memory ceiling, so drivers chain on each other's completion markers rather than
+  contending. Checkpoints are streamed into eval as they land — a training run's epoch-boundary
+  checkpoint starts its 9 tasks while the next epoch is still training.</p>`},
+ traj:{picker:true, n:"9 tasks per arm · every step the model took",
+   note:"Same step player as the rollouts: verbatim thinking, tool call, the pyautogui that ran, and the VM screenshot at each step."}},
+
+{id:"sft-train", group:"SFT", title:"Training runs", rate:"",
+ head:{t:"Training runs", pills:[P.dim("full-parameter · 1 GPU · ms-swift")],
+   lede:"What has been trained, on what, and what each arm is there to isolate. Arms with a tier-3 result are in the panel view; this page is the recipe and the schedule caveats that make those numbers readable."},
+ design:()=>`
+  <div class="seclabel">Runs in flight</div>
+  ${tbl([["job"],["arm"],["data"],["epochs",'class="num"'],["preserve_thinking"],["annealed?"],["what it answers"]],[
+   `<td class="num">229277</td><td><b>ep5pt</b></td><td>abs-pilot3 · 1288</td><td class="num">5</td><td class="hl">true</td><td>snapshots</td><td class="why">the epoch curve with history reasoning kept</td>`,
+   `<td class="num">229278</td><td><b>ep5np</b></td><td>abs-pilot3 · 1288</td><td class="num">5</td><td>false</td><td>snapshots</td><td class="why">the same curve without it</td>`,
+   `<td class="num">229348</td><td><b>more3</b></td><td>abs-pilot3 · 1288</td><td class="num">3</td><td class="hl">true</td><td class="hl">yes</td><td class="why">vs e3 (916, 3 ep): does volume help once epochs are sufficient?</td>`,
+   `<td class="num">229354</td><td><b>more3np</b></td><td>abs-pilot3 · 1288</td><td class="num">3</td><td>false</td><td class="hl">yes</td><td class="why">the flag's effect at one properly annealed point</td>`])}
+  <p class="note">Each pair answers a different question. <b>ep5pt vs ep5np</b> gives the flag's
+  effect along a whole 5-epoch curve; <b>more3 vs more3np</b> gives it at a single annealed point.
+  <b>more3 vs e3</b> isolates data volume now that epochs are sufficient — the 1-epoch version of
+  that comparison (more vs e1) showed nothing, but that was before the model had learned to
+  terminate at all.</p>
+  <div class="seclabel">An epoch-k checkpoint is not a k-epoch model</div>
+  ${tbl([["run"],["total steps",'class="num"'],["LR at the end of epoch 3",'class="num"']],[
+   `<td>e3 — a 3-epoch run</td><td class="num">345</td><td class="num hl">0.0 — annealed (1e-8 at step 340, 0.0 by 342)</td>`,
+   `<td>ep5pt / ep5np — 5-epoch runs</td><td class="num">805</td><td class="num">3.77e-6 = 38% of peak, still moving</td>`])}
+  <p class="note">The cosine schedule spans the run's <b>total</b> steps, so "epoch 3" means
+  different things in different runs. e3's final checkpoint is a finished product; a 5-epoch run's
+  epoch-3 snapshot is mid-flight. Expect the snapshot to look worse and do <b>not</b> read that as a
+  contradiction — it is the schedule. The five checkpoints of one run are comparable to each other
+  (one schedule, five points along it); they are not answers to "what would a k-epoch run produce".
+  Every checkpoint in the ledger carries the LR it was saved at.</p>
+  <div class="seclabel">Recipe v3 — what is frozen</div>
+  ${tbl([["flag"],["value"],["why"]],[
+   `<td><code>--tuner_type</code></td><td>full</td><td class="why">full-parameter on the 4B; swift 4.x renamed <code>--train_type</code></td>`,
+   `<td><code>--loss_scale</code></td><td>last_round</td><td class="why">one sample per step, loss only on the final assistant turn</td>`,
+   `<td><code>--preserve_thinking</code></td><td>true / false (the arm)</td><td class="why">swift strips history <code>&lt;think&gt;</code> by default, but the teacher generated every action <i>seeing</i> its own past reasoning — training was the only link that deleted it</td>`,
+   `<td><code>IMAGE_MAX_TOKEN_NUM</code></td><td>2048</td><td class="why">screenshots are 1920×1088 ≈ 2040 visual tokens; the official example's 1024 would downsample training images relative to the rollout</td>`,
+   `<td><code>--max_length</code></td><td>65536</td><td class="why">late-step samples carry up to 20 images ≈ 50k+ tokens</td>`,
+   `<td>vision tower</td><td>frozen</td><td class="why"><code>freeze_vit</code> + <code>freeze_aligner</code> + explicit <code>freeze_parameters</code></td>`,
+   `<td>preflight</td><td>mandatory</td><td class="why">opens every referenced media file from the job's own working directory and exits non-zero on any miss — the fix for the 33% silent drop</td>`])}
+  <div class="seclabel">Scale, honestly stated</div>
+  <p class="note">The trained arms span 609 → 1288 samples: a 2× range, all of it below the outside
+  reference point this line is measured against (412 teacher trajectories / 3,085 turn-level
+  samples). Data integrity has been eliminated as a cause of the regression; <b>data volume has
+  not</b> — it has barely been varied. An external checkpoint trained on that larger corpus sits in
+  the panel as an outside reading.</p>`,
+ traj:null},
+
 {id:"off361", group:"Baseline", title:"OSWorld-Verified 361", rate:"45%",
  head:{t:"OSWorld-Verified 361", pills:[P.warn("312/361 · proxy pending"),P.dim("2026-07-31")],
    lede:"The official benchmark on our serving stack — the anchor every generated corpus is measured against. 45.2% (141/312 non-proxy)."},
@@ -337,6 +567,16 @@ function overviewDesign(){
    `<td>absolute path in instruction</td><td class="num">87%</td><td class="num">—</td><td class="num hl">8%</td><td class="num">5%</td>`,
    `<td>internal cosine max (&lt;.5)</td><td class="num">0.45</td><td class="num">0.37</td><td class="num">0.49</td><td class="num">—</td>`,
    `<td>vs CUA-Gym 10,909 refs (&lt;.5)</td><td class="num">0.41</td><td class="num">0.43</td><td class="num">0.47</td><td class="num">—</td>`])}
+  <div class="seclabel">Downstream — the tasks become SFT data${window.SFT?` · live as of ${window.SFT.updated}`:""}</div>
+  <div class="cards">${[
+    [sftBest()?sftBest()+"/9":"—", "best tier-3 result of any trained Qwen3.5-4B arm"],
+    [(()=>{const b=sftArms().find(a=>a.key==="qwen35-4b-base"); return b?b.passed+"/9":"4/9";})(), "the stock 4B — the number SFT has to beat"],
+    [sftArms().length||"—", "arms evaluated on the identical 9 held-out tasks"],
+    ["0.61%", "share of training tokens that need the screenshot"]].map(card).join("")}</div>
+  <p class="note">Successful teacher rollouts on these corpora train a Qwen3.5-4B student. So far
+  SFT sits <b>below</b> the stock model on real tasks while every proxy metric improves — a
+  methods finding, detailed under <a href="#sft" style="color:var(--accent-ink);font-weight:700">SFT →
+  Overview</a>, with every arm's runs watchable in <a href="#sft-panel" style="color:var(--accent-ink);font-weight:700">Tier-3 Panel</a>.</p>
   <div class="seclabel">Findings that shaped the line</div>
   ${tbl([["finding"],["evidence"]],[
    `<td><b>length predicts failure</b></td><td>official 58%→16%, v8 33%→11% by instruction length; equal at matched lengths — the corpus gap was length mix</td>`,
@@ -347,7 +587,7 @@ function overviewDesign(){
    `<td><b>loop-lock ≠ (mainly) preserve</b></td><td>6/13 v11 fails loop under no-preserve ≈ v8's share — preliminary</td>`,
    `<td><b>Opus 5 writes tighter graders</b></td><td>~1.5× fewer coverage gaps than Opus 4.6, fixed judge</td>`])}`;
 }
-const groups = ["Results","Current","Baseline","v8 era","Corpus-only","Early"];
+const groups = ["Results","Current","SFT","Baseline","v8 era","Corpus-only","Early"];
 let curTab = "design";
 function renderNav(sel){
   document.getElementById("nav").innerHTML =
@@ -357,6 +597,8 @@ function renderNav(sel){
     return `<div class="gl">${g}</div>` + vs.map(v=>{
       let r = v.rate;
       if (v.id === "v11"){ const s = lv(); r = s ? s.rate + "%" : "live"; }
+      if (v.id === "sft-panel" && sftArms().length){ r = sftBest() + "/9"; }
+      if (v.id === "sft-train" && sftArms().length){ r = sftArms().length + " arms"; }
       return `<a href="#${v.id}" class="${v.id===sel?'sel':''}">${v.title}<span class="r ${r&&r!=="—"?'':'na'}">${r||""}</span></a>`;}).join("");
   }).join("");
 }
@@ -382,11 +624,26 @@ function render(){
   document.getElementById("content").innerHTML = html;
 }
 function trajBody(t){
+  if (t.picker){          /* SFT: one published viewer per trained arm */
+    const A = sftArms().filter(a=>a.traj);
+    if (!A.length) return `<p class="note">No arm has published trajectories yet — publishing
+      runs once per arm, after its ninth task is scored.</p>`;
+    const opts = A.map(a=>`<option value="${a.traj}">${esc(a.label)} — ${a.passed}/${a.scored} solved</option>`).join("");
+    return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select class="arm" id="armsel" onchange="pickArm(this.value)">${opts}</select>
+      <a class="btn" id="trajopen" href="${A[0].traj}" target="_blank" rel="noopener">Open full-screen ↗</a>
+      <span class="note" style="margin:0">${t.n}${t.note?" · "+t.note:""}</span></div>
+    <iframe class="trajframe" id="trajf" src="${A[0].traj}" loading="lazy"></iframe>`;
+  }
   return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
     <a class="btn" href="${t.url}" target="_blank" rel="noopener">Open full-screen ↗</a>
     ${t.url2?`<a class="btn ghost" href="${t.url2}" target="_blank" rel="noopener">${t.label2} ↗</a>`:""}
     <span class="note" style="margin:0">${t.n}${t.note?" · "+t.note:""}</span></div>
   <iframe class="trajframe" src="${t.url}" loading="lazy"></iframe>`;
+}
+function pickArm(u){
+  document.getElementById("trajf").src = u;
+  document.getElementById("trajopen").href = u;
 }
 function setTab(t){curTab=t; render();}
 window.addEventListener("hashchange", ()=>{curTab="design"; render();});
