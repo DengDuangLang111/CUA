@@ -627,8 +627,23 @@ locked task and would roughly halve attempt wall-clock.
 | **e1 (data fixed, 916 samples)** | **1/9** | **4.4** | **9/9** | **50 — every task hit the cap** |
 
 Restoring the silently-dropped third of the corpus raised training data by 50%
-and did not move the pass count: **1/9 before the fix, 1/9 after**. Data volume
-and data integrity are therefore eliminated as explanations for the regression.
+and did not move the pass count: **1/9 before the fix, 1/9 after**. Data
+*integrity* is therefore eliminated as an explanation.
+
+**Data volume is NOT eliminated, and an earlier version of this section
+over-claimed that it was.** The only volumes tested are 609 → 916 → 1288
+samples, i.e. 39 → 68 trajectories — a 2× span that sits entirely below the
+reference point (OpenWebRL: 412 trajectories / 3,085 turn-level samples, six
+times ours). A flat segment inside a range that may lie wholly on the
+"too little" side of the curve cannot refute the curve. The honest statement is:
+**within 609–1288 samples, volume does not move the result**; what happens at
+3,000 or 10,000 is untested. The 444-task campaign is expected to yield roughly
+110–120 passing trajectories, which is the first point where our scale
+approaches a quarter of the reference — that is when the volume question
+becomes answerable.
+
+Also keep the resolution in mind: 9 tasks means one task is ±11 points. 4/9 vs
+1/9 is three tasks and reads as real; 1/9 vs 2/9 does not.
 
 **Caveat I introduced and must not paper over:** e1 is the first arm served with
 `top_k=20` (verified in its serve log), because I patched the serve scripts
@@ -660,8 +675,11 @@ mid-trajectory retry, and at 19 steps per trajectory there are many. More of
 that data teaches the retry habit harder — which is exactly the e1 result.
 
 Falsifiable prediction for the `more` arm (1288 samples, same data philosophy):
-1–2/9 with lock-ups at 8–9/9. If it lands there, **shortest-trajectory
-selection becomes the only remaining evidence-backed lever** to try next.
+1–2/9 with lock-ups at 8–9/9. If it lands there it means volume does not help
+*at this scale* — it is a third point on a very short curve (609 / 916 / 1288),
+not a verdict on scaling. Trajectory selection (shortest-successful) is worth
+testing precisely because it is cheap and orthogonal to volume, not because
+volume has been ruled out.
 
 ### DATA DEFECT found 2026-08-13 evening: a third of the corpus never trained
 
