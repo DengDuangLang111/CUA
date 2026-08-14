@@ -843,6 +843,48 @@ cross-GPU gradient reduction. Early steps are not steady state (the baseline's
 46.28 is a step-144 reading), so this is the number to check at step 50+, not a
 conclusion. Report the per-micro-batch figure alongside any speedup claim.
 
+#### Verdict, at steady state (baseline step 498, accelerated step 102)
+
+**Speed — 1.49x wall clock, and the GPU count is doing all of it.**
+
+| | baseline 229277 | accelerated 229710 |
+|---|---|---|
+| config | 1 GPU · sdpa · zero2_offload | 2 GPU · flash_attn · causal_conv1d · zero2_offload |
+| per optimizer step | **42.98 s** | **28.87 s** |
+| micro-batches per GPU | 8 | 4 |
+| **per micro-batch** | **5.37 s** | **7.22 s** |
+| wall clock | — | **1.49x faster** |
+| per micro-batch | — | **1.34x SLOWER** |
+
+Two GPUs alone should give 2.0x. We measured 1.49x, so **everything else in the
+change set costs ~26%**. That 26% is flash_attn + causal_conv1d + DeepSpeed's
+cross-GPU gradient reduction combined, and this experiment **cannot separate
+them** — one run cannot attribute a shared cost. The honest statement is: *the
+two kernels bought nothing net at this sequence length, and may have cost
+something.* Plausible: only 8 of 32 layers are full attention, so flash-attn has
+little surface to work on here, while the all-reduce is unavoidable at 2 GPUs.
+
+**To attribute it properly**, one more 20-step run: 1 GPU, `zero2_offload`,
+`flash_attn` + `causal_conv1d`, `gradient_accumulation_steps 8`. Compared
+against the baseline's 5.37 s/micro-batch that isolates the kernels from the
+communication. Minutes, well under $1 — worth doing before anyone credits
+flash-attn for this speedup.
+
+**Quality — no loss. 27 aligned logging points:**
+
+| | value |
+|---|---|
+| mean loss delta | **+0.00006** (+0.038% relative) |
+| sd | 0.00277 (0.824% relative) |
+| range | −0.0070 to +0.0052 |
+| sign split | **12 above / 15 below** |
+
+Bit-identical was never the target: two GPUs change the gradient reduction order
+and flash-attn changes attention numerics. The test is *tracking without drift*,
+and a sign split that close to even is exactly that — a systematic change would
+be lopsided and would grow with training. `grad_norm` and `token_acc` track the
+same way. **The three accelerations are mathematically neutral.**
+
 ### Runs in flight (2026-08-14 01:10)
 
 All on abs-pilot3 (1288 samples, 161 steps/epoch) unless noted; every arm keeps
