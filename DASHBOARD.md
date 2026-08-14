@@ -93,6 +93,14 @@ snapshot needs no edit. **An unknown arm still appears**, labelled by its
 directory name — an unlabelled row is a visible gap, a dropped row is an
 invisible one.
 
+**The teacher row is a synthesised arm.** `results_generated/qwen36-teacher/`
+is not a rollout: it is Qwen3.6-27B's own passing trajectories for the nine
+panel tasks, `cp -al`-hardlinked out of the runs that produced the SFT data
+(7 from v11 at ms50, 2 from v11-500 at ms100), with a `PROVENANCE.json` naming
+the source run per task. Hardlinks on purpose — no extra disk, and it cannot
+drift from the run it was judged in. Its 9/9 is selection, not a score, and the
+page says so next to the table. Rebuild it if the panel ever changes.
+
 ### Why two daemons
 
 `sft_dash_daemon.sh` works in a **second clone** (`cua-dash-sft`), sparse-checked
