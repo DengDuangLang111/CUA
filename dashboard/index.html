@@ -158,7 +158,11 @@ const esc = s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;
 const sftArms  = ()=> (window.SFT && window.SFT.arms)  || [];
 const sftPanel = ()=> (window.SFT && window.SFT.panel) || [];
 const sftBest  = ()=> sftArms().reduce((m,a)=>Math.max(m,a.passed),0);
-const shortSlug = s=> String(s).split("-").slice(0,2).join("-");
+/* two slug segments name a task ("gdpr-art17"), except when the second is a
+   connector and the pair says nothing ("vscode-no"), so take three. */
+const shortSlug = s=>{ const p = String(s).split("-");
+  const n = /^(no|to|of|from|for|and|in|on|at)$/.test(p[1]||"") ? 3 : 2;
+  return p.slice(0,n).join("-"); };
 /* one row per arm, one column per held-out task; every cell is a link into
    that arm's own step player for that task. */
 function sftMatrix(){
@@ -182,8 +186,11 @@ function sftMatrix(){
              href="traj/sft/${a.key}/${r.dom}/${t.id}/viewer.html">${body}</a></td>`
         : `<td class="cell"><span class="${cls}" title="${esc(tip)}">${body}</span></td>`;
     }).join("");
-    return `<td><b>${esc(a.label)}</b><div class="why">${esc(a.data)} · ${esc(a.samples)} samples `
-         + `· ${esc(a.epochs)} ep · preserve ${esc(a.preserve)}</div></td>`
+    /* untrained arms have no recipe to describe; an em-dash row is just noise */
+    const sub = a.data === "—" ? "" :
+      `<div class="why">${esc(a.data)} · ${esc(a.samples)} samples · ${esc(a.epochs)} ep `
+      + `· preserve ${esc(a.preserve)}</div>`;
+    return `<td><b>${esc(a.label)}</b>${sub}</td>`
          + `<td class="num hl">${a.passed}/${a.scored}</td>` + cells;
   });
   return tbl(heads, rows);
