@@ -685,6 +685,46 @@ action is itself mis-grounded. That is consistent with a corpus of teacher
 successes in which "the action did nothing, try something else" is never
 demonstrated.
 
+### Epochs are the one lever that moved the real metric (2026-08-14 00:40)
+
+| arm | data | samples | epochs | preserve_thinking | **tasks solved** |
+|---|---|---|---|---|---|
+| teacher Qwen3.6-27B | — | — | — | — | 9/9 |
+| stock Qwen3.5-4B | — | — | — | — | **4/9** |
+| stock + top_k=20 | — | — | — | — | **4/9** |
+| **e3** | abs-pilot2 | 916 | **3** | true | **3/9** |
+| OpenWebRL-4B-SFT | theirs | 3085 | 3 | — | 2/9 |
+| pp15 (sampler ablation) | — | 609 | 1 | true | 2/9 |
+| e1 | abs-pilot2 | 916 | **1** | true | 1/9 |
+| more | abs-pilot3 | **1288** | 1 | true | 1/9 |
+| pilotS3 / v1 | — | 609 | 1 | true / unset | 1/9 |
+
+Only single-variable pairs support a conclusion:
+
+- **e1 vs e3** (same 916 samples, 1 → 3 epochs): **1/9 → 3/9.** Epochs help.
+- **e1 vs more** (both 1 epoch, 916 → 1288 samples): **1/9 → 1/9.** Volume does
+  not help *at this scale*.
+- **e3 vs more differs in two variables and supports nothing.** e3 did not win
+  because it had less data; it won because it trained three times as long.
+
+The qualitative change matters more than the count: on chrome-downloads every
+1-epoch model clicked the Chrome dock icon ~50 times; **e3 finished it in 18
+actions**.
+
+**Proxy metrics lied a third time.** e3's eval_loss bottomed at step 20 (0.311)
+and then sat on a 0.34 plateau for the remaining 325 steps — read alone, that
+says "more epochs bought nothing". The real tasks say 1/9 → 3/9. Together with
+the two earlier cases (loss and the action exam both calling a regression an
+improvement), the standing rule is now unambiguous: **on agent tasks, only the
+rollout counts.**
+
+**`preserve_thinking` has been compared only at 1 epoch** (pilotS with it unset
+vs pilotS3 with it true, both 609-effective samples): held-out loss ~0.52 flat
+vs 0.294→0.273 — a large difference — and **1/9 vs 1/9** on real tasks. Whether
+it matters at 3+ epochs was untested, which is what the two 5-epoch arms
+(229277 / 229278, abs-pilot3, checkpoints at every epoch 161/322/483/644/805,
+differing only in that flag) are for.
+
 ### e1 result (2026-08-13 21:21): fixing the data bug did NOT fix the regression
 
 | arm | passes | mean distinct actions | trajectories locked (≥10× repeat) | mean steps |
@@ -878,6 +918,40 @@ Fix directions, in the order worth trying:
    grounding 0.6%. Recovery behaviour is nearly absent from the corpus: `wait`
    is 3.4% of target actions and `terminate` 3.6%, and every trajectory is a
    teacher SUCCESS, so "you are stuck, do something else" is never demonstrated.
+
+### Where the 9 tier-3 tasks come from, and why they are not contaminated
+
+Nobody picked them. They fall out of the same task-level split that produces the
+validation set, in `ostg/sft/build.py`:
+
+```python
+is_val = int(hashlib.md5(slug.encode()).hexdigest(), 16) % 1000 < val_ratio * 1000
+```
+
+- **Task-level, not sample-level.** One trajectory yields many step samples that
+  share a long context prefix; splitting by sample would put a held-out sample's
+  own prefix in training and make eval loss meaningless. Splitting by slug keeps
+  every step and every screenshot of a task on one side.
+- **Deterministic across rebuilds.** The hash depends only on the slug, so a
+  task that was validation in one build stays validation in every later build —
+  which is why rebuilding v11-500 from 17 → 29 passing trajectories did not move
+  any exam task into training.
+- **The panel is the union of both corpora's val tasks**: 7 from v11-legacy
+  (39 passing trajectories, `val_tasks: 7`) and 2 from v11-500.
+- **The teacher scores 9/9 by construction**, because SFT data is built only
+  from `score == 1.0` trajectories, so every val task is one the teacher solved.
+  That is the ceiling line, not a measured achievement.
+
+**Contamination check, run 2026-08-14** — searched both shipped datasets for the
+nine exam slugs and task ids:
+
+| dataset | train rows | exam slugs in train | exam slugs in val |
+|---|---|---|---|
+| abs-pilot2 | 916 | **0 / 9** | 9 / 9 |
+| abs-pilot3 | 1288 | **0 / 9** | 9 / 9 |
+
+Not "the task was seen but not its answer" — the entire task, all of its steps
+and frames, never entered training.
 
 ### The three-arm tier-3 control (2026-08-13 evening)
 
