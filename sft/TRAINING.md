@@ -607,10 +607,32 @@ annealed 3-epoch point. `more3` vs `e3` isolates data volume (1288 vs 916) now
 that epochs are sufficient — the 1-epoch comparison (more vs e1) showed nothing,
 but that was before the model had learned to terminate at all.
 
-Evaluation is pipelined, not batched: `ckpt_pipeline.sh` picks up each
-checkpoint as it lands and runs the 9-task panel, one arm at a time.
-`more3_eval.sh` and `more3np_eval.sh` chain behind it so the three drivers never
-contend for the 3 VMs.
+### Eval policy: final checkpoints only (2026-08-14 01:40, user decision)
+
+`ckpt_pipeline.sh` — which evaluated **every** epoch-boundary checkpoint as it
+landed — is **stopped**. Superseded by `final_evals.sh`: **a 5-epoch run is
+evaluated at 5 epochs and a 3-epoch run at 3 epochs**, nothing in between.
+
+| arm | evaluated at | = |
+|---|---|---|
+| `ep5pt` / `ep5np` | `checkpoint-805` | 5 epochs |
+| `more3` / `more3np` | `checkpoint-483` | 3 epochs |
+
+Two reasons, and the second is the one that makes the mid-run snapshots close to
+worthless as *results*:
+
+1. **The 3 VMs are the scarce resource.** Ten checkpoint evals cost ~6.7 h of VM
+   time that the v11-500 teacher rollout needs to finish the corpus.
+2. **An epoch-k snapshot of a longer run is not a k-epoch model** (§ above): the
+   cosine spans the run's *total* steps, so `ep5`'s epoch-3 snapshot sits at 38%
+   of peak LR while `e3`'s is annealed to 0. Comparing a snapshot against an
+   annealed product measures the schedule, not the epochs.
+
+The five snapshots of one run remain comparable **to each other** for a trend,
+and they are still written — this is a decision about what gets VM time, not
+about what gets saved. `final_evals.sh` is installed and **not running**; it
+waits for every `sft-*` job to leave the queue, then runs the four arms one at a
+time. Launch it by hand when the VMs are free.
 
 ## The commands actually in use (2026-08-14)
 
@@ -666,15 +688,18 @@ OSTG_WAIT_BREAK=10 OSTG_LOOP_LOG=12 .venv/bin/python scripts/python/run_multienv
   --result_dir .../results_generated/<name>/valpanel-a1
 ```
 
-**Pipelining evaluation into training** (`ckpt_pipeline.sh`): training runs
-~10.5 h and evaluating ten checkpoints costs ~6.7 h of VM time; run serially
-that is 17 h, pipelined it is ~11 h. The pipeline polls both output dirs, treats
-a checkpoint as ready only when `config.json` and the weight shards exist **and
-the directory has been untouched for 180 s** (swift writes shards
-progressively — serving a half-written checkpoint is the failure this guards
-against), then runs one arm at a time and appends the tag to a `.done` ledger so
-a restart never re-evaluates. It exits when no `sft-ep5` job remains and no
-checkpoint is unevaluated.
+**Evaluating the finished arms** (`final_evals.sh`, replaces `ckpt_pipeline.sh`):
+waits until no `sft-*` job is in the queue, then for each arm serves its final
+checkpoint and runs the 9-task panel, strictly one arm at a time. If the exact
+final step is missing it falls back to the newest checkpoint **and logs that the
+number is not the full schedule** — a partial run still deserves a number, but
+never a silently mislabelled one.
+
+The retired pipeline's one idea worth keeping, should checkpoint streaming ever
+come back: a checkpoint counts as ready only when `config.json` and the weight
+shards exist **and the directory has been untouched for 180 s**. swift writes
+shards progressively, and serving a half-written checkpoint is the failure that
+guards against.
 
 ## RECIPE v3 — FROZEN 2026-08-13 evening (supersedes v2)
 

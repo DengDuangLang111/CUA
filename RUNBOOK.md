@@ -221,6 +221,38 @@ Reading the results:
 
 ## 5 Rollout
 
+### The teacher serve is FP8 since 2026-08-14
+
+`serve-chain-36-fp8.sbatch` (model `Qwen3.6-27B-FP8`, the official quantization)
+replaces `serve-chain-36.sbatch`. Measured A/B on identical prompts and images,
+`logs/fp8_ab.log`:
+
+| images per request | BF16 | FP8 | speedup |
+|---|---|---|---|
+| 1 | 2.8 s | 2.0 s | **1.41×** |
+| 8 | 4.8 s | 3.2 s | **1.51×** |
+| 20 | 6.9 s | 4.9 s | **1.39×** |
+
+Two things do **not** change, on purpose: `--served-model-name` is still
+`qwen36-27b-bf16-local`, so `--model` and every result path stay as they were.
+The name is now a misnomer — **the precision of record is
+`PRECISION_BOUNDARY.json` inside the result dir**, not the directory name. It
+lists every task generated under BF16 (v11-500: the first 121, 32 passed);
+everything after its timestamp is FP8. Mixing precisions inside one campaign is
+a deliberate, recorded choice, and any per-task analysis that cares must read
+that file rather than assume the corpus is homogeneous.
+
+The Slurm job name changes with it: **`eval` → `evalfp8`**. Anything that finds
+the serve by name (the tunnel's `JOB=`, cancel selectors) has to follow. Use
+`squeue -n <name>`, which is an exact match, rather than a `grep`/`awk` pattern —
+a `$` anchor does not survive Mac shell → ssh → wsl → ssh → remote shell.
+
+Resuming the campaign after a serve swap is one command:
+`osworld-verified-control/v11_500_fp8.sh` (cancels the old serve, submits the
+FP8 one, re-points the tunnel, then supervises the runner until every task in
+the manifest has a `result.txt` — it survives the serve self-chaining onto a new
+node at its 12 h wall).
+
 Preflight — the tunnel must answer (HTTP 200 + model id):
 
 ```bash
