@@ -627,10 +627,21 @@ locked task and would roughly halve attempt wall-clock.
 | **e1 (data fixed, 916 samples)** | **1/9** | **4.4** | **9/9** | **50 — every task hit the cap** |
 
 Restoring the silently-dropped third of the corpus raised training data by 50%
-and made the pathology **worse**: lock-ups went 7/9 → 9/9, distinct actions
-5.1 → 4.4, and every single task burned the full step budget. So the regression
-is not explained by data volume, data integrity, or sampling — all three have
-now been tested and eliminated.
+and did not move the pass count: **1/9 before the fix, 1/9 after**. Data volume
+and data integrity are therefore eliminated as explanations for the regression.
+
+**Caveat I introduced and must not paper over:** e1 is the first arm served with
+`top_k=20` (verified in its serve log), because I patched the serve scripts
+between arms. base (4/9), pilotS3 (1/9) and pp15 (2/9) all ran with `top_k`
+unset. So the *lock-up worsening* in the table — 7/9 → 9/9, distinct actions
+5.1 → 4.4 — **cannot be attributed to the data**: I had already predicted that
+`top_k=20`, by narrowing the distribution, would make an absorbing repeated
+state more likely, and e1 is the only arm carrying it. Changing a shared setting
+midway through a controlled comparison was an operational error.
+
+Remedy queued: re-run the **stock model under `top_k=20`** so the reference line
+matches every arm from e1 onward. Until that lands, only the pass counts are
+comparable across the pre/post-patch boundary, not the behavioural metrics.
 
 What remains is the **kind** of data, and the OpenWebRL comparison sharpens it:
 
