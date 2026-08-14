@@ -323,6 +323,57 @@ glance. Training fix = RECIPE v2 below (`--preserve_thinking true`), aligning
 training context with the jinja that both the exam and the deployed student
 will use.
 
+### Full log audit, 2026-08-13 evening (after the silent-drop defect)
+
+A sweep of every training, exam and rollout log, looking specifically for
+failures that change a conclusion without announcing themselves.
+
+**Clean — conclusions stand:**
+
+| check | result |
+|---|---|
+| v2 rollout (the 1/9) | 815 LLM requests, **815 × HTTP 200**, zero `call_llm failed` |
+| v1 rollout (the 1/9) | 297 requests, all 200 |
+| base rollout (the 4/9) | 58 × HTTP 400 in the log, but **all before 16:19:04**; first 200 at 16:21:58, first result written 16:23:12 — every failure predates the scored run (they are the `max-model-len` mistake, caught and fixed before scoring) |
+| unhandled/hallucinated actions | 0 across all three arms |
+| length truncation | `over_length_estimate` 0 (legacy) and 2 (v500) against a 65536 budget — `truncation_strategy=delete` had essentially nothing to delete |
+| e1 under RECIPE v3 | **zero** `template.encode` errors (pilotS3 had 70, pilotS3x3 had 130) — the fix is confirmed in production |
+
+**Worth knowing, not defects:**
+
+- **The tail filter is cutting a lot**: `dropped_tail_steps` 204/946 steps in
+  legacy (22%) and 245/636 in v500 (38%), plus 54 mid-loop drops in v500. These
+  are the teacher's own degenerate endings, so dropping them is the intent —
+  but 38% is high enough that the calibration deserves a re-check when the
+  corpus grows.
+- **Every legacy trajectory's first frame is an approximation**:
+  `tasks_initial_from_mp4: 39` out of 39 passing tasks. Those runs predate
+  `initial_state.png`, so step-1 samples use recording frame 0. Flagged in
+  sample meta; affects 39 of 609 legacy samples.
+- The `FileNotFoundError: 'images/court-docket-numbers-lookup/obs_021.png'`
+  entries are the same CWD defect in a second guise (both named slugs belong to
+  the v500 dataset), not a separate problem.
+
+### Rebuilt corpus + third arm (2026-08-13 19:20)
+
+Rebuilt v11-500 from the campaign's **29 passes** (was 17) through the standard
+pipeline (`ostg.sft.build --val-ratio 0.15` → `export --dialect swift` → tar →
+rsync → md5 + file-count verify → install), merged with legacy into
+`data/abs-pilot3`: **1288 train + 178 val rows, 0 missing images**.
+
+The stock `refresh_partial.sh` was NOT used as written: it contains
+`rm -rf v11-500-partial-snap-pilot2`, and jobs 228622/228623 hold absolute paths
+into that snapshot — running it would have killed both. The adapted script
+writes only new names (`v11-500-r2`, `abs-pilot3`) and touches nothing in use.
+
+Three arms now in flight, one recipe, one variable each:
+
+| job | data | epochs | isolates |
+|---|---|---|---|
+| 228622 `sft-e1` | abs-pilot2 (916) | 1 | the fixed-data baseline |
+| 228623 `sft-e3` | abs-pilot2 (916) | 3 | more optimization |
+| 228667 `sft-more` | abs-pilot3 (1288) | 1 | more data |
+
 ## RECIPE v3 — FROZEN 2026-08-13 evening (supersedes v2)
 
 v2 plus the two changes that make the 08-13 silent-data-drop impossible:
