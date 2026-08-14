@@ -972,6 +972,53 @@ metric degrades. First the action exam, then eval_loss, now train loss and token
 accuracy. Every one of them is computed without letting the policy choose its
 own next observation.
 
+#### Why `more3` is worse: the added data has zero domain overlap with the panel
+
+Not "more data hurt". **abs-pilot3 = abs-pilot2 + 11 trajectories, nothing
+removed** (verified by slug diff: 47 → 58 trajectories, 0 dropped). Those 11:
+
+| | count |
+|---|---|
+| **added trajectories** | `libreoffice_calc` × 10, `gimp` × 1 |
+| **the 9-task panel** | `chrome` × 5, `vs_code` × 3, `libreoffice_writer` × 1 |
+| **overlap** | **none** |
+
+By construction the added 372 samples cannot raise the score on this panel, and
+they dilute what can: the panel-relevant trajectories fall from 100% of the
+corpus to **71%** (916 of 1288).
+
+**And the added trajectories are the teacher's longest, most marginal runs.**
+The v11-500 rollout used a 100-step budget where v11 used 50:
+
+| added trajectory | domain | original steps |
+|---|---|---:|
+| carrier-fuel-surcharge-lookup | calc | **100 — hit the cap** |
+| returns-restock-fee-audit | calc | **100 — hit the cap** |
+| tutor-invoice-pdf-from-rates | calc | 97 |
+| pallet-manifest-weight-repair | calc | 63 |
+| lab-fee-invoice-pdf | calc | 46 |
+
+The existing 47 trajectories average 28 steps, max 50. Sample contribution is
+also lopsided: `tutor-invoice-pdf-from-rates` alone yields **97 samples** (the
+previous maximum for any trajectory was 45), and two trajectories account for
+42% of the 372 added.
+
+Four factors, all pushing the same way, and the symptom matches every one:
+zero-overlap domains · 29% dilution · demonstrations that are twice as long and
+include two the teacher barely finished · 40% more optimizer steps. `more3`
+burns a mean of 44.9 steps, hits the cap 6/9, and terminates on only 3/9 — it
+learned to take long meandering episodes, which is exactly what it was shown.
+
+**The honest limit of this result.** The panel's domains are fixed, so calc data
+can only cost points here — this shows *adding data outside the test's syllabus
+loses on that test*, **not** that these calc trajectories are bad data. A
+benchmark with real domain coverage would be needed to say that, which is one
+more reason real evaluation moves to OSWorld-Verified.
+
+**Rule going forward: report the domain overlap between any new training data
+and the evaluation before reporting the score.** It was not checked before this
+run, and it explains more of the result than anything else measured.
+
 #### All six arms on the identical nine tasks (2026-08-14, complete)
 
 | arm | data | epochs | steps | preserve | **solved** | terminated | hit cap |
