@@ -349,7 +349,15 @@ const VIEWS = [
    `<td>tasks that burned the full 50 steps</td><td class="num">9 / 9</td><td class="num">5 / 9</td>`,
    `<td>mean steps per task</td><td class="num">50</td><td class="num">33</td>`,
    `<td><code>mouse_move</code> share of actions</td><td class="num">32%</td><td class="num">15%</td>`])}
-  <p class="note"><b>e1 never emitted <code>terminate</code> once in 450 actions</b> — including on
+  <p class="note"><b>But epochs are not simply "more is better", and the arm that tested it went to
+  zero.</b> <code>more3</code> — 1288 samples, 3 epochs, fully annealed — scored <b>0/9</b>, the
+  lowest of any arm, while fitting the data <i>better</i> than e3 (final train loss 0.0335 vs
+  0.0373, token accuracy 0.9906 vs 0.9861). It also takes <b>40% more optimizer steps</b> than e3
+  (483 vs 345), because at a fixed batch the sample count sets steps per epoch — so that comparison
+  moves data volume and optimization together and cannot attribute the loss to either. Both runs sit
+  past the overfitting knee (<code>eval_loss</code> rises through training in both). The checkpoint
+  that separates the two causes is already on disk.</p>
+    <p class="note"><b>e1 never emitted <code>terminate</code> once in 450 actions</b> — including on
   the task it passed, where it kept oscillating between the address bar and the result link for 46
   steps after finishing. e3 emits <code>DONE</code> at step 5 on the same task. One epoch is enough
   to learn the output <i>format</i> (99.4% of the target tokens); it is not enough to learn the
@@ -358,7 +366,25 @@ const VIEWS = [
   dominated by the 99.4%, so it "converged" around step 20 while the behaviour that decides success
   was still being learned. <b>Terminate rate is now a first-class metric here — it moved when loss
   did not.</b></p>
-  <div class="seclabel">Why the screenshot stopped mattering — measured, not guessed</div>
+  <div class="seclabel">Termination tracks success across every arm</div>
+  ${tbl([["arm"],["terminated",'class="num"'],["solved",'class="num"'],["hit the 50-step cap",'class="num"']],[
+   `<td><b>stock Qwen3.5-4B</b></td><td class="num">7/9</td><td class="num hl">4/9</td><td class="num">2/9</td>`,
+   `<td><b>e3</b> · 916 · 3 ep</td><td class="num">4/9</td><td class="num hl">3/9</td><td class="num">5/9</td>`,
+   `<td>e1 · 916 · 1 ep</td><td class="num">0/9</td><td class="num">1/9</td><td class="num">9/9</td>`,
+   `<td>more · 1288 · 1 ep</td><td class="num">2/9</td><td class="num">1/9</td><td class="num">6/9</td>`,
+   `<td>more3np · 1288 · 3 ep · preserve off</td><td class="num">4/9</td><td class="num">1/9</td><td class="num">5/9</td>`,
+   `<td>more3 · 1288 · 3 ep · preserve on</td><td class="num">3/9</td><td class="num">0/9</td><td class="num">6/9</td>`])}
+  <p class="note">Not monotone, but unmistakable in direction: <b>a model that cannot stop cannot
+  finish.</b> <code>terminate</code> is 3.6% of target actions and invisible to every token-level
+  metric here — which is why loss and accuracy improved while this collapsed. <b>No SFT arm has
+  reached the stock model.</b></p>
+  <p class="note">The sharpest single frame is on <code>arxiv-listing</code>, the easiest task on the
+  panel. e3 finishes in five steps and terminates. <code>more3</code> alternates
+  <code>click(215,280)</code> and <code>typewrite("1207.7214")</code> for all fifty —
+  <b>two distinct actions, one of them 27 times</b> — and the screen changes on 28 of 49 transitions,
+  because the clicks open and close something and the state cycles. Both trajectories are watchable
+  side by side in the Tier-3 Panel.</p>
+    <div class="seclabel">Why the screenshot stopped mattering — measured, not guessed</div>
   ${tbl([["share of a training target (mean 587 chars)"],["portion",'class="num"'],["needs the pixels?"]],[
    `<td><code>&lt;think&gt;</code> reasoning prose</td><td class="num">59%</td><td class="why">no — continues the previous turn</td>`,
    `<td>action names + tool-call boilerplate</td><td class="num">~35%</td><td class="why">no — format and task priors</td>`,
