@@ -407,6 +407,31 @@ it). Both of today's arms shared the omission, so their comparison stands; the
 absolute numbers were measured under a wider sampler than the data was
 generated with.
 
+**Ablation run and settled (2026-08-13 20:23): `presence_penalty` does not fix
+the lock-ups.** Same pilotS3 checkpoint, same 9 tasks, single variable
+0 → 1.5:
+
+| | passes | mean distinct actions | trajectories with a ≥10× repeated action |
+|---|---|---|---|
+| SFT v2, presence 0 | 1/9 | 5.1 | **7/9** |
+| SFT v2, presence 1.5 | 2/9 | 6.6 | **7/9** |
+| stock 4B | 4/9 | 13.3 | 3/9 |
+
+One extra pass is inside the noise at n=9, and the lock-up count did not move at
+all; on arxiv it made things worse (6 steps and a pass at presence 0 became 46
+repeats and a fail). **The mechanism explains it: `presence_penalty` acts within
+a single completion, penalising tokens already emitted in *that* response. Our
+repetition is across steps — each step is a fresh API call whose completion is
+internally varied but identical to the previous step's.** The sampler cannot see
+the previous turn's output, so it was never the right knob. My earlier
+suggestion that it might be a one-flag deployment fix was wrong, and this
+40-minute experiment is what showed it.
+
+Conclusion tightened: **the lock-up lives in the weights, not the sampler.**
+Stock averages 13.3 distinct actions with 3/9 lock-ups; after SFT it is 5–6.6
+with 7/9. No sampling parameter recovers that gap — only data and recipe can,
+which is exactly what the e1 / more / e3 arms test.
+
 Do not expect `top_k=20` to cure the lock-ups — it *narrows* the distribution,
 making the policy more deterministic, which if anything makes an absorbing
 repeated state more likely. The parameter aimed at repetition is
