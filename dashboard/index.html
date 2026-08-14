@@ -383,31 +383,24 @@ const VIEWS = [
    `<td><b>reality</b></td><td>two dataset files carried <i>relative</i> image paths and the job ran from a different working directory. ms-swift falls back to base64-decoding an unresolvable path, throws <code>UnidentifiedImageError</code>, drops the sample with one warning line and substitutes a random other one. <b>307 of 916 samples (33%) could never load</b></td>`,
    `<td><b>fix</b></td><td>datasets emit absolute media paths; jobs never <code>cd</code> into a data directory; a preflight opens every referenced file and exits non-zero before any GPU time; every run's log is grepped for the silent-skip warning afterwards</td>`,
    `<td><b>proof</b></td><td>the first arm under the new recipe logged <b>zero</b> <code>template.encode</code> errors, against 70 and 130 for the two arms it replaced</td>`])}
-  <div class="seclabel">Do the loop filters actually catch the loops? Audited 2026-08-14</div>
-  <p class="note">Three filters run over every passing teacher trajectory before it becomes training
-  data. Re-applied to all <b>71</b> passing trajectories in the two corpora behind the current
-  dataset, they trim <b>614 tail steps</b> from 12 trajectories and drop <b>54 mid-episode targets</b>.
-  They also miss three trajectories, each through a different hole:</p>
-  ${tbl([["filter"],["what it matches"],["blind to"]],[
-   `<td><code>tail_run</code></td><td class="why">trailing run of byte-identical actions</td><td class="why">anything mid-episode; any oscillation</td>`,
-   `<td><code>low_diversity_tail</code></td><td class="why">trailing window of ≤3 distinct actions — <b>only if the trajectory hit the 50-step cap</b></td><td class="why">everything mid-episode; every loop in a trajectory that ended normally under 50 steps</td>`,
-   `<td><code>identical_runs</code></td><td class="why">mid-episode runs of ≥8 byte-identical actions</td><td class="why">oscillation; runs of 7; and <b>it drops targets only — the steps stay in the context history</b></td>`])}
-  ${tbl([["escapee"],["shape"],["why it survives"]],[
-   `<td><b>chrome/eadbe7a5</b><div class="why">69 steps</div></td><td><code>aabcde·[a×55]·fbbcdegh</code></td><td class="why">the 55-run is correctly dropped as 54 targets — but all 69 steps remain in history, so each of the 15 surviving targets is conditioned on 55 identical assistant turns. <b>That is the in-context pattern lock the student was measured failing at, served as training context.</b> The tail filter reads 0 because the tail itself is varied</td>`,
-   `<td><b>calc/768f4c21</b><div class="why">63 steps</div></td><td><code>…gg<b>hhhhhhh</b>ij…</code></td><td class="why">a run of <b>7</b>, one short of <code>min_run=8</code>, kept whole. Calibration recorded the longest legitimate run as 6 — so 7 is already outside the legitimate band and the threshold has zero margin</td>`,
-   `<td><b>gimp/e16448e3</b><div class="why">37 steps</div></td><td><code>…vv<b>wxyxyxyxy</b>za</code></td><td class="why">a 2-cycle oscillation. <code>identical_runs</code> needs consecutive byte-identical steps; <code>low_diversity_tail</code> would catch it but only runs on cap-hitting trajectories and only at the tail. <b>Mid-episode oscillation under 50 steps is modelled by nothing.</b></td>`])}
-  <p class="note">So: mostly working, and the one the teacher row advertises
-  (<code>vscode-no-telemetry</code>, 44 repeats) <b>is</b> caught — <code>low_diversity_tail</code>
-  trims it 50 → 5 steps. The gap is narrower than "loops get through": it is
-  <b>(a) oscillation is not modelled at all off the tail, (b) the 50-step gate makes the strongest
-  filter inapplicable to normally-ending trajectories, and (c) removing a target does not remove
-  it from the next sample's context.</b></p>
-  <p class="note">(c) has a receipt: 14 samples of <code>sec-edgar-berkshire-cik</code> are in the
-  training data every current run reads, and the worst carries <b>61 assistant turns of which 6 are
-  distinct, one repeated 56×</b>, with the label "produce turn 62". But <b>sized against the whole
-  set it is 7 samples in 1288 — 0.5%</b>, all from that one trajectory (4–7× repeats: another 4.5%;
-  no repeat at all: 85%). That is <b>hygiene, not the explanation</b>: 0.5% cannot account for
-  4/9 → 1/9. It is worth closing before the corpus scales, not as a lever to pull now.</p>
+  <div class="seclabel">Loop filters: audited, three fixes proposed, all three reverted</div>
+  <p class="note">Three filters run over every passing teacher trajectory before it becomes
+  training data. Re-applied to all <b>71</b> passing trajectories they trim <b>614 tail steps</b>
+  from 12 trajectories and drop <b>54 mid-episode targets</b>, and three trajectories escape them.
+  Fixes were written for all three escapes. <b>None shipped</b> — verification killed them, and the
+  two ways they died are more useful than the fixes would have been.</p>
+  ${tbl([["proposal"],["killed by"],["what it would have destroyed"]],[
+   `<td><b>collapse a caught run in the rendered history</b></td><td class="hl">reading the labels</td><td class="why">the 7 samples it removed are a <b>recovery demonstration</b> — after 55 identical clicks the labels are "click somewhere else", "redo what worked", <code>terminate</code>. This corpus never otherwise demonstrates getting unstuck, because every trajectory is a teacher success. The repetitive context is not poison, it is the setup that gives the recovery label meaning</td>`,
+   `<td><b>lower the repeat threshold 8 → 7</b></td><td class="hl">hashing the screenshots</td><td class="why">its only case scrolls a spreadsheet 7× — and <b>the screen changed at every one of those steps</b>. That is paging down, not grinding. It would have deleted 6 correct targets</td>`,
+   `<td><b>a mid-episode oscillation filter</b></td><td class="hl">the same check</td><td class="why">built on repeat count like the one above; would have taken a 7th target from that same productive scroll</td>`])}
+  <p class="note"><b>The rule that came out of it:</b> a repeated action is pathological only if the
+  world did not respond — <code>action(k+1) == action(k)</code> <i>and</i>
+  <code>screenshot(k) == screenshot(k-1)</code>. Count says nothing. Measured across 73
+  trajectories that criterion would drop <b>8 targets (0.49%)</b> and correctly spares the
+  productive scroll. At 0.49% it is not worth a recipe change; it is recorded as the shape any
+  future loop filter must take instead of a threshold.</p>
+  <p class="note">Kept from the whole episode: one counter. <code>recovery_samples</code> —
+  <b>100 corpus-wide</b> — so the next proposal to filter them has a number to argue with.</p>
   <div class="seclabel">Discipline that made the catch possible</div>
   ${tbl([["rule"],["what it does"]],[
    `<td>samples via the agent's own code</td><td class="why">context assembled by the rollout agent's message builder — format parity by construction, labels are the verbatim teacher response</td>`,
