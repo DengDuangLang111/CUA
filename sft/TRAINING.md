@@ -360,6 +360,41 @@ failures that change a conclusion without announcing themselves.
   finished and then scrolled forever. Those steps are precisely what must not
   enter SFT. Report the split (how many trajectories affected), never the bare
   aggregate.
+
+### Do the filters catch the loops? Audit 2026-08-14 (`/tmp/loopaudit.py`)
+
+Re-applied the exact `build.py` chain to **all 71 passing trajectories** in the
+two run dirs behind abs-pilot3. It works, mostly: **614 tail steps trimmed from
+12 trajectories, 54 mid-episode targets dropped**, and the teacher's showiest
+loop — `vscode-no-telemetry`, 44 repeats — **is** caught (`low_diversity_tail`
+trims it 50 → 5). Three trajectories escape, each through a different hole:
+
+| filter | matches | blind to |
+|---|---|---|
+| `tail_run` | trailing run of byte-identical actions | anything mid-episode; all oscillation |
+| `low_diversity_tail` | trailing ≤3-distinct window — **only if `len(steps) >= 50`** | everything mid-episode; every loop in a trajectory that ended normally under 50 steps |
+| `identical_runs` | mid-episode runs of **≥8** byte-identical actions | oscillation; runs of 7; and it removes **targets only, not history** |
+
+| escapee | shape | why it survives |
+|---|---|---|
+| `chrome/eadbe7a5` (69 steps) | `aabcde·[a×55]·fbbcdegh` | the 55-run *is* caught — 54 targets dropped. But all 69 steps stay in the context history, so each of the 15 surviving targets is conditioned on **55 identical assistant turns**. The tail filter reads 0 because the tail itself is varied |
+| `calc/768f4c21` (63 steps) | `…gg`**`hhhhhhh`**`ij…` | a run of **7**, one short of `min_run=8`, kept whole. Calibration recorded the longest *legitimate* run as 6 — so 7 is already outside the legitimate band and the threshold has zero margin |
+| `gimp/e16448e3` (37 steps) | `…vv`**`wxyxyxyxy`**`za` | a 2-cycle oscillation. `identical_runs` needs consecutive byte-identical steps; `low_diversity_tail` would catch it but only fires on cap-hitters and only at the tail. **Mid-episode oscillation under 50 steps is modelled by nothing** |
+
+**The one to fix first is `eadbe7a5`'s class**, because it is not a missed loop —
+it is a caught loop that still reaches the model. Dropping a step as a *target*
+while keeping it as *context* trains "after 55 identical turns, here is the next
+action", which is the exact in-context pattern lock the student was measured
+failing at. Candidate fixes, cheapest first: (1) after `identical_runs` marks a
+run, collapse it in the rendered history too (keep the first, drop the rest);
+(2) lower `min_run` 8 → 6 to match the calibration band, costing at most the one
+7-run seen here; (3) apply `low_diversity_tail`'s ≤3-distinct test as a sliding
+window over the whole trajectory rather than the tail, and drop the `>= 50` gate
+— it exists because a normally-terminated episode ends with varied steps, which
+is an argument about the *tail*, not about mid-episode windows.
+
+None of this is retro-applied to arms already trained; it would change the
+dataset under a comparison in flight. It is a v4 recipe change.
 - **Every legacy trajectory's first frame is an approximation**:
   `tasks_initial_from_mp4: 39` out of 39 passing tasks. Those runs predate
   `initial_state.png`, so step-1 samples use recording frame 0. Flagged in
@@ -1134,6 +1169,25 @@ is_val = int(hashlib.md5(slug.encode()).hexdigest(), 16) % 1000 < val_ratio * 10
 - **The teacher scores 9/9 by construction**, because SFT data is built only
   from `score == 1.0` trajectories, so every val task is one the teacher solved.
   That is the ceiling line, not a measured achievement.
+
+**It is a hash, not a seed.** There is no RNG and nothing to set: the draw is
+`md5(slug) % 1000` compared against a threshold. Two consequences worth stating
+because they are easy to assume away:
+
+- **One escape hatch exists.** `build.py:113-131` — if the draw selects nobody,
+  the lexicographically-first passing slug is *forced* into val so a requested
+  split is never empty. On a small corpus that makes the val set depend on
+  **which tasks passed**, i.e. on the rollout. It has not fired for these
+  corpora (`drawn` was true both times), but it is the one path by which a
+  rebuild could silently move the panel.
+- **The panel the arms run is frozen, not drawn.** It is a materialised
+  directory, `OSWorld/eval_valpanel_tasks/{examples,manifest.json}`, built once
+  as the union of both corpora's val tasks. Since 2026-08-14 `sft.json` carries
+  `panel_n/panel_id` (`9/35d3bac3`, md5 of the sorted task ids) and the
+  dashboard prints it next to the results header, so a regeneration is visible
+  rather than silent. **An arm measured on 9 tasks is not comparable to one
+  measured on 12** — if the panel ever changes, every arm retakes it, same rule
+  as the archived action exam.
 
 **Contamination check, run 2026-08-14** — searched both shipped datasets for the
 nine exam slugs and task ids:

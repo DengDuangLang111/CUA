@@ -157,7 +157,11 @@ const esc = s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;
 /* ---- SFT: the tier-3 panel, live from sft.json ------------------------- */
 const sftArms  = ()=> (window.SFT && window.SFT.arms)  || [];
 const sftPanel = ()=> (window.SFT && window.SFT.panel) || [];
-const sftBest  = ()=> sftArms().reduce((m,a)=>Math.max(m,a.passed),0);
+/* The teacher is excluded from every "best" figure on purpose: its 9/9 is the
+   definition of the panel, not a result, and letting it win a headline would
+   make the ceiling look like an achievement. */
+const sftBest  = ()=> sftArms().filter(a=>a.group!=="teacher")
+                               .reduce((m,a)=>Math.max(m,a.passed),0);
 /* two slug segments name a task ("gdpr-art17"), except when the second is a
    connector and the pair says nothing ("vscode-no"), so take three. */
 const shortSlug = s=>{ const p = String(s).split("-");
@@ -379,6 +383,26 @@ const VIEWS = [
    `<td><b>reality</b></td><td>two dataset files carried <i>relative</i> image paths and the job ran from a different working directory. ms-swift falls back to base64-decoding an unresolvable path, throws <code>UnidentifiedImageError</code>, drops the sample with one warning line and substitutes a random other one. <b>307 of 916 samples (33%) could never load</b></td>`,
    `<td><b>fix</b></td><td>datasets emit absolute media paths; jobs never <code>cd</code> into a data directory; a preflight opens every referenced file and exits non-zero before any GPU time; every run's log is grepped for the silent-skip warning afterwards</td>`,
    `<td><b>proof</b></td><td>the first arm under the new recipe logged <b>zero</b> <code>template.encode</code> errors, against 70 and 130 for the two arms it replaced</td>`])}
+  <div class="seclabel">Do the loop filters actually catch the loops? Audited 2026-08-14</div>
+  <p class="note">Three filters run over every passing teacher trajectory before it becomes training
+  data. Re-applied to all <b>71</b> passing trajectories in the two corpora behind the current
+  dataset, they trim <b>614 tail steps</b> from 12 trajectories and drop <b>54 mid-episode targets</b>.
+  They also miss three trajectories, each through a different hole:</p>
+  ${tbl([["filter"],["what it matches"],["blind to"]],[
+   `<td><code>tail_run</code></td><td class="why">trailing run of byte-identical actions</td><td class="why">anything mid-episode; any oscillation</td>`,
+   `<td><code>low_diversity_tail</code></td><td class="why">trailing window of ≤3 distinct actions — <b>only if the trajectory hit the 50-step cap</b></td><td class="why">everything mid-episode; every loop in a trajectory that ended normally under 50 steps</td>`,
+   `<td><code>identical_runs</code></td><td class="why">mid-episode runs of ≥8 byte-identical actions</td><td class="why">oscillation; runs of 7; and <b>it drops targets only — the steps stay in the context history</b></td>`])}
+  ${tbl([["escapee"],["shape"],["why it survives"]],[
+   `<td><b>chrome/eadbe7a5</b><div class="why">69 steps</div></td><td><code>aabcde·[a×55]·fbbcdegh</code></td><td class="why">the 55-run is correctly dropped as 54 targets — but all 69 steps remain in history, so each of the 15 surviving targets is conditioned on 55 identical assistant turns. <b>That is the in-context pattern lock the student was measured failing at, served as training context.</b> The tail filter reads 0 because the tail itself is varied</td>`,
+   `<td><b>calc/768f4c21</b><div class="why">63 steps</div></td><td><code>…gg<b>hhhhhhh</b>ij…</code></td><td class="why">a run of <b>7</b>, one short of <code>min_run=8</code>, kept whole. Calibration recorded the longest legitimate run as 6 — so 7 is already outside the legitimate band and the threshold has zero margin</td>`,
+   `<td><b>gimp/e16448e3</b><div class="why">37 steps</div></td><td><code>…vv<b>wxyxyxyxy</b>za</code></td><td class="why">a 2-cycle oscillation. <code>identical_runs</code> needs consecutive byte-identical steps; <code>low_diversity_tail</code> would catch it but only runs on cap-hitting trajectories and only at the tail. <b>Mid-episode oscillation under 50 steps is modelled by nothing.</b></td>`])}
+  <p class="note">So: mostly working, and the one the teacher row advertises
+  (<code>vscode-no-telemetry</code>, 44 repeats) <b>is</b> caught — <code>low_diversity_tail</code>
+  trims it 50 → 5 steps. The gap is narrower than "loops get through": it is
+  <b>(a) oscillation is not modelled at all off the tail, (b) the 50-step gate makes the strongest
+  filter inapplicable to normally-ending trajectories, and (c) removing a target does not remove
+  it from the next sample's context.</b> (c) is the one worth fixing first, because context is
+  exactly where the observed failure lives.</p>
   <div class="seclabel">Discipline that made the catch possible</div>
   ${tbl([["rule"],["what it does"]],[
    `<td>samples via the agent's own code</td><td class="why">context assembled by the rollout agent's message builder — format parity by construction, labels are the verbatim teacher response</td>`,
@@ -391,8 +415,9 @@ const VIEWS = [
 {id:"sft-panel", group:"SFT", title:"Tier-3 Panel", rate:"live",
  head:{t:"Tier-3 — the student drives the VM itself", pills:[P.good("live"),P.dim("9 held-out tasks · ms50 · 3 VMs")],
    lede:"The only arbiter in this project. Nine held-out tasks the teacher passes 9/9, run end to end in real VMs and scored by each task's own checker. Every cell in the matrix opens that arm's step player for that task."},
- design:()=>{ const A=sftArms(); return `
-  <div class="seclabel">Every arm on the same nine tasks${window.SFT?` · as of ${window.SFT.updated}`:""}</div>
+ design:()=>{ const A=sftArms(), S=window.SFT; return `
+  <div class="seclabel">Every arm on the same nine tasks${S?` · as of ${S.updated}`:""}${
+    S&&S.panel_id?` · panel <code>${S.panel_n}/${S.panel_id}</code>`:""}</div>
   ${sftArmTable()}
   <div class="seclabel">Task × arm — click any cell to watch that run</div>
   ${sftMatrix()}
@@ -418,7 +443,9 @@ const VIEWS = [
   ${tbl([["property"],["detail"]],[
    `<td><b>the split</b></td><td><code>int(md5(slug),16) % 1000 &lt; val_ratio*1000</code> in the dataset builder — the same task-level split that produces the validation set</td>`,
    `<td><b>task-level, not sample-level</b></td><td>one trajectory yields many step samples sharing a long context prefix; splitting by sample would put a held-out sample's own prefix into training. Splitting by slug keeps every step and every frame of a task on one side</td>`,
-   `<td><b>deterministic</b></td><td>the hash depends only on the slug, so a task that is validation in one build is validation in every later build — rebuilding from 17 → 29 passing trajectories moved nothing across the line</td>`,
+   `<td><b>deterministic</b></td><td>a hash of the slug string — <b>no seed, no RNG, nothing to set</b>. A task that is validation in one build is validation in every later build; rebuilding from 17 → 29 passing trajectories moved nothing across the line</td>`,
+   `<td><b>one escape hatch</b></td><td>if the draw selects nobody, the builder forces the lexicographically-first passing slug into validation so the split is never empty. On a small corpus that makes the val set depend on <i>which tasks passed</i> — i.e. on the rollout. It has not fired for these corpora, but it is the one path by which a rebuild could move the panel</td>`,
+   `<td><b>frozen, not drawn</b></td><td>the panel the arms actually run is a materialised directory (<code>eval_valpanel_tasks/</code>), not a live draw. The header above prints <code>count/fingerprint</code> so a silent regeneration shows up: <b>an arm measured on 9 tasks is not comparable to one measured on 12</b></td>`,
    `<td><b>composition</b></td><td>the union of both corpora's val tasks: 7 from v11-legacy, 2 from v11-500</td>`,
    `<td><b>teacher 9/9</b></td><td>by construction — SFT data is built only from <code>score == 1.0</code> trajectories, so every val task is one the teacher solved. That is the ceiling line, not an achievement</td>`])}
   <div class="seclabel">Contamination check (run 2026-08-14)</div>
