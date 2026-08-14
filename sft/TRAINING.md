@@ -1015,6 +1015,48 @@ loses on that test*, **not** that these calc trajectories are bad data. A
 benchmark with real domain coverage would be needed to say that, which is one
 more reason real evaluation moves to OSWorld-Verified.
 
+#### Is a 100-step pass a bug? No — and two of my own claims here were wrong
+
+Asked whether hitting exactly the 100-step cap and still scoring 1.0 looks like
+a bug. It does not, for a mechanical reason: **100 IS the cap**, so it is the
+expected length of every trajectory that fails to terminate, not a coincidence.
+And the passes are real — all five added calc tasks score **0.0 on an untouched
+VM** in the control sweep, so `compare_table` cannot be satisfied without
+actually editing the spreadsheet.
+
+What the two cap-hitters are is *the work done, then an inability to stop*:
+
+| trajectory | steps | most-repeated action | tail trimmed | **samples reaching training** |
+|---|---:|---:|---:|---:|
+| carrier-fuel-surcharge | 100 | **72×** | 73 | **27** |
+| returns-restock-fee | 100 | **90×** | 92 | **8** |
+| tutor-invoice-pdf | 97 | 15× | 0 | 97 |
+
+**Correction 1.** This file said the added data was "the teacher's longest, most
+marginal runs". Overstated: the tail filter caught both cap-hitters, cutting them
+to 35 samples between them — under 10% of the 372 added. The largest contributor,
+`tutor-invoice-pdf-from-rates`, is a **legitimate** 97-step trajectory with 61
+distinct actions that ends in `DONE` with nothing trimmed.
+
+**Correction 2.** Those two cases suggested the teacher itself cannot terminate,
+and that the student inherits it. Measured across every passing trajectory in
+both source runs, that is **false**:
+
+| source | passing trajectories | **ended with `DONE`** | ran out the budget |
+|---|---:|---:|---:|
+| v11 (ms50) | 39 | **33 = 85%** | 6 |
+| v11-500 (ms100) | 57 | **46 = 81%** | 9 |
+
+The teacher terminates in four trajectories out of five. The students manage
+0/9 (e1), 3/9 (more3), 4/9 (e3). **The student is losing a capability that the
+data demonstrates well** — this is not a coverage gap, it is a learning failure.
+
+Which sharpens the token-share argument rather than softening it: `terminate` is
+3.6% of target actions and occupies **one position in a ~28-step trajectory**.
+Token-averaged cross-entropy cannot see it under the 99.4% of format and prose.
+It is the first capability lost and the last recovered, and weighting that span
+in the loss is now the best-motivated open change in this file.
+
 **Rule going forward: report the domain overlap between any new training data
 and the evaluation before reporting the score.** It was not checked before this
 run, and it explains more of the result than anything else measured.
