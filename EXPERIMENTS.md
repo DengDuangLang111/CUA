@@ -1115,12 +1115,20 @@ teacher's ability band. Design: **regenerate the v500 coordinate space with
 qwen3.8-max as the only changed variable.**
 
 - Invocation identical to the original v500 run (from its logs): `--n 5
-  --batches 29 --shard I/4` × 4 shards, same seed 20260812. **CORRECTED after
-  completion: the paired-cells claim was wrong** — the coordinate product
-  changed between the Aug-12 v500 run and now (repo unversioned, drift not
-  reconstructable), so the runs consumed different cell budgets (Opus filled
-  29×5 slots → 446 specs over 259 coarse cells ≈1.7/cell; Qwen exhausted its
-  partition at ~batch 17 → 325 specs over 316 coarse cells ≈1.0/cell).
+  --batches 29 --shard I/4` × 4 shards, same seed 20260812. **CORRECTED
+  twice — final verified story (2026-08-15):** (a) **Lineage verified**:
+  `v500-s*` IS v11-500's generation — per-shard spec counts and slug sets
+  identical to `v11-500-s*` (443=443) and v11-500-final traces back 441/441,
+  so the raw-spec comparison base was right all along. (b) **Taxonomy did NOT
+  drift** (earlier speculation wrong): the v500 logs' own domain census
+  equals today's 13 domains verbatim, and taxonomy.py's mtime predates both
+  runs. (c) The 446-vs-325 budget gap lives in **gen.py itself drifting
+  untracked** between Aug 12 and Aug 15: the v500 log opens with a
+  "[gen] args:" startup line no surviving gen.py prints, and today's
+  spent-set walk is strictly once-per-triple — Opus shards kept 112 specs
+  over 81-triple partitions, impossible under today's code. Third
+  archaeology failure in one day; **the taskgen repo is now under git**
+  (first commit `141916e`, code only, outputs ignored).
   What holds: **253 shared coarse cells (80% of Qwen's) → stratified, not
   1:1, comparison**. Qwen keep rate ~98% (6 rejects in 331: 3 missing setup,
   2 syntax, 2 dup slugs) — the forced-tool-call regime is highly compliant;
