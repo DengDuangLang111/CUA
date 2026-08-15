@@ -2263,8 +2263,20 @@ the external-data question stay separately answerable. Design on record:
    Every candidate trajectory's instruction is checked against the full
    Verified 361 by embedding similarity; above-threshold → discarded, report
    archived. No screen, no training.
-2. Candidate sources by domain fit: OpenCUA **AgentNet** (Ubuntu desktop,
-   Apache) > OS-Genesis desktop portion > web/mobile sets (off-domain).
+2. Candidate sources, surveyed 2026-08-15 — the desktop-data drought ended
+   this year; what stays scarce is OUR slice (Ubuntu):
+   - **AgentNet** (OpenCUA): 22.5K human tasks, of which **Ubuntu 5K** — the
+     only human Ubuntu-desktop trajectories in the open, first in line.
+   - **ProCUA-SFT** (2026-06): 3.1M step-level samples from 93K synthetic
+     trajectories, the largest open desktop CUA training set — OS mix,
+     dialect and contamination unchecked.
+   - **GroundCUA** (CUA-Suite): 3.6M UI-element annotations on 56K
+     screenshots — not trajectories but the desktop version of MolmoWeb's
+     perception ingredient; feeds the grounding-fallback direction, not C.
+   - VideoCUA (10K human tasks as 30fps video): heavy processing, back of
+     the queue. OS-Genesis/ANCHOR: method references more than data.
+   - Scale context: ProCUA's 3.1M steps exceeds MolmoWebMix's 2.2M — raw
+     desktop volume has caught up with web; Ubuntu-fit volume has not.
 3. Similarity filter to OUR distribution: instruction embeddings + app-domain
    match, as the user proposed (same family of technique OpenWebRL used for
    corpus dedup).
