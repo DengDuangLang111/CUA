@@ -288,6 +288,57 @@ proves it: **7,906 steps, 0 containing `<think>`** — the responses start with
 two blank lines where the discarded reasoning used to be, and that campaign's
 45.2% was scored with no thinking whatsoever.
 
+**The authors' own Qwen runs, verbatim.** Their trajectory release ships the
+`args.json` each run wrote. Pulled 2026-08-14 by HTTP range request (no archive
+downloaded in full — `sft/tools/zpeek.py`); copies in
+`reference/osworld-author-runs/`. **They use our exact runner** — the arg set has
+`history_n` / `image_max` / `fold_size` / `coord` / `simple_path` /
+`add_thought_prefix`, which only `run_multienv_qwen.py` has.
+
+| | qwen3.7-plus | qwen3.6 think | qwen3.6 nothink | `mano` (qwen2.5-vl) | **ours** |
+|---|---|---|---|---|---|
+| benchmark | **Verified 361** | V2 (102) | V2 (102) | **Verified 361** | generated |
+| max_steps | 100 | 300 | 300 | 100 | **50** |
+| history_n | 100 | 300 | 300 | 3 (+5 images) | 100 |
+| image_max / fold_size | 20 / 10 | 20 / 10 | 20 / 10 | — | 20 / 10 |
+| coord | relative | relative | relative | — | relative |
+| sleep_after_execution | **5.0** | **5.0** | **5.0** | **10.0** | 3 |
+| temperature | **0.6** | **0.6** | **0.6** | 0.0 | **1.0** |
+| top_p | 0.95 | 0.95 | 0.95 | 0.9 | 0.95 |
+| max_tokens | **8192** | **8192** | **8192** | 1000 | 81920 |
+| enable_thinking | false | false | false | — | true |
+| num_envs | 9 | 6 | 10 | 10 | 3 |
+| enable_proxy | **true** | — | — | — | false |
+
+Two rules hold across all of theirs: **`history_n` is always set equal to
+`max_steps`** (keep everything — our 100-with-50-steps has the same effect), and
+**`temperature` is 0.6, never 1.0.** `image_max 20` / `fold_size 10` / `coord
+relative` match us exactly.
+
+**Their scores, from each archive's own `summary/results.json`:** qwen3.7-plus on
+Verified 361 = **mean 0.6899, exact-1.0 66.6%** (n=374). qwen3.6-think on
+OSWorld-V2 102 = mean 0.2984, exact-1.0 6.3% (n=95).
+
+**Thinking is present in their trajectories.** Sampled `qwen36-cua-think` task
+006: **337/337 steps carry a `</think>` block**, median response 418 chars, p90
+771 — and with `history_n 300` all of it stays in context. Note `enable_thinking`
+is `false` in their args, which confirms the flag is inert against a local vLLM
+(it is honoured only for `dashscope` base URLs); the reasoning arrives through
+the parser, not the flag.
+
+**Their action dialect is the newline form**, e.g.
+`<parameter=action>\nleft_click\n</parameter>` — the same shape our parser
+expects, so `OSTG_PARAM_DIALECT` stays unset.
+
+**Which tool definition they used.** The `qwen35` RL archive ships the literal
+`tools_def.json`, and its 14-action enum is **byte-identical to upstream's
+`build_base_tools_def`** — including `answer`, which it documents as "Answer a
+question". But the qwen3.7 Verified-361 trajectories emit `screenshot`, which
+only `build_internal_tools_def` declares. So both dialects are in real use by the
+authors, and **our choice of `internal` matches their 3.7 run.** `answer` is
+therefore not a hallucination *in general* — it is declared in the base dialect —
+but it is genuinely undeclared in the internal dialect we run.
+
 **The spread is not chaos — the authors declare three tiers.** The repo alone
 made the variation look arbitrary, so it was checked against the authors'
 external sources on 2026-08-14. Their own trajectory release

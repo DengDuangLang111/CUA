@@ -906,6 +906,60 @@ automatically better. If a 3.8-4B exists, whether the student should move too is
 a separate decision — and it would invalidate every arm in the current registry
 for comparison purposes.
 
+## 11b. Qwen3.8-27B first 40 tasks — it is not the config
+
+Written 2026-08-14 while `v11-100-t1-20260814` was mid-flight (40/100 scored),
+because the suspicion was that a mis-set config was depressing results. It was
+not. **Paired on the identical 40 task ids** against Qwen3.6's
+`v11-all-ms50-think-nopreserve-20260809`:
+
+| | mean | exact 1.0 |
+|---|---|---|
+| Qwen3.6-27B | 0.3750 | 15 / 40 |
+| **Qwen3.8-27B** | **0.7500** | **30 / 40** |
+
+**Better on 15, worse on 0, tied on 25.** Exactly double the mean with zero
+regressions. Partial batch, dispatched in manifest order, so the remaining 60
+could move it — but a 0-regression split is not what a broken config looks like.
+
+### The DONE revert is doing the right thing, for a reason nobody predicted
+
+The `actions.py` fallback was reverted to upstream's `DONE` earlier the same day.
+Classifying all 40 finished episodes by their **final** step:
+
+| how the episode ended | n | mean | exact 1.0 | median steps |
+|---|---:|---:|---:|---:|
+| prose completion, no tool call → **DONE** | 27 | **0.815** | 22 | 15 |
+| explicit `terminate` | 7 | 0.857 | 6 | 48 |
+| `call_user` (undeclared → DONE) | 3 | 0.667 | 2 | 33 |
+| ran out of steps | 2 | 0.000 | 0 | 52 |
+| `screenshot` (undeclared → DONE) | 1 | 0.000 | 0 | 58 |
+
+**The single largest ending — 27 of 40 — is the model writing "The task is
+complete." in prose and emitting no tool call at all.** Those score 0.815 with 22
+perfect, and they finish in a median of 15 steps against `terminate`'s 48. Under
+the old WAIT patch every one of them would have looped to the 50-step wall,
+burning ~35 wasted steps each with a live VM still able to disturb the final
+state. Reverting to DONE converts a silent stall into a clean, correctly-scored
+stop.
+
+The cost is the last two rows: 4 episodes ended on an action the internal parser
+has no branch for, and 2 of those scored 0. **The authors' own runs show what the
+alternative looks like** — sampling 12 qwen3.7-plus trajectories from their
+release, `screenshot` appears 4 times and every one is logged as `action: WAIT`
+with the episode continuing (3 of the 4 were at step 1, so under DONE those tasks
+would have died on their first action). So WAIT is right for `screenshot` and
+DONE is right for prose-completion, and the current all-or-nothing fallback
+cannot be both.
+
+**The targeted fix, if it is ever worth making:** give `screenshot` its own
+branch returning WAIT — it is a declared action in `build_internal_tools_def`
+that the parser simply never implemented, so this is filling a hole, not adding
+behaviour — and leave the fallback at DONE. That is one `elif`, it changes
+nothing about prose-completion, and it removes the only measured way this harness
+kills a healthy episode. **Not applied**: the campaign is mid-flight and a
+harness change would split the batch. Revisit between campaigns.
+
 ## 12. Open
 
 - **The main rollout is mid-flight** (13 of 203 at this writing); claims about
