@@ -2316,3 +2316,47 @@ samples, zero filter losses, verify 11,595 image refs / 0 missing.**
 save_steps 150 (= 1196/8 per epoch). 10 samples estimated over max_length
 65536 (the xhigh thinking tail — new; no prior dataset had any): confirm
 swift's truncation strategy at launch so labels are never silently cut.
+
+## How the two published recipes handle history thinking — verified, 2026-08-15
+
+Question forced by our launch preflight: the student's template strips historical
+`<think>` unconditionally (measured; no `preserve_thinking` var exists in its
+jinja), so training must pick a side. What do Qwen-CUA and OpenWebRL do?
+
+**OpenWebRL: lean/lean.** Verified behaviorally against its actual base model
+(the OpenWebRL-4B-SFT copy on Tillicum, Qwen3-VL-Thinking lineage): three
+history assistant turns carrying `<think>THINKMARKn</think>` in content, rendered
+via `apply_chat_template` under default / `enable_thinking=False` / `=True` —
+**history think stripped in all three; visible text kept**. Their SFT Stage 2
+renders through this same `apply_chat_template` (their stated byte-consistency
+doctrine), and their runtime uses it too — so their model trains AND infers with
+history reasoning stripped. (Their rollout code carries `<think>` in the message
+objects with mode `full`; the template is what leans it at render, both sides
+equally.) Their 4B at 67% Online-Mind2Web is a lean/lean data point.
+
+**Qwen-CUA: rich/rich.** Paper, verbatim: after screenshot folding "the
+corresponding reasoning and actions remain in the conversation" — historical
+reasoning is their explicit textual memory. Their backbone lineage's template
+preserves history think (we measured Qwen3.8's: kept in all turns,
+`preserve_thinking` default true). Consistent on both sides, in the rich
+direction — enabled by a template that supports it.
+
+**Nobody ships rich-train/lean-infer.** That cell is the bug: it is what our
+e1/e3/more arms did (`--preserve_thinking true` in swift, then evaluation
+through the student's stripping template with no switch to prevent it —
+valpanel args confirm `preserve_thinking: False` and the jinja has no such
+var anyway). `more3np` (false) was accidentally the only consistent arm.
+
+| | train keeps history think | infer keeps it | consistent? |
+|---|---|---|---|
+| Qwen-CUA | yes | yes (template supports) | ✅ rich/rich |
+| OpenWebRL | no (template strips) | no | ✅ lean/lean |
+| our e1/e3/more | yes | **no** (template strips, no switch) | ❌ |
+| **arm A decision** | **no (`preserve_thinking false`)** | no | ✅ lean/lean |
+
+Arm A therefore trains `preserve_thinking false`: the student's stock template
+forces lean at inference, so lean at training is the only consistency-preserving
+choice without a custom serving template — and it is the exact cell OpenWebRL's
+4B validated. The label turn's thinking is untouched by this flag: the model
+still learns to reason before every action; it just does not see its past
+reasoning, matching its deployment reality.
