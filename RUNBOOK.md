@@ -377,6 +377,46 @@ the bridge, catching the field on the way out and re-embedding the text in
 the official-361 run's 7,906 steps with zero `<think>` is what the broken bridge
 looks like. **Keep thinking in `content`; there is nothing to change.**
 
+**Does thinking go back into history? — every reasoning model in the authors'
+Verified archive, from code + archive evidence** (2026-08-14). Method per row:
+archive `args.json` fingerprinted to its runner (exact or subset key match),
+then that agent's history-construction code read; trajectory samples where they
+add anything.
+
+| Verified run | thinking exists? | replayed into history? | mechanism | text history | images |
+|---|---|---|---|---|---|
+| **claude**-3-7 / 4 / 4-5 (15/50/100 steps each) | yes — API thinking blocks (`no_thinking: false`) | **yes, verbatim + signature** | native `thinking` blocks; non-text blocks replayed via `model_dump()` (`anthropic/utils.py:528`); the API *requires* them back when tool use + thinking are on | **full episode** | last 10 |
+| **o3** (15/50/100) | hidden reasoning: yes; **API never returns it** | internal: **never** · prompted visible "Thought:" **yes** | `parse_thought_from_planner_response` regexes the *visible* text; replayed as user-role text `Thought:\n…\nAction:…` (`o3_agent.py:98-107`) | full episode | last 5 |
+| **doubao**-1.5-thinking (runner = `uitars15_v2`, archive keys ⊂ its argparse) | yes — prompted inline `<think>` in `content` (`"thinking":{"type":"enabled"}` sent; only `content` read) | **yes, inline text, verbatim** | `history_responses` replayed untouched as assistant content (`uitars15_v2.py:832`) | full episode | last 5 |
+| **kimi**-k2.5 (`thinking: true`) | yes — API `reasoning_content` field | **yes, as text in Kimi's own markers** | history template `◁think▷{thought}◁/think▷## Action:\n{action}` (`kimi_agent.py:51`), thought = `response['reasoning_content']` (`:63`) | full episode | last 3 |
+| qwen3.7 / 3.5-RL / 2.5-vl | no (all nothink) | n/a | — | full / h100 / 3 turns | 20 / ? / 3 |
+
+(Current-tree `seed_agent.py` — a newer Doubao runner, not the archived run —
+goes further still: it splits reasoning out on a sentinel and sends it back as a
+`reasoning_content` **field** on input assistant messages (`seed_agent.py:647-651`),
+which Volcengine's API accepts. Our vLLM drops that field; theirs doesn't.)
+
+**The pattern is unanimous: every model whose reasoning is *accessible* replays
+it into history, full-length.** Claude ships it back as signed blocks because
+the API demands it; Doubao inlines it in content; Kimi re-wraps it in its own
+think markers; the newer Seed runner passes it as a field; qwen3.6-on-V2 inlines
+it. The single exception, o3, is not a design choice — the API physically
+withholds the reasoning, and the agent compensates by replaying the *prompted*
+visible Thought text instead. Nobody strips accessible reasoning from history.
+
+**Correction to the per-agent config table above:** its claude `hist=3` row is
+wrong in effect. `run_multienv_claude.py:276` passes `max_trajectory_length=3`,
+but `AnthropicAgent.__init__` has no such parameter — it vanishes into
+`**kwargs`, unused. The Claude runs keep the **full** message history and cap
+only images (10). The argparse-default column in that table records what runners
+*declare*, not always what agents *do*.
+
+**Design consequence for us:** replaying full thinking in history is not our
+eccentricity — it is the norm across the authors' own Verified runs for every
+model that allows it. The open question (does a reasoning-saturated context
+help or hurt a 27B student?) remains open, but "the authors don't do this" is
+now off the table as an argument either way.
+
 **Every Qwen run in the authors' Verified archive, and what each model actually
 received** (2026-08-14; all read from the archives themselves — args.json
 fingerprints, sampled trajectories, and, where they exist, the dumped messages).
