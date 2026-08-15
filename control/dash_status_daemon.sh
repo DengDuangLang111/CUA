@@ -138,6 +138,20 @@ json.dump(out, open(p, "w"), indent=1)
 PY
   if [ "$?" = "0" ]; then
     NOW=$(date +%s)
+    # status.json goes out FIRST, every cycle -- traj staging (heavy the first
+    # time a new run is seen) must never delay the live numbers. Learned
+    # 2026-08-15: v1 of this rewrite pushed status after the traj loop and the
+    # site sat on 80-minute-old progress while a fresh campaign staged.
+    git add dashboard/status.json
+    if git commit -q -m "status: auto-refresh"; then
+      git pull --rebase -q origin $BRANCH >/dev/null 2>&1 || git rebase --abort >/dev/null 2>&1
+      if git push -q origin HEAD:$BRANCH; then
+        echo "[$(date +%H:%M)] status pushed"
+      else
+        git reset -q --soft HEAD~1
+        echo "[$(date +%H:%M)] status push failed, will retry"
+      fi
+    fi
     if [ $((NOW - LAST_TRAJ)) -ge 1800 ]; then
       for AJ in "$RG"/*/*/args.json; do
         SRC=$(dirname "$AJ")
@@ -163,7 +177,7 @@ PY
         else
           ( cd /mnt/d/research/ostg-v11.1 && PYTHONPATH=. $P -m ostg.traj_html "$STG" >/dev/null 2>&1 )
         fi
-        STG="$STG" $P - <<'PY'
+        STG="$STG" $P - <<'PYC'
 import glob, os
 from PIL import Image
 for p in glob.glob(os.environ["STG"] + "/**/*.png", recursive=True):
@@ -173,23 +187,23 @@ for p in glob.glob(os.environ["STG"] + "/**/*.png", recursive=True):
         if im.width > 1100: im = im.resize((1100, int(im.height*1100/im.width)))
         im.save(p, "JPEG", quality=32, optimize=True)
     except Exception: pass
-PY
+PYC
         mkdir -p "$REPO/dashboard/traj/$SLUG"
         rsync -a --delete "$STG/" "$REPO/dashboard/traj/$SLUG/"
         git add -A "dashboard/traj/$SLUG"
         echo "[$(date +%H:%M)] traj $SLUG: $(find "$STG" -name viewer.html | wc -l) viewers"
       done
-      DID_TRAJ=1
-    fi
-    git add dashboard/status.json
-    if git commit -q -m "status: auto-refresh"; then
-      git pull --rebase -q origin $BRANCH >/dev/null 2>&1 || git rebase --abort >/dev/null 2>&1
-      if git push -q origin HEAD:$BRANCH; then
-        [ "$DID_TRAJ" = "1" ] && LAST_TRAJ=$NOW
-        echo "[$(date +%H:%M)] pushed"
+      if git commit -q -m "traj: auto-publish"; then
+        git pull --rebase -q origin $BRANCH >/dev/null 2>&1 || git rebase --abort >/dev/null 2>&1
+        if git push -q origin HEAD:$BRANCH; then
+          LAST_TRAJ=$NOW
+          echo "[$(date +%H:%M)] traj pushed"
+        else
+          git reset -q --soft HEAD~1
+          echo "[$(date +%H:%M)] traj push failed, will retry"
+        fi
       else
-        git reset -q --soft HEAD~1
-        echo "[$(date +%H:%M)] push failed, will retry"
+        LAST_TRAJ=$NOW   # nothing new to publish; do not re-stage every cycle
       fi
     fi
   fi
