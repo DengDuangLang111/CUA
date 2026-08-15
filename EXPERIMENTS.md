@@ -1245,6 +1245,27 @@ runbook section, one knob changed:
 | model | claude-opus-5 | **qwen3.8-max** |
 | logging | buffered | `python -u` (log-only difference) |
 
+**Completed same day: 488 specs, and the coordinate system cured the register
+confound.** Final three-way readout:
+
+| | v500 (Opus, 4-axis) | **v11q2 (Qwen, 4-axis)** | v8.4-era (Qwen, 3-axis) |
+|---|---|---|---|
+| specs | 446 | **488** | 325 |
+| instruction path% | 8% | **5%** | 85% |
+| voice filled | 100% | **100%** | 0% |
+| ambiguity mix (1/2/3/4) | 43/130/139/134 | **49/147/146/146** | absent |
+| probe tolerance | 67% | **34%** | 37% |
+| setup median chars | 658 | **321** | 297 |
+
+The ambiguity coordinate (only 10% of cells permit paths; levels 2–4 forbid
+filenames by definition) plus the 4-axis briefs/schema made Qwen fill voice
+100% and follow the quota exactly — path-explicitness collapsed 85%→5%,
+BELOW Opus's 8%. The fill-required-only theory refines to: Qwen complies
+perfectly with whatever the brief makes explicit, and improvises nothing.
+**What survives the cure is the real model signal**: probe tolerance
+engineering (34% vs 67% — the control stage will price this) and setup/world
+richness (half of Opus's). Yield actually exceeds Opus (488 vs 446).
+
 The v8.4-era 325 is demoted to register-analysis material. Standard-process
 consolidation shipped with the launch: the v11.1 RUNBOOK now carries the
 500-scale shape, the generator-swap knob and the code-hash line (`190009be`);
