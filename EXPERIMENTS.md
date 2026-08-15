@@ -946,6 +946,21 @@ browser (60=60), thunderbird (25=25) and gimp (n=3, 100=100) did not move.
 steps), thunderbird 25%, impress 44%, 3-app 31%** — niche media apps plus
 cross-app orchestration, not uniform hardness.
 
+**⑤ The 3-app cliff is a bookkeeping failure, not an acting failure.**
+Failure-mode dissection: diff 1–4 failures are scattered early stops (0–3
+wall-hits per tier); diff-5's 11 failures split 4 horizon-exhausted / 7 early
+stops, and **6 of those 7 end in a confident completion claim** (3×
+terminate:success, 3× prose "task complete") at steps 16–37 — most of the work
+done, one cross-app thread dropped, conjunctive probe says 0. Contributing
+mechanics: the early-stop points (23–37 steps) all sit past the image_max=20
+folding boundary, so the first app's states have left the visual window; and
+the failing runs skip the cross-app re-verification the passing runs perform.
+Model-independent (3.6 shows the same cliff shape 33→12%). Corollaries: the
+five diff-5 passes are the corpus's most precious demonstrations (the only
+ones showing cross-app bookkeeping plus pre-close verification), and
+"cliff = bookkeeping" is itself a paper-able observation with a built-in
+testbed from the 3-app generator.
+
 SFT corollary: the 69-trajectory corpus skews easy/single-app by construction
 (88% of diff-1 tasks contribute vs 31% of diff-5) — the student's demonstrated
 distribution is easier than the task distribution; the teacher-regenerates-
