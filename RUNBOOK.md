@@ -463,6 +463,25 @@ Verified Qwen number of theirs (2.5-vl, 3.5-RL, 3.7) is nothink. The only
 author run with thinking in history is qwen3.6 on **V2**. We are the first
 Verified-harness run in this comparison set that replays real thinking.
 
+**Why the `answer` hallucination vanished in 3.8 — paired-task evidence
+(2026-08-15).** All 106 of 3.6's `answer` emissions came from three tasks
+(44×, 19×, 43× — the parser has no branch, so each became WAIT and the model
+re-tried into the same screenshot). The same three tasks under 3.8:
+
+| task | 3.6 | 3.8 |
+|---|---|---|
+| 9d933275 | 0.0 — 44 `answer` spins | **1.0 in 4 steps**, prose close |
+| a4b791c4 | 1.0 — 19 spins after the work was done | **1.0 in 14 steps**, prose close |
+| 64d9fd2c | 1.0 — 43 spins after the work was done | **1.0 in 8 steps**, prose close |
+
+The behavioural slot is identical — "I have the result, I want to say it and
+stop" — and `answer` is exactly the tool the BASE dialect provides for that
+(the Qwen team's own RL tools_def declares it). Under the internal dialect the
+tool does not exist; 3.6 reached for it anyway (its training prior), while 3.8
+expresses the same intent schema-legally: state the result in prose, emit no
+tool call, which upstream's DONE fallback turns into a clean scored stop. The
+hallucination did not so much disappear as find its legal channel.
+
 **Two harnesses — keep them apart** (clarified 2026-08-14 after conflating
 them). The authors' archives mix runs from two different codebases, and evidence
 from one does not transfer to the other:
