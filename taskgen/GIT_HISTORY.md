@@ -60,3 +60,5 @@ worktree 误用的温床。
 `specs_culled.jsonl` 审计痕迹;对已剔的 v11q2 复跑 0 culls 验证了与一次性脚本
 等价。RUNBOOK Ship 节改为指向该模块,一次性脚本 `tools/cull_v11q2.py` 留在
 wrapper 仓库作历史)。main = v11.1 = `05af9098`。
+当日再同步:`69d26b84`(文档整编 —— 本仓库全部 .md 换为指路桩,文档定都 CUA 仓库;
+RUNBOOK 先被 CUA 版吸收为严格超集再换桩)。main = v11.1 = `69d26b84`。
