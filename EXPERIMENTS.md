@@ -1193,6 +1193,43 @@ qwen3.8-max as the only changed variable.**
   calibration curve, teacher (3.8-27B) pass-rate distribution vs v11-500's,
   and per-cell paired comparison on the shared coordinates.
 
+### 11c-FINAL: the worktree resolution (2026-08-15, supersedes the drift story above)
+
+The user's three challenges were all correct; the final verified picture:
+
+1. **Nothing was ever rewritten untracked. ostg/ was a git repo all along** —
+   `.git` lives in the ostg SUBDIRECTORY (the parent dir is plain), with 14
+   branches and **six worktrees**: `os-simple-taskgen`(v6),
+   `os-simple-taskgen-v8`(v8.4), `ostg-v9/-v10/-v11/-v11.1`. My "unversioned"
+   claim, the drift speculation, and the bytecode archaeology were all
+   artifacts of checking only the parent directory for git.
+2. **v500 was generated from the v10/v11 lineage** (`--spent-from` landed
+   `11f2cf47` 08-09 17:59 "quota accounting on keep, not on draw"; the "v10
+   standard generation invocation" was documented 39 minutes after v500
+   finished). **My v11q ran from the v8.4 worktree** — an older lineage whose
+   walk caps at one pass. The 446-vs-325 gap was a WORKTREE MIXUP, mine,
+   today.
+3. **On the real lineage the quota ledger is a 4-tuple — ambiguity IS a
+   coordinate** (`taskgen/gen.py:874`): the grid there is 5×13×5×4 = 1300,
+   exactly as the user said. The 325 analysis described the wrong branch's
+   taxonomy.
+4. Remediation on the right branch (`v11.1`, commits `dc9b35d9`+`a361e753`):
+   the protocol adapter now lives in `ostg/llm.py` (auto-routing, non-claude
+   default = v11 regime), gen wires `--protocol`, and the sft fixes
+   (DECLARED, cv2 fallback, verify gate, filter tests) are committed where
+   they belong. The v8.4 working tree is restored pristine.
+5. **Thinking verdict revised**: direct probes run 4–6 s with
+   `enable_thinking:true`; `thinking_budget` partially binds (1000 trims,
+   300 does not). The 75-minute "hang" was confounded by unflushed stdout
+   (no `python -u`) — "operationally dead" is retracted; one instrumented
+   retry on the v11.1 runway will settle real per-batch latency.
+6. **The lesson, corrected**: the failure was not missing version control —
+   it was not KNOWING the version control was there (`.git` in a subdir,
+   six worktrees) and not knowing which worktree ran what. Fixes: run logs
+   now print the git hash (`[gen] args ... code=`), and the check before any
+   campaign is `git -C <exec-dir> log -1` — in the directory the code
+   actually runs from.
+
 ## 12. Open
 
 - **The main rollout is mid-flight** (13 of 203 at this writing); claims about
