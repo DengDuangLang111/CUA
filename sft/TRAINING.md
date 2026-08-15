@@ -2334,12 +2334,19 @@ history reasoning stripped. (Their rollout code carries `<think>` in the message
 objects with mode `full`; the template is what leans it at render, both sides
 equally.) Their 4B at 67% Online-Mind2Web is a lean/lean data point.
 
-**Qwen-CUA: rich/rich.** Paper, verbatim: after screenshot folding "the
-corresponding reasoning and actions remain in the conversation" — historical
-reasoning is their explicit textual memory. Their backbone lineage's template
-preserves history think (we measured Qwen3.8's: kept in all turns,
-`preserve_thinking` default true). Consistent on both sides, in the rich
-direction — enabled by a template that supports it.
+**Qwen-CUA: rich at inference (direct evidence), rich at training (inferred).**
+Their own demo client re-embeds streamed reasoning into content exactly like our
+`client.py:51` — `f"<think>\n{reasoning}\n</think>\n{content}"`
+(`demo/src/qwen_cua/model_client.py:108`) — and replays it via `build_messages`;
+with their backbone lineage's preserving template (we measured Qwen3.8's), the
+model sees history reasoning at inference. Training-side rich is INFERRED, not
+quoted: the paper's "reasoning and actions remain in the conversation" plus
+slices rendering that same conversation; no sentence says "training context
+keeps think" outright. Important wire-vs-token distinction the harness hides:
+ALL three parties (teacher rollout, Qwen-CUA, our student eval) SEND think-in-
+content over the wire; whether the model SEES it is decided by the serving
+template — teacher and Qwen-CUA templates pass it through, the student's strips
+it. The divergence lives inside vLLM's render, invisible to the harness.
 
 **Nobody ships rich-train/lean-infer.** That cell is the bug: it is what our
 e1/e3/more arms did (`--preserve_thinking true` in swift, then evaluation
