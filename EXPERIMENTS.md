@@ -1115,8 +1115,16 @@ teacher's ability band. Design: **regenerate the v500 coordinate space with
 qwen3.8-max as the only changed variable.**
 
 - Invocation identical to the original v500 run (from its logs): `--n 5
-  --batches 29 --shard I/4` × 4 shards, **same seed 20260812 → the same
-  coordinate partition → paired cells** between Opus5-500 and Qwen-500;
+  --batches 29 --shard I/4` × 4 shards, same seed 20260812. **CORRECTED after
+  completion: the paired-cells claim was wrong** — the coordinate product
+  changed between the Aug-12 v500 run and now (repo unversioned, drift not
+  reconstructable), so the runs consumed different cell budgets (Opus filled
+  29×5 slots → 446 specs over 259 coarse cells ≈1.7/cell; Qwen exhausted its
+  partition at ~batch 17 → 325 specs over 316 coarse cells ≈1.0/cell).
+  What holds: **253 shared coarse cells (80% of Qwen's) → stratified, not
+  1:1, comparison**. Qwen keep rate ~98% (6 rejects in 331: 3 missing setup,
+  2 syntax, 2 dup slugs) — the forced-tool-call regime is highly compliant;
+  325-not-500 is cell exhaustion, not quality.;
   `--avoid-corpus` = the CUA-Gym 10,910-instruction dump; own-avoid automatic
   (sibling `out/runs/*/specs.jsonl`, which now includes v11-500 — so v2 is
   disjoint from v1 by construction).
