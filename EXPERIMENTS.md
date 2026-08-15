@@ -1136,6 +1136,18 @@ qwen3.8-max as the only changed variable.**
 - Downstream unchanged and still Claude/programmatic (gold, audits, control):
   Qwen writes, Claude audits, programs decide — the generator swap does not
   touch the verification separation.
+- **Why 325 exactly, and why simpler — resolved (2026-08-15):** one gen
+  invocation walks the core grid (5 intents × 13 domains × 5 difficulties =
+  **325 triples**) once, one spec per triple, then stops — Qwen's count is a
+  clean single pass (Opus's 446 was ~1.7 passes over the then-259-triple
+  grid). The ~10k capacity is multi-pass + fine-axis rotation, realized by
+  re-running (auto-avoid makes each pass disjoint). And the simplicity has a
+  measured mechanism: **Qwen omits the voice field entirely (0/78 vs Opus
+  112/112)** — optional schema fields get dropped by its fill-required-only
+  function-calling habit, killing the register axis; deeper, the prompt
+  co-evolved with Claude across v6–v11 (each rule patches a Claude failure
+  mode), so "same prompt" is Opus's home field — cross-model generator swaps
+  cost roughly half a prompt re-tune, itself a finding.
 - **First qualitative/quantitative comparison at 325/580 specs (2026-08-15):**
   the generators differ in REGISTER, and it is a confound. Qwen writes
   spec-style: 85% of instructions carry an absolute path (Opus 8%), 86% name
