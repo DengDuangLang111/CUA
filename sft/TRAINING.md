@@ -2016,3 +2016,74 @@ Ledger row contract: job id, recipe version, data version (filter version +
 sample counts + snapshot name), outcome (incl. failures and WHY), wandb link,
 checkpoint path. Corollary learned today: an eval baseline is only valid for
 deltas if it took the SAME exam — re-baseline whenever the panel changes.
+
+
+## How OpenWebRL handles thinking in training data — and where we differ
+
+Checked 2026-08-14 against their released code (github.com/OpenWebRL/OpenWebRL,
+clone at `0d38a95`-era HEAD), because their 4B web agent is the closest published
+analogue to our student. Everything below is from their code, not the paper.
+
+### Their rollout / RL context (`openwebrl/generate_browser.py:338-400`)
+
+They built exactly the compression machinery we have been debating, as two knobs:
+
+- `turn_history_reasoning_mode`: `full` | `hide_thinking` (regex-strips
+  `<thinking>` blocks from **historical** assistant turns; the current turn is
+  never touched) | `action_only` (history keeps only the action/tool_call
+  blocks).
+- `browser_history_reasoning_max_turns`: a middle setting — full reasoning for
+  the last N assistant turns, `hide_thinking` for everything older.
+
+**And then they ship every released script with both knobs off**: all three run
+scripts set `TURN_HISTORY_REASONING_MODE:-full` and `MAX_TURNS:-0`. Their
+headline 4B numbers (67.0% Online-Mind2Web) were trained with **full thinking in
+history** — the same convention as ours and as every reasoning model in the
+OSWorld authors' Verified archive (RUNBOOK, "Does thinking go back into
+history"). The knobs exist for ablation; the answer they ship is `full`.
+
+### Where they are genuinely different: images, not text
+
+Their text history is full-length, but screenshots in context are **last 1**
+(4B script) or **last 3** (8B script) — against our `image_max 20`. A 4B student
+trained with a single current screenshot plus full text/thinking history reached
+67% on a live-web benchmark. That is the strongest external evidence yet on our
+"does the student need 20 images" question, and it points at no.
+
+### Their SFT warm start (`sft/`)
+
+- Stage 1 (`convert_to_openai_messages.py:256-264`): canonical episodes keep
+  reasoning **inline in assistant `content`** (`<think>…` text) and split tool
+  calls into structured `tool_calls` — reasoning rides in content, same as our
+  convention.
+- Stage 2 (`prepare_openai_for_llamafactory.py`): renders canonical episodes
+  through the **base model's own `tokenizer.apply_chat_template`** — "the exact
+  call the runtime makes at inference — so the SFT data is byte-consistent with
+  the model's inference format" (their README). Historical thinking is kept; no
+  compression exists anywhere in the SFT path.
+- Two granularities: whole-episode (`mask_history: false`, supervise every
+  assistant turn) or per-turn prefixes (`iter_prefixes`, `messages[:i+1]`) with
+  a **single current screenshot** and `mask_history: true`.
+
+### The delta table
+
+| | OpenWebRL | ours |
+|---|---|---|
+| thinking in rollout history | full (default; knobs exist) | full (no knobs — would live in `_response_transform`) |
+| screenshots in context | **1** (4B) / 3 (8B) | 20 |
+| SFT reasoning placement | inline in content | inline in content |
+| SFT rendered via | base model's official chat template (byte-consistent with inference) | our own sample assembly from `traj.jsonl` `response` |
+| SFT granularity | per-episode or per-turn prefix | per-step aggregated by `step_num` |
+| after SFT | online multi-turn RL (slime) | nothing yet |
+
+### Two actionable points
+
+1. **Byte-consistency check we have never run.** They guarantee SFT text ==
+   inference text by rendering through the same chat template. We assemble SFT
+   samples ourselves, and we now know the serving template injects an empty
+   `<think>` slot ahead of every historical assistant turn (RUNBOOK) — so our
+   student trains on histories WITHOUT the empty slots and infers on histories
+   WITH them. Small, but it is exactly the class of mismatch their pipeline
+   exists to kill, and checking ours costs one rendered-vs-assembled diff.
+2. **The image-history experiment has an external prior now.** Their 4B works
+   with 1 screenshot. If we ever cut `image_max`, cut hard, not to 10.

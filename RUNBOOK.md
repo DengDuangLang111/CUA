@@ -411,6 +411,12 @@ but `AnthropicAgent.__init__` has no such parameter — it vanishes into
 only images (10). The argparse-default column in that table records what runners
 *declare*, not always what agents *do*.
 
+**OpenWebRL cross-check** — the closest published 4B-student pipeline ships
+`hide_thinking`/`action_only` compression knobs and then defaults every released
+script to `full` with the reasoning window off; their headline numbers train on
+full thinking in history with **1–3 screenshots** in context. Details and the
+delta table: `sft/TRAINING.md`, "How OpenWebRL handles thinking".
+
 **Design consequence for us:** replaying full thinking in history is not our
 eccentricity — it is the norm across the authors' own Verified runs for every
 model that allows it. The open question (does a reasoning-saturated context
