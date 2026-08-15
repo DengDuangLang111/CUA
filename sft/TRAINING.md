@@ -2285,3 +2285,34 @@ the external-data question stay separately answerable. Design on record:
    converter per source, the main engineering cost.
 5. C evaluates on the same frozen verified-eval-50; its delta over A/B is the
    single-variable answer to "does external data help".
+
+## Qwen-CUA (2026-08-03, Qwen Team x XLang) — the desktop flagship's recipe
+
+Two findings that reframe ours (arXiv 2608.02352):
+
+1. **Our context construction is theirs, verbatim.** "Scales the active visual
+   history to 20 screenshots per turn", boundary "advances by 10 steps",
+   folded screenshots become "a fixed textual placeholder", and "reasoning and
+   actions remain in the conversation" — i.e. image_max 20 / fold_size 10 /
+   think-in-history. The upstream runner's mechanism IS the flagship's
+   training mechanism (XLang = the OSWorld authors). The image-count question
+   is now web-lineage (1 image: OpenWebRL, MolmoWeb) vs desktop-flagship
+   (20 + folding) — genuinely open, ours to test, not to assume.
+2. **Fold-aware slicing — the packing idea done right.** "Complete episodes
+   are rendered as multiple context-bounded slices by advancing the
+   folded-prefix boundary; each slice inherits the terminal reward, and only
+   active model-generated tokens contribute to its loss." Slices along fold
+   boundaries keep training context identical to inference context, which is
+   exactly the equivalence CONTEXT.md §6 proved plain packing breaks. Builder
+   v3 candidate, on record, not started.
+
+Also noted: model-assisted CoT completion for reasoning-less human demos
+(moot for us — teacher reasoning comes free), and iterative rounds that
+retrain from the same mid-training checkpoint rather than continually
+fine-tuning the previous agent (anti-drift; copy when we iterate).
+
+Arm A dataset FINAL (pipeline run 2026-08-15): **69 trajectories → 1,196
+samples, zero filter losses, verify 11,595 image refs / 0 missing.**
+save_steps 150 (= 1196/8 per epoch). 10 samples estimated over max_length
+65536 (the xhigh thinking tail — new; no prior dataset had any): confirm
+swift's truncation strategy at launch so labels are never silently cut.
