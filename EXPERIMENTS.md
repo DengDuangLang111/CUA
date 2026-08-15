@@ -922,6 +922,30 @@ not. **Paired on the identical 40 task ids** against Qwen3.6's
 regressions. Partial batch, dispatched in manifest order, so the remaining 60
 could move it — but a 0-regression split is not what a broken config looks like.
 
+### Category analysis of v11-100 under 3.8: four paradigms (2026-08-15)
+
+**① The generator's difficulty labels are empirically calibrated.** Pass rate
+is monotone in the 1–5 difficulty annotation for BOTH models (3.8: 88/78/75/71/
+31%; 3.6: 50/48/46/33/12%), and steps-to-pass rises monotonically too
+(10→12→15→18→20). The free difficulty scale claimed by innovation candidate
+#2 is real, on two model generations.
+
+**② Difficulty's substance is multi-app orchestration.** app_count 1→2→3 =
+82→73→31% (a cliff at 3); ambiguity 1→4 = 90→74→72→57% (monotone hurt);
+**voice is flat (67–74%)** — the model is robust to phrasing style.
+
+**③ 3.8's gains concentrate in precise structured work.** table grading
+9→73%, calc 7→60%, configure 24→60%, os 23→69%, vs_code 46→88% — while
+browser (60=60), thunderbird (25=25) and gimp (n=3, 100=100) did not move.
+
+**④ Residual weakness portrait: vlc 25% (passing runs grind to median 35
+steps), thunderbird 25%, impress 44%, 3-app 31%** — niche media apps plus
+cross-app orchestration, not uniform hardness.
+
+SFT corollary: the 69-trajectory corpus skews easy/single-app by construction
+(88% of diff-1 tasks contribute vs 31% of diff-5) — the student's demonstrated
+distribution is easier than the task distribution; the teacher-regenerates-
+failures loop is the standing answer.
 ### Data quality, side by side (measured at 84/100, 2026-08-14 23:10)
 
 Same 100 tasks, same runner, same 3 envs. Every number from the trajectories

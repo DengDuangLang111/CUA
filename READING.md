@@ -62,6 +62,16 @@ together they are "how to distill desktop competence into a small model".
 | difficulty scale | no | no | teacher pass-rate gradient, RL-curriculum-ready |
 | openness | closed / small | open + judge-bound | ours, openable |
 
+Update 2026-08-15: the difficulty scale is now empirically validated — pass
+rate monotone in the generator's 1–5 labels on both teacher generations
+(EXPERIMENTS.md, category analysis). The negative-control gap made precise:
+positive control (gold→PASS) and trivial negative (initial-state→FAIL) are
+systematic; **near-miss negatives (mutated gold end-states that must all
+FAIL) are not** — they test probe specificity, and the two known
+wrong-answer-scored-1 leaks are exactly what they would catch. Design: k
+generic mutators (drop row, reorder, right-content-wrong-name, partial) + an
+LLM-crafted trap per task, specificity column in the control report.
+
 Honest weaknesses to preempt: (1) **same-head co-generation has correlated
 blind spots** — a misunderstanding of app behaviour infects task and probe
 coherently; positive control catches evaluator-broken cases (did: 6 right-
