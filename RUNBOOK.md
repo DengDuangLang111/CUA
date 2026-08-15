@@ -221,6 +221,84 @@ Reading the results:
 
 ## 5 Rollout
 
+### What the OSWorld AUTHORS run — there is no single "official config"
+
+Checked in the upstream worktree `091f5ef1` on 2026-08-14, because "the official
+settings" had been used loosely in this project to mean three different things:
+our own run of the official 361 tasks, the upstream defaults, and the authors'
+published baseline. Only the last is what the paper numbers come from.
+
+**The authors' paper baseline** (`README.md`, "the baseline agent used in our
+paper", GPT-4o pure-screenshot):
+
+```bash
+python run.py --provider_name vmware --headless \
+    --observation_type screenshot --model gpt-4o \
+    --sleep_after_execution 3 --max_steps 15
+```
+
+with `run.py`'s own defaults filling the rest: **`max_trajectory_length 3`**,
+`max_tokens 1500`, `temperature 1.0`, `top_p 0.9`, 1920×1080.
+
+**Every agent then brings its own numbers.** Per-runner defaults in
+`scripts/python/`:
+
+| agent runner | max_steps | sleep | history | max_tokens | temp |
+|---|---:|---:|---:|---:|---:|
+| `run.py` (paper baseline) | **15** | 0.0 → **3 documented** | **3** | 1500 | 1.0 |
+| claude | 15 | 0.5 | 3 | 16000 | — |
+| openaicua | 15 | 0.0 | 3 | 1500 | 1.0 |
+| qwen25vl | 15 | 0.0 | 3 | 1500 | 1.0 |
+| qwen3vl | 15 | 0.0 | 3 | 32768 | 0 |
+| gpt54 | 15 | 0.0 | 3 | — | 1.0 |
+| aguvis | 15 | 2.0 | — | 1500 | 0 |
+| dart_gui | 15 | 5.0 | — | 500 | 0.0 |
+| os_symphony | 15 | 1.0 | 8 | — | — |
+| owl | 15 | 1 | 15 | 1500 | 0 |
+| autoglm | 50 | 1.0 | 3 | 4096 | 0.4 |
+| gui_owl15 | 50 | 5 | **50** | — | 0 |
+| mobileagent_v3 | 50 | **10.0** | **50** | 1500 | 0 |
+| evocua | 50 | 5.0 | — | 32768 | 0.0 |
+| **qwen (ours)** | **50** | **0.0** | **see below** | 32768 | **0.0** |
+| gemini | 100 | 5.0 | — | — | — |
+| kimi_k25 | 100 | 5.0 | — | 4096 | 1.0 |
+| opencua | 100 | 5.0 | — | 2048 | 0 |
+| m3 | 100 | 3.0 | 10 | 8192 | 0.6 |
+| muse_spark | 100 | 0.0 | **100** | **131072** | — |
+
+Ranges: **max_steps 15–100 · sleep 0–10 · history 3–100 · max_tokens 500–131072
+· temperature 0–1.0**. Anyone comparing two numbers on this leaderboard is also
+comparing two harnesses.
+
+**`run_multienv_qwen.py` does not use `max_trajectory_length` at all.** It has a
+different history mechanism: `history_n 100` (turns of TEXT kept) + `image_max
+20` + `fold_size 10` (screenshots kept; older ones become the string "This
+screenshot has been collapsed."). So on the Qwen line the model carries **every
+previous response verbatim, reasoning included, with only the last ~20
+screenshots**. The modal upstream setting — and the paper baseline — is
+`max_trajectory_length 3`.
+
+**Thinking is off by default on this line.** `--enable_thinking` is honoured
+only when the base URL contains `dashscope`; against a local vLLM it is silently
+discarded, and vLLM 0.25 additionally renamed the response field
+`reasoning_content` → `reasoning` so the client read `None` and dropped it.
+Both are patched locally (`main.py`, `client.py`); **without those patches an
+upstream Qwen run has no reasoning at all.** Our own official-361 campaign
+proves it: **7,906 steps, 0 containing `<think>`** — the responses start with
+two blank lines where the discarded reasoning used to be, and that campaign's
+45.2% was scored with no thinking whatsoever.
+
+**How our generated-task campaigns sit against the paper baseline:**
+
+| | authors' baseline | ours |
+|---|---|---|
+| runner | `run.py` | `run_multienv_qwen.py` (also upstream) |
+| max_steps | 15 | 50 |
+| history | 3 turns | 100 turns + 20 images |
+| max_tokens | 1500 | 81920 (measured p90 output: **143 tokens**) |
+| sleep | 3 | 3 (was 1 until 2026-08-14) |
+| thinking | n/a for gpt-4o | on, via two local patches |
+
 ### The harness is behaviourally upstream again (2026-08-14)
 
 **`mm_agents/qwen/actions.py` is now `+60 / −0` against upstream `091f5ef1`** —
