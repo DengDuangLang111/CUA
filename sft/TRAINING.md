@@ -2177,3 +2177,33 @@ through review — never by ad-hoc variation of the invocation.
 Sync note: the executing copy lives on WSL (`/mnt/d/research/ostg-v11.1`);
 after changing anything under `sft/`, push the file and compare md5 before
 running (CLAUDE.md §9).
+
+## The Verified eval protocol (2026-08-15, user decision)
+
+No more val split and no more 9-task panels: **arms are evaluated on a fixed
+sample of OSWorld-Verified itself.** The user's design: uniformly sample the
+benchmark, run base Qwen3.5-4B and the SFT'd model on the SAME tasks, compare.
+
+**The sample.** From the **312 non-proxy** tasks of `test_nogdrive.json` (the
+49 `proxy: true` tasks are excluded — no residential proxy is configured, and
+they degrade silently without one). Stratified proportionally by domain,
+`random.Random(20260815)`, largest-remainder rounding:
+
+- `evaluation_examples/verified_eval100_nonproxy.json` — 100 tasks
+- `evaluation_examples/verified_eval50_nonproxy.json` — **50 tasks, a stratified
+  prefix of the 100**: run the 50 first; if the result is borderline, running
+  the remaining 50 upgrades the eval to n=100 with zero wasted episodes.
+
+Copies live in the repo under `eval/`; the runner-facing copies sit in the
+OSWorld `evaluation_examples/` dir on WSL. Both files are frozen — never
+resample; a new draw is a new eval and old numbers stop being comparable.
+
+**50 vs 100, the arithmetic.** At plausible rates (base 4B ≈ 5–10%, a useful
+SFT effect ≥ +15 points), n=50 gives SE per arm ≈ 4–6 points — enough to call
+a ≥15-point gap, not enough for ≤8. n=100 halves nothing (SE ~3–4) but doubles
+the ~10–20 h wall-clock per arm pair. Hence 50 as the screening eval with the
+free upgrade path.
+
+**Config for both arms — identical or the comparison is void:** ms50, sleep 3,
+temp 1.0 / top_p 0.95, history_n 100, image_max 20, the same runner. Score =
+evaluator output; report mean and exact-1.0.
