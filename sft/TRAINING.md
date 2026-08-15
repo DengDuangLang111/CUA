@@ -2391,3 +2391,18 @@ stock) is `eval/qwen35_4b_keepthink.jinja`, deployed at serve time via
 Estimated ~5–6.5 h per run, 3 shared VMs, starts when v11-500 lands
 (~Aug 16 morning). The lean arm evaluated both ways makes the serving-template
 effect itself a measured variable on the same weights.
+
+### Qualitative read of the arm-A demonstrations (2026-08-15)
+
+Four trajectories read step-by-step (min/median/max/random). What the
+statistics cannot show: the corpus contains **root-cause fixes** (caught
+autocorrect converting a hyphen to an en-dash, disabled Replace-dashes in
+AutoCorrect options, retyped — rather than fighting the symptom), **real
+recovery sequences** (a genuinely stuck Chrome dialog diagnosed through
+hypothesis elimination and cleared by reload), and **programmatic
+verification** (cat-ing Chrome's Bookmarks JSON in a terminal to check order
+and URLs instead of trusting the rendered UI). Reasoning is grounded — quotes
+actual on-screen content throughout; no fabricated state observed. Impurities:
+verbose near-identical narration across mechanical loops (a 4x add-bookmark
+cycle), and wrong-hypothesis chains during confusion that resolve correctly —
+token inefficiency and mixed-value recovery text, not correctness problems.
