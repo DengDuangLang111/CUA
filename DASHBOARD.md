@@ -186,6 +186,17 @@ push (a traj push, ≤30 min) to deploy.
 **Deploy budget after this**: traj ≤48/day + manual docs ~10–20 ≈ 60–70,
 against the hobby tier's ~100/day. Status/sft pushes: zero.
 
+### The repo must live on ext4, not /mnt/d (2026-08-15)
+
+With ~800 MB of trajectory files in the worktree, the daemon's top-of-loop
+`git checkout` / `fetch` / `reset` took **4–8 minutes per cycle** on DrvFs
+(`/mnt/d`, the 9p filesystem), silently stretching the 5-minute cadence to
+~20 minutes. The same checkout on WSL's ext4: **0.2 s** (measured). The status
+daemon's clone is now `~/cua-dash`; `/mnt/d/research/cua-dash` is retired for
+the daemon (kept only as a spare working copy). The SFT daemon's clone
+(`cua-dash-sft`) still lives on /mnt/d — same disease, milder symptom (its
+payload is smaller); move it the next time its cadence matters.
+
 ### Why the cycle used to take ~70 minutes, and must not again
 
 The PIL compression step rewrites staged screenshots, so a plain `rsync -a`

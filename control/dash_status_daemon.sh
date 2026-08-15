@@ -18,7 +18,10 @@
 #                                     deploy -- tagged [skip deploy] for the
 #                                     project's Ignored Build Step
 #   traj/<modeldir>/<rundir>/      -> at most every 30 min, per discovered run
-REPO=/mnt/d/research/cua-dash
+# On ext4, NOT DrvFs: with ~800MB of traj files in the worktree, the
+# top-of-loop git ops took 4-8 MINUTES per cycle on /mnt/d (9p filesystem),
+# stretching the 5-minute cadence to ~20. Same ops here: 0.2s (measured).
+REPO=$HOME/cua-dash
 P=/mnt/d/research/OSWorld/.venv/bin/python
 BRANCH=main
 RG=/mnt/d/research/OSWorld/results_generated
@@ -36,7 +39,7 @@ while true; do
   $P - <<'PY'
 import glob, json, os, collections, datetime
 RG = "/mnt/d/research/OSWorld/results_generated"
-REPO = "/mnt/d/research/cua-dash"
+REPO = os.path.expanduser("~/cua-dash")
 TG = "/mnt/d/research/os-simple-taskgen-v8"
 
 def scores_of(rd):
