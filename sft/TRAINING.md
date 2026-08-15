@@ -2197,6 +2197,8 @@ they degrade silently without one). Stratified proportionally by domain,
 Copies live in the repo under `eval/`; the runner-facing copies sit in the
 OSWorld `evaluation_examples/` dir on WSL. Both files are frozen — never
 resample; a new draw is a new eval and old numbers stop being comparable.
+**Subset property verified 2026-08-15: every task in the 50 is in the 100
+(per-domain ⊆ checks all true, zero duplicates).**
 
 **50 vs 100, the arithmetic.** At plausible rates (base 4B ≈ 5–10%, a useful
 SFT effect ≥ +15 points), n=50 gives SE per arm ≈ 4–6 points — enough to call

@@ -978,6 +978,16 @@ cleanly attributable to the model: the 3.6 span crossed a night with serve
 wall-expiry and tunnel dead time baked in, while 3.8's 4 hours were one clean
 evening window. Projection: v11-500 (444 tasks) in ~25 h at this rate.
 
+### Effective sampling of the 3.8 campaign, top_k included
+
+The client (`_build_payload`) sends only `temperature`, `top_p`, `max_tokens` —
+grep confirms **no `top_k` anywhere in `mm_agents/qwen/`** — so every parameter
+the client omits falls through to the serve's `--override-generation-config`.
+Effective sampling therefore is: **temperature 1.0 · top_p 0.95 · top_k 20 ·
+min_p 0 · presence 0 · repetition 1.0** — Qwen's published "general thinking"
+profile, exactly as recorded in the result dir's `MODEL_BOUNDARY.json`. The
+top_k 20 is live, by serve default rather than by client request.
+
 ### Where a step's 16 seconds actually go (measured 2026-08-14)
 
 Sources: traj timestamps (n=1,473 inter-step gaps), the live serve's own log,
