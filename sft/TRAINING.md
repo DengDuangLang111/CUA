@@ -2249,3 +2249,27 @@ SFT with neither is exactly the untested cell our A/B occupies. MolmoWeb
 footnote worth keeping: their 36K human trajectories gave "limited gains" over
 synthetic. If A/B disappoints, grounding/perception data for the student is the
 recorded next candidate — noted, not started.
+
+## Arm C (designed, not started): open-source trajectories with similarity filtering
+
+User idea 2026-08-15: pull open trajectory datasets, similarity-filter to our
+task distribution, add to SFT. Deferred to after A/B so the volume question and
+the external-data question stay separately answerable. Design on record:
+
+1. **Contamination screen is mandatory and comes first.** Our eval is now
+   OSWorld-Verified itself; the largest open CUA trajectory source is the
+   authors' `ubuntu_osworld_verified_trajs` — trajectories ON the eval
+   benchmark — and OSWorld-derived subsets hide inside other collections.
+   Every candidate trajectory's instruction is checked against the full
+   Verified 361 by embedding similarity; above-threshold → discarded, report
+   archived. No screen, no training.
+2. Candidate sources by domain fit: OpenCUA **AgentNet** (Ubuntu desktop,
+   Apache) > OS-Genesis desktop portion > web/mobile sets (off-domain).
+3. Similarity filter to OUR distribution: instruction embeddings + app-domain
+   match, as the user proposed (same family of technique OpenWebRL used for
+   corpus dedup).
+4. **Dialect conversion** into the internal tool-call format + our context
+   construction, then the standard `pipeline.sh` with its verify gate — one
+   converter per source, the main engineering cost.
+5. C evaluates on the same frozen verified-eval-50; its delta over A/B is the
+   single-variable answer to "does external data help".
