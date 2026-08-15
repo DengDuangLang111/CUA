@@ -2229,3 +2229,23 @@ Timeline: A launches ~02:00 Aug 15 (3ep × 1.2k ≈ 6–10 h) alongside the 500
 rollout (~28–31 h); eval-50 for base + A when the VMs free up Aug 16; B builds
 and trains after (3ep × 5.2k ≈ 24–36 h — epochs negotiable), evals Aug 17.
 Every sbatch is shown to the user before submission.
+
+## The two published SFT recipes bracketing ours (2026-08-15)
+
+| | OpenWebRL (small-data + RL) | MolmoWeb (big-data pure SFT) | ours (A) |
+|---|---|---|---|
+| base | Qwen3-VL-4B-Thinking | Molmo2 4B/8B (Qwen3 LM + SigLIP2) | Qwen3.5-4B |
+| trajectories / steps | 412 / 3,085 | 278.5K / 2.2M | 69 / ~1,250 |
+| extra data | none | **+10.5M perception** (7M grounding, 2.2M screenshot QA; 20% of mix) | none |
+| screenshots per sample | 1 | 1 (zero history images) | up to 20 |
+| text history | full, with thinking | last 10 actions + URL/title, no thinking | full, with thinking |
+| vision tower | frozen | trained (fed by the perception data) | swift default — confirm freeze_vit in the launch log |
+| after SFT | online RL (SFT is warm start only) | nothing (SFT is everything) | nothing yet |
+
+Both published recipes use ONE screenshot of visual context — the third
+independent source pointing at an image_max cut. Their two proven routes are
+"curation + RL on top" and "scale + perception data"; a thousand-sample pure
+SFT with neither is exactly the untested cell our A/B occupies. MolmoWeb
+footnote worth keeping: their 36K human trajectories gave "limited gains" over
+synthetic. If A/B disappoints, grounding/perception data for the student is the
+recorded next candidate — noted, not started.
