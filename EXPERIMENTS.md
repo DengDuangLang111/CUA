@@ -1266,6 +1266,31 @@ perfectly with whatever the brief makes explicit, and improvises nothing.
 engineering (34% vs 67% — the control stage will price this) and setup/world
 richness (half of Opus's). Yield actually exceeds Opus (488 vs 446).
 
+**Acceptance battery (2026-08-15, `ostg.taskgen.accept`, same refs both corpora,
+both measured pre-cull straight out of generation):**
+
+| gate | v500 (Opus) | v11q2 (Qwen) |
+|---|---|---|
+| intra jaccard ≥0.4 | max .38, **0 pairs — ok** | max .60, **18 pairs — FAIL** |
+| intra tf-idf ≥0.5 | max .49, **0 pairs — ok** | max .76, **28 pairs — FAIL** |
+| grader-signature ≥0.30 (review band) | 1,324 | 2,828 (5 pairs at 1.00) |
+| vs cua-gym ≥0.5 | max .47, **0 — ok** | max .75, **6 specs — FAIL** |
+| vs OSWorld-361 ≥0.5 | max .46, 0 — ok | max .45, 0 — ok |
+| slug collisions across shards | 0 | 5 (e.g. `freight-rate-correction` in s0 AND s2) |
+| distinct-bigram ratio | .69 | .68 |
+
+So the register cure exposes the **third surviving model delta: semantic
+near-duplication**. Opus's 446 pass every gate raw; Qwen re-derives the same
+task from different seeds — five cross-shard *identical slugs*, whole
+near-clone families (gradebook-weighted-total × 3, clinic-vitals × 2), and six
+specs within 0.5 of cua-gym (max 0.75). Phrasing diversity is identical
+(bigram ratio .68 vs .69) — the duplication is in task *identity*, not
+wording, which is exactly the Opus-4.6 defect shape recorded in §10, and it is
+mechanically catchable: the cull (keep earlier member, move line to
+`specs_culled.jsonl`, re-run ship) costs ~30–40 specs, landing v11q2 near
+Opus's yield. Surviving deltas now number three: probe tolerance (34% vs
+67%), setup thickness (321 vs 658), and idea-space entropy (this table).
+
 The v8.4-era 325 is demoted to register-analysis material. Standard-process
 consolidation shipped with the launch: the v11.1 RUNBOOK now carries the
 500-scale shape, the generator-swap knob and the code-hash line (`190009be`);
