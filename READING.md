@@ -135,3 +135,13 @@ lesson's precise scope is that heavier SFT hurt POST-RL performance — it does
 not forbid heavier SFT helping SFT-only, so arm B stands. Unchanged: the
 scarce asset remains the verifiable RL task pool, which our generator
 manufactures with a difficulty scale.
+
+Teacher provenance note (2026-08-15): OpenWebRL's demonstrations came from
+Qwen3-VL-235B, 4 independent rollouts per task, GPT-4.1-judged, then curated
+to 412. Same-family same-generation distillation gave them template
+consistency by construction — the entire cross-template problem we hit is
+specific to cross-generation distillation and also our research material.
+Actionable borrow: best-of-4 harvesting on our failed tasks (especially the
+11 failed diff-5s, whose passes are the corpus's most precious
+demonstrations) — 3–4 rerolls per failed task, shortest-success curation,
+zero pipeline change, run when VMs free up.
