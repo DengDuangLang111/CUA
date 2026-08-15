@@ -57,6 +57,15 @@ deliberately NOT overridden: `--refill 2` (lost batches redraw), thinking off
 shard with seeds aligned; `--spent-from <specs.jsonl>` seeds the quota ledger
 so a top-up run overdraws whatever axis is in deficit.
 
+**Scale shapes** (same anatomy, only the knobs change): the 500-scale campaign
+shape is `--batches 29 --shard i/4` (580 draws; v500 and v11q2 both used seed
+20260812). **Generator swap**: `--model <name>` — claude* speaks the Anthropic
+endpoint, anything else (qwen3.8-max, ...) auto-routes to the OpenAI endpoint
+via ostg/llm.py's protocol adapter; non-claude default mirrors this runbook's
+regime (thinking off + forced tool call). Use `python -u` so shard logs stream
+(a buffered log reads as a hang). The `[gen] args` line now prints `code=<git
+hash>` — record it; it is the line that answers "which code ran this".
+
 Batch losses are re-drawn by refill; check the tail of the log for the
 closing axis summary.
 ## 2 Ship (accept gates)
@@ -68,9 +77,21 @@ PYTHONPATH=. $P -m ostg.taskgen.ship out/runs/<set>-s0 out/runs/<set>-s1 \
 ```
 
 re-emit rebuilds every task JSON with the current emitter (older sets pick up
-newer fixes), then runs the HARD/REVIEW gates (see README). **To cull a
-duplicate**: move its line from `specs.jsonl` to `specs_culled.jsonl` in the
-same run dir and re-run ship (keep the earlier-generated member of a pair).
+newer fixes), then runs the HARD/REVIEW gates (see README). **To cull
+duplicates and contamination** (when accept FAILs), use the module — it is the
+mechanical form of the old hand rule:
+
+```bash
+PYTHONPATH=. $P -m ostg.taskgen.cull out/runs/<set>-s0 out/runs/<set>-s1 [...] \
+  --ref cua-gym=/mnt/d/research/cua-gym/tasks.jsonl [--apply]
+```
+
+Dry-run prints the full plan: hard-gate pairs walked in score order, the
+later member culled (pass dirs s0 s1 s2 … — positional order is the
+generation-order proxy), plus any spec ≥0.5 against a --ref corpus culled
+outright. Review the plan, then `--apply` moves lines to `specs_culled.jsonl`
+(append — the audit trail survives) and re-run ship; accept must come back
+green. First use: v11q2 (28/488 culled, gates all green on the 460 kept).
 
 **Grader-defect scan (before merge, v11+).** Three defect classes pass every
 mechanical gate and control, then surface as fake model failures in the

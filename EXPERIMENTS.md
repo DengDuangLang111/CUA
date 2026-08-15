@@ -1,25 +1,22 @@
 # Synthetic task generation for OSWorld — design, experiments, results
 
-Status 2026-08-09 (night). **v11 (§3) is the standard going forward**: the
-v10 design (ambiguity + warm-start axes, monotone difficulty ladder, 60%
-cross-app, instructions written as prompts a user types at an agent) plus a
-repair pipeline that rewrites fixable rejects instead of discarding them and
-inline per-spec constraints in the prompt. Head-to-head on the same seed and
-command, v11 kept 4x more specs per batch than v10 at equal quality gates;
-its corpus has passed VM controls (100 checked, 8 removed — see §3) and 92
-tasks are rolling now under no-preserve thinking at the official 50-step
-budget. v10's 70 tasks are retired to a generation-economics control group
-and do not enter the VM. The v9 corpus (§2) was generated and
-gated but superseded before rollout. The v8 rollout was stopped at 99/203
-scored (24 solved) to free the VMs — resumable at any time by relaunching
-with the same result directory. Sections 1–4 describe the running system and
-the design behind it; sections 5–9 are the experiments that produced it,
-with sample sizes attached so weak evidence can be told from strong.
+## 现状(2026-08-15,过时即改;历史快照看 git log)
 
-Code and docs: https://github.com/DengDuangLang111/CUA (private) — branch
-`v11` is the standard pipeline (default branch pending its first rollout);
-`v8`/`v8.4` are the frozen lines the stopped rollout and its tooling run on;
-earlier branches preserve the v3–v10 history.
+- **v11-500 教师 rollout 进行中**:261/444,`results_generated/qwen38-27b-local/v11-500-t1ms50-20260814`,
+  Qwen3.8-27B FP8 · thinking on · 3 VM · serve 链 232417 在班(12h 墙自动续)。
+- **双臂 SFT 完成**(08-15):rich/lean 各 3 epoch 收敛到 loss .07 / acc 97.78%,
+  checkpoint 150/300/450 在 `sft/out/q38e3-{rich,lean}/`。→ `sft/TRAINING.md` 现状块。
+- **eval 矩阵排队**(等 v11-500 空出 VM):base-stock → rich-keepthink →
+  lean-keepthink → lean-stock,verified-eval-50 non-proxy,~5–6.5h/臂。
+- **v11q2(qwen3.8-max 生成)已 ship**:剔 28 → 460 specs → 459 task JSON,
+  accept 全绿(§11d);待办:4 个 scan review 项裁决 + VM control 轮(probe 容错 34% vs 67% 定价)。
+- 谱系:**v11.1 = main = 标准流水线**(4 轴 1300 格);任务源
+  `os-simple-taskgen-v8/out/runs/`;分支史 → `taskgen/GIT_HISTORY.md`。
+
+Sections 1–4 describe the system design; §5 onward are the experiments that
+produced it, newest last, with sample sizes attached so weak evidence can be
+told from strong. Code and docs: https://github.com/DengDuangLang111/CUA
+(private).
 
 ---
 
