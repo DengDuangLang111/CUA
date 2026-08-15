@@ -49,3 +49,27 @@ actually read); 🔎 = from memory, verify before citing.
 
 1+2 compose: the pipeline produces the corpus; the context study consumes it;
 together they are "how to distill desktop competence into a small model".
+
+## Positioning: our generation vs the two paradigms (2026-08-15)
+
+| axis | evaluator-first (Qwen-CUA, AndroidWorld) | task-first (OS-Genesis) | ours (co-gen + admission + validation) |
+|---|---|---|---|
+| verifiability | by construction | derived, often degrades to LLM judge | constrained AND empirically tested (positive control must score 1.0) |
+| naturalness | low (checkability warps tasks) | high | mid-high (user-voice instruction, program-decidable gate) |
+| grader | handwritten / closed | LLM judge (~90% at best) | compiled deterministic probe |
+| idle-agent zero | usually | often missing | rule-enforced (probe FAILs on setup state) |
+| path independence | yes | unguaranteed | rule-enforced (machine state only) |
+| difficulty scale | no | no | teacher pass-rate gradient, RL-curriculum-ready |
+| openness | closed / small | open + judge-bound | ours, openable |
+
+Honest weaknesses to preempt: (1) **same-head co-generation has correlated
+blind spots** — a misunderstanding of app behaviour infects task and probe
+coherently; positive control catches evaluator-broken cases (did: 6 right-
+answer-scored-0 + 2 wrong-answer-scored-1) but **negative control is not yet
+systematic** — the pipeline's most paper-critical gap. (2) Free-form probes
+mean every grader is fresh code; the control layer is load-bearing.
+
+One-line positioning: co-generate the triple, admit only the program-decidable,
+then prove the grader itself correct by experiment — scalable verified
+programmatic grading, which neither existing lane offers, with teacher
+pass-rate as a free difficulty scale.
