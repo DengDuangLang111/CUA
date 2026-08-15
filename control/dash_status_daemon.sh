@@ -13,7 +13,10 @@
 # every png every round (PIL changed the staged file, the next rsync saw a
 # mismatch, forever): ~26 min/cycle doing nothing.
 #
-#   status.json                    -> every cycle (tiny; the page reads this)
+#   status.json                    -> every cycle (tiny; the page reads it from
+#                                     GitHub RAW, so these pushes need no Vercel
+#                                     deploy -- tagged [skip deploy] for the
+#                                     project's Ignored Build Step
 #   traj/<modeldir>/<rundir>/      -> at most every 30 min, per discovered run
 REPO=/mnt/d/research/cua-dash
 P=/mnt/d/research/OSWorld/.venv/bin/python
@@ -143,7 +146,7 @@ PY
     # 2026-08-15: v1 of this rewrite pushed status after the traj loop and the
     # site sat on 80-minute-old progress while a fresh campaign staged.
     git add dashboard/status.json
-    if git commit -q -m "status: auto-refresh"; then
+    if git commit -q -m "status: auto-refresh [skip deploy]"; then
       git pull --rebase -q origin $BRANCH >/dev/null 2>&1 || git rebase --abort >/dev/null 2>&1
       if git push -q origin HEAD:$BRANCH; then
         echo "[$(date +%H:%M)] status pushed"

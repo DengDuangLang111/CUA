@@ -153,6 +153,28 @@ Trajectory viewers live at `dashboard/traj/<model-dir>/<run-dir>/` — the slug
 is the on-disk path, so it never needs choosing. (`traj/v11-500/` is the one
 legacy flat path from before this scheme; its links are kept alive.)
 
+### Live numbers do not ride on Vercel deploys (2026-08-15)
+
+The page fetches `status.json` / `sft.json` from **GitHub raw**
+(`raw.githubusercontent.com/.../dashboard/`, CORS `*`, ~5-min CDN cache) with
+the relative path as fallback. Freshness therefore depends only on the daemon's
+git push. This exists because the Vercel hobby tier allows ~100 deploys/day and
+a heavy push day exhausted it mid-campaign: GitHub had current numbers, the
+site served 90-minute-old ones, and nothing could deploy until the quota
+recovered.
+
+Deploys still matter for the page code and the trajectory viewers. To stop
+status pushes from burning quota, the daemon tags them `[skip deploy]`, and the
+Vercel project needs this **Ignored Build Step** (Settings → Git, must be set in
+the Vercel UI — repo config cannot do it):
+
+```
+git log -1 --pretty=%B | grep -q "\[skip deploy\]" && exit 0 || exit 1
+```
+
+Until that is set, status pushes trigger deploys as before (harmless when under
+quota — the raw fetch already makes those deploys redundant).
+
 ### Why the cycle used to take ~70 minutes, and must not again
 
 The PIL compression step rewrites staged screenshots, so a plain `rsync -a`

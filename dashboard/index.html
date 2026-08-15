@@ -121,15 +121,27 @@
 /* live numbers: a WSL daemon recomputes dashboard/status.json every 5 min and
    pushes; Vercel redeploys from GitHub; this fetch patches the page on load. */
 window.LIVE = null; window.SFT = null;
+/* Live JSON comes from GitHub raw FIRST (CORS *, ~5-min CDN cache): freshness
+   then depends only on the daemon's git push, not on a Vercel deploy. Learned
+   2026-08-15 when the hobby-tier deploy quota ran out mid-campaign and the
+   site sat on 90-minute-old numbers while GitHub had current ones. The
+   relative fetch stays as fallback (works on previews/local). */
+const RAW = "https://raw.githubusercontent.com/DengDuangLang111/CUA/main/dashboard/";
+function pullJson(name, apply){
+  fetch(RAW + name + "?t=" + Math.floor(Date.now()/120000), {cache:"no-store"})
+    .then(r=>r.ok?r.json():Promise.reject())
+    .catch(()=>fetch(name, {cache:"no-store"}).then(r=>r.ok?r.json():null))
+    .then(apply).catch(()=>{});
+}
 function pullLive(){
-  fetch("status.json", {cache:"no-store"}).then(r=>r.ok?r.json():null).then(j=>{
+  pullJson("status.json", j=>{
     if (j && JSON.stringify(j) !== JSON.stringify(window.LIVE)){ window.LIVE=j; render(); }
-  }).catch(()=>{});
+  });
   /* sft.json is written by a second daemon in its own clone: two writers, two
      files, so neither can ever clobber the other's keys on a raced push. */
-  fetch("sft.json", {cache:"no-store"}).then(r=>r.ok?r.json():null).then(j=>{
+  pullJson("sft.json", j=>{
     if (j && JSON.stringify(j) !== JSON.stringify(window.SFT)){ window.SFT=j; render(); }
-  }).catch(()=>{});
+  });
 }
 pullLive(); setInterval(pullLive, 120000);
 function lv(){ const s = window.LIVE && window.LIVE.v11; if(!s || !s.scored) return null;
