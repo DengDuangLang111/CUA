@@ -922,6 +922,44 @@ not. **Paired on the identical 40 task ids** against Qwen3.6's
 regressions. Partial batch, dispatched in manifest order, so the remaining 60
 could move it — but a 0-regression split is not what a broken config looks like.
 
+### Data quality, side by side (measured at 84/100, 2026-08-14 23:10)
+
+Same 100 tasks, same runner, same 3 envs. Every number from the trajectories
+themselves:
+
+| metric | 3.6 v11-100 | **3.8 v11-100** |
+|---|---|---|
+| perfect (1.0) | 39 / 100 | **57 / 84 so far** |
+| steps/task med / p90 | 43 / 50 | **16 / 48** |
+| perfect-trajectory steps median | 21 | **15** |
+| hit the 50-step wall | 48% | **10%** |
+| wall-hitters scored 1.0 (poison) | 6 | **1** |
+| WAIT share of steps | 10.3% | **7.3%** |
+| · model's own `wait` | 223 | 75 |
+| · declared-but-unimplemented → WAIT | 124 | 51 |
+| · empty response → WAIT | 9 | **0** (empty → DONE now) |
+| steps naming an UNDECLARED action | 106 (3.1%) — all `answer` | **0** |
+| tasks ending in ≥5 identical repeats | **29** (worst: 50×) | **0** (worst: 2) |
+| think chars med / p90 | 356 / 784 | 260 / **2611** |
+
+Cross-check: the 3.6 columns reproduce the 2026-08-13 WAIT audit exactly
+(223 + 106 + 18 + 9), so the classifier agrees with the hand audit.
+
+**What this means for the SFT corpus:**
+- **The `answer` hallucination is extinct in 3.8** — zero undeclared-action
+  steps against 3.6's 106. Nothing for the hallucination filter to drop.
+- **Tail grinding is extinct** — 0 tasks end in ≥5 identical repeats against
+  29 (one of which repeated its final action 50 times). `identical_runs` and
+  `low_diversity_tail` will fire rarely if at all on this corpus.
+- **Poison wall-1.0s down 6×** (6 → 1); the single survivor still needs the
+  build-time check.
+- **More and shorter demonstrations**: 57 perfects already (vs 39 total) at
+  median 15 steps (vs 21) — more tasks demonstrated, less filler per
+  demonstration.
+- The one regression: the **xhigh thinking tail** (p90 2,611 chars vs 784).
+  Whether long deliberation in labels helps or hurts a 4B student is exactly
+  the reasoning-effort A/B already queued.
+
 ### Throughput: 3.7× the 3.6 campaign, decomposed
 
 Measured at 72/100 (2026-08-14 22:05), both runs 3 envs / ms50:
