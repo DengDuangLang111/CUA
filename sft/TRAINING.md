@@ -2157,3 +2157,23 @@ smaller `image_max` at ROLLOUT (CONTEXT.md §6.3), for which OpenWebRL's
    exists to kill, and checking ours costs one rendered-vs-assembled diff.
 2. **The image-history experiment has an external prior now.** Their 4B works
    with 1 screenshot. If we ever cut `image_max`, cut hard, not to 10.
+
+## The pipeline is one command (2026-08-15, user rule)
+
+All data filtering runs through a single fixed entrypoint — the same command
+whether a human or an agent invokes it, no per-run planning:
+
+```bash
+bash sft/pipeline.sh RESULT_DIR TASKS_DIR OUT_DIR
+```
+
+It does exactly three things, in order: **build** (score==1.0 trajectories →
+per-step samples via the agent's own context code, with the standing filters),
+**verify** (`ostg.sft.verify`: every image referenced by every sample exists
+and is non-empty — hard fail otherwise), **report** (print `report.json` so
+drop counts are on the record). Behaviour changes happen in `ostg/sft/*.py`
+through review — never by ad-hoc variation of the invocation.
+
+Sync note: the executing copy lives on WSL (`/mnt/d/research/ostg-v11.1`);
+after changing anything under `sft/`, push the file and compare md5 before
+running (CLAUDE.md §9).
