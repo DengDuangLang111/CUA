@@ -377,6 +377,46 @@ the bridge, catching the field on the way out and re-embedding the text in
 the official-361 run's 7,906 steps with zero `<think>` is what the broken bridge
 looks like. **Keep thinking in `content`; there is nothing to change.**
 
+**Every Qwen run in the authors' Verified archive, and what each model actually
+received** (2026-08-14; all read from the archives themselves — args.json
+fingerprints, sampled trajectories, and, where they exist, the dumped messages).
+
+| archive | tasks | runner (by exact argparse-key match) | steps | temp | history | thinking in responses | model input recorded? |
+|---|---|---|---|---|---|---|---|
+| qwen2.5-vl-**32b** ×2 (15/100 step) | Verified `test_all` | `run_multienv_qwen25vl.py` (24/24 keys) | 15 / 100 | 1.0 | `max_trajectory_length` **3** | none (non-reasoning line) | no |
+| qwen2.5-vl-**72b** ×2 (15/100 step) | same | same | 15 / 100 | 1.0 | 3 | none | no |
+| **qwen3.5-plus** nothink (OSWorld-RL, `testall_h100`) | Verified task set | OSWorld-RL pipeline (no args.json; `messages.json` per task) | 100 | — | h100 | none | **yes — 1,326 message dumps** |
+| **qwen3.7-plus** (100 steps) | Verified 361 `test_nogdrive` | **`run_multienv_qwen.py` (33/33 keys — ours)** | 100 | 0.6 | `history_n` 100 | **none — 0/323 sampled steps** | no |
+| *(dataset-root `args.json`, model "mano", qwen25vl mode)* | Verified `test_nogdrive` | mano agent | 100 | 0.0 | 3 (+5 images) | — | no |
+| qwen3.6-cua think / nothink | **V2 (102) — not Verified** | V2 `run_multienv.py` | 300 | 0.6 | 300 | think run: yes | no |
+
+**Direct answer to "did their history carry the extra think block":**
+
+- **qwen3.5 — no, observed directly.** The only Verified archive with message
+  dumps. 5/5 sampled tasks: every assistant turn in the sent history starts
+  `Action: ` — **zero `<think>` of any kind, real or empty**. The RL harness
+  replays bare `Action: … <tool_call>…` strings.
+- **qwen3.7 — not recorded.** The archive has no message dumps, so what its
+  model received cannot be read from data. What IS known: its responses carry no
+  thinking (0/323), and — code-fact about the shared runner, not their data —
+  `ensure_empty_think_prefix` prepends an empty `<think>` to each replayed turn
+  client-side. Whatever their serve's template then did at render time is their
+  template's business and is not knowable from the archive.
+- **qwen2.5-vl — no think concept at all**; 3-turn history, non-reasoning line.
+- **ours, for contrast — observed directly** in our own dumps
+  (`draft/message_cache/qwen_messages_step_*.json`, live 3.8 run): 49/49
+  assistant turns carry exactly **one, real** think block merged in `content`;
+  the doubled empty slot appears only at server-side template render (proved via
+  `/tokenize`), never in the sent messages. Caveat: that dump dir is shared
+  across the 3 envs and overwritten per step index — fine for shape checks,
+  useless for per-task attribution.
+
+Reading order for the confusion this table retires: the authors have published
+**no Verified Qwen run that feeds thinking through history at all** — every
+Verified Qwen number of theirs (2.5-vl, 3.5-RL, 3.7) is nothink. The only
+author run with thinking in history is qwen3.6 on **V2**. We are the first
+Verified-harness run in this comparison set that replays real thinking.
+
 **Two harnesses — keep them apart** (clarified 2026-08-14 after conflating
 them). The authors' archives mix runs from two different codebases, and evidence
 from one does not transfer to the other:
