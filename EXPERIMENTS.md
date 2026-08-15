@@ -1304,7 +1304,9 @@ newer rigid-name gate (`writer-template-margin-sync`) → **459 task JSONs**,
 and the full accept battery is green (jaccard 0 ≥.4, cosine 0 ≥.5, cua-gym
 max .49, OSWorld max .45). Grader-defect scan flags 4 review items
 (2 missing-source, 1 fake-media, 1 the dropped rigid-name) — adjudicate before
-rollout. VM control round still pending (VMs occupied by the v11-500 rollout);
+rollout. The cull is now a standing pipeline stage on main: `ostg.taskgen.cull`
+(ostg 05af9098, RUNBOOK Ship section), verified equivalent to the one-off
+script by a zero-cull dry-run over the already-culled set. VM control round still pending (VMs occupied by the v11-500 rollout);
 that stage prices the probe-tolerance gap (34% vs 67%).
 
 The v8.4-era 325 is demoted to register-analysis material. Standard-process

@@ -51,3 +51,12 @@ worktree 误用的温床。
 
 **已执行 2026-08-15**:main `9317793d`(08-09) → `a361e753`(08-15, =v11.1 tip)。
 六个 worktree 逐一核验原样;磁盘零文件变化;时代分支全部保留。
+
+**同步规矩(2026-08-15 起)**:工作分支仍是 v11.1,每次流程级提交后
+`git fetch . v11.1:main` 快进 main(ff-only,main 未被 checkout,零风险)。
+当日同步:`190009be`(RUNBOOK 吸收 500 规模形状 + 生成器开关)、
+`05af9098`(**cull 成为流水线阶段** `ostg.taskgen.cull` —— accept 硬门 FAIL 时的
+机械补救:贪心留先生成者 + 参考语料 ≥0.5 直接剔,dry-run 默认,`--apply` 落
+`specs_culled.jsonl` 审计痕迹;对已剔的 v11q2 复跑 0 culls 验证了与一次性脚本
+等价。RUNBOOK Ship 节改为指向该模块,一次性脚本 `tools/cull_v11q2.py` 留在
+wrapper 仓库作历史)。main = v11.1 = `05af9098`。
