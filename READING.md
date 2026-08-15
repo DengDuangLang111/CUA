@@ -111,3 +111,22 @@ granularity, scale all differ). Three comparisons that ARE sound:
 Paper shape: main = the transplant table (3 rows suffice); support = the
 metric table (doubles as innovation #3); positioning = the categorical table.
 None of the three requires datasets to be commensurable — only the rulers.
+
+## Why OpenWebRL's 0.4K "worked" — the decomposition (2026-08-15)
+
+The 0.4K did not produce the 67%; it is the ignition, RL on 2.2K verifiable
+tasks is the engine. Evidence: their own framing (warm start for exploration),
+the 1.9K-SFT-worse-after-RL result (if SFT were the engine, more would help;
+it reduced plasticity instead), and our own SFT-only arms not beating base at
+similar scale. Warm start has exactly three small-data jobs: format
+compliance, lifting RL-task success into the learnable band (the 1–7/8
+window Qwen-CUA formalises), and not ossifying the base — the third argues
+for LESS data. Amplifiers: 7.5-step tasks, a base VLM that already grounds,
+curation maximising format-signal per sample.
+
+Corollaries for us: (1) calibrate arm A/B expectations — beating base with
+healthier behaviour is already the recipe's ceiling for pure SFT; (2) the
+scarce asset in their pipeline was the 2.2K verifiable RL task pool, and our
+generator IS the desktop version of that machine, difficulty scale included;
+(3) the v11 corpus's endgame may be warm-start + RL pool rather than
+pure-SFT product — to be decided by the A/B numbers.
