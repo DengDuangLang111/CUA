@@ -2073,8 +2073,28 @@ trained with a single current screenshot plus full text/thinking history reached
 | screenshots in context | **1** (4B) / 3 (8B) | 20 |
 | SFT reasoning placement | inline in content | inline in content |
 | SFT rendered via | base model's official chat template (byte-consistent with inference) | our own sample assembly from `traj.jsonl` `response` |
-| SFT granularity | per-episode or per-turn prefix | per-step aggregated by `step_num` |
+| SFT granularity | per-turn prefix **or whole-episode packing** | per-turn prefix only |
+| per-sample visual context | per-turn mode: 1 current screenshot (matches their rollout) | full inference context via the agent's own `build_messages` — 20 images + folding (matches our rollout) |
 | after SFT | online multi-turn RL (slime) | nothing yet |
+
+**A correction to an earlier phrasing.** "Aggregated by `step_num`" is not a
+granularity choice and does not belong in the row above — it is a dedup fix for
+an OSWorld artifact: `traj.jsonl` writes one line per pyautogui action, so a
+multi-action response repeats identical lines (v11: 1,041 lines → 946 steps,
+§5.2). Both pipelines are per-turn at heart; OpenWebRL never needs the fix
+because its trajectories store one record per turn to begin with.
+
+**The one real granularity difference is whole-episode packing, which we lack.**
+Their `mask_history: false` mode puts the entire episode in ONE sequence and
+supervises every assistant turn in the same forward pass. Because turn k's
+supervised tokens attend to exactly the prefix a per-turn sample would carry,
+the supervision is mathematically the union of all per-turn samples — but the
+shared prefix is encoded once instead of once per step. Per-turn expansion of a
+T-step episode costs O(T²) encoded tokens against O(T) packed; at our median
+~15 steps that is roughly an 8× overhead, at 50 steps ~25×. (Caveat: packing a
+50-step OSWorld episode means one sequence holding up to 20 images and every
+response — long; their web episodes are shorter and carry 1 image.) Worth a look
+if ms-swift supports multi-span supervision; not a correctness issue.
 
 ### Two actionable points
 
