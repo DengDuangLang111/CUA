@@ -48,18 +48,33 @@ def initial_png_from_mp4(task_dir, out_png):
     trajectory is unbuildable, not just step 1's. Callers must flag the
     approximation in sample meta.
     """
+    mp4 = str(Path(task_dir) / "recording.mp4")
     try:
         r = subprocess.run(
             ["ffmpeg", "-y", "-loglevel", "error", "-i",
-             str(Path(task_dir) / "recording.mp4"), "-frames:v", "1", str(out_png)],
+             mp4, "-frames:v", "1", str(out_png)],
             capture_output=True)
+        return r.returncode == 0 and Path(out_png).is_file()
     except FileNotFoundError:
-        if not initial_png_from_mp4.warned:
-            print("[build] --initial-fallback mp4 requested but ffmpeg is not "
-                  "installed; affected trajectories are dropped instead")
-            initial_png_from_mp4.warned = True
-        return False
-    return r.returncode == 0 and Path(out_png).is_file()
+        pass
+    # No ffmpeg binary. cv2 decodes the frame without any external tool --
+    # discovered the hard way 2026-08-15, when a re-run on a WSL box without
+    # ffmpeg silently dropped all 39 v11 trajectories (946 steps -> 0 samples).
+    try:
+        import cv2
+        cap = cv2.VideoCapture(mp4)
+        ok, frame = cap.read()
+        cap.release()
+        if ok:
+            cv2.imwrite(str(out_png), frame)
+            return Path(out_png).is_file()
+    except ImportError:
+        pass
+    if not initial_png_from_mp4.warned:
+        print("[build] --initial-fallback mp4 requested but neither ffmpeg "
+              "nor cv2 is available; affected trajectories are dropped instead")
+        initial_png_from_mp4.warned = True
+    return False
 
 
 initial_png_from_mp4.warned = False
