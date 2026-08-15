@@ -85,3 +85,29 @@ One-line positioning: co-generate the triple, admit only the program-decidable,
 then prove the grader itself correct by experiment — scalable verified
 programmatic grading, which neither existing lane offers, with teacher
 pass-rate as a free difficulty scale.
+
+## How to compare our data against others (2026-08-15)
+
+Datasets are not comparable as artifacts (environments, grading semantics,
+granularity, scale all differ). Three comparisons that ARE sound:
+
+1. **Functional (gold standard): fixed student + budget + recipe + benchmark,
+   swap only the data source.** Qwen3.5-4B, e3 recipe, ~1.2k-sample budget,
+   verified-eval-50; rows = ours / AgentNet-Ubuntu / ProCUA subset, each
+   through the dialect converter and the same pipeline filters. Measures
+   value-per-sample. Precedented (MolmoWeb human-vs-synthetic, OpenWebRL
+   0.4K-vs-1.9K). Declared confound: conversion quality — mitigate by passing
+   our own data through the same converter. This is arm C generalised.
+2. **Intrinsic: transferable rulers applied to everyone.** Our judge-free
+   trajectory metrics (repeat, revisitation, tail runs, screen-change) run
+   unchanged on their trajectories; plus instruction-embedding dispersion and
+   app coverage. Fair because the ruler belongs to no dataset.
+3. **Categorical: axes with no competitor.** Grader form (compiled probe vs
+   judge vs human), grader-validated (positive/negative control) — unique,
+   teacher-pass-rate difficulty scale — unique, contamination-by-construction
+   status. The narrative axis is "the corpus knows its own reliability", not
+   volume.
+
+Paper shape: main = the transplant table (3 rows suffice); support = the
+metric table (doubles as innovation #3); positioning = the categorical table.
+None of the three requires datasets to be commensurable — only the rulers.
