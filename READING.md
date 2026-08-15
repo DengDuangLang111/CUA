@@ -112,21 +112,26 @@ Paper shape: main = the transplant table (3 rows suffice); support = the
 metric table (doubles as innovation #3); positioning = the categorical table.
 None of the three requires datasets to be commensurable — only the rulers.
 
-## Why OpenWebRL's 0.4K "worked" — the decomposition (2026-08-15)
+## Why OpenWebRL's 0.4K worked — CORRECTED same day (user caught it)
 
-The 0.4K did not produce the 67%; it is the ignition, RL on 2.2K verifiable
-tasks is the engine. Evidence: their own framing (warm start for exploration),
-the 1.9K-SFT-worse-after-RL result (if SFT were the engine, more would help;
-it reduced plasticity instead), and our own SFT-only arms not beating base at
-similar scale. Warm start has exactly three small-data jobs: format
-compliance, lifting RL-task success into the learnable band (the 1–7/8
-window Qwen-CUA formalises), and not ossifying the base — the third argues
-for LESS data. Amplifiers: 7.5-step tasks, a base VLM that already grounds,
-curation maximising format-signal per sample.
+First version of this section called the 0.4K "ignition, not engine". Table 2
+refutes that: base 39.3% avg → **SFT-only 52.0%** → RL 68.4% ("SFT improves
+the average success rate from 39.3% to 52.0%, while MM-GRPO further increases
+it to 68.4%"). Pure SFT contributed +12.7 points — 44% of the total climb.
+SFT walks the first half of the mountain, RL the second.
 
-Corollaries for us: (1) calibrate arm A/B expectations — beating base with
-healthier behaviour is already the recipe's ceiling for pure SFT; (2) the
-scarce asset in their pipeline was the 2.2K verifiable RL task pool, and our
-generator IS the desktop version of that machine, difficulty scale included;
-(3) the v11 corpus's endgame may be warm-start + RL pool rather than
-pure-SFT product — to be decided by the A/B numbers.
+What the +13 stood on, versus our old arms: a base already at 32% on the
+target benchmark (tuning, not teaching), 412 tasks / 70 sites of diversity
+(vs our 39-69), in-distribution eval (web-trained, web-tested; ours crosses
+generated→Verified), and 7.5-step tasks. Notable honest wrinkle: their SFT
+render is lean-history while their eval restores rich — they gained 13 points
+DESPITE a train-lean/eval-rich mismatch, so consistency is not a universal
+life-or-death line; on 7.5-step tasks history is small. Its importance should
+scale with horizon — our domain, not theirs.
+
+Calibration for A/B, revised: pure SFT has precedent for double-digit gains;
+the OpenWebRL-analog success bar is base-4B-on-eval-50 + ~10 points. The 1.9K
+lesson's precise scope is that heavier SFT hurt POST-RL performance — it does
+not forbid heavier SFT helping SFT-only, so arm B stands. Unchanged: the
+scarce asset remains the verifiable RL task pool, which our generator
+manufactures with a difficulty scale.
