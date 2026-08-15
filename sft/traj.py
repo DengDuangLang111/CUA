@@ -17,11 +17,20 @@ from pathlib import Path
 # An action name in a response that is NOT here was hallucinated: the parser
 # silently degraded it to WAIT, so the recorded response does not describe
 # what actually ran.
+#
+# This set is exactly the action enum of build_internal_tools_def -- the tools
+# the model was TOLD it has (mm_agents/qwen/prompts.py). Declared-but-
+# unimplemented names (screenshot, key_down, key_up) stay IN: the model used a
+# tool it was given, and the harness's WAIT degrade is behaviourally coherent
+# for them (user decision 2026-08-14, "screenshot的保留吧"). `answer` stays OUT
+# -- it is base-dialect only, a hallucination under the internal dialect.
+# `hold_key` was removed 2026-08-15: it was never in the internal enum, so it
+# was masking real hallucinations as declared.
 DECLARED = frozenset((
-    "key", "type", "mouse_move", "left_click", "left_click_drag",
-    "right_click", "middle_click", "double_click", "triple_click",
-    "scroll", "hscroll", "wait", "terminate", "call_user",
-    "left_mouse_down", "left_mouse_up", "hold_key",
+    "key", "key_down", "key_up", "type", "mouse_move", "left_click",
+    "left_click_drag", "right_click", "middle_click", "double_click",
+    "triple_click", "scroll", "hscroll", "screenshot", "wait",
+    "terminate", "call_user", "left_mouse_down", "left_mouse_up",
 ))
 
 ACTION_TAG = re.compile(r"<parameter=action>\s*([a-z_]+)\s*</parameter>", re.S)
