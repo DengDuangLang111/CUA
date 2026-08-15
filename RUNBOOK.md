@@ -221,7 +221,7 @@ Reading the results:
 
 ## 5 Rollout
 
-### What the OSWorld AUTHORS run — there is no single "official config"
+### What the OSWorld AUTHORS run — three declared step tiers, not one config
 
 Checked in the upstream worktree `091f5ef1` on 2026-08-14, because "the official
 settings" had been used loosely in this project to mean three different things:
@@ -287,6 +287,44 @@ upstream Qwen run has no reasoning at all.** Our own official-361 campaign
 proves it: **7,906 steps, 0 containing `<think>`** — the responses start with
 two blank lines where the discarded reasoning used to be, and that campaign's
 45.2% was scored with no thinking whatsoever.
+
+**The spread is not chaos — the authors declare three tiers.** The repo alone
+made the variation look arbitrary, so it was checked against the authors'
+external sources on 2026-08-14. Their own trajectory release
+(`huggingface.co/datasets/xlangai/ubuntu_osworld_verified_trajs`, "15+ model
+variants", 1000+ episodes, 500 GB) states the protocol the repo never documents:
+
+> **15 steps** — Quick evaluation · **50 steps** — Standard evaluation ·
+> **100 steps** — Extended evaluation
+
+Every per-runner number above lands on one of those three, or on a submitter's
+own pick between them. `run.py`'s 15 is the *quick* tier, which is what the
+NeurIPS paper reports; the 50s and 100s are *standard* and *extended*.
+**Our 50 is the authors' Standard tier** — that was luck, not design, but it is
+the right place to be.
+
+**The tier is worth several benchmark points, and the authors say so.** From the
+OSWorld-Verified announcement: *"o3's performance varies drastically with step
+budget (9.1% to 23.0%), compared with 5% of GPT-4o"* — a 14-point swing on one
+model from one config knob, and a 3× ratio between the same model's own numbers.
+They also state plainly: *"We ran experiments for each model under different step
+settings."* So the leaderboard is not one protocol; it is the best of three per
+submission.
+
+Third-party aggregators reach the same conclusion independently — the Steel.dev
+benchmark registry warns that rows *"can vary by evaluator, harness, attempt
+budget, tool access, task filtering, or verification level"*, and its OSWorld
+board shows the current top entries at 100 steps against OpenAI CUA's 50.
+
+**Sources checked (2026-08-14).** Paper §4.1 (`ar5iv` HTML): *"a max step limit
+of 15"*, *"providing the most recent 3 observations and actions in chat mode"*,
+*"a temperature of 1.0 and top-p of 0.9"*, *"resolution … set to 1920×1080"*.
+Appendix C.1 ("Hyper-Parameter of the Baseline Agents") is referenced by the
+paper but was not retrievable — **max_tokens and any inter-action sleep are
+still unconfirmed from the paper itself**; the 1500 / sleep-3 figures above come
+from the repo, not the paper. The OSWorld-Verified blog does **not** publish a
+per-model × per-tier score table, and the HF dataset viewer is broken (schema
+error), so the per-tier numbers behind "9.1% to 23.0%" could not be read.
 
 **How our generated-task campaigns sit against the paper baseline:**
 
