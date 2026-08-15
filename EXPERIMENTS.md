@@ -1291,6 +1291,22 @@ mechanically catchable: the cull (keep earlier member, move line to
 Opus's yield. Surviving deltas now number three: probe tolerance (34% vs
 67%), setup thickness (321 vs 658), and idea-space entropy (this table).
 
+**Cull executed + shipped (2026-08-15, user-approved).**
+`tools/cull_v11q2.py` (wrapper repo, bc37bfd): greedy over the union of both
+hard-gate pair lists, later member culled (shard index then line number — the
+deterministic proxy for generation order across concurrent shards), plus every
+spec ≥0.5 vs cua-gym. **28 culled** (24 near-dups incl. whole clusters — the
+chrome-proxy triplet keeps one, the clinic-roster export family lost all four
+members once its keeper hit contamination — + 4 contamination) → **460 specs**,
+still above Opus's 446. Audit trail in each shard's `specs_culled.jsonl`.
+Ship then re-emitted with the current emitter: 1 more spec dropped by the
+newer rigid-name gate (`writer-template-margin-sync`) → **459 task JSONs**,
+and the full accept battery is green (jaccard 0 ≥.4, cosine 0 ≥.5, cua-gym
+max .49, OSWorld max .45). Grader-defect scan flags 4 review items
+(2 missing-source, 1 fake-media, 1 the dropped rigid-name) — adjudicate before
+rollout. VM control round still pending (VMs occupied by the v11-500 rollout);
+that stage prices the probe-tolerance gap (34% vs 67%).
+
 The v8.4-era 325 is demoted to register-analysis material. Standard-process
 consolidation shipped with the launch: the v11.1 RUNBOOK now carries the
 500-scale shape, the generator-swap knob and the code-hash line (`190009be`);
