@@ -377,6 +377,27 @@ the bridge, catching the field on the way out and re-embedding the text in
 the official-361 run's 7,906 steps with zero `<think>` is what the broken bridge
 looks like. **Keep thinking in `content`; there is nothing to change.**
 
+**The authors' V2 runs use the same in-content convention — by a different
+route** (verified in the Mac `OSWorld-V2` copy, 2026-08-14). Their
+`qwen35vl_agent.py:655` reads only `choices[0].message.content` and never
+touches `reasoning_content`; `qwen_internal_agent.py:240` replays the stored
+string into history verbatim, with no transform. Their serve evidently ran **no
+reasoning parser at all** — the stored responses open mid-thought and end with
+`</think>` but have no opening `<think>` (it lived in the generation prompt), and
+had a parser split the text their content-only read would have dropped the
+thinking, yet 337/337 sampled steps carry it. So: we re-merge after our parser
+splits; they never split. Same destination — one text blob in `content`.
+
+**Why one blob is legible to the model:** the three segments carry trained
+delimiters — `<think>…</think>` are special tokens in the Qwen3 vocabulary, and
+`<tool_call><function=…>` is the function-calling grammar the template itself
+renders structured `tool_calls` into (`:121-132`). Structured fields and a
+pre-rendered blob therefore reach the model as essentially the same token
+stream; there is no hidden "more structured" view to lose. The V2 system prompt
+additionally pins position ("reasoning … BEFORE the function call, but NOT
+after"). Empirically: 1399/1399 live-3.8 steps have well-formed think blocks and
+parseable calls.
+
 **What the standard shape would be.** The template wants:
 
 ```json
