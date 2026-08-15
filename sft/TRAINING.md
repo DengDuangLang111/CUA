@@ -2209,3 +2209,23 @@ free upgrade path.
 **Config for both arms — identical or the comparison is void:** ms50, sleep 3,
 temp 1.0 / top_p 0.95, history_n 100, image_max 20, the same runner. Score =
 evaluator output; report mean and exact-1.0.
+
+## The A/B plan on 3.8 data (2026-08-15)
+
+Not either/or: **arm A (v11-100 only) trains tonight while v11-500 rolls out —
+the GPUs and the VMs are disjoint resources — and arm B (v11-100 + v11-500)
+trains when the 500 lands.** Both evaluate on the frozen verified-eval-50, so
+A-vs-B answers the data-volume question on a real benchmark instead of the
+9-task panel whose SE retracted every earlier volume claim.
+
+| | A: v11-100 | B: +v11-500 (projected) |
+|---|---|---|
+| perfect trajectories | ~62 | ~260–290 |
+| samples (= steps; zero filtered, measured) | ~1,200 | ~5,000–5,500 |
+| trajectory median steps | 15 | ~20–25 (3.6's v11-500 successes: med 27, mean 37.6 — harder, longer tasks) |
+| OpenWebRL scale reference | below their 412-traj recipe | at it; their harm line was 1.9K |
+
+Timeline: A launches ~02:00 Aug 15 (3ep × 1.2k ≈ 6–10 h) alongside the 500
+rollout (~28–31 h); eval-50 for base + A when the VMs free up Aug 16; B builds
+and trains after (3ep × 5.2k ≈ 24–36 h — epochs negotiable), evals Aug 17.
+Every sbatch is shown to the user before submission.
