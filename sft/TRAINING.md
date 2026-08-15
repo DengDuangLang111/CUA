@@ -2392,6 +2392,22 @@ Estimated ~5–6.5 h per run, 3 shared VMs, starts when v11-500 lands
 (~Aug 16 morning). The lean arm evaluated both ways makes the serving-template
 effect itself a measured variable on the same weights.
 
+**COMPLETED 2026-08-15 (both COMPLETED, exit 0:0)** — rich 5:19:53, lean
+4:55:21 (~$5 each, under the 9 h wall). Checkpoints 150/300/450 (= epoch
+boundaries) present for both under
+`/gpfs/scrubbed/jy050706/sft/out/q38e3-{rich,lean}/v0-20260815-012706/`.
+
+| arm | train loss first→last | token acc first→last |
+|---|---|---|
+| rich (232347) | 0.622 → **0.069** | 81.8% → **97.78%** |
+| lean (232348) | 0.804 → **0.074** | 78.1% → **97.78%** |
+
+Lean starts noticeably harder (0.80 vs 0.62 first-step loss, −3.7 pts acc):
+predicting the same actions without the past-reasoning context is a harder
+modeling problem, exactly the mechanism the rich/lean contrast is designed to
+price. Both converge to the same endpoint (~0.07 / 97.78%) — training-side
+metrics cannot separate the arms; only the eval matrix can.
+
 ### Qualitative read of the arm-A demonstrations (2026-08-15)
 
 Four trajectories read step-by-step (min/median/max/random). What the
