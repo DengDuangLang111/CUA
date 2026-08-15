@@ -1128,6 +1128,19 @@ qwen3.8-max as the only changed variable.**
 - Downstream unchanged and still Claude/programmatic (gold, audits, control):
   Qwen writes, Claude audits, programs decide — the generator swap does not
   touch the verification separation.
+- **First qualitative/quantitative comparison at 325/580 specs (2026-08-15):**
+  the generators differ in REGISTER, and it is a confound. Qwen writes
+  spec-style: 85% of instructions carry an absolute path (Opus 8%), 86% name
+  the file (15%), setups are half the size (med 297 vs 658 chars), and the
+  voice axis collapsed (0 sloppy-voice specs vs Opus's 32/32 adherent) —
+  systematically easier tasks because discovery work is handed over in the
+  instruction. Probes: both structurally correct, but Opus carries tolerance
+  machinery in 67% of probes vs Qwen's 37% — prediction: higher control-BAD
+  (over-rigid probe) rate for Qwen, which the verification layer will
+  quantify. Analysis of the family-alignment hypothesis must therefore
+  stratify by difficulty, treat instruction-path-explicitness as a covariate,
+  and report probe-rigidity separately; a style guard in the prompt is a
+  possible v2, deliberately NOT applied mid-run.
 - Readouts when rolled: yield through validation/control, difficulty
   calibration curve, teacher (3.8-27B) pass-rate distribution vs v11-500's,
   and per-cell paired comparison on the shared coordinates.
