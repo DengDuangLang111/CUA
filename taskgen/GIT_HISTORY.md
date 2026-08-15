@@ -48,3 +48,6 @@ git -C /mnt/d/research/os-simple-taskgen-v8/ostg branch -f main v11.1
 (main 未被任何 worktree checkout,移动引用零影响;各时代分支保留原位作历史标记,
 将来可转 tag。)风险:无。收益:main 语义恢复为"最新生产血统",消灭今天这类
 worktree 误用的温床。
+
+**已执行 2026-08-15**:main `9317793d`(08-09) → `a361e753`(08-15, =v11.1 tip)。
+六个 worktree 逐一核验原样;磁盘零文件变化;时代分支全部保留。
