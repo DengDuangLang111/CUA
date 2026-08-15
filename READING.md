@@ -62,9 +62,11 @@ together they are "how to distill desktop competence into a small model".
 | difficulty scale | no | no | teacher pass-rate gradient, RL-curriculum-ready |
 | openness | closed / small | open + judge-bound | ours, openable |
 
-Update 2026-08-15: the difficulty scale is now empirically validated — pass
-rate monotone in the generator's 1–5 labels on both teacher generations
-(EXPERIMENTS.md, category analysis). The negative-control gap made precise:
+Update 2026-08-15 (corrected same day — the user caught a confound):
+difficulty and app_count are perfectly confounded by design (1–2=1app,
+3–4=2app, 5=3app). Validated: the app-count ladder's monotone-cliff effect and
+the direction of within-tier grading; within-tier independent validity awaits
+the 444-task sample (EXPERIMENTS.md, category analysis). The negative-control gap made precise:
 positive control (gold→PASS) and trivial negative (initial-state→FAIL) are
 systematic; **near-miss negatives (mutated gold end-states that must all
 FAIL) are not** — they test probe specificity, and the two known

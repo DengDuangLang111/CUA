@@ -924,15 +924,19 @@ could move it — but a 0-regression split is not what a broken config looks lik
 
 ### Category analysis of v11-100 under 3.8: four paradigms (2026-08-15)
 
-**① The generator's difficulty labels are empirically calibrated.** Pass rate
-is monotone in the 1–5 difficulty annotation for BOTH models (3.8: 88/78/75/71/
-31%; 3.6: 50/48/46/33/12%), and steps-to-pass rises monotonically too
-(10→12→15→18→20). The free difficulty scale claimed by innovation candidate
-#2 is real, on two model generations.
+**① CORRECTED (user caught the confound): difficulty and app_count are
+perfectly confounded by design** — diff 1–2 are all 1-app, 3–4 all 2-app, 5
+all 3-app. The monotone pass curve therefore decomposes into two claims:
+(a) the app-count ladder works (82→73→31%, a designed effect, validated);
+(b) the WITHIN-tier grading carries the label's independent information:
+diff1 88% vs diff2 78% (3.6: 50 vs 48) and diff3 75% vs diff4 71% (3.6: 46 vs
+33) — all four comparisons directionally right but n≈20 per cell, mostly
+within noise except 3.6's 46-vs-33. Paper wording: "a two-level difficulty
+design (app-count tiers + within-tier grading) with monotone pass rates on two
+teacher generations; within-tier validity pending the 444-task sample."
 
-**② Difficulty's substance is multi-app orchestration.** app_count 1→2→3 =
-82→73→31% (a cliff at 3); ambiguity 1→4 = 90→74→72→57% (monotone hurt);
-**voice is flat (67–74%)** — the model is robust to phrasing style.
+**② Ambiguity hurts monotonically (90→74→72→57%); voice is flat (67–74%)** —
+robust to phrasing style, sensitive to actual under-specification.
 
 **③ 3.8's gains concentrate in precise structured work.** table grading
 9→73%, calc 7→60%, configure 24→60%, os 23→69%, vs_code 46→88% — while
