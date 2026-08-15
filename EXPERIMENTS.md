@@ -1129,6 +1129,26 @@ qwen3.8-max as the only changed variable.**
   over 81-triple partitions, impossible under today's code. Third
   archaeology failure in one day; **the taskgen repo is now under git**
   (first commit `141916e`, code only, outputs ignored).
+- **Route-A forensics complete (2026-08-15), from the surviving Aug-11
+  bytecode** (`fossils/ostg-v11.1-pycache/`, commit `f05de82`): the old
+  gen.py carried two since-deleted flags, `--spent-from` and `--start-batch`,
+  and its walk **sampled triples with replacement per batch** (spent only if
+  injected) — 145 draws over an 81-triple shard partition covers ~84%,
+  predicting ~272 distinct triples vs 259 observed; the numbers close.
+  Today's walk is without-replacement and stops at exhaustion (325). One
+  `[gen] args` invocation per shard confirmed — 446 was a single run.
+  **The prompt did not drift**: `single_json.txt` mtime 2026-08-09 00:39,
+  before both runs, no other copies — Opus and Qwen generated from the
+  byte-identical prompt; every output difference is model-side or walk-side.
+- **Thinking probe verdict: operationally dead.** 75 minutes with zero specs
+  (nothink: 4 minutes for the same volume), likely a gateway stream hang in
+  thinking mode on top of genuine slowness; killed. Quality question moot at
+  this latency.
+- **The lesson, recorded**: code that GENERATES DATA must be under version
+  control before it runs, and run logs should print the code identity (a git
+  hash), not just args — the v500 log's `[gen] args` line was the only
+  surviving fingerprint and it took a day plus a pycache accident to
+  reconstruct what one `git log -1` would have answered.
   What holds: **253 shared coarse cells (80% of Qwen's) → stratified, not
   1:1, comparison**. Qwen keep rate ~98% (6 rejects in 331: 3 missing setup,
   2 syntax, 2 dup slugs) — the forced-tool-call regime is highly compliant;
