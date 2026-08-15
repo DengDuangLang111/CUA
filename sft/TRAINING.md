@@ -2370,3 +2370,24 @@ The arm-A flag is an open user decision; the three configurations and their
 verified properties are laid out above. Constant across all of them: the label
 turn's thinking is untouched — the model learns to produce reasoning either
 way; the flag only decides whether it sees its own past reasoning.
+
+## LAUNCHED 2026-08-15: both arms, rich and lean (user decision)
+
+Jobs **232347 `sft-q38rich`** (`preserve_thinking true`) and **232348
+`sft-q38lean`** (`false`), submitted together, identical otherwise: the
+q38-v11100 dataset (69 trajs / 1,196 samples, verified), e3 recipe, 3 epochs,
+epoch-boundary checkpoints, 9 h walls (~$8.10 each). Sbatch copies under
+`sft/sbatch/`; the verified keepthink template (stock 4B jinja + one branch,
+T1–T4 all green: history think kept, think-free renders byte-identical to
+stock) is `eval/qwen35_4b_keepthink.jinja`, deployed at serve time via
+`--chat-template`, the base model directory untouched.
+
+**Eval matrix on verified-eval-50, user-ordered:**
+1. base-4B · stock template
+2. q38e3-**rich** · keepthink (rich/rich)
+3. q38e3-**lean** · keepthink (OpenWebRL-style: lean-trained, rich-evaled)
+4. q38e3-**lean** · stock (lean/lean)
+
+Estimated ~5–6.5 h per run, 3 shared VMs, starts when v11-500 lands
+(~Aug 16 morning). The lean arm evaluated both ways makes the serving-template
+effect itself a measured variable on the same weights.
