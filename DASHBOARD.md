@@ -163,17 +163,28 @@ a heavy push day exhausted it mid-campaign: GitHub had current numbers, the
 site served 90-minute-old ones, and nothing could deploy until the quota
 recovered.
 
-Deploys still matter for the page code and the trajectory viewers. To stop
-status pushes from burning quota, the daemon tags them `[skip deploy]`, and the
-Vercel project needs this **Ignored Build Step** (Settings → Git, must be set in
-the Vercel UI — repo config cannot do it):
+Deploys still matter for the page code and the trajectory viewers. Status
+pushes stop consuming quota via `vercel.json`'s `ignoreCommand` — which the
+docs confirm **overrides the UI's Ignored Build Step**, so no dashboard setting
+is needed (earlier advice that the UI was required was wrong; corrected
+2026-08-15). Both `vercel.json` and `dashboard/vercel.json` carry it (only the
+project-root copy is read; the other is inert because the project's root
+directory is not recorded anywhere we can see):
 
-```
-git log -1 --pretty=%B | grep -q "\[skip deploy\]" && exit 0 || exit 1
+```json
+{"ignoreCommand":
+ "git diff --name-only HEAD^ HEAD | grep -qvE \"^dashboard/(status|sft)[.]json$\" && exit 1 || exit 0"}
 ```
 
-Until that is set, status pushes trigger deploys as before (harmless when under
-quota — the raw fetch already makes those deploys redundant).
+Content-based, not message-based: a push whose only changes are `status.json` /
+`sft.json` is skipped (exit 0); anything else builds (exit 1). Verified against
+real history before shipping — status-only commits skip, all five recent code/
+doc commits build. Known lag: if page code lands while quota is exhausted and
+the next successful push is status-only, the code waits for the next non-json
+push (a traj push, ≤30 min) to deploy.
+
+**Deploy budget after this**: traj ≤48/day + manual docs ~10–20 ≈ 60–70,
+against the hobby tier's ~100/day. Status/sft pushes: zero.
 
 ### Why the cycle used to take ~70 minutes, and must not again
 
