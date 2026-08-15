@@ -365,6 +365,18 @@ tokens). **The server-side lever does not reach our thinking.** Any hide-thinkin
 experiment must be client-side, in `QwenAgent._response_transform`
 (`main.py:265`) — the same hook `ensure_empty_think_prefix` already occupies.
 
+**The two directions, stated once** — this pair of facts reads as a
+contradiction until the direction is attached. *Response* (server → us):
+`--reasoning-parser qwen3` splits generated text and thinking arrives in the
+response's `reasoning_content`/`reasoning` field — the field works. *Request*
+(us → server): vLLM drops `reasoning_content` on input assistant messages — the
+field is dead. So "thinking is replayed into history" and "thinking cannot ride
+in `reasoning_content`" are both true: the harness's merge (`client.py:51`) is
+the bridge, catching the field on the way out and re-embedding the text in
+`content` on the way back in. Without that bridge thinking is lost entirely —
+the official-361 run's 7,906 steps with zero `<think>` is what the broken bridge
+looks like. **Keep thinking in `content`; there is nothing to change.**
+
 **What the standard shape would be.** The template wants:
 
 ```json
