@@ -607,6 +607,18 @@ showing up as occasional very long deliberation. It is not obviously bad — 3.8
 doubling 3.6's score on these tasks — but it is a setting nobody chose, and it
 belongs in any account of why 3.8's steps are slower.
 
+**How fold_size=10 actually works — a saw-tooth, not a sliding window**
+(`history.py:7`, five lines): `folded_prefix_k` counts folded OLDEST
+screenshots, monotone, advancing by 10 whenever active images would exceed 20.
+Active visual window oscillates 11↔20 (boundary jumps at steps 21, 31, 41…);
+folded steps keep their full text (think/prose/actions) and only the image
+becomes "This screenshot has been collapsed." The chunked design buys prefix
+stability — ten consecutive steps share a byte-identical history prefix —
+which is exactly what makes Qwen-CUA's fold-aware training slices (and prefix
+caching, where the architecture allows it) possible. It also times the diff-5
+cliff: those failures close at steps 23–37, i.e. 10–20 images already folded,
+first app visible only as text.
+
 **"History = 3" and "history = 20" are not the same axis.** This caused real
 confusion, so, verified in the code 2026-08-14:
 
