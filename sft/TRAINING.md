@@ -2065,6 +2065,56 @@ trained with a single current screenshot plus full text/thinking history reached
   assistant turn) or per-turn prefixes (`iter_prefixes`, `messages[:i+1]`) with
   a **single current screenshot** and `mask_history: true`.
 
+### What the paper itself teaches — quality lessons, ranked by relevance to us
+
+From the paper (arXiv 2606.02031) + the repo, 2026-08-14. Their released recipe,
+first: **SFT used per-turn ONLY** — `PER_TURN=1` is the wrapper default and its
+comment says "reproducing the released recipe"; `mask_history: true`, single
+current screenshot, vision tower + projector frozen, LM full-finetuned,
+`cutoff_len 36864`. The whole-episode mode exists in the tooling as an
+efficiency alternative and was NOT the released run. Base for the VL family:
+Qwen3-VL-4B-**Thinking**.
+
+**① Historical reasoning is their single most valuable context component.**
+Ablating it costs **−14.6 to −23.7 points — the largest effect they measured**.
+Their words: reasoning traces "naturally serve as compact textual memory", and
+"Human users do not repeatedly inspect every previous browser state; instead,
+they rely primarily on recent visual observations together with memory of prior
+actions." This settles our hide-thinking debate in the opposite direction from
+the worry: **stripping think from history is the single most damaging thing
+their ablations found.** Our full-think replay is the validated side.
+
+**② Screenshot history is nearly worthless beyond 1.** Going from one screenshot
+to two: −1.9 to −4.0. Combined with ①, their context recipe is "all the text,
+almost none of the images" — the extreme of the trade our runner makes at 20
+images. External support for a hard rollout-side `image_max` cut, already noted.
+
+**③ Curation: small and picked, not large and complete.** "We intentionally
+curate a small, high-quality subset instead of imitating all successful teacher
+trajectories." Mechanics: 4 teacher rollouts per task → judge → **shortest
+successful trajectory per task** (response-length tiebreak) → per-website cap →
+**412 trajectories / 70 sites**. We currently take every successful trajectory,
+including the four 50-step wall-hitters scored 1.0 that CLAUDE.md already calls
+poison. Borrowable immediately: shortest-per-task when we have multiple
+successes, and drop limit-hitting 1.0s.
+
+**④ Heavier SFT warm start made the post-RL model WORSE.** 1.9K trajs × 3 ep
+underperformed 0.4K × 3 ep after RL — "stronger warm start … may reduce policy
+plasticity." Consistent with our own more-data arms showing nothing. If RL-init
+is this corpus's purpose, over-SFT is a measured risk, not a hunch.
+
+**⑤ Textual environment feedback is worth −5.2 to −8.0 when removed.** Their
+user turns carry action-outcome strings ("lightweight feedback makes web
+interaction more observable, allowing the agent to distinguish successful
+actions from silent failures"). Our OSWorld user turns carry a screenshot and
+nothing else. Injecting outcome text is a harness change — off-limits for
+Verified comparability, but legitimate for generated-task training rollouts.
+
+**⑥ Their judge is their weak point, our evaluators are ours.** They needed a
+distilled 8B judge (89.8% vs GPT-4.1) because success is subjective on the live
+web; our programmatic evaluators are exact — but our wall-hitting false-1.0s
+show they have holes of their own kind.
+
 ### The delta table
 
 | | OpenWebRL | ours |
