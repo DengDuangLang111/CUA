@@ -2429,3 +2429,29 @@ B adds harder, longer trajectories (3.6's v11-500 successes: median 27 steps);
 sign(B - A) on the frozen eval-50 is this paradox's empirical answer here.
 Future refinements if needed: weight by step-productivity, not length; and
 teacher-regenerates-what-the-student-fails iteration.
+
+### e1 vs e3, compiled; and the dissociation playbook (2026-08-15)
+
+All 9-task panels, scores + per-step behaviour:
+
+| panel | 1.0s | mean | med steps | repeat% | terminate% |
+|---|---|---|---|---|---|
+| q35-e1 (own 1-ep anneal) | 1/9 | 0.111 | 50 | 73.0 | 0 |
+| q35-e3 seeds 1/2/3 | 3, 0, 0 | 0.333/0/0 | 50 | 41.5/48.1/36.8 | 44/0/0 |
+| base-4B (topk panel) | 4/9 | 0.444 | 14 | 14.7 | 78 |
+
+Scores: e1 vs e3 indistinguishable (both average 0.111 across seeds; the panel's
+noise swallows everything — the reason eval-50 exists). Behaviour (per-step, so
+better powered): e3 repeats less than e1 (~42% vs 73%) and one seed adopted
+terminate (44% vs 0) — more epochs deepened absorption of the teacher's format
+habits without converting to score. The base row is the indictment: healthier
+on every axis. This IS the format-perfect/task-fails dissociation, archived.
+
+Diagnosis playbook for that dissociation, all tooling on the shelf: layer 1
+format health (parse rate, enum rate, coordinate range); layer 2 score; the
+gap located by ① repeat + state-revisitation (looping) ② wall-rate + median
+steps (grinding) ③ terminate calibration incl. false completion claims
+④ screen-change-per-action (grounding) ⑤ divergence-point vs the teacher's
+trajectory on the same task (`check.py --reference`) ⑥ think-action consistency
+by reading ⑦ per-domain channel split. To be run on all four eval-50 arms the
+day scores land.
