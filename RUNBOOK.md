@@ -288,6 +288,102 @@ proves it: **7,906 steps, 0 containing `<think>`** — the responses start with
 two blank lines where the discarded reasoning used to be, and that campaign's
 45.2% was scored with no thinking whatsoever.
 
+### Why the dashboard looks stale (2026-08-14)
+
+It is not stale — it is slow. Both daemons were alive and the last push was 22
+minutes old when checked. The cycle is **~70 minutes, not the 5 the daemon loop
+suggests**, and the whole of it is one step:
+
+```
+[19:40] traj: staging
+[20:06] traj: publishing 255 viewers     <- ~26 min
+[20:17] pushed (scored=30 100 252)
+```
+
+`dash_status_daemon.sh:113` regenerates **every** trajectory viewer each round
+via `ostg.traj_html`, then rsyncs the lot. At 255 viewers that is ~26 minutes of
+work to republish pages that overwhelmingly did not change. It grows with the
+corpus, so it will keep getting worse.
+
+The fix is to make the regeneration incremental — skip any task whose
+`traj.jsonl` mtime predates its `viewer.html`. Not applied yet.
+
+One other thing in that log: at 17:11 the run died on
+`Unable to create '/mnt/d/research/cua-dash/.git/index.lock': File exists`. The
+two-clone design (`control/README.md`) is supposed to make contention impossible,
+so either something else is touching `cua-dash`, or a crashed git left the lock
+behind. It recovered on the next cycle; worth watching rather than chasing.
+
+### Qwen3.8's chat template, read at source (2026-08-14)
+
+Pulled from the served weights: `/gpfs/scrubbed/jy050706/models/Qwen3.8-27B/chat_template.jinja`
+(8,952 bytes). Everything below is the template's own code, not inference.
+
+**Where `xhigh` comes from — Qwen ships it as the default** (`:47`):
+
+```jinja
+{%- set resolved_reasoning_effort = reasoning_effort|default('xhigh') %}
+{%- if resolved_reasoning_effort not in ('xhigh', 'medium', 'low') %}
+    {{- raise_exception('Unexpected reasoning effort ...') }}
+```
+
+Only **three** values exist: `xhigh` (default), `medium`, `low`. **`high` is not
+one of them** — that is the 400 seen earlier, a template `raise_exception`, not a
+vLLM bug. `medium` is the only value that emits **no preamble at all**; `xhigh`
+and `low` each prepend a sentence ahead of our system prompt. Nothing in our
+stack sets it, so every request in the campaign runs at `xhigh`.
+
+**Where the empty `<think>` block comes from** (`:111-120`):
+
+```jinja
+{%- set reasoning_content = '' %}
+{%- if message.reasoning_content is string %}
+    {%- set reasoning_content = message.reasoning_content %}
+{%- endif %}
+{%- if preserve_thinking is undefined or preserve_thinking is true
+       or loop.index0 > ns.last_query_index %}
+    {{- '<|im_start|>' + message.role + '\n<think>\n' + reasoning_content + '\n</think>\n\n' + content }}
+{%- else %}
+    {{- '<|im_start|>' + message.role + '\n' + content }}
+{%- endif %}
+```
+
+The template reads reasoning from a **separate `message.reasoning_content`
+field** and **always emits the `<think>` wrapper** on the preserve branch. We
+never set that field — our reasoning is merged into `content` by
+`client.py:51` — so the wrapper renders **empty**, and then our content, which
+itself opens with `<think>real reasoning</think>`, follows it. Hence two blocks
+per historical turn. The empty one is the template's structural slot standing
+vacant; the real one is our text arriving through the wrong door.
+
+**`preserve_thinking` is retired** (user decision, 2026-08-14) — it is not a
+lever here in any case: `undefined` takes the same branch as `true`, and `false`
+only strips the `reasoning_content` slot, never text living inside `content`.
+Verified against the live server: production shape, `false`, `medium`, and
+`medium`+`false` all keep the reasoning in every turn (131 / 119 / 89 / 77
+tokens). **The server-side lever does not reach our thinking.** Any hide-thinking
+experiment must be client-side, in `QwenAgent._response_transform`
+(`main.py:265`) — the same hook `ensure_empty_think_prefix` already occupies.
+
+**What the standard shape would be.** The template wants:
+
+```json
+{"role": "assistant", "reasoning_content": "...", "content": "...", "tool_calls": [...]}
+```
+
+with tool calls in their own field — the template renders them into
+`<tool_call>\n<function=...>` itself (`:121-132`). Our harness instead sends one
+text blob carrying `<think>`, prose, and `<tool_call>` markup together. That is
+the OSWorld-Qwen convention and the authors' own runs do the same (their
+`messages.json` shows assistant turns as plain strings), but it predates 3.8's
+template.
+
+**It is not fixable by just moving the field, though**: vLLM **drops
+`reasoning_content` from input messages** — passing it renders an empty `<think>`
+and the text never appears (verified, same endpoint). So on this vLLM version the
+in-content convention is the only one that reaches the model at all, and the
+doubled block is its unavoidable cost. Leave it.
+
 **Measured against the live Qwen3.8 server, 2026-08-14** — `POST /tokenize`
 renders the real chat template, so this is what the model actually receives, not
 an inference from code. Three assistant turns, each carrying a distinct marker
