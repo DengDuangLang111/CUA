@@ -2447,6 +2447,16 @@ terminate (44% vs 0) — more epochs deepened absorption of the teacher's format
 habits without converting to score. The base row is the indictment: healthier
 on every axis. This IS the format-perfect/task-fails dissociation, archived.
 
+Extended to 5 epochs (single panels, no seed replication): ep5pt (rich) 1/9,
+rep 52%, term 22%; ep5np (lean) 2/9, rep 39%, term 33%; more3np (lean, 3ep,
+more data) 1/9 with **rep 12% — the only SFT arm near base's 15%**. Readings:
+the epoch axis is FLAT on scores from 1 through 5 (everything in the 0–3/9
+noise band) while behavioural absorption rises monotonically — five epochs of
+deeper imitation bought zero score. And the np/lean arms are systematically
+the behaviourally healthiest SFT arms at both 3 and 5 epochs — the old data's
+weak foreshadowing of the consistency finding, now being tested properly by
+the rich/lean pair on eval-50.
+
 Diagnosis playbook for that dissociation, all tooling on the shelf: layer 1
 format health (parse rate, enum rate, coordinate range); layer 2 score; the
 gap located by ① repeat + state-revisitation (looping) ② wall-rate + median
