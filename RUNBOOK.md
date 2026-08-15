@@ -377,16 +377,34 @@ the bridge, catching the field on the way out and re-embedding the text in
 the official-361 run's 7,906 steps with zero `<think>` is what the broken bridge
 looks like. **Keep thinking in `content`; there is nothing to change.**
 
-**The authors' V2 runs use the same in-content convention — by a different
-route** (verified in the Mac `OSWorld-V2` copy, 2026-08-14). Their
-`qwen35vl_agent.py:655` reads only `choices[0].message.content` and never
-touches `reasoning_content`; `qwen_internal_agent.py:240` replays the stored
-string into history verbatim, with no transform. Their serve evidently ran **no
-reasoning parser at all** — the stored responses open mid-thought and end with
-`</think>` but have no opening `<think>` (it lived in the generation prompt), and
-had a parser split the text their content-only read would have dropped the
-thinking, yet 337/337 sampled steps carry it. So: we re-merge after our parser
-splits; they never split. Same destination — one text blob in `content`.
+**Two harnesses — keep them apart** (clarified 2026-08-14 after conflating
+them). The authors' archives mix runs from two different codebases, and evidence
+from one does not transfer to the other:
+
+| | OSWorld (**Verified**) — what we run | OSWorld-V2 — not what we run |
+|---|---|---|
+| runner | `run_multienv_qwen.py` | V2's `run_multienv.py` (has `eval_version`) |
+| agent | `mm_agents/qwen/` (`QwenAgent`) | V2's `qwen_internal_agent.py` |
+| authors' runs in the archive | qwen3.7-plus, 361 tasks | qwen3.6 think + nothink, 102 tasks |
+
+**Verified side.** The qwen3.7-plus `args.json` keys match
+`run_multienv_qwen.py`'s argparse **exactly — 33 keys, zero diff in either
+direction** — so the authors' only published Verified Qwen run used literally
+our runner. And it ran **nothink: 0 of 323 sampled steps contain `</think>`**
+(model name `qwen37_plus-nothink-can` agrees). Their 0.690 / 66.6%-exact on
+Verified was achieved with no thinking at all. So on Verified the authors never
+exercised thinking-through-history; when **we** enable it, the in-content merge
+is upstream's own code path (`client.py:51`), but running with thinking on this
+benchmark is our choice, not a reproduction of theirs.
+
+**V2 side** (evidence stays, scope corrected — this is where the 337/337 finding
+belongs). V2's `qwen35vl_agent.py:655` reads only `choices[0].message.content`
+and `qwen_internal_agent.py:240` replays it verbatim; their serve ran no
+reasoning parser — responses open mid-thought with no `<think>` yet 337/337
+sampled steps carry the reasoning. So on V2, thinking rides in `content` by
+never being split. Same one-blob destination as our Verified path, different
+route, **different benchmark** — it demonstrates the convention works, not what
+the authors do on Verified.
 
 **Why one blob is legible to the model:** the three segments carry trained
 delimiters — `<think>…</think>` are special tokens in the Qwen3 vocabulary, and
