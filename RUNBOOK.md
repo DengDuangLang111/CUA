@@ -221,6 +221,93 @@ Reading the results:
 
 ## 5 Rollout
 
+### The harness is behaviourally upstream again (2026-08-14)
+
+**`mm_agents/qwen/actions.py` is now `+60 / −0` against upstream `091f5ef1`** —
+sixty added lines, **zero upstream lines changed**. What remains is a dialect
+shim that does nothing unless `OSTG_PARAM_DIALECT=inline`, and one
+`logger.warning`. With that variable unset the behaviour is upstream's.
+
+**What was reverted, and why it mattered.** Every campaign before this one ran
+with a patch turning an unparseable response into `WAIT` instead of upstream's
+`DONE`:
+
+```python
+if not pyautogui_code:
+    pyautogui_code.append("FAIL" if infeasible_response else "DONE")   # upstream
+#                                                           "WAIT"    # our patch
+```
+
+The patch was added because the model sometimes emits nothing after `</think>`
+and three impress tasks died on it. But **`DONE` is not "fail"** — it stops the
+episode and scores the final state — so the patch could only *add* attempts.
+It inflated pass rates against every published OSWorld number. Measured on our
+own corpora before reverting:
+
+| corpus | tasks that would have ended earlier upstream | of those, currently scoring 1.0 |
+|---|---:|---:|
+| v11 (100) | 10 | **7** |
+| v11-500 (252 scored) | 54 | **20** |
+
+So **v11's 39% and v11-500's 24% are numbers from a patched harness** and are
+not comparable to published OSWorld results. Every campaign from 2026-08-14
+onward is.
+
+### How far the run parameters sit from upstream defaults
+
+`run_multienv_qwen.py` is upstream's own Qwen runner, not something we wrote.
+Its defaults versus what we pass:
+
+| parameter | upstream default | ours | note |
+|---|---|---|---|
+| `history_n` / `image_max` / `fold_size` | 100 / 20 / 10 | **same** | what the model sees is untouched |
+| `action_space` / `observation_type` / screen | pyautogui / screenshot / 1920×1080 | **same** | |
+| `max_steps` | 50 | **50** | v11-500 used 100 until 2026-08-14 |
+| `sleep_after_execution` | 0.0 | **1.0** | gives the UI time to repaint before the screenshot |
+| `num_envs` | 1 | **3** | throughput |
+| `temperature` | 0.0 (greedy) | **per the model card** | see below |
+| `max_tokens` | 32768 | **81920** | 32768 is also Qwen's general recommendation; 81920 is their competition setting |
+
+**A naming trap worth knowing**: the official-361 result directory is called
+`...-temp06-sleep3-maxsteps50-...` but the campaign passed
+`--sleep_after_execution 0` (`run_verified_campaign.sh:153`, confirmed by its
+own `args.json`). **The `sleep3` in that name is wrong and no code reads it.**
+
+### Sampling: the client wins, so the serve file lies
+
+`--override-generation-config` on the vLLM serve only sets *defaults*. The
+runner sends `temperature` on every request and that takes precedence. The
+Qwen3.6 serve script has said `"temperature": 1.0` for its whole life while
+every rollout actually ran at **0.6**. **Read the runner command, not the serve
+file.**
+
+Qwen publishes two thinking profiles for 3.5, 3.6 and 3.8 alike:
+
+| | thinking · general | thinking · precise coding |
+|---|---|---|
+| all three models | **temp 1.0**, top_p 0.95, top_k 20, min_p 0 | temp 0.6, top_p 0.95, top_k 20 |
+
+Campaigns through 2026-08-13 used the **precise-coding** profile — Qwen labels
+that row "precise coding tasks (e.g. WebDev)", and driving a GUI is agentic
+control. The Qwen3.8 campaign uses the general profile.
+
+### There are TWO tool definitions upstream; we use `internal`
+
+`mm_agents/qwen/prompts.py` ships both, and they are deliberately different
+interfaces for different model generations — not an oversight to be aligned:
+
+| | `build_base_tools_def` | `build_internal_tools_def` (ours) |
+|---|---|---|
+| how a task ends | `answer` | `terminate` + `call_user` |
+| low-level input | — | `key_down`/`key_up`, `left_mouse_down`/`up` |
+| explicit capture | — | `screenshot` |
+
+`QwenAgent` — what `run_multienv_qwen.py` instantiates — uses `internal`.
+Qwen3.6 emitted `answer` **64 times across 3,425 steps** even though it is not
+in the list it was given; the parser has no branch, so those steps degraded to
+the fallback. **Do not add an `answer` branch mapping to DONE** — that makes a
+hallucination end the episode irreversibly.
+
 ### The teacher serve is FP8 since 2026-08-14
 
 `serve-chain-36-fp8.sbatch` (model `Qwen3.6-27B-FP8`, the official quantization)
