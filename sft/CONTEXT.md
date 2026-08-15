@@ -70,10 +70,25 @@ sufficient to reconstruct a specific task's context.
    context for step k is turns 1..k rendered with the folding state *as of
    step k*.
 2. **Packing a whole trajectory into one multi-turn sample and training all
-   assistant turns is NOT equivalent**, for two independent reasons:
-   (a) history turns must lose their `<think>` while every target needs its
-   own kept — impossible in a single sequence; (b) folding rewrites past
-   turns' content as the step index advances.
+   assistant turns is NOT equivalent.** As originally written this had two
+   legs; one fell on 2026-08-14 and the other got numbers.
+   ~~(a) history turns must lose their `<think>` while every target needs its
+   own kept~~ — **premise wrong**: history turns KEEP their think everywhere we
+   have since measured (teacher rollout: our own message dumps show 49/49
+   replayed turns with real think, RUNBOOK; training render: swift runs with
+   `--preserve_thinking true`). With think kept on both sides, a packed
+   sequence would present each turn identically to its per-turn sample.
+   (b) **folding rewrites past turns' content as the step index advances** —
+   still true and now the sole, sufficient reason. At step k>20 old screenshots
+   are collapsed to text; in a packed sequence they would sit there as real
+   images. Only episodes ≤ `image_max` steps are prefix-stable and packable
+   losslessly.
+   **And the measurement kills the idea anyway** (v11 corpus, 39 successful
+   trajectories, median 21 steps): full packing would cut image encodings
+   12.9× (12,236 → 946 per epoch) but is only lossless for the 19 episodes
+   ≤ 20 steps — and packing just those saves **1.1×**, because per-turn cost
+   is dominated by exactly the long episodes that folding makes unpackable.
+   The benefit lives only where the equivalence fails. Rejection stands.
 3. **Cost of exactness**: a late-step sample carries up to 20 images at
    1920×1088 (~2.6k visual tokens each) ≈ 50k+ tokens. Per-step samples also
    re-pay the shared prefix. If this dominates training cost, the lever is a

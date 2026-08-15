@@ -2084,17 +2084,17 @@ multi-action response repeats identical lines (v11: 1,041 lines → 946 steps,
 §5.2). Both pipelines are per-turn at heart; OpenWebRL never needs the fix
 because its trajectories store one record per turn to begin with.
 
-**The one real granularity difference is whole-episode packing, which we lack.**
-Their `mask_history: false` mode puts the entire episode in ONE sequence and
-supervises every assistant turn in the same forward pass. Because turn k's
-supervised tokens attend to exactly the prefix a per-turn sample would carry,
-the supervision is mathematically the union of all per-turn samples — but the
-shared prefix is encoded once instead of once per step. Per-turn expansion of a
-T-step episode costs O(T²) encoded tokens against O(T) packed; at our median
-~15 steps that is roughly an 8× overhead, at 50 steps ~25×. (Caveat: packing a
-50-step OSWorld episode means one sequence holding up to 20 images and every
-response — long; their web episodes are shorter and carry 1 image.) Worth a look
-if ms-swift supports multi-span supervision; not a correctness issue.
+**The one real granularity difference is whole-episode packing — and it was
+measured and rejected the same day** (sft/CONTEXT.md §6.2). Their
+`mask_history: false` mode supervises every turn of an episode in one packed
+sequence at O(T) encoded tokens instead of per-turn's O(T²). But our folding
+(`image_max 20`/`fold_size 10`) rewrites history as steps advance, so packing is
+only lossless for episodes ≤20 steps — 49% of the v11 corpus by count and
+almost none of it by cost. Measured: full packing saves 12.9× image encodings;
+the lossless subset saves **1.1×**. The savings live exactly where the
+equivalence breaks. If training cost is the problem, the real lever remains a
+smaller `image_max` at ROLLOUT (CONTEXT.md §6.3), for which OpenWebRL's
+1-image 4B is now external support.
 
 ### Two actionable points
 
