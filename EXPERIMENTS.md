@@ -922,6 +922,24 @@ not. **Paired on the identical 40 task ids** against Qwen3.6's
 regressions. Partial batch, dispatched in manifest order, so the remaining 60
 could move it — but a 0-regression split is not what a broken config looks like.
 
+### Throughput: 3.7× the 3.6 campaign, decomposed
+
+Measured at 72/100 (2026-08-14 22:05), both runs 3 envs / ms50:
+
+| | 3.6 v11-100 (sleep 1) | 3.8 v11-100 (sleep 3) |
+|---|---|---|
+| tasks/hour | 4.9 (20.3 h for 100) | **18.0** |
+| steps/task median / mean | 43 / 34.7 | **16 / 20.1** |
+| episodes at the 50-step wall | 48% | 7% |
+| wall-seconds per step (per env) | 63 | 29 |
+
+Two multiplicative factors: **×1.7 from steps-per-task collapsing** (the DONE
+revert ends prose-completions immediately, and the model actually finishes —
+48% → 7% wall-hitters), and **×2.2 from per-step wall time** — which is NOT
+cleanly attributable to the model: the 3.6 span crossed a night with serve
+wall-expiry and tunnel dead time baked in, while 3.8's 4 hours were one clean
+evening window. Projection: v11-500 (444 tasks) in ~25 h at this rate.
+
 ### The DONE revert is doing the right thing, for a reason nobody predicted
 
 The `actions.py` fallback was reverted to upstream's `DONE` earlier the same day.
