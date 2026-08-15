@@ -940,6 +940,44 @@ cleanly attributable to the model: the 3.6 span crossed a night with serve
 wall-expiry and tunnel dead time baked in, while 3.8's 4 hours were one clean
 evening window. Projection: v11-500 (444 tasks) in ~25 h at this rate.
 
+### Where a step's 16 seconds actually go (measured 2026-08-14)
+
+Sources: traj timestamps (n=1,473 inter-step gaps), the live serve's own log,
+and a timed streaming request with a real 12-image payload through the tunnel.
+
+Step cycle: **p10 8.8s · median 16.0s · p90 37.3s · mean 22.7s.** Budget for a
+median mid-episode step (~12 images ≈ 32k prompt tokens):
+
+| component | measured | median step | p90 step |
+|---|---|---:|---:|
+| VM side: pyautogui exec + **sleep 3.0** + screenshot fetch + client overhead | cycle − LLM roundtrip | **~8s** | ~8s |
+| upload (12 imgs × 319 KB b64 = 3.9 MB; 20 imgs = 6.4 MB) | inside TTFT | ~1s | ~1.5s |
+| **prefill — recomputed from zero every step** | TTFT cold 3.94s / warm 2.70s | **~3s** | ~5s |
+| decode · thinking (median 260 chars, p90 2,607) | 50.7 tok/s solo, ~30–40 under 3-way load | ~2s | **~17s** |
+| decode · visible (median 263 chars, p90 574) | same | ~2s | ~4s |
+
+Server facts from the log: prompt throughput 5–7.6k tok/s (chunked prefill,
+8,192-token budget), generation 70–150 tok/s across 3 requests, GPU KV usage
+~8%, **MM cache hit 91.4%** (vision features cached) but
+**`enable_prefix_caching=False`, prefix hit 0.0%** — every step re-prefills the
+entire conversation. vLLM defaults APC on in V1; it auto-disabled here, almost
+certainly because Qwen3.8 is a hybrid Gated-DeltaNet architecture (the log's
+splitting ops include `qwen_gdn_attention_core`) whose linear-attention state
+was not prefix-cacheable in vLLM 0.25.1.
+
+**Levers, ranked by seconds-per-step:**
+1. **Thinking tail** (p90 17s): `reasoning_effort medium` instead of the
+   template's default xhigh — already queued as the post-campaign A/B; this is
+   its speed half.
+2. **VM side 8s**, of which sleep 3.0 is deliberate (upstream-documented; the
+   authors use 5) — not an error, but the single biggest fixed cost. sleep 1
+   would cut ~12% of median cycle at fidelity risk.
+3. **Prefill ~3s**: prefix caching would eliminate most of it; check whether a
+   newer vLLM supports APC for GDN hybrids before the next campaign.
+4. **image_max 20 → 5** halves prefill + upload AND is the quality experiment
+   OpenWebRL's 1-image 4B already supports. Speed and science point the same way.
+5. num_envs 3 → 4 (+33%) stays blocked by the 22 GB WSL ceiling (§6.5 decision).
+
 ### The DONE revert is doing the right thing, for a reason nobody predicted
 
 The `actions.py` fallback was reverted to upstream's `DONE` earlier the same day.
