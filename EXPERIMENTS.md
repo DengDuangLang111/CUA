@@ -1230,6 +1230,26 @@ The user's three challenges were all correct; the final verified picture:
    campaign is `git -C <exec-dir> log -1` — in the directory the code
    actually runs from.
 
+### 11d. v11q2-500: the rerun on the right lineage (launched 2026-08-15)
+
+Aligned line-for-line with the v500/Opus invocation, from the same canonical
+runbook section, one knob changed:
+
+| | v500 (Opus) | v11q2 (Qwen) |
+|---|---|---|
+| code | v10/v11 lineage | **v11.1 (= main), `code=` on the args line** |
+| walk | on-keep quota ledger, 4-axis grid (5×13×5×4) | same |
+| shape | `--n 5 --batches 29 --shard i/4`, seed 20260812 | same |
+| avoid | CUA-Gym 10,910 + sibling corpora | same (v8.4-era 325 parked to `_x/` so it is NOT avoided — comparability) |
+| regime | thinking off + forced tool call | same (adapter default) |
+| model | claude-opus-5 | **qwen3.8-max** |
+| logging | buffered | `python -u` (log-only difference) |
+
+The v8.4-era 325 is demoted to register-analysis material. Standard-process
+consolidation shipped with the launch: the v11.1 RUNBOOK now carries the
+500-scale shape, the generator-swap knob and the code-hash line (`190009be`);
+`main` fast-forwarded again to include it.
+
 ## 12. Open
 
 - **The main rollout is mid-flight** (13 of 203 at this writing); claims about
