@@ -2323,16 +2323,21 @@ Question forced by our launch preflight: the student's template strips historica
 `<think>` unconditionally (measured; no `preserve_thinking` var exists in its
 jinja), so training must pick a side. What do Qwen-CUA and OpenWebRL do?
 
-**OpenWebRL: lean/lean.** Verified behaviorally against its actual base model
-(the OpenWebRL-4B-SFT copy on Tillicum, Qwen3-VL-Thinking lineage): three
-history assistant turns carrying `<think>THINKMARKn</think>` in content, rendered
-via `apply_chat_template` under default / `enable_thinking=False` / `=True` —
-**history think stripped in all three; visible text kept**. Their SFT Stage 2
-renders through this same `apply_chat_template` (their stated byte-consistency
-doctrine), and their runtime uses it too — so their model trains AND infers with
-history reasoning stripped. (Their rollout code carries `<think>` in the message
-objects with mode `full`; the template is what leans it at render, both sides
-equally.) Their 4B at 67% Online-Mind2Web is a lean/lean data point.
+**OpenWebRL: lean SFT warm start, rich RL and rich eval — CORRECTED
+2026-08-15** (an earlier revision of this section wrongly called them
+lean/lean throughout). The template does strip history think — verified
+behaviorally on their base-model lineage, all of default/`enable_thinking`
+False/True — **but their rollout code defeats the template**:
+`_restore_assistant_history_blocks_in_prompt` (`generate_browser.py:431`,
+called at `:1775`) regex-replaces every templated assistant block with the
+ORIGINAL content after rendering, with the comment "Some Qwen chat templates
+discard visible `<think>...</think>` content from prior assistant turns...we
+want the full historical assistant reasoning to remain visible". Their eval
+(`run_evaluate.py`) imports the same code path. Their SFT Stage 2 has NO such
+restore — it renders through the raw template, so the warm start trains on
+lean history contexts. Net: **67% = lean-SFT warm start → rich RL → rich
+eval**, and their −14.6 to −23.7 ablation for removing historical reasoning is
+coherent: measured on a rich-trained model, at eval.
 
 **Qwen-CUA: rich at inference (direct evidence), rich at training (inferred).**
 Their own demo client re-embeds streamed reasoning into content exactly like our
@@ -2354,16 +2359,14 @@ through the student's stripping template with no switch to prevent it —
 valpanel args confirm `preserve_thinking: False` and the jinja has no such
 var anyway). `more3np` (false) was accidentally the only consistent arm.
 
-| | train keeps history think | infer keeps it | consistent? |
-|---|---|---|---|
-| Qwen-CUA | yes | yes (template supports) | ✅ rich/rich |
-| OpenWebRL | no (template strips) | no | ✅ lean/lean |
-| our e1/e3/more | yes | **no** (template strips, no switch) | ❌ |
-| **arm A decision** | **no (`preserve_thinking false`)** | no | ✅ lean/lean |
+| | SFT-stage history think | RL-stage | eval/infer | notes |
+|---|---|---|---|---|
+| Qwen-CUA | inferred rich | rich (iterative RL on the same conversation) | rich (direct code evidence) | template supports it natively |
+| OpenWebRL | **lean** (raw template render) | **rich** (post-template restore) | **rich** (same restore path) | built machinery to defeat the template |
+| our e1/e3/more | rich | — | lean (template strips, no switch) | the cell nobody publishes |
+| more3np | lean | — | lean | accidentally consistent |
 
-Arm A therefore trains `preserve_thinking false`: the student's stock template
-forces lean at inference, so lean at training is the only consistency-preserving
-choice without a custom serving template — and it is the exact cell OpenWebRL's
-4B validated. The label turn's thinking is untouched by this flag: the model
-still learns to reason before every action; it just does not see its past
-reasoning, matching its deployment reality.
+The arm-A flag is an open user decision; the three configurations and their
+verified properties are laid out above. Constant across all of them: the label
+turn's thinking is untouched — the model learns to produce reasoning either
+way; the flag only decides whether it sees its own past reasoning.
