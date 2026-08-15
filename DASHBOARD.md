@@ -134,6 +134,34 @@ near-copies of one screen, and the SFT panel is full of them. Measured on e3:
 **352 files / 77 MB → 148 files / 4.5 MB.** Dedup must run *after* `traj_html`
 writes the viewer, or the substitution has nothing to rewrite.
 
+## 3.5 The runs table is the contract (2026-08-15)
+
+**Rule: every rollout run appears in the "All rollout runs" table, and every row
+has a trajectory cell — a step-player link once published, 没跑 until then.**
+No run is mentioned anywhere on the page without a row here.
+
+This is enforced by construction, not by discipline. The daemon discovers runs
+by globbing `results_generated/*/*/args.json` — the runner writes `args.json`
+into every result dir, so **a new campaign needs zero dashboard wiring**: it
+appears in the table on the next cycle (scored counts, mean, steps/temp/sleep/
+history read from its own `args.json` + `MODEL_BOUNDARY.json`), and its
+trajectory viewers auto-publish once it has ≥10 results with activity in the
+last 3 days. Old finished runs stay listed with 没跑 in the trajectory column
+rather than silently vanishing.
+
+Trajectory viewers live at `dashboard/traj/<model-dir>/<run-dir>/` — the slug
+is the on-disk path, so it never needs choosing. (`traj/v11-500/` is the one
+legacy flat path from before this scheme; its links are kept alive.)
+
+### Why the cycle used to take ~70 minutes, and must not again
+
+The PIL compression step rewrites staged screenshots, so a plain `rsync -a`
+from the result dir saw every compressed file as changed, re-copied the
+original, and re-compressed it — every screenshot, every cycle, ~26 minutes of
+no-op work. Screenshots are immutable once the runner writes them: they sync
+with `--ignore-existing`, and only the small mutable files (`traj.jsonl`,
+`result.txt`) sync normally. If staging ever gets slow again, check this first.
+
 ## 4 Hard-won rules
 
 - **Push to `main`.** Vercel's production branch is `main`; pushes to any
