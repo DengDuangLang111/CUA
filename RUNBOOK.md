@@ -288,6 +288,53 @@ proves it: **7,906 steps, 0 containing `<think>`** — the responses start with
 two blank lines where the discarded reasoning used to be, and that campaign's
 45.2% was scored with no thinking whatsoever.
 
+**"History = 3" and "history = 20" are not the same axis.** This caused real
+confusion, so, verified in the code 2026-08-14:
+
+- The paper's **3** is *one* number covering *both* modalities: three
+  `(observation, action)` pairs — three screenshots **and** three actions, capped
+  together. `run.py`'s `max_trajectory_length`.
+- The Qwen runner **splits that into two independent axes**: `history_n` for
+  TEXT and `image_max` (+ `fold_size`) for IMAGES. Text is kept in full; only
+  images are capped. There is no `max_trajectory_length` on this line at all.
+
+**Why split them: images cost ~5× more than text even at 1/5 the count.**
+`process_image` (`mm_agents/qwen/images.py:19`) sets
+`max_pixels = 16*16*4*12800 = 13,107,200`, which a 1920×1080 screenshot
+(2,073,600 px) never reaches — so no downscale, and at 28×28 px per visual token
+one screenshot is **≈2,650 tokens**. 20 of them ≈ **53,000 tokens**. A response
+is 418 chars at the median (measured on the authors' qwen3.6-think run) ≈ 110
+tokens, so 100 turns of text ≈ **11,000 tokens**. Capping images and keeping all
+text is the cheap trade, and it is why the two knobs exist.
+
+**A long history is not a Qwen peculiarity.** `image_max`/`fold_size` are unique
+to this runner, but keeping far more than 3 turns is common upstream:
+`muse_spark` 100, `gui_owl15` 50, `mobileagent_v3` 50, `owl` 15, `m3` 10,
+`os_symphony` 8. The paper's 3 is a 2024 GPT-4o-era baseline, not a standard.
+
+**Thinking DOES go back into the context — verbatim, for the whole episode.**
+The chain, all verified in code:
+
+1. `client.py:51` — `merge_reasoning_content` builds the stored response as
+   `<think>\n{reasoning}\n</think>\n\n{content}` whenever the server returns a
+   reasoning field.
+2. `main.py:265` — `QwenAgent._response_transform` is `ensure_empty_think_prefix`.
+3. `history.py:92` — that function **returns the text unchanged if it already
+   matches `^\s*<think>.*?</think>`**, and otherwise prepends an *empty*
+   `<think>\n\n</think>`.
+
+So a response that carries reasoning is replayed into every later turn with its
+reasoning intact, until `history_n` drops it. **With our `history_n 100` and
+`max_steps 50`, nothing is ever dropped: the model sees the full reasoning of
+every step it has taken.** The authors' runs are the same by construction —
+`history_n` equals `max_steps` in all of theirs. The paper's 3-turn baseline had
+no reasoning to carry at all (GPT-4o, 2024).
+
+This is the concrete form of the context-compression question: the argument for
+an OpenWebRL-style `hide_thinking` is that a context which is almost entirely
+past reasoning invites the model to imitate reasoning rather than act. Nothing
+here settles that — it just establishes that the reasoning really is all there.
+
 **The authors' own Qwen runs, verbatim.** Their trajectory release ships the
 `args.json` each run wrote. Pulled 2026-08-14 by HTTP range request (no archive
 downloaded in full — `sft/tools/zpeek.py`); copies in
