@@ -288,6 +288,73 @@ proves it: **7,906 steps, 0 containing `<think>`** — the responses start with
 two blank lines where the discarded reasoning used to be, and that campaign's
 45.2% was scored with no thinking whatsoever.
 
+**Measured against the live Qwen3.8 server, 2026-08-14** — `POST /tokenize`
+renders the real chat template, so this is what the model actually receives, not
+an inference from code. Three assistant turns, each carrying a distinct marker
+inside `<think>`:
+
+| chat_template_kwargs | tokens | thinking surviving |
+|---|---:|---|
+| *(none)* | 140 | turns 1, 2, 3 |
+| `enable_thinking: true` | 140 | turns 1, 2, 3 |
+| `+ preserve_thinking: true` | 140 | turns 1, 2, 3 |
+
+**Qwen3.8's template does not strip historical reasoning, and `preserve_thinking`
+changes nothing — all three render byte-identically.** The whole episode's
+reasoning is in context regardless of the flag. (Tested on 3.8 only; 3.6 serves a
+different template and was not re-tested.) That retires `--preserve_thinking` as
+a variable for this model — the arms that differed on it differed on nothing.
+
+Two things the render exposed that no one was looking for:
+
+**① The template prepends an empty `<think>\n\n</think>` to every historical
+assistant turn, unconditionally.** With a plain answer the model sees
+`<think>\n\n</think>\n\nPLAINANSWER`; with our real responses — which already
+open with `<think>` — it sees **two** blocks back to back:
+
+```
+<|im_start|>assistant
+<think>
+
+</think>
+
+<think>
+...the real reasoning...
+</think>
+
+...the visible content...<|im_end|>
+```
+
+This also makes our `ensure_empty_think_prefix` (`history.py:92`) dead weight on
+3.8: the template does the same job, and on responses that already carry
+reasoning our function is a no-op while the template still prepends.
+
+**② The template injects a reasoning-effort preamble ahead of our system prompt,
+and its default is the highest setting.** With no kwargs at all:
+
+> `Reasoning effort is set to xhigh. Please think carefully through the task,
+> validate key assumptions, consider plausible alternatives, and prioritize
+> correctness, consistency, and clarity in the final answer.`
+
+then a blank line, then our own system prompt. Passing
+`reasoning_effort: "medium"` is the only setting that emits **no line at all**
+(18 tokens vs 44 for `low`); `high`/`xhigh` were rejected with a 400 through
+`chat_template_kwargs`, so the route to change it is not yet established.
+
+**The live campaign is running on `xhigh`,** since `_build_payload` sends only
+`{"enable_thinking": true}`. What that costs, measured over both campaigns'
+`traj.jsonl` on the same 100-task corpus:
+
+| | steps | response chars med / p90 | `<think>` present | think chars med / p90 |
+|---|---:|---|---:|---|
+| Qwen3.6 | 3770 | 605 / 1056 | 100% | 357 / **755** |
+| Qwen3.8 (live) | 1399 | 872 / **9688** | 100% | 379 / **6495** |
+
+Medians are close; the **p90 tail is ~9× longer**. That is the xhigh preamble
+showing up as occasional very long deliberation. It is not obviously bad — 3.8 is
+doubling 3.6's score on these tasks — but it is a setting nobody chose, and it
+belongs in any account of why 3.8's steps are slower.
+
 **"History = 3" and "history = 20" are not the same axis.** This caused real
 confusion, so, verified in the code 2026-08-14:
 
