@@ -1,6 +1,6 @@
 """Generate self-contained OSWorld tasks with Claude, in one pass.
 
-    python -m ostg.taskgen.gen --n 5 --batches 4 --thinking --out out/runs/v8/specs.jsonl
+    python -m ostg.gen --n 5 --batches 4 --thinking --out out/runs/v8/specs.jsonl
 
 Each batch: draw taxonomy cells, prompt the model, append specs.jsonl, and
 write runnable task JSON (examples/<domain>/<id>.json + manifest.json) next to
@@ -10,7 +10,7 @@ The task JSON leans on three facts checked against the OSWorld source:
 the expected getter reads `rules` (plural); vm_command_line returns raw stdout
 (PASS arrives as "PASS\n", which check_include_exclude tolerates and
 exact_match does not); and setup exit codes are never checked, so a broken
-setup is silent -- ostg.taskgen.control exists to catch that before rollouts.
+setup is silent -- ostg.control exists to catch that before rollouts.
 """
 import argparse
 import collections
@@ -25,9 +25,7 @@ import urllib.request
 import uuid
 from pathlib import Path
 
-from ostg.llm import call_and_extract, load_env
-from ostg.taskgen import scan
-from ostg.taskgen import taxonomy as T
+from ostg import taxonomy as T
 
 HERE = Path(__file__).resolve().parent
 PROMPTS = HERE / "prompts"
@@ -173,14 +171,9 @@ def user_prompt(n, cells, external=None, own=None, per_app=12, own_per_app=8):
     for i, c in enumerate(cells):
         lines.append(
             "  spec %d: intent=%s, domain=%s, difficulty=%d, apps=%d, artifact=%s, "
-            "source=%s, primary=%s, grade=%s, ambiguity=%d, voice=%s, warm=%s, "
-            "limit=%dch(~%dw)"
+            "source=%s, primary=%s, grade=%s"
             % (i + 1, c["intent"], c["domain"], c["difficulty"], c["app_count"],
-               c["artifact"], c["source"], c["primary"], c.get("grade", "probe"),
-               c["ambiguity"], c["voice"],
-               "yes" if c.get("warm") else "no",
-               {1: 150, 2: 150, 3: 250}.get(c["difficulty"], 300),
-               {1: 150, 2: 150, 3: 250}.get(c["difficulty"], 300) // 6))
+               c["artifact"], c["source"], c["primary"], c.get("grade", "probe")))
 
     ints = sorted({c["intent"] for c in cells})
     doms = sorted({c["domain"] for c in cells})
@@ -195,19 +188,7 @@ def user_prompt(n, cells, external=None, own=None, per_app=12, own_per_app=8):
              "explicit requirements it imposes. It is not a hint -- the spec must "
              "match the level it was given, and apps= says how many applications "
              "to put in the apps list.\n"
-           + "\n".join("  %d = %s" % (c, T.DIFFICULTY[c][0]) for c in cons)
-           + "\n\nambiguity is how explicitly the instruction may point at its "
-             "objects. The check stays exact at every level -- only the wording "
-             "loosens (see <ambiguity>):\n"
-           + "\n".join("  %d = %s" % (a, T.AMBIGUITY[a])
-                       for a in sorted({c["ambiguity"] for c in cells}))
-           + "\n\nvoice is the register the instruction is written in:\n"
-           + "\n".join("  %s = %s" % (v, T.VOICES[v])
-                       for v in sorted({c["voice"] for c in cells}))
-           + "\n\nwarm says whether the workspace starts already open (see "
-             "<warm_start>): warm=yes tasks SET open_path and may assume the "
-             "document/app is on screen; warm=no tasks set NO open_path and "
-             "their instruction must not presume anything is open.")
+           + "\n".join("  %d = %s" % (c, T.DIFFICULTY[c][0]) for c in cons))
 
     def brief_for(app):
         return " ".join(sorted({"%s %s %s %s" % (c["intent"], c["domain"],
@@ -273,6 +254,277 @@ def tool_definition(name=TOOL):
             "input_schema": SCHEMA}
 
 
+def load_env(path=".env"):
+    p = Path(path)
+    if not p.is_file():
+        return
+    for line in p.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
+def _protocol(cfg):
+    """Which wire protocol to speak. 'auto' routes claude* to the Anthropic
+    endpoint and everything else (qwen*, gpt*, ...) to the OpenAI one --
+    the gateway's own supported_endpoint_types work exactly this way."""
+    p = (cfg.get("protocol") or "auto").lower()
+    if p != "auto":
+        return p
+    return "anthropic" if cfg["model"].lower().startswith("claude") else "openai"
+
+
+def call(messages, system_blocks, cfg, timeout=900, tool=None):
+    tool = tool or tool_definition()
+    if _protocol(cfg) == "openai":
+        return _call_openai(messages, system_blocks, cfg, timeout=timeout, tool=tool)
+    payload = {
+        "model": cfg["model"],
+        "max_tokens": cfg["max_tokens"],
+        "system": system_blocks,
+        "messages": messages,
+        "tools": [tool],
+        "tool_choice": {"type": "tool", "name": tool["name"]},
+    }
+    # Thinking and a forced tool choice are mutually exclusive; auto makes the
+    # tool call probable rather than guaranteed, hence the retry in the caller.
+    if cfg.get("thinking"):
+        payload["thinking"] = {"type": "adaptive"}
+        payload["tool_choice"] = {"type": "auto"}
+    else:
+        # Explicit, not omitted: Opus 5 thinks by default, and the forced tool
+        # choice above demands thinking off.
+        payload["thinking"] = {"type": "disabled"}
+    # Streaming is about the gateway: a batch sends nothing for minutes, nginx
+    # hits proxy_read_timeout and answers 504 before Anthropic is ever reached.
+    # An event stream keeps bytes moving, so the timeout never arms.
+    if cfg.get("stream"):
+        payload["stream"] = True
+    req = urllib.request.Request(
+        cfg["base"] + "/v1/messages",
+        data=json.dumps(payload).encode(),
+        headers={"content-type": "application/json",
+                 "anthropic-version": "2023-06-01",
+                 "x-api-key": cfg["key"]},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            if payload.get("stream"):
+                return _assemble(r)
+            return json.loads(r.read().decode("utf-8", "replace"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "replace")[:600]
+        err = RuntimeError("HTTP %d: %s" % (e.code, body))
+        err.transient = e.code == 429 or 500 <= e.code < 600
+        raise err from None
+    except (urllib.error.URLError, socket.timeout, TimeoutError) as e:
+        # A timeout or a dropped connection must not kill the remaining batches.
+        err = RuntimeError("network: %s" % e)
+        err.transient = True
+        raise err from None
+
+
+def _to_openai_messages(messages, system_blocks):
+    """Anthropic-form messages/system -> OpenAI chat messages. Content blocks
+    become plain strings; cache_control has no OpenAI equivalent and is
+    dropped."""
+    def text_of(content):
+        if isinstance(content, str):
+            return content
+        return "\n".join(p.get("text", "") for p in content
+                         if isinstance(p, dict) and p.get("type") == "text")
+    out = []
+    sys_text = text_of(system_blocks) if isinstance(system_blocks, list) else str(system_blocks)
+    if sys_text.strip():
+        out.append({"role": "system", "content": sys_text})
+    for m in messages:
+        out.append({"role": m["role"], "content": text_of(m.get("content", ""))})
+    return out
+
+
+def _from_openai_response(data):
+    """OpenAI chat response -> the Anthropic shape extract() expects."""
+    msg = (data.get("choices") or [{}])[0].get("message", {})
+    finish = (data.get("choices") or [{}])[0].get("finish_reason")
+    content = []
+    rc = msg.get("reasoning_content") or msg.get("reasoning")
+    if rc:
+        content.append({"type": "thinking", "thinking": rc})
+    if msg.get("content"):
+        content.append({"type": "text", "text": msg["content"]})
+    for tc in msg.get("tool_calls") or []:
+        fn = tc.get("function", {})
+        try:
+            args = json.loads(fn.get("arguments") or "{}")
+        except ValueError:
+            continue  # malformed arguments: extract() raises, retry covers it
+        content.append({"type": "tool_use", "name": fn.get("name"), "input": args})
+    usage = data.get("usage") or {}
+    return {"content": content,
+            "stop_reason": {"tool_calls": "tool_use", "stop": "end_turn"}.get(finish, finish),
+            "usage": {"input_tokens": usage.get("prompt_tokens"),
+                      "output_tokens": usage.get("completion_tokens")}}
+
+
+def _call_openai(messages, system_blocks, cfg, timeout=900, tool=None):
+    """OpenAI-protocol twin of call(): /v1/chat/completions with function
+    calling, response translated back to the Anthropic shape so every caller
+    downstream is oblivious. No thinking field -- that knob is Anthropic-only;
+    non-claude models keep their server-side defaults."""
+    payload = {
+        "model": cfg["model"],
+        "max_tokens": cfg["max_tokens"],
+        "messages": _to_openai_messages(messages, system_blocks),
+        "tools": [{"type": "function",
+                   "function": {"name": tool["name"],
+                                "description": tool.get("description", ""),
+                                "parameters": tool["input_schema"]}}],
+        # Mirror of the anthropic branch's regime, verified against the
+        # gateway 2026-08-15: default = thinking OFF + forced tool_choice
+        # (the exact v11 production mechanism, 100% parseable); --thinking =
+        # thinking on + auto (forced is rejected in thinking mode by qwen and
+        # anthropic alike), guarded by the caller's retry loop.
+        "tool_choice": ("auto" if cfg.get("thinking")
+                        else {"type": "function", "function": {"name": tool["name"]}}),
+        "enable_thinking": bool(cfg.get("thinking")),
+    }
+    if cfg.get("stream"):
+        payload["stream"] = True
+    req = urllib.request.Request(
+        cfg["base"] + "/v1/chat/completions",
+        data=json.dumps(payload).encode(),
+        headers={"content-type": "application/json",
+                 "authorization": "Bearer " + cfg["key"]},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            if payload.get("stream"):
+                return _from_openai_response(_assemble_openai(r))
+            return _from_openai_response(json.loads(r.read().decode("utf-8", "replace")))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "replace")[:600]
+        err = RuntimeError("HTTP %d: %s" % (e.code, body))
+        err.transient = e.code == 429 or 500 <= e.code < 600
+        raise err from None
+    except (urllib.error.URLError, socket.timeout, TimeoutError) as e:
+        err = RuntimeError("network: %s" % e)
+        err.transient = True
+        raise err from None
+
+
+def _assemble_openai(response):
+    """OpenAI SSE stream -> one non-streaming-shaped chat response."""
+    msg = {"content": "", "reasoning_content": "", "tool_calls": {}}
+    finish = None
+    usage = {}
+    for raw in response:
+        line = raw.decode("utf-8", "replace").strip()
+        if not line.startswith("data:") or line[5:].strip() == "[DONE]":
+            continue
+        try:
+            ev = json.loads(line[5:].strip())
+        except ValueError:
+            continue
+        if ev.get("usage"):
+            usage = ev["usage"]
+        for ch in ev.get("choices") or []:
+            if ch.get("finish_reason"):
+                finish = ch["finish_reason"]
+            d = ch.get("delta") or {}
+            if d.get("content"):
+                msg["content"] += d["content"]
+            if d.get("reasoning_content"):
+                msg["reasoning_content"] += d["reasoning_content"]
+            for tc in d.get("tool_calls") or []:
+                slot = msg["tool_calls"].setdefault(tc.get("index", 0),
+                        {"function": {"name": "", "arguments": ""}})
+                fn = tc.get("function") or {}
+                if fn.get("name"):
+                    slot["function"]["name"] = fn["name"]
+                if fn.get("arguments"):
+                    slot["function"]["arguments"] += fn["arguments"]
+    return {"choices": [{"message": {
+                "content": msg["content"] or None,
+                "reasoning_content": msg["reasoning_content"] or None,
+                "tool_calls": [msg["tool_calls"][i] for i in sorted(msg["tool_calls"])] or None},
+             "finish_reason": finish}],
+            "usage": usage}
+
+
+def _assemble(response):
+    """Rebuild the non-streaming response shape from an SSE event stream, so
+    callers cannot tell the difference. Handles the three block types this
+    generator can receive: text, thinking, tool_use (partial_json fragments)."""
+    blocks, out = {}, {"content": [], "usage": {}, "stop_reason": None}
+    for raw in response:
+        line = raw.decode("utf-8", "replace").strip()
+        if not line.startswith("data:"):
+            continue
+        try:
+            ev = json.loads(line[5:].strip())
+        except ValueError:
+            continue
+        kind = ev.get("type")
+        if kind == "message_start":
+            out["usage"] = dict(ev.get("message", {}).get("usage") or {})
+        elif kind == "content_block_start":
+            blocks[ev["index"]] = dict(ev["content_block"])
+            blocks[ev["index"]]["_json"] = ""
+        elif kind == "content_block_delta":
+            b = blocks.setdefault(ev["index"], {"type": "text", "text": "", "_json": ""})
+            d = ev.get("delta", {})
+            if d.get("type") == "text_delta":
+                b["text"] = b.get("text", "") + d.get("text", "")
+            elif d.get("type") == "thinking_delta":
+                b["thinking"] = b.get("thinking", "") + d.get("thinking", "")
+            elif d.get("type") == "input_json_delta":
+                b["_json"] += d.get("partial_json", "")
+        elif kind == "message_delta":
+            out["stop_reason"] = (ev.get("delta") or {}).get("stop_reason")
+            out["usage"].update(ev.get("usage") or {})
+    for i in sorted(blocks):
+        b = blocks[i]
+        frag = b.pop("_json", "")
+        if b.get("type") == "tool_use":
+            try:
+                b["input"] = json.loads(frag) if frag else b.get("input") or {}
+            except ValueError:
+                continue  # truncated tool call: extract() raises, the retry covers it
+        out["content"].append(b)
+    return out
+
+
+def extract(resp, name=TOOL, field="specs"):
+    for b in resp.get("content", []):
+        if b.get("type") == "tool_use" and b.get("name") == name:
+            inp = b.get("input", {})
+            return inp.get(field, []) if field else inp
+    raise RuntimeError("no tool_use block (stop_reason=%s)" % resp.get("stop_reason"))
+
+
+def call_and_extract(messages, system_blocks, cfg, tries=3, tool=None, field="specs"):
+    for attempt in range(1, tries + 1):
+        try:
+            resp = call(messages, system_blocks, cfg, tool=tool)
+        except RuntimeError as e:
+            if attempt == tries or not getattr(e, "transient", False):
+                raise
+            print("  retry %d/%d after %s" % (attempt, tries - 1, str(e)[:60]))
+            continue
+        thought = sum(1 for b in resp.get("content", []) if b.get("type") == "thinking")
+        try:
+            specs = extract(resp, name=(tool or tool_definition())["name"], field=field)
+        except RuntimeError as e:
+            if attempt == tries:
+                raise
+            print("  retry %d/%d: %s" % (attempt, tries - 1, e))
+            continue
+        return specs, resp, thought
+    raise AssertionError("unreachable")
 
 
 # The wrapper exists so an uncaught exception reaches stdout as FAIL instead of
@@ -329,37 +581,17 @@ def task_json(spec, batch):
     # counts only HTTP failures toward the cap).
     config = []
     if (spec.get("setup") or "").strip():
-        # ostg.taskgen.prebuild has already rewritten any soffice-carrying setup into
-        # a base64 blob before this point (ship stage 0); a leftover soffice
-        # here means prebuild was skipped, which the visibility check and the
-        # controls will surface. No in-VM soffice = no compositor poison.
         config.append({"type": "execute",
                        "parameters": {"command": spec["setup"], "shell": True}})
-    prim = apps[0] if apps else ""
     if spec.get("open_path") and grade != "browser":
-        # Warm start, matched to the app the way the official corpus does it.
-        # xdg-open hands html to a browser and 500s; gimp/vlc/code cold starts
-        # are flaky through /setup/open_file -- launch those directly.
         p = spec["open_path"]
-        low = p.lower()
-        if low.startswith(("chrome://", "http://", "https://")):
-            # xdg-open cannot resolve a chrome:// scheme (the open endpoint
-            # 404s); the browser has to be handed the URL directly.
-            config.append({"type": "launch", "parameters": {
-                "command": ["google-chrome", p]}})
-        elif low.endswith((".html", ".htm")):
+        if p.lower().endswith((".html", ".htm")):
+            # xdg-open on an html file 500s in the VM (browser handoff); give
+            # the intended start state -- the page open in Chrome -- via launch.
             config.append({"type": "launch", "parameters": {
                 "command": ["google-chrome", "file://" + p]}})
-        elif prim == "gimp" or low.endswith((".xcf", ".png", ".jpg", ".jpeg")):
-            config.append({"type": "launch", "parameters": {"command": ["gimp", p]}})
-        elif prim == "vscode":
-            config.append({"type": "launch", "parameters": {"command": ["code", p]}})
-        elif prim == "vlc" or low.endswith((".mp4", ".mp3", ".mkv", ".avi")):
-            config.append({"type": "launch", "parameters": {"command": ["vlc", p]}})
         else:
             config.append({"type": "open", "parameters": {"path": p}})
-    elif spec.get("warm") and grade != "browser" and prim == "thunderbird":
-        config.append({"type": "launch", "parameters": {"command": ["thunderbird"]}})
 
     if grade == "browser":
         # The official chrome template: debug port for chrome_open_tabs, socat
@@ -430,7 +662,6 @@ def task_json(spec, batch):
         "ostg": {"slug": spec["slug"], "batch": batch, "grade": grade,
                  "intent": spec.get("intent"), "domain": spec.get("domain"),
                  "difficulty": spec.get("difficulty"),
-                 "ambiguity": spec.get("ambiguity"), "voice": spec.get("voice"),
                  "app_count": spec.get("app_count")},
     }
 
@@ -479,106 +710,10 @@ def _setup_compiles(setup):
     return None
 
 
-REPAIR_TOOL = {
-    "name": "repair_instruction",
-    "description": "Return the rewritten instruction.",
-    "input_schema": {"type": "object",
-                     "properties": {"instruction": {"type": "string"}},
-                     "required": ["instruction"]},
-}
-
-_REPAIRABLE = ("filename in", "absolute path in", "instruction over",
-               "terse/sloppy instruction over",
-               "repairable:")   # anything ostg.taskgen.scan marks scan.REPAIR
-
-
-def repair_instruction(spec, why, cfg):
-    """One cheap rewrite instead of discarding the whole spec."""
-    cap = {1: 150, 2: 150, 3: 250}.get(spec.get("difficulty") or 3, 300)
-    ctx = json.dumps({k: spec.get(k) for k in
-                      ("setup", "probe", "table_target", "table_rules",
-                       "start_url", "url_patterns", "open_path")},
-                     ensure_ascii=False)[:1400]
-    user = ("This task instruction was rejected: %s\n\n"
-            "instruction: %s\n\n"
-            "environment (unchangeable, for consistency): %s\n\n"
-            "Rewrite ONLY the instruction. Same task, same meaning, consistent "
-            "with the environment. ambiguity=%s (at levels 2-4 refer to objects "
-            "by what they are -- never a filename or /home/user path). voice=%s. "
-            "At most %d characters.\n"
-            "If the rejection says the probe pins an output name: state how the "
-            "output is named as a RULE the agent can follow -- 'named after the "
-            "log', 'same base name as the sheet', 'called <the exact word the "
-            "probe expects>' when that word is a plain noun -- so the probe's "
-            "expectation is reachable without writing a path."
-            % (why, spec.get("instruction"), ctx,
-               spec.get("ambiguity"), spec.get("voice"), cap))
-    try:
-        res, _, _ = call_and_extract(
-            [{"role": "user", "content": user}],
-            [{"type": "text", "text": "You repair task instructions. "
-                                      "Answer only through the tool."}],
-            cfg, tries=2, tool=REPAIR_TOOL, field=None)
-        return (res.get("instruction") or "").strip() or None
-    except RuntimeError:
-        return None
-
-
-_STRAY_TAG = re.compile(r"\s*</(?:setup|probe|instruction|spec|json|task)>\s*$")
-
-
-def sanitize(spec):
-    """Strip the prompt's own closing tag when the model leaks it into a value.
-
-    The tool schema is not enforced, so a spec occasionally arrives with the
-    surrounding XML tag glued to the end of a field ('...)"</setup>'). In a
-    setup that is a shell syntax error -- the starting state is never built,
-    and nothing downstream notices: the task simply scores 0 for reasons that
-    look like a weak agent (5 such specs in the 472-run, one of which no other
-    check could have caught).
-    """
-    for field in ("setup", "probe", "instruction"):
-        v = spec.get(field)
-        if isinstance(v, str) and _STRAY_TAG.search(v):
-            spec[field] = _STRAY_TAG.sub("", v)
-
-
 def gate(spec):
-    amb = spec.get("ambiguity") or 1
-    _instr = spec.get("instruction") or ""
-    if amb >= 2 and "/home/user" in _instr:
-        return "absolute path in an ambiguity>=2 instruction"
-    if amb >= 2 and spec.get("grade") != "browser" and re.search(
-            r"\b[\w-]+\.(xlsx|ods|odt|odp|docx|pptx|csv|txt|pdf|py|md|json|html|htm|png|jpg|mp4)\b",
-            _instr):
-        return "filename in an ambiguity>=2 instruction"
-    if amb == 3 and spec.get("grade") != "browser" and not (spec.get("open_path") or "").strip():
-        return "ambiguity=3 without open_path"
-    prim0 = (spec.get("apps") or [""])[0]
-    if spec.get("grade") != "browser":
-        if spec.get("warm") and prim0 not in ("files", "terminal", "thunderbird") \
-                and not (spec.get("open_path") or "").strip():
-            return "warm task without open_path"
-        if not spec.get("warm") and (spec.get("open_path") or "").strip():
-            return "cold task with open_path"
-        if not spec.get("warm") and re.search(r"\b(is|are) (already )?open\b", _instr):
-            return "cold task whose instruction presumes an open workspace"
-    if spec.get("voice") in ("terse", "sloppy") and len(_instr.split()) > 40:
-        return "terse/sloppy instruction over 40 words"
-    _cap = {1: 150, 2: 150, 3: 250}.get(spec.get("difficulty") or 3, 300)
-    if len(_instr) > _cap:
-        return "instruction over %d chars for d%s" % (_cap, spec.get("difficulty"))
     """Why this spec cannot become a task, or None. Strict on purpose: a bad
     field that slips through either crashes evaluate() (no result.txt) or
     ships a task that can never score."""
-    # Grade-agnostic defect classes, before any grade-specific early return --
-    # browser tasks return early below, and used to escape the scan entirely.
-    for _cls, _sev, _why in scan.scan_spec(spec):
-        if _sev == scan.REPAIR:
-            return "repairable: %s -- %s" % (_cls, _why)
-        if _sev == scan.BLOCK:
-            return "%s -- %s" % (_cls, _why)
-
     grade = spec.get("grade") or "probe"
 
     if grade == "browser":
@@ -599,25 +734,6 @@ def gate(spec):
 
     if not (spec.get("setup") or "").strip():
         return "no setup"
-    for _f in ("setup", "probe"):
-        if re.search(r"</(setup|probe|instruction|spec|json|task)>",
-                     spec.get(_f) or ""):
-            return "leaked prompt tag inside %s (sanitize did not catch it)" % _f
-
-    # The ambiguity gate forbids naming files in the instruction, and the probe
-    # must still decide alone -- so the model resolves the squeeze by inventing
-    # a name in the probe that the agent was never told. The task then cannot be
-    # won by anyone who named their output anything else. Reuse ship's tuned
-    # predicate (one implementation, two call sites) and REPAIR it here: the
-    # rewrite adds a naming rule to the instruction, which keeps the ambiguity
-    # level (a rule is a description, not a path) and restores winnability.
-    if re.search(r"--convert-to'?\s*,?\s*'?(odp|pptx|ppt)\b(?!:)(?!')?", spec["setup"]) and \
-       not re.search(r"--convert-to'?\s*,?\s*'?(odp|pptx|ppt):", spec["setup"]):
-        # BARE `--convert-to odp` fails everywhere: txt loads into Writer,
-        # which has no presentation export (v11 control caught 7). The
-        # filter-qualified form `odp:impress8` DOES work (2 control-passed
-        # tasks prove it) and is allowed; prebuilt binaries remain preferred.
-        return "setup converts to a presentation format without an explicit filter (bare odp fails; use odp:impress8 or a prebuilt binary)"
     why = _setup_compiles(spec["setup"])
     if why:
         return why
@@ -668,6 +784,8 @@ def main():
                     help="batch name for task ids; default: the --out directory name")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--model", default=None)
+    ap.add_argument("--protocol", default=None, choices=["auto", "anthropic", "openai"],
+                    help="wire protocol; auto = claude* -> anthropic, else openai")
     ap.add_argument("--env", default=".env")
     ap.add_argument("--max-tokens", type=int, default=48000)
     ap.add_argument("--apps", default=None, help="comma-separated primary-app filter")
@@ -681,11 +799,6 @@ def main():
                          "disjoint coordinates; cross-process duplication is "
                          "held down by the sibling-run avoid list, re-read "
                          "before every batch")
-    ap.add_argument("--spent-from", action="append", default=[],
-                    help="specs.jsonl file(s) whose kept coordinates seed the "
-                         "quota ledger, so a top-up run corrects axis deficits")
-    ap.add_argument("--start-batch", type=int, default=0,
-                    help="resume: skip the first N batches (seeds stay aligned)")
     ap.add_argument("--refill", type=int, default=2,
                     help="extra batches drawn from fresh cells when a batch is "
                          "lost (no tool call after retries) or its specs are "
@@ -700,21 +813,6 @@ def main():
     ap.add_argument("--avoid-own-per-app", type=int, default=8)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
-
-    # Echo the full invocation and persist it next to the output: the v11
-    # campaign's seed proved unrecoverable from artifacts, which blocks
-    # same-seed reasoning later. Never again.
-    try:
-        from pathlib import Path as _P
-        _outdir = _P(str(args.out)).parent
-        _outdir.mkdir(parents=True, exist_ok=True)
-        (_outdir / "args.json").write_text(
-            json.dumps({k: str(v) for k, v in vars(args).items()}, indent=1),
-            encoding="utf-8")
-    except Exception:
-        pass
-    print("[gen] args: seed=%s n=%s batches=%s shard=%s model=%s out=%s"
-          % (args.seed, args.n, args.batches, args.shard, args.model, args.out))
 
     shard = None
     if args.shard:
@@ -733,6 +831,7 @@ def main():
         "base": os.environ.get("PPAPI_BASE_URL", "https://app-us.ppapi.ai").rstrip("/"),
         "key": os.environ.get("PPAPI_API_KEY", ""),
         "model": args.model or os.environ.get("PPAPI_MODEL", "claude-opus-4-6"),
+        "protocol": args.protocol or os.environ.get("PPAPI_PROTOCOL", "auto"),
         "max_tokens": args.max_tokens,
         "thinking": args.thinking,
         "stream": args.stream,
@@ -796,14 +895,8 @@ def main():
 
     kept = 0
     spent = set()
-    for pf in args.spent_from:
-        for line in Path(pf).read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                r = json.loads(line)
-                spent.add((r.get("intent"), r.get("domain"),
-                           r.get("difficulty"), r.get("ambiguity")))
     target = args.n * args.batches
-    b = args.start_batch
+    b = 0
     with args.out.open("a", encoding="utf-8") as fh:
         # A lost batch (thinking means tool_choice auto, so no tool call is
         # possible even after retries) or a rejected spec leaves the run short;
@@ -815,6 +908,7 @@ def main():
             b += 1
             if not c:
                 break
+            spent.update((x["intent"], x["domain"], x["difficulty"]) for x in c)
             seen, own_by_app = priors_now()  # sibling runs may be writing
             print("\nbatch %d/%d%s" % (b, args.batches, label))
             for x in c:
@@ -829,7 +923,7 @@ def main():
                                             args.avoid_per_app,
                                             args.avoid_own_per_app)}]
             try:
-                specs, resp, thought = call_and_extract(msgs, system_blocks, cfg, tool=tool_definition())
+                specs, resp, thought = call_and_extract(msgs, system_blocks, cfg)
             except RuntimeError as e:
                 print("  failed: %s" % e)
                 continue
@@ -839,9 +933,6 @@ def main():
                      u.get("cache_read_input_tokens"), thought))
             kept_before = kept
             for i, s in enumerate(specs):
-                if not isinstance(s, dict):
-                    print("  skip non-object spec entry %r" % str(s)[:60])
-                    continue
                 slug = s.get("slug") or ""
                 if not slug or slug in seen:
                     print("  skip duplicate/blank slug %r" % slug)
@@ -851,27 +942,13 @@ def main():
                 if i < len(c):
                     for k in ("drawn_from", "intent", "domain", "difficulty",
                               "constraints", "artifact", "source", "app_count",
-                              "grade", "ambiguity", "voice", "warm"):
+                              "grade"):
                         s[k] = c[i][k]
-                sanitize(s)
                 why = gate(s)
-                if why and why.startswith(_REPAIRABLE):
-                    fixed = repair_instruction(s, why, cfg)
-                    if fixed:
-                        s["instruction"] = fixed
-                        why2 = gate(s)
-                        if not why2:
-                            print("  repaired %-30s (%s)" % (slug, why[:40]))
-                        why = why2
                 if why:
                     print("  skip %-34s %s" % (slug, why))
                     continue
                 seen.add(slug)
-                # Quota accounting happens on KEEP: a gate-rejected spec must
-                # return its cell to the pool, or the high-difficulty quotas
-                # bleed out through rejections (measured: d4+d5 at 21% of a
-                # 35% target).
-                spent.add((s["intent"], s["domain"], s["difficulty"], s["ambiguity"]))
                 fh.write(json.dumps(s, ensure_ascii=False) + "\n")
                 fh.flush()
                 domain, tj = task_json(s, batch_name)
