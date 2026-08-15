@@ -2406,3 +2406,26 @@ actual on-screen content throughout; no fabricated state observed. Impurities:
 verbose near-identical narration across mechanical loops (a 4x add-bookmark
 cycle), and wrong-hypothesis chains during confusion that resolve correctly —
 token inefficiency and mixed-value recovery text, not correctness problems.
+
+### The length-quality tension, resolved into a different axis (2026-08-15)
+
+User-raised paradox: short trajectories are accurate but teach no complex
+behaviour; long ones carry complexity but risk low-quality actions. Position
+taken: **length is a proxy; the real axis is per-step conditional correctness.**
+Training is per-step (last-round loss), so a 50-step episode is 50 samples of
+"given this state, what now" — good-long means every step defensible in
+context (the audited 50-step bookmarks run), bad-long means steps of flailing
+(the 43x Ctrl+S era). Our existing metrics (tail runs, state revisitation
+0.02-pass vs 0.56-fail, screen-change-per-action) measure exactly this axis,
+and the 3.8 corpus's long trajectories pass it.
+
+Recipe placement: OpenWebRL's shortest-per-task rule is optimal for short web
+tasks with RL following (complex behaviour comes from RL, not SFT) and should
+NOT be copied here; Qwen-CUA keeps long demonstrations and refreshes them
+iteratively as the model grows. Ours: success gate + pathology filters, no
+length cuts — the mid/long trajectories carrying root-cause fixes and
+verification are the desktop-domain asset. The running A/B is the direct test:
+B adds harder, longer trajectories (3.6's v11-500 successes: median 27 steps);
+sign(B - A) on the frozen eval-50 is this paradox's empirical answer here.
+Future refinements if needed: weight by step-productivity, not length; and
+teacher-regenerates-what-the-student-fails iteration.
