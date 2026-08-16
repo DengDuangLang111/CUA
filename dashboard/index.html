@@ -615,7 +615,9 @@ const VIEWS = [
   sampler.</p>
   <p class="note">The base-4B row is the floor every trained arm must beat; until it lands, treat the
   trained rows as absolute readings without a reference. Protocol and arithmetic (why n=50, SE ≈ 4–6
-  points, the free upgrade to n=100): <code>sft/TRAINING.md</code>, "The Verified eval protocol".</p>`;}},
+  points, the free upgrade to n=100): <code>sft/TRAINING.md</code>, "The Verified eval protocol".</p>`;},
+ traj:{picker:"eval50", n:"50 tasks per arm · every step the model took",
+   note:"Same step player as the rollouts: verbatim thinking, tool call, the pyautogui that ran, and the VM screenshot at each step. Viewers refresh on the daemon's 30-minute cycle while the arm is still filling in."}},
 
 {id:"sft-train", group:"SFT", title:"Training runs", rate:"",
  head:{t:"Training runs", pills:[P.dim("full-parameter · 1 GPU · ms-swift")],
@@ -855,10 +857,22 @@ function render(){
   }
   document.getElementById("content").innerHTML = html;
 }
+/* eval-50 arms whose run has published viewers (publication state lives in
+   status.json; the viewer tree is traj/<modeldir>/<run>/). */
+function ev50TrajArms(){
+  const pub = new Set(((window.LIVE&&window.LIVE.runs)||[])
+                      .filter(r=>r.traj_published).map(r=>r.batch));
+  return (ev50().arms||[]).filter(a=>pub.has(a.run))
+    .map(a=>({label:a.label, passed:a.passed, scored:a.scored,
+              traj:`traj/${a.modeldir}/${a.run}/index.html`}));
+}
 function trajBody(t){
-  if (t.picker){          /* SFT: one published viewer per trained arm */
-    const A = sftArms().filter(a=>a.traj);
-    if (!A.length) return `<p class="note">No arm has published trajectories yet — publishing
+  if (t.picker){          /* one published viewer per arm */
+    const A = t.picker==="eval50" ? ev50TrajArms() : sftArms().filter(a=>a.traj);
+    if (!A.length) return t.picker==="eval50"
+      ? `<p class="note">No eval arm has published trajectories yet — the daemon publishes
+        on its 30-minute cycle as soon as a run has scored results.</p>`
+      : `<p class="note">No arm has published trajectories yet — publishing
       runs once per arm, after its ninth task is scored.</p>`;
     const opts = A.map(a=>`<option value="${a.traj}">${esc(a.label)} — ${a.passed}/${a.scored} solved</option>`).join("");
     return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
