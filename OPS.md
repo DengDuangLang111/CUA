@@ -277,6 +277,14 @@ ssh -S ~/.ssh/cm/qwen36-tillicum-login -o ControlMaster=no -o BatchMode=yes \
 ssh -S ~/.ssh/cm/qwen36-tillicum-login jy050706@tillicum-login02.hyak.uw.edu
 ```
 
+### serve 端口按角色分家(2026-08-16,一次 23 秒崩溃的学费)
+
+所有 serve sbatch 曾统一绑节点 8000 —— Slurm 把两个 serve 调到同一节点时
+`Address already in use` 秒崩(lean serve 235244 因此阵亡)。约定:**每个
+serve 角色固定专属节点端口,与 WSL 本地端口同尾号**:教师=8000(本地 18020,
+历史遗留尾号不一致,不动它),4B rich=8011,base=8012,lean=8013,ep1=8014…
+新 serve sbatch 一律按此表取港;隧道 RPORT 同步。
+
 ### 隧道自去重与孤儿自灭(2026-08-16 加固)
 
 历史病:每个 driver 启动都无条件拉新隧道,旧清理(`pkill -f "LPORT=..."`)匹配
