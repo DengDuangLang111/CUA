@@ -33,7 +33,13 @@
       (同脚本改 `--num_envs 2`,断点续跑自 13/50)。预计 eval ~4 分钟/题,
       剩余 ~35 题 ≈ 2.5h;rollout 剩 ~145 题 @1VM 会拖到数天 —— 预期是 eval
       矩阵(base 等臂)接着占这 2 VM,矩阵跑完再还给 rollout。
-- [ ] D 完成:eval 50/50 落地,读数入账;rollout 收尾后本文归档
+- [x] D3 **base/keepthink 臂自动接棒已布防**(2026-08-15 21:1x,用户指令):
+      编排器 run_eval50_basekeep.sh 后台待命 —— 检测到 EVAL50_RICHRICH_DONE 即
+      scancel rich serve → 起 serve-chain-4b-base.sbatch(**原版 4B 权重 +
+      同一 keepthink 模板 + 同采样 incl. top_k 20**)→ 隧道 18012 →
+      `--preserve_thinking --num_envs 2` 跑同一 50 题。与 richrich **唯一**差异
+      是权重,这对臂干净隔离 SFT 效应。dashboard 已注册 basekeep 臂,自动上表。
+- [ ] D 完成:eval 各臂落地,读数入账;rollout 收尾后本文归档
 
 执行备注:run38.sh 的 stop_runner 会 `docker rm -f` 全部容器,run38b/run_eval 的
 清理改为按 result_dir 模式 pkill + 共存时跳过 docker 清理;发现 5 个历史积累的
