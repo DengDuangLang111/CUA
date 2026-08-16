@@ -232,8 +232,9 @@ traj 节拍(30min)   │   ignoreCommand 分类   └ 轨迹 traj/      ← Verc
 3. **status-first 循环序(2026-08-15 21:32)**:sft daemon 原本 publish(重,
    渲染 viewer,可达数分钟)在 status(轻,秒级)之前,tier-3 出新臂时把矩阵
    数据节拍从 5 分钟拖到 ~10 分钟 —— 用户第三次报"不刷新"的根因。现为
-   status → publish → status:数据永远先行,新臂的 traj 链接靠第二遍 status
-   同周期补上。
+   status → **立即 commit+push 数据** → publish → status → 周期末推送
+   (2026-08-16 00:17 二次修正:光把计算前置没用,推送也压在 publish 后面 ——
+   数据现在算完即出门,实测落分到 github ≤5 分钟)。
 4. **`tools/dash_probe.sh`**:一条命令核五层(origin 头 / 数据双路对比 /
    线上壳版本 vs 仓库壳版本 / traj 抽样 / WSL daemon 存活),任何改动后跑一次。
 
