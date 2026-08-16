@@ -209,6 +209,37 @@ before the push, ~100 MB of duplicate screenshots stopped at the staging
 index. Cadence (one traj push per 30-min cycle) is what caps deploys, so the
 threshold change costs zero quota.
 
+### 机制图与加固决策(2026-08-15,整日故障复盘后)
+
+本站是三个数据面复用一条 git 通道的分布式系统:
+
+```
+status daemon(5min)┐                        ┌ 壳 index.html   ← Vercel 部署(改了必须部署)
+sft daemon(5min)   ├→ github main 单分支 →─┤ 数据 *.json     ← 浏览器直拉,免部署
+traj 节拍(30min)   │   ignoreCommand 分类   └ 轨迹 traj/      ← Vercel 部署(30min 节拍)
+人工提交           ┘
+```
+
+一天内的五次故障共享两个病根:**部署分类器的对象(commit)会被 Vercel 合并**,
+以及**静默与故障在页面上不可区分**。加固三件套(全部已实装):
+
+1. **SHA 定址取数**:页面先问 GitHub API 拿 main 头 SHA,再拉不可变的
+   `/​<sha>/` raw 路径 —— branch-CDN 的 5–15 分钟粘滞整类消失;API 失败降级回
+   branch ref。限额账:60/hr/IP,2 分钟一轮 = 30/hr。
+2. **健康条**(侧边栏 brand 下):`live/idle/STALLED?` + 最后推送距今 + 两份
+   json 的 updated + 壳版本/SHA。判定:有进行中的 run 且 >12 分钟无任何推送
+   才红 —— "没新数据"和"链路断了"从此长得不一样。
+3. **`tools/dash_probe.sh`**:一条命令核五层(origin 头 / 数据双路对比 /
+   线上壳版本 vs 仓库壳版本 / traj 抽样 / WSL daemon 存活),任何改动后跑一次。
+
+**否决的方案**:为 traj 拆第二个 Vercel 项目(能整个删掉分类器)——用户要单站,
+且残余风险(traj 推送被合并 → ≤30 分钟自愈延迟)已被健康条变成可见事件,
+不值得结构手术。若未来要做,用同域 rewrite 保住单一 URL。
+
+**扩展契约**:加一个新区 = daemon 侧一个数据块(sft.json/status.json)+
+前端一个 VIEWS 条目(+ 需要时 traj key)+ probe 里加一行抽样。eval-50 区就是
+按这个路径接入的,当模板用。
+
 ### The repo must live on ext4, not /mnt/d (2026-08-15)
 
 With ~800 MB of trajectory files in the worktree, the daemon's top-of-loop

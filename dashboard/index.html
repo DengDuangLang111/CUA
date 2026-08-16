@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- deploy-stamp 20260815-eval50-traj (retrigger: prior deploy coalesced into a daemon commit and was skipped) --><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Experiments on CUA Task Generation</title></head><body>
+<!-- shell marker lives in const SHELL_STAMP; probe greps SHELL_STAMP = --><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Experiments on CUA Task Generation</title></head><body>
 
 <style>
   :root{
@@ -127,22 +127,68 @@ window.LIVE = null; window.SFT = null;
    2026-08-15 when the hobby-tier deploy quota ran out mid-campaign and the
    site sat on 90-minute-old numbers while GitHub had current ones. The
    relative fetch stays as fallback (works on previews/local). */
-const RAW = "https://raw.githubusercontent.com/DengDuangLang111/CUA/main/dashboard/";
-function pullJson(name, apply){
-  fetch(RAW + name + "?t=" + Math.floor(Date.now()/120000), {cache:"no-store"})
+const SHELL_STAMP = "20260815-robust1";   /* bump on shell changes; probe greps it */
+const RAW_BASE = "https://raw.githubusercontent.com/DengDuangLang111/CUA/";
+const REPO_API = "https://api.github.com/repos/DengDuangLang111/CUA/commits/main";
+/* SHA-PINNED FETCH (2026-08-15): the branch-ref raw URL sits behind a CDN with
+   a ~5-min TTL that ignores query strings and occasionally sticks for 15+ min.
+   Asking the GitHub API for the branch head first, then fetching the
+   IMMUTABLE /<sha>/ raw path, makes staleness structurally impossible: a
+   sha-pinned URL is either current or a 404 (brand-new sha not yet on the
+   edge), and the 404 falls back to the branch ref. API rate limit (60/hr/IP
+   unauth) at one poll per 2 min = 30/hr; on 403/failure we also fall back. */
+window.FRESH = {sha:null, pushed:null, api:false};
+async function headSha(){
+  try{
+    const r = await fetch(REPO_API, {cache:"no-store"});
+    if(!r.ok) return null;
+    const j = await r.json();
+    window.FRESH.pushed = (j.commit && (j.commit.committer||j.commit.author||{}).date) || null;
+    return j.sha || null;
+  }catch(e){ return null; }
+}
+function pullJson(ref, name, apply){
+  fetch(RAW_BASE + ref + "/dashboard/" + name, {cache:"no-store"})
     .then(r=>r.ok?r.json():Promise.reject())
+    .catch(()=>fetch(RAW_BASE + "main/dashboard/" + name + "?t=" + Math.floor(Date.now()/120000), {cache:"no-store"})
+      .then(r=>r.ok?r.json():Promise.reject()))
     .catch(()=>fetch(name, {cache:"no-store"}).then(r=>r.ok?r.json():null))
     .then(apply).catch(()=>{});
 }
-function pullLive(){
-  pullJson("status.json", j=>{
+async function pullLive(){
+  const sha = await headSha();
+  window.FRESH.sha = sha; window.FRESH.api = !!sha;
+  const ref = sha || "main";
+  pullJson(ref, "status.json", j=>{
     if (j && JSON.stringify(j) !== JSON.stringify(window.LIVE)){ window.LIVE=j; render(); }
+    renderFresh();
   });
   /* sft.json is written by a second daemon in its own clone: two writers, two
      files, so neither can ever clobber the other's keys on a raced push. */
-  pullJson("sft.json", j=>{
+  pullJson(ref, "sft.json", j=>{
     if (j && JSON.stringify(j) !== JSON.stringify(window.SFT)){ window.SFT=j; render(); }
+    renderFresh();
   });
+}
+/* HEALTH STRIP (2026-08-15): "quiet" and "broken" must not look the same.
+   Signal: the branch's last-push time from the API (moves whenever any daemon
+   pushes) vs whether any run is still in progress. Active runs push status
+   every ~5 min, so active + no push for >12 min = the pipeline, not the data. */
+function renderFresh(){
+  const el = document.getElementById("fresh"); if(!el) return;
+  const F = window.FRESH; const L = window.LIVE||{}; const S = window.SFT||{};
+  const active = (L.runs||[]).some(r=>r.total && r.scored < r.total) ||
+                 ((S.eval50||{}).arms||[]).some(a=>a.scored < ((S.eval50||{}).n||50));
+  let push = "—", state = "idle", color = "var(--muted)";
+  if (F.pushed){
+    const m = Math.round((Date.now() - new Date(F.pushed).getTime())/60000);
+    push = m + "m";
+    if (active) { state = m > 12 ? "STALLED?" : "live"; color = m > 12 ? "#b3261e" : "var(--accent-ink)"; }
+  } else if (!F.api) { state = "api-off"; }
+  el.innerHTML = `<span style="color:${color};font-weight:700">${state}</span>`
+    + ` · pushed ${push} ago`
+    + `<br>status ${(L.updated||"—").replace("2026-","")} · sft ${(S.updated||"—").replace("2026-","")}`
+    + `<br>shell ${SHELL_STAMP}${F.sha?` · ${F.sha.slice(0,7)}`:""}`;
 }
 pullLive(); setInterval(pullLive, 120000);
 function lv(){ const s = window.LIVE && window.LIVE.v11; if(!s || !s.scored) return null;
@@ -824,7 +870,8 @@ const groups = ["Results","Current","SFT","Baseline","v8 era","Corpus-only","Ear
 let curTab = "design";
 function renderNav(sel){
   document.getElementById("nav").innerHTML =
-   `<div class="brand">CUA · Task Generation<small>experiments &amp; rollouts dashboard</small></div>` +
+   `<div class="brand">CUA · Task Generation<small>experiments &amp; rollouts dashboard</small>
+     <div id="fresh" style="margin-top:7px;font:400 10.5px/1.5 ui-monospace,monospace;color:var(--muted)"></div></div>` +
    groups.map(g=>{
     const vs = VIEWS.filter(v=>v.group===g);
     return `<div class="gl">${g}</div>` + vs.map(v=>{
@@ -856,6 +903,7 @@ function render(){
       <div class="tabbody">${curTab==='design'||!hasTraj ? v.design() : trajBody(v.traj)}</div>`;
   }
   document.getElementById("content").innerHTML = html;
+  renderFresh();
 }
 /* eval-50 arms whose run has published viewers (publication state lives in
    status.json; the viewer tree is traj/<modeldir>/<run>/). */
