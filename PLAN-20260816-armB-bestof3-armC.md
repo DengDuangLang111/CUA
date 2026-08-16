@@ -60,6 +60,7 @@ best-of-3 选择 → C 数据构建 → C 训练 → C eval                  ←
 - [ ] v11-500 rollout 444/444
 - [ ] B 数据构建(含新过滤,剔除清单入账)
 - [ ] B 训练完成(ep1/ep3 checkpoint 齐)
+- [x] ep1(A-ckpt150)eval **完成:13/50 = 26% ≈ ep3 的 28% —— epochs 判据出局,损伤属于语料本身**(详 TRAINING.md);原 [~] 记录保留:
 - [~] ep1(A-ckpt150)eval **提前开跑**(2026-08-16 02:36,用户决定:信息价值
       最高,先于 500 收尾执行)—— serve 233719,keepthink+preserve,2 VM;
       rollout 同期降 1 VM(run38e)。落地后回填结论。

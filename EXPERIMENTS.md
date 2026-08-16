@@ -5,6 +5,9 @@
 - **v11-500 教师 rollout 进行中**:291/444 起降为 **2 VM** 续跑(run38b.sh,同 result_dir;
   PLAN-20260815),`results_generated/qwen38-27b-local/v11-500-t1ms50-20260814`,
   Qwen3.8-27B FP8 · thinking on · serve 链在班。
+- **eval-50 epochs 曲线闭合:base 38% → ep1 26% → ep3 28%** —— 损伤在第一个
+  epoch 就全额安装且不随深度变化;训练深度无罪,语料迁移全责。详情
+  → `sft/TRAINING.md`。
 - **eval-50 头两臂完成:base/keepthink 19/50 = 38% > rich/rich 14/50 = 28%**
   —— 原版反超 SFT 十个点(McNemar 7:2,p≈.18);损伤集中在语料稀薄域
   (impress/thunderbird/vs_code),窄化签名。模型卡 35.6 在我们严口径下复现

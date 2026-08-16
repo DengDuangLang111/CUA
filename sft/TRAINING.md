@@ -2418,6 +2418,23 @@ Estimated ~5–6.5 h per run, 3 shared VMs, starts when v11-500 lands
 (~Aug 16 morning). The lean arm evaluated both ways makes the serving-template
 effect itself a measured variable on the same weights.
 
+**FINAL rich-ep1 (2026-08-16 09:04): 13/50 = 26% — THE EPOCHS CURVE IS
+FLAT-DAMAGED: base 38% → ep1 26% → ep3 28%.** One epoch loses as much as
+three; the ~10–12-point regression is fully installed by the first epoch and
+neither deepens nor heals after. Training depth is exonerated; the corpus
+and its transfer to Verified carry the entire indictment. Per-domain (ep1):
+chrome 3/3 (best of the three arms) · gimp 2/4 · calc 0/7 · impress 0/7 ·
+writer 0/3 · multi_apps 1/12 · os 2/4 · thunderbird 1/3 · vlc 2/3 ·
+vs_code 2/4, plus the same impress 0.903 near-pass base hit. Operational
+footnote: the arm ran under mixed client timeouts (130s→300s→600s over the
+first five tasks; 600s thereafter — 45 of 50 uniform), and its checkpoint's
+half-migrated behavior (terse when confident, 20k-token deliberation when
+lost) made it ~3x slower per hard task than either sibling. Consequence for
+the plan: the B arm's question sharpens from "does more data help?" to "does
+DIFFERENT data (harder, longer v11-500 trajectories) change the sign at
+all?" — and the anti-forgetting levers (replay mix, LoRA, eval-aligned data)
+move from options to the likely main line if B stays negative.
+
 ### Trajectory forensics at ep1's 7-task mark (2026-08-16 05:0x)
 
 Three findings that change how the arm numbers should be read:
