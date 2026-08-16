@@ -173,15 +173,22 @@ directory is not recorded anywhere we can see):
 
 ```json
 {"ignoreCommand":
- "git diff --name-only HEAD^ HEAD | grep -qvE \"^dashboard/(status|sft)[.]json$\" && exit 1 || exit 0"}
+ "curl -sf --max-time 10 https://cua-dashboard-theta.vercel.app/ | cmp -s - dashboard/index.html && exit 0 || exit 1"}
 ```
 
-Content-based, not message-based: a push whose only changes are `status.json` /
-`sft.json` is skipped (exit 0); anything else builds (exit 1). Verified against
-real history before shipping — status-only commits skip, all five recent code/
-doc commits build. Known lag: if page code lands while quota is exhausted and
-the next successful push is status-only, the code waits for the next non-json
-push (a traj push, ≤30 min) to deploy.
+**Served-content compare, since 2026-08-15.** The first version diffed
+`HEAD^..HEAD` for non-json files — and had a coalescing race that ate a real
+change the same day it mattered: Vercel deploys the branch head, so when a
+daemon json push lands on top of a code change inside the queue window, the
+check sees a json-only diff and skips the code change *forever* (the eval-50
+section vanished this way; a human retrigger was needed — and the retrigger
+itself could lose the same race). The current form asks the only question that
+matters — *does production serve what the repo holds?* — by comparing the
+served `index.html` against the repo copy. Race-free by construction,
+self-healing (any missed deploy is picked up by the next daemon push, ≤5 min),
+daemon pushes still cost zero quota, and a curl failure fails open into a
+build. Its one assumption: the page is a single-file app — if the site ever
+grows a second code asset, extend the comparison.
 
 **Deploy budget after this**: traj ≤48/day + manual docs ~10–20 ≈ 60–70,
 against the hobby tier's ~100/day. Status/sft pushes: zero.
