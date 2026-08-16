@@ -60,7 +60,9 @@ best-of-3 选择 → C 数据构建 → C 训练 → C eval                  ←
 - [ ] v11-500 rollout 444/444
 - [ ] B 数据构建(含新过滤,剔除清单入账)
 - [ ] B 训练完成(ep1/ep3 checkpoint 齐)
-- [ ] ep1(A-ckpt150)eval 落地,epochs 判据出结论
+- [~] ep1(A-ckpt150)eval **提前开跑**(2026-08-16 02:36,用户决定:信息价值
+      最高,先于 500 收尾执行)—— serve 233719,keepthink+preserve,2 VM;
+      rollout 同期降 1 VM(run38e)。落地后回填结论
 - [ ] 重跑一完成 / [ ] 重跑二完成
 - [ ] B-ep1 eval / [ ] B-ep3 eval → 量的裁决入 TRAINING.md
 - [ ] best-of-3 选择脚本 + C 构建(选择统计入账)
