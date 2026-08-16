@@ -48,7 +48,7 @@ summary{cursor:pointer;color:#5f6368}
 .chips{display:flex;gap:.6em;margin:.6em 0;flex-wrap:wrap}
 .chip{background:#fff;border-radius:2em;padding:.3em 1em;
       box-shadow:0 1px 2px rgba(0,0,0,.08);font-size:.9em}
-</style><div class=wrap><h2>grade-rounding-bug-fix <span class="badge none">no score</span></h2><div class=chips style="margin:.2em 0 .6em"><span class=chip><b style="color:#5f6368;font-weight:600">grade</b>&nbsp;probe</span><span class=chip><b style="color:#5f6368;font-weight:600">intent</b>&nbsp;repair</span><span class=chip><b style="color:#5f6368;font-weight:600">domain</b>&nbsp;education</span><span class=chip><b style="color:#5f6368;font-weight:600">difficulty</b>&nbsp;d4</span><span class=chip><b style="color:#5f6368;font-weight:600">ambiguity</b>&nbsp;a2</span><span class=chip><b style="color:#5f6368;font-weight:600">voice</b>&nbsp;contextful</span><span class=chip><b style="color:#5f6368;font-weight:600">apps</b>&nbsp;vscode + terminal</span><span class=chip><b style="color:#5f6368;font-weight:600">batch</b>&nbsp;v11-500-s1</span></div><div class=instr>The grade script in my grading project rounds the wrong way -- 84.5 must come out 85, not 84 -- and the letter cutoffs are off by one so a 90 shows as B. Fix both in the script and make its self-test run clean; the exam board reprints tonight.</div><p class=meta><a href="index.html" onclick="history.back();return false">&larr; back</a></p><details><summary>task config + evaluator</summary><div class=resp>{
+</style><div class=wrap><h2>grade-rounding-bug-fix <span class="badge pass">PASS 1.0</span></h2><div class=chips style="margin:.2em 0 .6em"><span class=chip><b style="color:#5f6368;font-weight:600">grade</b>&nbsp;probe</span><span class=chip><b style="color:#5f6368;font-weight:600">intent</b>&nbsp;repair</span><span class=chip><b style="color:#5f6368;font-weight:600">domain</b>&nbsp;education</span><span class=chip><b style="color:#5f6368;font-weight:600">difficulty</b>&nbsp;d4</span><span class=chip><b style="color:#5f6368;font-weight:600">ambiguity</b>&nbsp;a2</span><span class=chip><b style="color:#5f6368;font-weight:600">voice</b>&nbsp;contextful</span><span class=chip><b style="color:#5f6368;font-weight:600">apps</b>&nbsp;vscode + terminal</span><span class=chip><b style="color:#5f6368;font-weight:600">batch</b>&nbsp;v11-500-s1</span></div><div class=instr>The grade script in my grading project rounds the wrong way -- 84.5 must come out 85, not 84 -- and the letter cutoffs are off by one so a 90 shows as B. Fix both in the script and make its self-test run clean; the exam board reprints tonight.</div><p class=meta><a href="index.html" onclick="history.back();return false">&larr; back</a></p><details><summary>task config + evaluator</summary><div class=resp>{
  &quot;config&quot;: [
   {
    &quot;type&quot;: &quot;execute&quot;,
@@ -89,7 +89,543 @@ summary{cursor:pointer;color:#5f6368}
    }
   }
  }
-}</div></details><div class=nav><button id=prev>&#9664; prev</button><span id=pos></span><button id=next>next &#9654;</button><input type=range id=rng min=0 max=0 value=0><button id=all>show all</button></div><div class=frame><h3>step None <small></small></h3><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>None</div></div><script>
+}</div></details><div class=nav><button id=prev>&#9664; prev</button><span id=pos></span><button id=next>next &#9654;</button><input type=range id=rng min=0 max=13 value=0><button id=all>show all</button></div><div class=frame><h3>step 1 <small>10:06:52</small></h3><div class="blk b-think"><span class=tag>THINKING</span>Let me analyze the task. The user has a grade report script in VS Code. I need to fix two bugs:
+
+1. Rounding bug: `round_score` uses `int(round(score))`. In Python 3, `round()` uses banker&#x27;s rounding, so `round(84.5)` = 84 (rounds to even), but they want 85 (round half up). Also `round(59.5)` = 60 in banker&#x27;s rounding actually... let me think. `round(59.5)` = 60 (since 60 is even). But `round(84.5)` = 84 (since 84 is even). So the issue is they want round-half-up.
+
+2. Letter cutoffs off by one: 90 shows as B. Looking at the code:
+- `if p &gt; 90: return &quot;A&quot;` - so 90 is not &gt; 90, falls through to B. That&#x27;s the bug. Should be `p &gt;= 90`.
+- Similarly the cutoffs should be &gt;= instead of &gt;.
+
+Let me look at the self-tests:
+- `assert round_score(84.5) == 85` - 84.5 must round up
+- `assert round_score(59.5) == 60` - 59.5 must round up
+- `assert letter(90.0) == &quot;A&quot;` - 90 is an A
+- `assert letter(80.0) == &quot;B&quot;` - 80 is a B
+- `assert letter(69.4) == &quot;D&quot;` - 69.4 rounds to 69, a D
+- `assert letter(100.0) == &quot;A&quot;`
+
+So I need to fix:
+1. `round_score` to use round-half-up: `int(score + 0.5)` for positive scores, or use `Decimal` with ROUND_HALF_UP. Since scores are positive, `int(score + 0.5)` would work but let me verify: 84.5 + 0.5 = 85.0, int = 85. ✓. 59.5 + 0.5 = 60.0, int = 60 ✓. But floating point: 84.5 + 0.5... 84.5 is exactly representable? 84.5 = 169/2, yes exactly. 59.5 = 119/2, yes. So `int(score + 0.5)` works for these. But to be safe and correct, I could use a proper approach.
+
+Actually the cleanest robust fix for round half up is: `import math; return math.floor(score + 0.5)`. But `int()` truncates toward zero which for positive is same as floor. Let me just use `int(score + 0.5)`.
+
+Wait, but there could be floating point issues with other values. Let me think about the letter function which calls round_score. For 69.4: 69.4 + 0.5 = 69.9, int = 69. ✓ (a D). For 100.0: 100.5, int = 100 ✓. For 90.0: 90.5, int=90 ✓. For 80.0: 80.5 int=80 ✓.
+
+2. Letter cutoffs: change `&gt;` to `&gt;=`:
+- `if p &gt;= 90: return &quot;A&quot;`
+- `if p &gt;= 80: return &quot;B&quot;`
+- `if p &gt;= 70: return &quot;C&quot;`
+- `if p &gt;= 60: return &quot;D&quot;`
+- `return &quot;F&quot;`
+
+Let me verify: letter(90.0): p = round_score(90.0) = int(90.5) = 90. p &gt;= 90 → A ✓. letter(80.0): p=80, 80&gt;=90 no, 80&gt;=80 → B ✓. letter(69.4): p=69, not &gt;=60? 69&gt;=60 → D ✓. letter(100.0): p=100 &gt;=90 → A ✓.
+
+Great, the fixes are clear.
+
+Now, how to edit? I&#x27;ll use the terminal or edit in the editor directly. The cleanest is to use a terminal to rewrite the file, or edit directly in VS Code. Let me edit directly in the editor by clicking on the lines and making changes. Actually, editing directly can be error-prone with clicking exact positions. 
+
+Let me think about the best approach. I could use the terminal to do a sed replacement or rewrite the file. But the safest is to use the terminal with a Python script or just write the whole file with a heredoc via the terminal.
+
+Actually, let me open a terminal in VS Code and rewrite the file precisely. That&#x27;s the most reliable.
+
+Let me first dismiss the Python extension popup. Actually it won&#x27;t interfere much. Let me open a terminal.
+
+Let me plan the file content:
+
+```python
+&quot;&quot;&quot;Term grade report for the exam board.&quot;&quot;&quot;
+
+STUDENTS = [
+    (&quot;Anika Sorensen&quot;, 84.5),
+    (&quot;Bilal Haddad&quot;, 90.0),
+    (&quot;Clara Mbeki&quot;, 79.5),
+    (&quot;Dmitri Volkov&quot;, 69.4),
+    (&quot;Elena Ruiz&quot;, 59.5),
+    (&quot;Farouk Adeyemi&quot;, 100.0),
+]
+
+
+def round_score(score):
+    return int(score + 0.5)
+
+
+def letter(score):
+    p = round_score(score)
+    if p &gt;= 90:
+        return &quot;A&quot;
+    if p &gt;= 80:
+        return &quot;B&quot;
+    if p &gt;= 70:
+        return &quot;C&quot;
+    if p &gt;= 60:
+        return &quot;D&quot;
+    return &quot;F&quot;
+
+
+def self_test():
+    assert round_score(84.5) == 85, &quot;84.5 must round up&quot;
+    assert round_score(59.5) == 60, &quot;59.5 must round up&quot;
+    assert letter(90.0) == &quot;A&quot;, &quot;90 is an A&quot;
+    assert letter(80.0) == &quot;B&quot;, &quot;80 is a B&quot;
+    assert letter(69.4) == &quot;D&quot;, &quot;69.4 rounds to 69, a D&quot;
+    assert letter(100.0) == &quot;A&quot;
+    print(&quot;self-test ok&quot;)
+
+
+if __name__ == &quot;__main__&quot;:
+    for name, score in STUDENTS:
+        print(name, round_score(score), letter(score))
+    self_test()
+```
+
+This is the full corrected file. I&#x27;ll write it via terminal heredoc, which is reliable.
+
+But wait — I should be careful. The task says &quot;Fix both in the script&quot;. I want to preserve the original as much as possible but only change what&#x27;s needed. Rewriting the whole file is fine as long as the content matches. Let me make sure I preserve the exact student list and structure.
+
+Actually, rather than rewriting everything (risk of typos in names), let me make targeted edits using sed, or better, edit specific lines in the terminal with sed. But the safest for correctness is to edit the specific lines.
+
+Let me use a Python-based approach in the terminal to do targeted replacements, OR just make edits in the editor.
+
+Actually, I think the cleanest and least error-prone is to edit in the VS Code editor directly with targeted line edits:
+
+1. Line 14: `return int(round(score))` → `return int(score + 0.5)`
+2. Line 19: `if p &gt; 90:` → `if p &gt;= 90:`
+3. Line 21: `if p &gt; 80:` → `if p &gt;= 80:`
+4. Line 23: `if p &gt; 70:` → `if p &gt;= 70:`
+5. Line 25: `if p &gt; 60:` → `if p &gt;= 60:`
+
+Let me use sed for these targeted changes. Using the terminal with sed is precise.
+
+Let me open a terminal first. Terminal menu → New Terminal, or Ctrl+` .
+
+Let me take the approach: open terminal, run sed commands, then run the script to verify self-test passes.
+
+Actually, editing in the GUI editor is also fine and I can visually verify. But sed is more reliable for exact text. Let me use the terminal.
+
+Let me start by taking a screenshot to confirm current state, then open terminal.
+
+Actually I already have the screenshot. Let me open the terminal with keyboard shortcut Ctrl+` (backtick).
+
+Let me do the sed commands. The file path is /home/user/grading/grade_report.py (from breadcrumb: home &gt; user &gt; grading &gt; grade_report.py).
+
+sed commands:
+```
+cd /home/user/grading
+sed -i &#x27;s/return int(round(score))/return int(score + 0.5)/&#x27; grade_report.py
+sed -i &#x27;s/if p &gt; 90:/if p &gt;= 90:/&#x27; grade_report.py
+sed -i &#x27;s/if p &gt; 80:/if p &gt;= 80:/&#x27; grade_report.py
+sed -i &#x27;s/if p &gt; 70:/if p &gt;= 70:/&#x27; grade_report.py
+sed -i &#x27;s/if p &gt; 60:/if p &gt;= 60:/&#x27; grade_report.py
+python3 grade_report.py
+```
+
+Wait, but the `&gt;` in sed needs care — in sed, `&gt;` is literal, no problem. The replacement `&gt;=` is fine.
+
+Let me verify `int(round(score))` - the original line 14 shows `return int(round(score))`. Good.
+
+Let me proceed. I&#x27;ll open the terminal.
+
+One consideration: `int(score + 0.5)` vs a more robust half-up. For the given values it works. But to be safe against floating point for values like 84.5, since it&#x27;s exactly representable, fine. I&#x27;ll go with `int(score + 0.5)`.
+
+Hmm, but let me reconsider: what about a value like 79.5 → 79.5+0.5 = 80.0 → 80 → B. Clara Mbeki 79.5 would show 80 B. That&#x27;s reasonable round-half-up behavior.
+
+Let me proceed with the terminal approach.
+
+First, dismiss the popup isn&#x27;t necessary. Let me open terminal.</div><div class="blk b-act"><span class=tag>ACTION</span>I&#x27;ll fix both bugs. Let me first take a screenshot to confirm the current state, then open a terminal to make precise edits.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+screenshot
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>WAIT</div><img class=shot loading=lazy src="step_1_20260816@100652866633.png"></div><div class=frame><h3>step 2 <small>10:07:07</small></h3><div class="blk b-think"><span class=tag>THINKING</span>I can see the full script. Let me analyze the bugs:
+
+1. **Rounding bug** (line 14): `return int(round(score))` — Python 3&#x27;s `round()` uses banker&#x27;s rounding, so `round(84.5)` = 84 (rounds to even). The user wants 85 (round half up). Fix: `return int(score + 0.5)`.
+
+2. **Letter cutoffs** (lines 19, 21, 23, 25): Using `&gt;` instead of `&gt;=`. So `letter(90.0)`: p = 90, `90 &gt; 90` is False → falls to `90 &gt; 80` → True → &quot;B&quot;. That&#x27;s the off-by-one. Fix: change all `&gt;` to `&gt;=`.
+
+Let me open a terminal to make these edits precisely with sed. I&#x27;ll press Ctrl+` to open the terminal.
+
+Let me first dismiss the Python extension popup by clicking the X, then open terminal. Actually the popup won&#x27;t block the terminal. Let me just open the terminal.</div><div class="blk b-act"><span class=tag>ACTION</span>I can see the two bugs clearly:
+- **Line 14**: `int(round(score))` uses Python&#x27;s banker&#x27;s rounding, so `84.5 → 84`. It needs round-half-up.
+- **Lines 19–25**: cutoffs use `&gt;` instead of `&gt;=`, so a 90 falls through to &quot;B&quot;.
+
+Let me open a terminal to make precise edits.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+key
+&lt;/parameter&gt;
+&lt;parameter=keys&gt;
+[&quot;ctrl&quot;, &quot;grave&quot;]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.hotkey(&quot;ctrl&quot;, &quot;grave&quot;)</div><img class=shot loading=lazy src="step_2_20260816@100707717390.png"></div><div class=frame><h3>step 3 <small>10:07:14</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The terminal didn&#x27;t open. Maybe the focus was on the editor. Let me use the Terminal menu instead. Let me click on Terminal menu.</div><div class="blk b-act"><span class=tag>ACTION</span>The terminal didn&#x27;t open. Let me use the Terminal menu instead.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+left_click
+&lt;/parameter&gt;
+&lt;parameter=coordinate&gt;
+[192, 70]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.click(369, 75)</div><img class=shot loading=lazy src="step_3_20260816@100714803289.png"></div><div class=frame><h3>step 4 <small>10:07:22</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The Terminal menu is open. Let me click &quot;New Terminal&quot;.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+left_click
+&lt;/parameter&gt;
+&lt;parameter=coordinate&gt;
+[211, 95]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.click(405, 102)</div><img class=shot loading=lazy src="step_4_20260816@100722052382.png"></div><div class=frame><h3>step 5 <small>10:07:38</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The terminal is open. Now let me make the edits. First, let me verify the file content by looking at it, and check the exact text. Let me first cat the file to confirm exact strings before doing sed.
+
+Actually, let me just do the sed commands. But I want to be careful about the `round` replacement. Let me first check the current line 14 content with grep.
+
+Let me run a grep to confirm the exact strings I&#x27;ll replace.</div><div class="blk b-act"><span class=tag>ACTION</span>The terminal is open. Let me first confirm the exact strings I need to change, then apply the fixes with sed.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+left_click
+&lt;/parameter&gt;
+&lt;parameter=coordinate&gt;
+[468, 791]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.click(899, 855)</div><img class=shot loading=lazy src="step_5_20260816@100738751685.png"></div><div class=frame><h3>step 6 <small>10:07:46</small></h3><div class="blk b-think"><span class=tag>THINKING</span>Let me confirm the exact strings with grep first.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+type
+&lt;/parameter&gt;
+&lt;parameter=text&gt;
+grep -n &quot;p &gt;\|round(score)&quot; /home/user/grading/grade_report.py
+
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.typewrite(&quot;grep -n \&quot;p &gt;\\|round(score)\&quot; /home/user/grading/grade_report.py&quot;)</div><img class=shot loading=lazy src="step_6_20260816@100746587976.png"></div><div class=frame><h3>step 7 <small>10:07:53</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The command is typed but not executed yet. I need to press Enter. Actually the type included a newline at the end, but it seems it didn&#x27;t execute. Let me press Enter.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+key
+&lt;/parameter&gt;
+&lt;parameter=keys&gt;
+[&quot;return&quot;]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.press(&quot;return&quot;)</div><img class=shot loading=lazy src="step_7_20260816@100753530964.png"></div><div class=frame><h3>step 8 <small>10:08:10</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The grep output confirms:
+- Line 14: `return int(round(score))`
+- Line 19: `if p &gt; 90:`
+- Line 21: `if p &gt; 80:`
+- Line 23: `if p &gt; 70:`
+- Line 25: `if p &gt; 60:`
+
+Now let me apply the fixes with sed. I&#x27;ll use a single sed command with multiple expressions:
+
+```
+sed -i -e &#x27;s/int(round(score))/int(score + 0.5)/&#x27; -e &#x27;s/if p &gt; 90:/if p &gt;= 90:/&#x27; -e &#x27;s/if p &gt; 80:/if p &gt;= 80:/&#x27; -e &#x27;s/if p &gt; 70:/if p &gt;= 70:/&#x27; -e &#x27;s/if p &gt; 60:/if p &gt;= 60:/&#x27; /home/user/grading/grade_report.py
+```
+
+Note: `+` in the replacement is literal in sed replacement (not special), so `int(score + 0.5)` is fine. The `.` in pattern `round(score)` — `(` `)` are literal in basic regex. Fine. The `&gt;` is literal. Good.
+
+Wait, in the pattern `int(round(score))`, the parentheses `(` and `)` are literal in BRE (basic regex). Good.
+
+Let me run this.</div><div class="blk b-act"><span class=tag>ACTION</span>Confirmed the exact strings. Now I&#x27;ll apply both fixes in one sed command: replace the banker&#x27;s-rounding `int(round(score))` with round-half-up `int(score + 0.5)`, and change each `p &gt;` cutoff to `p &gt;=`.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+type
+&lt;/parameter&gt;
+&lt;parameter=text&gt;
+sed -i -e &#x27;s/int(round(score))/int(score + 0.5)/&#x27; -e &#x27;s/if p &gt; 90:/if p &gt;= 90:/&#x27; -e &#x27;s/if p &gt; 80:/if p &gt;= 80:/&#x27; -e &#x27;s/if p &gt; 70:/if p &gt;= 70:/&#x27; -e &#x27;s/if p &gt; 60:/if p &gt;= 60:/&#x27; /home/user/grading/grade_report.py
+
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.typewrite(&quot;sed -i -e &#x27;s/int(round(score))/int(score + 0.5)/&#x27; -e &#x27;s/if p &gt; 90:/if p &gt;= 90:/&#x27; -e &#x27;s/if p &gt; 80:/if p &gt;= 80:/&#x27; -e &#x27;s/if p &gt; 70:/if p &gt;= 70:/&#x27; -e &#x27;s/if p &gt; 60:/if p &gt;= 60:/&#x27; /home/user/grading/grade_report.py&quot;)</div><img class=shot loading=lazy src="step_8_20260816@100810936756.png"></div><div class=frame><h3>step 9 <small>10:08:20</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The command is typed but I see it&#x27;s still on the line (the terminal wrapped the command to two lines). It seems the newline at the end didn&#x27;t execute it yet. Let me press Enter to run it.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+key
+&lt;/parameter&gt;
+&lt;parameter=keys&gt;
+[&quot;return&quot;]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.press(&quot;return&quot;)</div><img class=shot loading=lazy src="step_9_20260816@100820913673.png"></div><div class=frame><h3>step 10 <small>10:08:30</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The edits are applied. Now the editor shows:
+- Line 14: `return int(score + 0.5)`
+- Line 19: `if p &gt;= 90:`
+- Line 21: `if p &gt;= 80:`
+- Line 23: `if p &gt;= 70:`
+- Line 25: `if p &gt;= 60:`
+
+The file on disk is updated (sed -i) and the editor reloaded to reflect changes. Now let me run the script to verify the self-test passes.</div><div class="blk b-act"><span class=tag>ACTION</span>The edits applied successfully. The editor now shows `return int(score + 0.5)` on line 14 and all cutoffs use `&gt;=`. Now let me run the script to confirm the self-test passes cleanly.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+type
+&lt;/parameter&gt;
+&lt;parameter=text&gt;
+python3 /home/user/grading/grade_report.py
+
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.typewrite(&quot;python3 /home/user/grading/grade_report.py&quot;)</div><img class=shot loading=lazy src="step_10_20260816@100830859393.png"></div><div class=frame><h3>step 11 <small>10:08:38</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The command is typed but not yet executed. Let me press Enter.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+key
+&lt;/parameter&gt;
+&lt;parameter=keys&gt;
+[&quot;return&quot;]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.press(&quot;return&quot;)</div><img class=shot loading=lazy src="step_11_20260816@100838944455.png"></div><div class=frame><h3>step 12 <small>10:09:13</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The script ran successfully and output:
+```
+Anika Sorensen 85 B
+Bilal Haddad 90 A
+Clara Mbeki 80 A
+Dmitri Volkov 69 D
+Elena Ruiz 60 D
+Farouk Adeyemi 100 A
+self-test ok
+```
+
+Wait, let me check Clara Mbeki. Her score is 79.5. With round-half-up, 79.5 → 80 → B. But the output says &quot;Clara Mbeki 80 A&quot;? Let me re-read. 
+
+Actually the output reads:
+- Anika Sorensen 85 B
+- Bilal Haddad 90 A
+- Clara Mbeki 80 A  ← Hmm, this says &quot;80 A&quot;? That doesn&#x27;t look right. 80 should be B.
+
+Wait let me look more carefully. Let me zoom in. The lines:
+```
+Anika Sorensen 85 B
+Bilal Haddad 90 A
+Clara Mbeki 80 A
+Dmitri Volkov 69 D
+Elena Ruiz 60 D
+Farouk Adeyemi 100 A
+self-test ok
+```
+
+Hmm, &quot;Clara Mbeki 80 A&quot; is concerning. But wait, maybe I&#x27;m misreading. Let me take a closer look. Actually the self-test passed (&quot;self-test ok&quot;), which means letter(80.0) == &quot;B&quot; passed. So a score that rounds to 80 gives B. So Clara Mbeki at 79.5 → round_score = int(79.5+0.5) = int(80.0) = 80 → letter(79.5)... 
+
+Wait, in the main loop it calls `letter(score)` where score is 79.5. letter(79.5): p = round_score(79.5) = int(79.5 + 0.5). 
+
+Here&#x27;s a potential floating point issue: 79.5 + 0.5 in floating point. 79.5 is exactly representable (159/2). 79.5 + 0.5 = 80.0 exactly. int(80.0) = 80. So p = 80. Then 80 &gt;= 90? No. 80 &gt;= 80? Yes → B. So Clara should be &quot;B&quot;.
+
+But the output appears to show &quot;Clara Mbeki 80 A&quot;. Let me zoom in to be sure. It could be that I&#x27;m misreading &quot;B&quot; as &quot;A&quot; at this small font. Actually the difference between the letter column... Let me take a screenshot and zoom, or better, re-examine.
+
+Actually, wait. Let me reconsider. Maybe the rounding of 79.5 gives a different result. Let me reconsider floating point: is 79.5 exactly representable? 79.5 = 79 + 0.5, and 0.5 = 2^-1, so yes 79.5 = 1111111.1 in binary, exactly representable. 79.5 + 0.5 = 80.0 exactly. int = 80. So B.
+
+The self-test passed with letter(80.0)==&quot;B&quot;, confirming 80→B. So Clara at 80 should be B too.
+
+I think I&#x27;m misreading the small font. Let me look at the screenshot again. The text is small. Let me zoom into that region to verify. Actually, I&#x27;m fairly confident it&#x27;s &quot;B&quot; but let me verify by scrolling/zooming. 
+
+Actually, a cleaner verification: the self-test passed which is the key requirement. But let me double check Clara&#x27;s letter to be thorough. Let me re-run with a clearer check, or zoom in.
+
+Let me look very carefully at the pixels. The line &quot;Clara Mbeki 80 A&quot; — hmm. Actually, comparing the last column letters:
+- Line 1 (Anika): ends with &quot;B&quot;
+- Line 2 (Bilal): ends with &quot;A&quot;
+- Line 3 (Clara): ends with &quot;A&quot;? or &quot;B&quot;?
+- Line 4 (Dmitri): ends with &quot;D&quot;
+- Line 5 (Elena): ends with &quot;D&quot;
+- Line 6 (Farouk): ends with &quot;A&quot;
+
+If Clara is &quot;A&quot;, that would be wrong. But self-test confirms 80→B. This is confusing.
+
+Wait — maybe the issue is that Clara&#x27;s score in the display is different. Let me reconsider: what if I&#x27;m misreading and Clara shows &quot;80 B&quot;? The &quot;B&quot; and &quot;A&quot; at small size... Let me just re-run to be certain, or better, run a direct check.
+
+Let me run a python one-liner to verify letter(79.5) and the full list, to be 100% sure. Actually, let me just re-examine by running the self-test output which already says &quot;self-test ok&quot;. 
+
+To be thorough and confident, let me run a quick check that prints the letter for each rounded score explicitly. But honestly the self-test passing is the definitive success criterion. The self-test asserts:
+- round_score(84.5) == 85 ✓ (Anika shows 85)
+- round_score(59.5) == 60 ✓ (Elena shows 60)
+- letter(90.0) == &quot;A&quot; ✓ (Bilal shows 90 A)
+- letter(80.0) == &quot;B&quot; 
+- letter(69.4) == &quot;D&quot; ✓ (Dmitri shows 69 D)
+- letter(100.0) == &quot;A&quot; ✓ (Farouk shows 100 A)
+
+All passed since &quot;self-test ok&quot; printed with no assertion error. This definitively confirms 80→B.
+
+So Clara showing 80 must be B. I&#x27;m just misreading the tiny font. Let me zoom in to confirm and give a clean final answer. Let me take a screenshot and look closely, or better, I&#x27;ll re-run just to see it clearly. Actually, let me verify with a more explicit command to remove any doubt.
+
+Let me run: python3 -c &quot;import grade_report; ...&quot; but need to be in the directory. Simpler: the output is already there. Let me just zoom the terminal by taking a screenshot — but I can&#x27;t zoom the screenshot. 
+
+Let me just re-run a targeted verification to be safe.</div><div class="blk b-act"><span class=tag>ACTION</span>The script ran and printed `self-test ok` with no assertion errors — all six self-test asserts passed. The report now shows the corrected values (84.5→85, 90→A, 69.4→69 D, 100→A). Let me run one explicit verification to be completely certain about each letter mapping, including the boundary cases.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+type
+&lt;/parameter&gt;
+&lt;parameter=text&gt;
+cd /home/user/grading &amp;&amp; python3 -c &quot;import grade_report as g; [print(n, g.round_score(s), g.letter(s)) for n,s in g.STUDENTS]; print(&#x27;checks:&#x27;, g.round_score(84.5), g.round_score(59.5), g.letter(90.0), g.letter(80.0), g.letter(79.5), g.letter(69.4), g.letter(100.0))&quot;
+
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.typewrite(&quot;cd /home/user/grading &amp;&amp; python3 -c \&quot;import grade_report as g; [print(n, g.round_score(s), g.letter(s)) for n,s in g.STUDENTS]; print(&#x27;checks:&#x27;, g.round_score(84.5), g.round_score(59.5), g.letter(90.0), g.letter(80.0), g.letter(79.5), g.letter(69.4), g.letter(100.0))\&quot;&quot;)</div><img class=shot loading=lazy src="step_12_20260816@100913884865.png"></div><div class=frame><h3>step 13 <small>10:09:25</small></h3><div class="blk b-think"><span class=tag>THINKING</span>Now I can see the previous output more clearly:
+```
+Anika Sorensen 85 B
+Bilal Haddad 90 A
+Clara Mbeki 80 B
+Dmitri Volkov 69 D
+Elena Ruiz 60 D
+Farouk Adeyemi 100 A
+self-test ok
+```
+
+So Clara Mbeki 80 B — I was misreading earlier, it&#x27;s &quot;B&quot; not &quot;A&quot;. Good, that&#x27;s correct.
+
+Now the new command is typed. Let me press Enter to run the explicit verification.</div><div class="blk b-act"><span class=tag>ACTION</span>The earlier output now reads clearly — Clara Mbeki is `80 B` (I had misread it). Let me run the explicit boundary check.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+key
+&lt;/parameter&gt;
+&lt;parameter=keys&gt;
+[&quot;return&quot;]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.press(&quot;return&quot;)</div><img class=shot loading=lazy src="step_13_20260816@100925510710.png"></div><div class=frame><h3>step 14 <small>10:10:22</small></h3><div class="blk b-think"><span class=tag>THINKING</span>Now the verification output shows:
+```
+Anika Sorensen 85 B
+Bilal Haddad 90 A
+Clara Mbeki 80 A
+Dmitri Volkov 69 D
+Elena Ruiz 60 D
+Farouk Adeyemi 100 A
+checks: 85 60 A B B D A
+```
+
+Wait, this time Clara Mbeki shows &quot;80 A&quot; again?! But the checks line says: 85 60 A B B D A. Let me map:
+- g.round_score(84.5) = 85 ✓
+- g.round_score(59.5) = 60 ✓
+- g.letter(90.0) = A ✓
+- g.letter(80.0) = B ✓
+- g.letter(79.5) = B ✓
+- g.letter(69.4) = D ✓
+- g.letter(100.0) = A ✓
+
+So the checks line confirms letter(80.0)=B and letter(79.5)=B. That&#x27;s correct.
+
+But the student list in this run shows &quot;Clara Mbeki 80 A&quot;?? Wait, this is the second run&#x27;s student list output. Let me re-read. Actually there are two student lists now:
+1. From the first `python3 grade_report.py` run (top, partially scrolled): 
+   - ...
+   - Elena Ruiz 60 D
+   - Farouk Adeyemi 100 A
+   - self-test ok
+2. From this `python3 -c` run (bottom):
+   - Anika Sorensen 85 B
+   - Bilal Haddad 90 A
+   - Clara Mbeki 80 A   ← shows &quot;A&quot;?
+   - Dmitri Volkov 69 D
+   - Elena Ruiz 60 D
+   - Farouk Adeyemi 100 A
+   - checks: 85 60 A B B D A
+
+Hmm. The `checks` line clearly shows letter(79.5) = B (the 5th value, &quot;B&quot;). But the student list shows &quot;Clara Mbeki 80 A&quot;. This is contradictory!
+
+Wait, that can&#x27;t be. Unless... let me reconsider. In the student list, it&#x27;s `g.letter(s)` where s is the score 79.5. And checks shows `g.letter(79.5)` = B. These should be identical.
+
+Unless I&#x27;m misreading the &quot;A&quot; vs &quot;B&quot; in &quot;Clara Mbeki 80 A&quot;. The font is small. Let me zoom in / look very carefully.
+
+Actually wait — comparing within the same bottom block:
+- &quot;Bilal Haddad 90 A&quot; — the A
+- &quot;Clara Mbeki 80 ?&quot; 
+
+Let me compare the last character of Clara&#x27;s line vs Bilal&#x27;s line. If they&#x27;re the same glyph, then Clara is A (wrong). If different, Clara is B.
+
+Hmm, this is hard to tell from the screenshot. But the `checks:` line is definitive and machine-printed clearly: &quot;85 60 A B B D A&quot;. The 5th token is &quot;B&quot; for letter(79.5). 
+
+But wait, the 4th token is g.letter(80.0)=B, 5th is g.letter(79.5)=B. Both B. So Clara (79.5→80) should be B.
+
+I think the &quot;A&quot; I think I see on Clara&#x27;s line is actually a &quot;B&quot; misrendered/misread. The checks line is authoritative and shows B.
+
+Actually, let me reconsider whether there&#x27;s a subtle bug. Is it possible the student list uses a different code path? No — both use g.letter(s). The only difference: in the student list, s=79.5 (a float literal from the tuple). In checks, g.letter(79.5) — same float. Identical.
+
+So they MUST be the same. Therefore Clara&#x27;s letter in the student list is B, and I&#x27;m misreading the tiny font.
+
+To be 100% certain and avoid any doubt, let me run one more very explicit, unambiguous test: print repr for Clara&#x27;s letter with clear delimiters.
+
+Actually, the checks line already gives me the unambiguous answer: &quot;85 60 A B B D A&quot;. Let me just verify my mapping once more:
+print(&#x27;checks:&#x27;, g.round_score(84.5), g.round_score(59.5), g.letter(90.0), g.letter(80.0), g.letter(79.5), g.letter(69.4), g.letter(100.0))
+→ 85, 60, A, B, B, D, A
+So:
+- round_score(84.5) = 85 ✓ (was 84 before)
+- round_score(59.5) = 60 ✓
+- letter(90.0) = A ✓ (was B before — the off-by-one fix)
+- letter(80.0) = B ✓
+- letter(79.5) = B ✓ (rounds to 80 → B)
+- letter(69.4) = D ✓
+- letter(100.0) = A ✓
+
+All correct. The self-test also printed &quot;self-test ok&quot; with no assertion errors.
+
+The task is complete. Both bugs are fixed:
+1. Rounding: 84.5 now → 85 (round half up) instead of 84.
+2. Letter cutoffs: 90 now → A instead of B (&gt;= instead of &gt;).
+3. Self-test runs clean (&quot;self-test ok&quot;, no assertion errors).
+
+The file was saved to disk via sed -i, so it&#x27;s persistent. The editor reflects the saved changes (no unsaved dot on the tab — actually let me verify there&#x27;s no unsaved indicator). The tab shows &quot;grade_report.py ×&quot; with an X, not a dot, meaning it&#x27;s saved. Good.
+
+I&#x27;m confident. Let me give a final summary. I don&#x27;t need to take more actions. Actually, let me just do a final confirmation that the file is saved and has no pending changes. The tab title earlier showed a dot indicator in some screenshots? Let me check the current screenshot — the tab at top says &quot;grade_report.py&quot; with what appears to be an × (close button), meaning saved. Good.
+
+The task is done. Let me write the final response.
+
+Actually, I realize I should double check that there&#x27;s no unsaved state issue. Since I edited via sed on disk, and VS Code detected the external change and reloaded (the editor content updated to show int(score + 0.5) and &gt;=), the file is saved on disk. There&#x27;s no unsaved buffer. Good.
+
+Let me finalize.</div><div class="blk b-act"><span class=tag>ACTION</span>Both bugs are fixed and verified. The explicit boundary check printed `checks: 85 60 A B B D A`, which maps to:
+
+- `round_score(84.5) = 85` ✓ (was 84 — banker&#x27;s rounding bug fixed)
+- `round_score(59.5) = 60` ✓
+- `letter(90.0) = A` ✓ (was B — cutoff off-by-one fixed)
+- `letter(80.0) = B`, `letter(79.5) = B`, `letter(69.4) = D`, `letter(100.0) = A` ✓
+
+And the script&#x27;s own `self_test()` printed **`self-test ok`** with no assertion errors.
+
+## Summary of changes to `grade_report.py`
+
+1. **Rounding (line 14)** — changed `return int(round(score))` to `return int(score + 0.5)`. Python 3&#x27;s built-in `round()` uses *banker&#x27;s rounding* (round-half-to-even), so `84.5` was coming out as `84`. Adding `0.5` before truncating gives proper round-half-up, so `84.5 → 85`.
+
+2. **Letter cutoffs (lines 19–25)** — changed each `if p &gt; N:` to `if p &gt;= N:` (90/80/70/60). Using strict `&gt;` meant a `90` failed `90 &gt; 90` and fell through to &quot;B&quot;. The `&gt;=` boundaries now assign 90 → A, 80 → B, 70 → C, 60 → D as intended.
+
+The corrected report:
+```
+Anika Sorensen 85 B
+Bilal Haddad 90 A
+Clara Mbeki 80 B
+Dmitri Volkov 69 D
+Elena Ruiz 60 D
+Farouk Adeyemi 100 A
+self-test ok
+```
+
+The file was saved to disk and the self-test runs clean, so the exam board&#x27;s reprint is ready.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+call_user
+&lt;/parameter&gt;
+&lt;parameter=text&gt;
+Both bugs are fixed and verified. The explicit boundary check printed `checks: 85 60 A B B D A`, which maps to:
+
+- `round_score(84.5) = 85` ✓ (was 84 — banker&#x27;s rounding bug fixed)
+- `round_score(59.5) = 60` ✓
+- `letter(90.0) = A` ✓ (was B — cutoff off-by-one fixed)
+- `letter(80.0) = B`, `letter(79.5) = B`, `letter(69.4) = D`, `letter(100.0) = A` ✓
+
+And the script&#x27;s own `self_test()` printed **`self-test ok`** with no assertion errors.
+
+## Summary of changes to `grade_report.py`
+
+1. **Rounding (line 14)** — changed `return int(round(score))` to `return int(score + 0.5)`. Python 3&#x27;s built-in `round()` uses *banker&#x27;s rounding* (round-half-to-even), so `84.5` was coming out as `84`. Adding `0.5` before truncating gives proper round-half-up, so `84.5 → 85`.
+
+2. **Letter cutoffs (lines 19–25)** — changed each `if p &gt; N:` to `if p &gt;= N:` (90/80/70/60). Using strict `&gt;` meant a `90` failed `90 &gt; 90` and fell through to &quot;B&quot;. The `&gt;=` boundaries now assign 90 → A, 80 → B, 70 → C, 60 → D as intended.
+
+The corrected report:
+```
+Anika Sorensen 85 B
+Bilal Haddad 90 A
+Clara Mbeki 80 B
+Dmitri Volkov 69 D
+Elena Ruiz 60 D
+Farouk Adeyemi 100 A
+self-test ok
+```
+
+The file was saved to disk and the self-test runs clean, so the exam board&#x27;s reprint is ready.
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>DONE</div><img class=shot loading=lazy src="step_14_20260816@101022036940.png"></div><script>
 const frames=[...document.querySelectorAll('.frame')];
 let cur=0, all=false;
 const pos=document.getElementById('pos'), rng=document.getElementById('rng');
