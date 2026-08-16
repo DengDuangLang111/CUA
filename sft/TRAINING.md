@@ -2418,6 +2418,18 @@ Estimated ~5–6.5 h per run, 3 shared VMs, starts when v11-500 lands
 (~Aug 16 morning). The lean arm evaluated both ways makes the serving-template
 effect itself a measured variable on the same weights.
 
+**FINAL rich/rich (2026-08-15 23:30): 14/50 = 28%** — the pre-registered
+central call (14/50) hit exactly. Per-domain: chrome 2/3 · gimp 2/4 · calc 2/7
+· impress 0/7 · writer 1/3 · multi_apps 3/12 · os 2/4 · thunderbird 0/3 ·
+vlc 1/3 · vs_code 1/4. Grading the forecast: impress collapse (0/7) and os
+(2/4) called exactly; multi_apps finished 25% — its mid-run 3/6 heat fully
+regressed (0/6 in the back half), landing between the prior (15%) and the
+streak; vs_code and thunderbird over-predicted (corpus strength did not
+transfer). One task (impress 70bca0cc) aborted on 5x LLM timeout at step 44
+in pass 1; the driver's pass-2 retry scored it (fail) — 50/50 clean, no
+denominator holes. The 28% now awaits the base/keepthink control: handover
+was autonomous (rich serve cancelled 23:31:56, base serve 233022 submitted).
+
 **Pre-registered prediction (2026-08-15 20:55 PT, rich/rich at 25/50 scored,
 8 passed)**: final 13–15/50 (central 28%), band 11–18. Per-domain forecast:
 impress ~10% (0/6 observed — domain collapse), multi_apps ~15% over its 10
