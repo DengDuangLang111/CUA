@@ -229,7 +229,12 @@ traj 节拍(30min)   │   ignoreCommand 分类   └ 轨迹 traj/      ← Verc
 2. **健康条**(侧边栏 brand 下):`live/idle/STALLED?` + 最后推送距今 + 两份
    json 的 updated + 壳版本/SHA。判定:有进行中的 run 且 >12 分钟无任何推送
    才红 —— "没新数据"和"链路断了"从此长得不一样。
-3. **`tools/dash_probe.sh`**:一条命令核五层(origin 头 / 数据双路对比 /
+3. **status-first 循环序(2026-08-15 21:32)**:sft daemon 原本 publish(重,
+   渲染 viewer,可达数分钟)在 status(轻,秒级)之前,tier-3 出新臂时把矩阵
+   数据节拍从 5 分钟拖到 ~10 分钟 —— 用户第三次报"不刷新"的根因。现为
+   status → publish → status:数据永远先行,新臂的 traj 链接靠第二遍 status
+   同周期补上。
+4. **`tools/dash_probe.sh`**:一条命令核五层(origin 头 / 数据双路对比 /
    线上壳版本 vs 仓库壳版本 / traj 抽样 / WSL daemon 存活),任何改动后跑一次。
 
 **否决的方案**:为 traj 拆第二个 Vercel 项目(能整个删掉分类器)——用户要单站,
