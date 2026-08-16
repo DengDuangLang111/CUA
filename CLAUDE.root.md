@@ -23,8 +23,11 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && <命令>"'
   多行/复杂脚本走 heredoc:`ssh osworld-windows 'wsl -e bash -s' <<'EOF' … EOF`。
 - **推单个文件**:`ssh osworld-windows 'wsl -e bash -lc "cat > /绝对/路径"' < 本地文件`,
   **推完必对 md5**(`md5 -q` vs `md5sum`),不一致就当没推。for 循环套引号会静默失败。
-- **多段 heredoc 会静默吞输出**(三跳下退出码还是 0)——查状态一次 ssh 只查一件事;
-  等条件用 Monitor 或 `Bash(run_in_background)` + until 循环,过滤器必须覆盖失败态。
+- **heredoc 里的内层 ssh 必须加 `-n`**:不加则内层 ssh 把外层脚本的剩余行当
+  stdin 吃掉 —— 这就是"多段 heredoc 静默吞输出"的真机制(2026-08-16 破案:
+  吞的不只是输出,是后续命令本身,曾静默漏杀进程/漏建文件)。查状态仍旧
+  一次 ssh 只查一件事;等条件用 Monitor 或 `Bash(run_in_background)` + until
+  循环,过滤器必须覆盖失败态。
 - `timeout` 命令在 Mac zsh 不存在,别用。
 - 连通自检:`ssh -o BatchMode=yes osworld-windows 'wsl -e bash -lc "echo OK && whoami"'`
 

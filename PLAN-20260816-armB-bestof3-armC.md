@@ -57,7 +57,11 @@ best-of-3 选择 → C 数据构建 → C 训练 → C eval                  ←
 
 ## 4 进度勾选
 
-- [ ] v11-500 rollout 444/444
+- [~] v11-500 rollout **443/444(249 过/194 败,56.2%)**;最后一题因实验机
+      08-16 下午掉线中断,回线后补
+- [x] 质量普查固化:`ostg.sft.census`(复用 build 同款 traj 加载器,枚举自
+      harness import;pipeline.sh 第 0 步 + 可独立调用)—— B 构建前的对表会
+      用它出数(用户规矩:检测走 pipeline,不写一次性脚本)
 - [ ] B 数据构建(含新过滤,剔除清单入账)
 - [ ] B 训练完成(ep1/ep3 checkpoint 齐)
 - [x] ep1(A-ckpt150)eval **完成:13/50 = 26% ≈ ep3 的 28% —— epochs 判据出局,损伤属于语料本身**(详 TRAINING.md);原 [~] 记录保留:

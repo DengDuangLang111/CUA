@@ -2,9 +2,10 @@
 
 ## 现状(2026-08-15,过时即改;历史快照看 git log)
 
-- **v11-500 教师 rollout 进行中**:291/444 起降为 **2 VM** 续跑(run38b.sh,同 result_dir;
-  PLAN-20260815),`results_generated/qwen38-27b-local/v11-500-t1ms50-20260814`,
-  Qwen3.8-27B FP8 · thinking on · serve 链在班。
+- **v11-500 教师 rollout 实质完成:443/444,249 过 / 194 败(教师通过率 56.2%)**
+  —— 最后一题(vs_code)重跑中断于实验机 08-16 下午掉线;机器回线后补最后一题
+  + 跑 `ostg.sft.census` 质量对表 + B 构建。若机器是重启,恢复 Tillicum 链路
+  需重过一次 Duo(ControlMaster 会随重启死亡)。
 - **eval-50 epochs 曲线闭合:base 38% → ep1 26% → ep3 28%** —— 损伤在第一个
   epoch 就全额安装且不随深度变化;训练深度无罪,语料迁移全责。详情
   → `sft/TRAINING.md`。

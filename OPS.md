@@ -277,6 +277,15 @@ ssh -S ~/.ssh/cm/qwen36-tillicum-login -o ControlMaster=no -o BatchMode=yes \
 ssh -S ~/.ssh/cm/qwen36-tillicum-login jy050706@tillicum-login02.hyak.uw.edu
 ```
 
+### 隧道自去重与孤儿自灭(2026-08-16 加固)
+
+历史病:每个 driver 启动都无条件拉新隧道,旧清理(`pkill -f "LPORT=..."`)匹配
+命令行而 LPORT 是环境变量、从未杀到过任何实例,隧道又永不自退 —— 峰值时 6 个
+副本(其中 5 个死 job 的孤儿)以 ~600 次/小时空轮询登录节点。已修在脚本本身
+(唯一咽喉点):启动时扫 /proc 环境变量**杀掉同 LPORT 的一切旧实例**(含历史
+遗留);job 连 PENDING 都查不到持续 ~1 小时则**自动退出**。此后无论 driver
+怎么反复重启,每端口至多一条隧道,且不留永生孤儿。
+
 ### 重建隧道(只有 ControlMaster 挂了才需要)
 
 ```bash
