@@ -224,6 +224,43 @@ function sftArmTable(){
       + `<td class="num why">${Object.values(a.tasks).reduce((s,t)=>s+t.steps,0)}</td>`));
 }
 
+/* ---- SFT: verified eval-50 matrix, same sft.json feed ------------------- */
+const ev50 = ()=> (window.SFT && window.SFT.eval50) || {panel:[],arms:[]};
+const ev50Best = ()=> (ev50().arms||[]).filter(a=>a.group!=="reference")
+                                       .reduce((m,a)=>Math.max(m,a.passed),0);
+function ev50Matrix(){
+  const E = ev50(), P = E.panel||[], A = E.arms||[];
+  if (!A.length) return `<p class="note">waiting for the first eval-50 arm…</p>`;
+  /* trajectory publication is owned by the OTHER daemon (status.json), so a
+     cell becomes a link exactly when that run's row says traj_published. */
+  const pub = new Set(((window.LIVE&&window.LIVE.runs)||[])
+                      .filter(r=>r.traj_published).map(r=>r.batch));
+  const heads = [["arm"],["solved",'class="num"'],["mean",'class="num"'],
+    ...P.map((t,i)=>[`${i+1}<small>${t.dom.replace("libreoffice_","")}</small>`,
+                 `class="task" title="${esc(t.dom)}/${esc(t.id)} — ${esc(t.instr)}"`])];
+  const rows = A.map(a=>{
+    const cells = P.map(t=>{
+      const r = a.tasks[t.id];
+      if (!r) return `<td class="cell"><span class="cnone">—</span></td>`;
+      const cls  = r.score===1 ? "cpass" : "cfail";
+      const mark = r.score===1 ? "✓" : "·";
+      const tip  = `${a.label} · ${t.dom}/${t.id.slice(0,8)}: `
+                 + `${r.score===1?"pass":(r.score==null?"unscored":"fail")}, ${r.steps} steps, `
+                 + `${r.distinct} distinct actions, longest repeat ${r.maxrep}`
+                 + `${r.term?", emitted terminate":", never terminated"}`;
+      const body = `${mark}<small>${r.steps}</small>`;
+      return pub.has(a.run)
+        ? `<td class="cell"><a class="${cls}" title="${esc(tip)}" target="_blank" rel="noopener"
+             href="traj/${a.modeldir}/${a.run}/${r.dom}/${t.id}/viewer.html">${body}</a></td>`
+        : `<td class="cell"><span class="${cls}" title="${esc(tip)}">${body}</span></td>`;
+    }).join("");
+    return `<td><b>${esc(a.label)}</b><div class="why">${esc(a.note)}</div></td>`
+         + `<td class="num hl">${a.passed}/${a.scored}</td>`
+         + `<td class="num">${a.mean==null?"—":a.mean.toFixed(2)}</td>` + cells;
+  });
+  return tbl(heads, rows);
+}
+
 const VIEWS = [
 {id:"runs", group:"Current", title:"All rollout runs", rate:"live",
  head:{t:"Every rollout run, one row each", pills:[P.good("auto-discovered"),P.dim("zero-config")],
@@ -562,6 +599,23 @@ const VIEWS = [
  traj:{picker:true, n:"9 tasks per arm · every step the model took",
    note:"Same step player as the rollouts: verbatim thinking, tool call, the pyautogui that ran, and the VM screenshot at each step."}},
 
+{id:"sft-eval50", group:"SFT", title:"Verified eval-50", rate:"live",
+ head:{t:"Verified eval-50 — the arms on the real benchmark", pills:[P.good("live"),P.dim("frozen 50-task sample · non-proxy · ms50"),P.warn("arms comparable only under the identical config")],
+   lede:"The eval matrix that decides the arms: a frozen, domain-stratified 50-task sample of OSWorld-Verified (seed 20260815, proxy tasks excluded), every arm run by the same script — ms50, sleep 3, temp 1.0 / top_p 0.95 (client) with top_k 20 riding the serve override, history 100, image_max 20, no OSTG_* env vars. Score = each task's own evaluator. Cells open the step player once that run's trajectories are published."},
+ design:()=>{ const S=window.SFT; return `
+  <div class="seclabel">Task × arm — the 50 columns are the frozen sample, domain-ordered${S&&S.updated?` · as of ${S.updated}`:""}</div>
+  ${ev50Matrix()}
+  <p class="note">Cell = pass (✓) or fail (·) with steps taken; tooltip carries distinct-action count,
+  longest repeat and whether the run emitted <code>terminate</code>. An arm still filling in is a row
+  with — cells: the eval runs one VM alongside the rollout, roughly a task every 8 minutes.
+  <b>Reading it</b>: rich/rich = rich weights + keepthink template + preserve_thinking; the lean arm
+  appears twice on the same weights (keepthink vs stock serving) so the serving template itself is a
+  measured variable. Numbers are comparable only within this table — same tasks, same harness, same
+  sampler.</p>
+  <p class="note">The base-4B row is the floor every trained arm must beat; until it lands, treat the
+  trained rows as absolute readings without a reference. Protocol and arithmetic (why n=50, SE ≈ 4–6
+  points, the free upgrade to n=100): <code>sft/TRAINING.md</code>, "The Verified eval protocol".</p>`;}},
+
 {id:"sft-train", group:"SFT", title:"Training runs", rate:"",
  head:{t:"Training runs", pills:[P.dim("full-parameter · 1 GPU · ms-swift")],
    lede:"What has been trained, on what, and what each arm is there to isolate. Arms with a tier-3 result are in the panel view; this page is the recipe and the schedule caveats that make those numbers readable."},
@@ -774,6 +828,7 @@ function renderNav(sel){
       let r = v.rate;
       if (v.id === "v11"){ const s = lv(); r = s ? s.rate + "%" : "live"; }
       if (v.id === "sft-panel" && sftArms().length){ r = sftBest() + "/9"; }
+      if (v.id === "sft-eval50" && ev50().arms.length){ r = ev50Best() + "/50"; }
       if (v.id === "sft-train" && sftArms().length){ r = sftArms().length + " arms"; }
       return `<a href="#${v.id}" class="${v.id===sel?'sel':''}">${v.title}<span class="r ${r&&r!=="—"?'':'na'}">${r||""}</span></a>`;}).join("");
   }).join("");
