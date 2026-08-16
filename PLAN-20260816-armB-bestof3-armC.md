@@ -1,0 +1,68 @@
+# PLAN 2026-08-16 — B 臂(量)→ ep1 曲线(深)→ best-of-3 重跑(质)→ C 臂
+
+> **活跃计划文档**:全部任务跑完并入账后归档进 `outdated/`。批准:用户 2026-08-16
+> 凌晨("你先写一个接下来的计划md,跑完了这一切任务再归档")。
+> 背景:eval-50 头两臂给出 base/keepthink **38%** > rich/rich **28%** ——
+> arm A(69 轨迹 ×3ep 全参)对 Verified 迁移为负,损伤集中在语料稀薄域
+> (窄化签名)。本计划用三个可测实验拆开 **量 / 深 / 质** 三个嫌疑。
+
+## 0 现有过滤的事实(2026-08-16 核对 sft/traj.py + build.py)
+
+已有(片段级,arm A 用过):撞顶轨迹截 `low_diversity_tail`(≥8 步、≤3 种动作
+的尾巴);非撞顶截 `tail_run`(结尾逐字节同动作连段);中途 ≥8 连同动作只保
+第一步为训练目标(历史保留)。**没有**(B/C 新增):整条剔除撞顶侥幸 pass;
+DONE/terminate 纪律要求。
+
+## 1 流水线(依赖顺序)
+
+```
+v11-500 rollout 收尾(3 VM,344/444 起)                        ← 进行中
+   ├─→ [GPU] B 数据构建(500+100 成功轨迹,新过滤)→ B 训练 3ep(存 ep 边界)
+   └─→ [VM]  ep1 eval(arm A ckpt-150,2 VM,~3.5h)‖ 重跑一(1 VM 起步)
+                └─ eval 撤场后 3 VM 全给重跑一/二(各 ~20h)
+B-ep1 / B-ep3 eval(各 2-3 VM ~3h)                             ← 量+深的裁决
+best-of-3 选择 → C 数据构建 → C 训练 → C eval                  ← 质的裁决
+```
+
+## 2 各步细则与判据
+
+- **B 数据构建**:v11-500 + v11-100 全部 score==1.0 轨迹,**新增两条整条级过滤**
+  (用户拍板 2026-08-16):①撞 50 步上限的 pass 整条剔除;②从未 emit
+  terminate/DONE 的 pass 整条剔除。片段级过滤照旧。构建走 `sft/pipeline.sh`
+  一键;count 与剔除清单入 TRAINING.md。
+- **B 训练**:同 e3 配方(全参、lr 1e-5、3ep、epoch 边界 checkpoint)。
+  **不预设 3ep 为终点** —— ep1 与 ep3 都要 eval。
+- **ep1 eval(arm A ckpt-150)**:rich 权重的 1-epoch 点,keepthink + preserve,
+  eval-50。判据:若 ep1 显著优于 ep3(28%)、逼近或超过 base(38%),
+  "练太深 = 遗忘"实锤,后续训练默认 1-2ep + 考虑 LoRA/低 lr。
+- **100 重跑 ×2**:run38 同款(教师 3.8、t1.0、ms50、thinking on),
+  result_dir 分别 `v11-100-t1-rerun2-<date>` / `-rerun3-<date>`。
+- **best-of-3 选择规则**:每题在三次跑(原跑 + 两重跑)的成功轨迹里选
+  **最短的合格轨迹**;合格 = emit 过 terminate 且未撞顶。全部不合格则该题
+  弃权(宁缺毋滥)。同长度平手取带显式验证动作者(先记规则,C 构建时实现)。
+- **C 数据构建 + 训练 + eval**:best-of-3 语料,epoch 数由 ep1-eval 结论决定。
+- **eval 一律**:verified_eval50_nonproxy,keepthink + preserve,同 runner 同参
+  (top_k 20 在 serve override)。臂间只比这张表。
+
+## 3 资源与预算
+
+| 项 | 资源 | 估时 |
+|---|---|---|
+| 500 收尾 | 3 VM | ~20h(进行中)|
+| B 构建+训练 | Tillicum GPU | ~1 天(与 VM 无关,500 落地即起)|
+| ep1 eval | 2 VM + 1 GPU serve | ~3.5h |
+| 重跑 ×2 | 1→3 VM + 教师 serve | ~2 天 |
+| B-ep1/ep3 eval | 2-3 VM + GPU serve | 各 ~3h |
+| C 构建+训练+eval | GPU + VM | ~1 天 |
+
+## 4 进度勾选
+
+- [ ] v11-500 rollout 444/444
+- [ ] B 数据构建(含新过滤,剔除清单入账)
+- [ ] B 训练完成(ep1/ep3 checkpoint 齐)
+- [ ] ep1(A-ckpt150)eval 落地,epochs 判据出结论
+- [ ] 重跑一完成 / [ ] 重跑二完成
+- [ ] B-ep1 eval / [ ] B-ep3 eval → 量的裁决入 TRAINING.md
+- [ ] best-of-3 选择脚本 + C 构建(选择统计入账)
+- [ ] C 训练 + eval → 质的裁决入 TRAINING.md
+- [ ] 全部入账后:本文与 PLAN-20260815 一起归档 outdated/
