@@ -2418,6 +2418,37 @@ Estimated ~5–6.5 h per run, 3 shared VMs, starts when v11-500 lands
 (~Aug 16 morning). The lean arm evaluated both ways makes the serving-template
 effect itself a measured variable on the same weights.
 
+### Trajectory forensics at ep1's 7-task mark (2026-08-16 05:0x)
+
+Three findings that change how the arm numbers should be read:
+
+1. **The eval has a hidden 10% dimension: five `func:"infeasible"` tasks**
+   (gimp svg-convert, calc 2bd59342, os a462a795, vlc 7882ed6e, vs_code
+   7c4cc09e) where declaring FAIL is the correct answer. Surrender profiles:
+   base declares once in 50 tasks (1/1 correct — never quits, so loses 4 of 5
+   infeasible points by grinding to cap); ep3 declares 4 times (2 correct =
+   os+vlc, 2 wrong — including impress 455d3c66, the task base nearly passed
+   at 0.903); ep1 so far 1 true declaration, and it is the show-piece:
+2. **ep1's svg "win" is a correct infeasibility deliberation** — 10 steps,
+   ending in a 114k-char think that concludes the task cannot be done, then
+   FAIL. base and ep3 both ground to the cap on it. The deep-thinking mode
+   that makes ep1 slow is exactly what produced the benchmark's hardest
+   judgment call.
+3. **ep1's unique loss (transparent-background) was not a surrender — the
+   harness killed it.** Step 4's think plans "zoom in to verify the
+   selection"; the tool call emits `ctrl_scroll` — an action name NOT in the
+   parser enum → empty parse → the upstream fallback (restored 08-14) ends
+   the episode as FAIL. §3.1's hallucinated-action trap, now with
+   instant-death semantics. Rules are equal across arms, but arms that
+   hallucinate undeclared action names more (the半迁移态 ep1) pay more.
+   Count per-arm empty-parse deaths at the full-50 mark.
+
+Corpus-design implications, recorded for B/C: exact action-name fidelity is a
+trainable/filterable property (one hallucinated name = one dead episode
+upstream); and surrender calibration is worth 10% of the benchmark —
+best-of-3 selection keeps correct-FAIL demos if the rerun corpus surfaces
+any, and generated corpora should include infeasible tasks with FAIL demos.
+
 **FINAL base/keepthink (2026-08-16 02:13): 19/50 = 38% — THE STOCK MODEL
 BEATS THE SFT ARM BY 10 POINTS.** Identical serving (keepthink +
 preserve_thinking), weights the only difference. Per-domain (base vs rich):
