@@ -127,7 +127,7 @@ window.LIVE = null; window.SFT = null;
    2026-08-15 when the hobby-tier deploy quota ran out mid-campaign and the
    site sat on 90-minute-old numbers while GitHub had current ones. The
    relative fetch stays as fallback (works on previews/local). */
-const SHELL_STAMP = "20260815-robust1";   /* bump on shell changes; probe greps it */
+const SHELL_STAMP = "20260816-etag";   /* bump on shell changes; probe greps it */
 const RAW_BASE = "https://raw.githubusercontent.com/DengDuangLang111/CUA/";
 const REPO_API = "https://api.github.com/repos/DengDuangLang111/CUA/commits/main";
 /* SHA-PINNED FETCH (2026-08-15): the branch-ref raw URL sits behind a CDN with
@@ -138,13 +138,26 @@ const REPO_API = "https://api.github.com/repos/DengDuangLang111/CUA/commits/main
    edge), and the 404 falls back to the branch ref. API rate limit (60/hr/IP
    unauth) at one poll per 2 min = 30/hr; on 403/failure we also fall back. */
 window.FRESH = {sha:null, pushed:null, api:false};
+/* ETag conditional requests: a 304 does NOT count against the unauthenticated
+   60/hr/IP limit, so multiple open tabs no longer exhaust it (the failure
+   mode: limit trips -> silent branch-CDN fallback -> stale cache returns).
+   On any API failure we still fall back to the branch ref, never a stale sha. */
+const _shaCache = {etag:null, sha:null, pushed:null};
 async function headSha(){
   try{
-    const r = await fetch(REPO_API, {cache:"no-store"});
+    const h = _shaCache.etag ? {"If-None-Match": _shaCache.etag} : {};
+    const r = await fetch(REPO_API, {cache:"no-store", headers:h});
+    if (r.status === 304){
+      window.FRESH.pushed = _shaCache.pushed;
+      return _shaCache.sha;
+    }
     if(!r.ok) return null;
+    _shaCache.etag = r.headers.get("etag");
     const j = await r.json();
-    window.FRESH.pushed = (j.commit && (j.commit.committer||j.commit.author||{}).date) || null;
-    return j.sha || null;
+    _shaCache.pushed = (j.commit && (j.commit.committer||j.commit.author||{}).date) || null;
+    _shaCache.sha = j.sha || null;
+    window.FRESH.pushed = _shaCache.pushed;
+    return _shaCache.sha;
   }catch(e){ return null; }
 }
 function pullJson(ref, name, apply){
