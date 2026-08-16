@@ -2215,6 +2215,17 @@ resample; a new draw is a new eval and old numbers stop being comparable.
 **Subset property verified 2026-08-15: every task in the 50 is in the 100
 (per-domain ⊆ checks all true, zero duplicates).**
 
+**External anchor found 2026-08-15**: the Qwen3.5-4B model card itself
+reports **OSWorld-Verified 35.6** (alongside ScreenSpot Pro 60.3, AndroidWorld
+58.6). Not comparable to our numbers — vendor self-reports run their own
+agent/harness and favored step tier on the full 369 (incl. proxy), vs our
+ms50 · screenshot-only · pyautogui · 50-task non-proxy subset — but it warns
+that the base prior below (5–10%) may be far too low: if stock 4B lands
+25–35% even on our stricter harness, the SFT margin question is much tighter
+than the power arithmetic assumed. The base-stock arm measurement settles it;
+until then treat 35.6 as "the vendor can make this model do Verified" and
+nothing more.
+
 **50 vs 100, the arithmetic.** At plausible rates (base 4B ≈ 5–10%, a useful
 SFT effect ≥ +15 points), n=50 gives SE per arm ≈ 4–6 points — enough to call
 a ≥15-point gap, not enough for ≤8. n=100 halves nothing (SE ~3–4) but doubles
