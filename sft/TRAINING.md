@@ -2418,6 +2418,22 @@ Estimated ~5–6.5 h per run, 3 shared VMs, starts when v11-500 lands
 (~Aug 16 morning). The lean arm evaluated both ways makes the serving-template
 effect itself a measured variable on the same weights.
 
+**FINAL base/keepthink (2026-08-16 02:13): 19/50 = 38% — THE STOCK MODEL
+BEATS THE SFT ARM BY 10 POINTS.** Identical serving (keepthink +
+preserve_thinking), weights the only difference. Per-domain (base vs rich):
+impress 2/7-vs-0/7 (+ one 0.903 near-pass) · thunderbird 2/3-vs-0/3 · vs_code
+2/4-vs-1/4 · multi_apps 4/12-vs-3/12 · os 1/4-vs-2/4 (rich's only win) ·
+chrome/gimp/calc/writer/vlc identical. Paired: both 12, base-only 7,
+rich-only 2, neither 29 — McNemar 7:2, p≈0.18: not enough to convict "SFT
+hurts" at n=50, decisive that **SFT did not help**. The damage concentrates
+in domains thin or absent in the 69-trajectory corpus — the narrowing
+signature, not a serving artifact. The model card's 35.6 self-report is
+essentially reproduced on our stricter harness (38%): stock Qwen3.5-4B is
+simply strong at Verified out of the box, and the bar arm A had to clear was
+far higher than the 5–10% the protocol assumed. Arm B (v11-100 + v11-500,
+~4x data) is now the pivotal test; the n=100 upgrade path exists if the
+lean arms land within a few points.
+
 **FINAL rich/rich (2026-08-15 23:30): 14/50 = 28%** — the pre-registered
 central call (14/50) hit exactly. Per-domain: chrome 2/3 · gimp 2/4 · calc 2/7
 · impress 0/7 · writer 1/3 · multi_apps 3/12 · os 2/4 · thunderbird 0/3 ·

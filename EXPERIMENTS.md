@@ -5,9 +5,10 @@
 - **v11-500 教师 rollout 进行中**:291/444 起降为 **2 VM** 续跑(run38b.sh,同 result_dir;
   PLAN-20260815),`results_generated/qwen38-27b-local/v11-500-t1ms50-20260814`,
   Qwen3.8-27B FP8 · thinking on · serve 链在班。
-- **rich/rich eval 完成(08-15 23:30):14/50 = 28%**,预注册预测正中;分域与
-  预测对账 → `sft/TRAINING.md`。**base/keepthink 对照臂自动接棒中**(serve 233022,
-  原版 4B 权重 + 同 keepthink 服务,唯权重之差隔离 SFT 效应)。
+- **eval-50 头两臂完成:base/keepthink 19/50 = 38% > rich/rich 14/50 = 28%**
+  —— 原版反超 SFT 十个点(McNemar 7:2,p≈.18);损伤集中在语料稀薄域
+  (impress/thunderbird/vs_code),窄化签名。模型卡 35.6 在我们严口径下复现
+  (38%)。详情 → `sft/TRAINING.md`。lean 双臂接续中。
 - **双臂 SFT 完成**(08-15):rich/lean 各 3 epoch 收敛到 loss .07 / acc 97.78%,
   checkpoint 150/300/450 在 `sft/out/q38e3-{rich,lean}/`。→ `sft/TRAINING.md` 现状块。
 - **eval 矩阵排队**(等 v11-500 空出 VM):base-stock → rich-keepthink →
