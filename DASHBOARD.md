@@ -199,6 +199,16 @@ the shell itself never waits.
 **Deploy budget after this**: traj ≤48/day + manual docs ~10–20 ≈ 60–70,
 against the hobby tier's ~100/day. Status/sft pushes: zero.
 
+**Viewer publish thresholds (2026-08-15)**: the status daemon publishes a
+run's viewers once it has ≥10 scored results — except `eval50-*` runs, which
+publish from the FIRST result (user decision: eval arms must be watchable
+immediately). The exception is scoped on purpose: a blanket threshold of 1
+made the daemon start double-publishing the tier-3 valpanel runs (9 results
+each, already hosted by the SFT daemon under `traj/sft/`) — caught mid-cycle
+before the push, ~100 MB of duplicate screenshots stopped at the staging
+index. Cadence (one traj push per 30-min cycle) is what caps deploys, so the
+threshold change costs zero quota.
+
 ### The repo must live on ext4, not /mnt/d (2026-08-15)
 
 With ~800 MB of trajectory files in the worktree, the daemon's top-of-loop
