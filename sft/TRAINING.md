@@ -2418,6 +2418,13 @@ Estimated ~5–6.5 h per run, 3 shared VMs, starts when v11-500 lands
 (~Aug 16 morning). The lean arm evaluated both ways makes the serving-template
 effect itself a measured variable on the same weights.
 
+**Pre-registered prediction (2026-08-15 20:55 PT, rich/rich at 25/50 scored,
+8 passed)**: final 13–15/50 (central 28%), band 11–18. Per-domain forecast:
+impress ~10% (0/6 observed — domain collapse), multi_apps ~15% over its 10
+remaining (the deciding block), os/vs_code ~40% (corpus-taught terminal and
+settings.json routes), thunderbird ~25%, vlc ~30%. Logged before the fact so
+the final readout can grade the model of the model.
+
 **COMPLETED 2026-08-15 (both COMPLETED, exit 0:0)** — rich 5:19:53, lean
 4:55:21 (~$5 each, under the 9 h wall). Checkpoints 150/300/450 (= epoch
 boundaries) present for both under
