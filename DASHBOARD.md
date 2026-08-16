@@ -187,8 +187,14 @@ matters — *does production serve what the repo holds?* — by comparing the
 served `index.html` against the repo copy. Race-free by construction,
 self-healing (any missed deploy is picked up by the next daemon push, ≤5 min),
 daemon pushes still cost zero quota, and a curl failure fails open into a
-build. Its one assumption: the page is a single-file app — if the site ever
-grows a second code asset, extend the comparison.
+build. Two-stage since later the same day: the pure content-compare
+turned out to skip **traj pushes** (trajectory viewers are Vercel assets too —
+the 'single-file app' assumption was wrong within the hour). Current form:
+build if the last commit touched anything beyond the two json files (catches
+traj pushes on their own merits), otherwise build only if the served shell
+differs from the repo copy (catches coalesced code changes). Residual gap: a
+traj push coalesced under a json push waits for the next traj cycle (≤30 min);
+the shell itself never waits.
 
 **Deploy budget after this**: traj ≤48/day + manual docs ~10–20 ≈ 60–70,
 against the hobby tier's ~100/day. Status/sft pushes: zero.
