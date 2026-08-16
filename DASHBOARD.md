@@ -246,6 +246,14 @@ traj 节拍(30min)   │   ignoreCommand 分类   └ 轨迹 traj/      ← Verc
 前端一个 VIEWS 条目(+ 需要时 traj key)+ probe 里加一行抽样。eval-50 区就是
 按这个路径接入的,当模板用。
 
+### ext4 规则的第二次执行(2026-08-16 06:06)
+
+sft daemon 的 clone(cua-dash-sft)当时漏搬,仍在 /mnt/d —— 08-16 凌晨把周期
+压到 75s 后立刻现形:`git reset --hard` 单步 2–5 分钟,周期被 git 层吃掉,
+"75 秒节拍"名存实亡。照方抓药搬到 `~/cua-dash-sft`(同 sparse 配置):
+git status 0.109s,新 daemon 启动 12 秒内完成首推。**规则升级为:任何
+daemon 的工作 clone 一律 ext4,无例外** —— 这是同一颗雷第二次爆。
+
 ### The repo must live on ext4, not /mnt/d (2026-08-15)
 
 With ~800 MB of trajectory files in the worktree, the daemon's top-of-loop
