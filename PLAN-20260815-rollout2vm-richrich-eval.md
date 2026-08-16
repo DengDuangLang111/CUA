@@ -20,14 +20,19 @@
 
 ## 步骤与状态
 
-- [ ] A1 温和终止 rollout runner,等容器退净
-- [ ] A2 原命令改 `--num_envs 2` 同 result_dir 重启,确认跳过已完成、2 容器在跑
-- [ ] B1 keepthink 模板推上 Tillicum
-- [ ] B2 4B serve sbatch(rich/checkpoint-450,`--chat-template` keepthink,新端口)提交并 RUNNING
-- [ ] B3 WSL 新隧道 18011(复用 ControlMaster,无 Duo)
-- [ ] B4 eval runner 起跑:1 env,50 题,`--preserve_thinking`,参数按 TRAINING.md 协议
-- [ ] C 两路监控挂上(过滤器覆盖失败态);EXPERIMENTS / TRAINING 现状块更新
+- [x] A1 run38.sh 链 + runner 终止,容器清零(17:05)
+- [x] A2 run38b.sh 从 **291/444** 断点续跑,`num_envs 2` 验证(17:11)
+- [x] B1 keepthink 模板上 Tillicum,md5 一致(863e28c4…)
+- [x] B2 serve job **232766** RUNNING @g008(vLLM 起,chat_template 加载确认)
+- [x] B3 隧道 18011 起(ControlMaster 复用,无 Duo);**render 对照验证 keepthink 生效**
+      (同对话带/不带历史 think 渲染 38 vs 30 tokens,差值恰为 think 块)
+- [x] B4 eval runner 起跑 17:21(pass 1 at 0/50,`--preserve_thinking` + `num_envs 1` 验证)
+- [x] C 两路监控挂上(DONE|FATAL 过滤);现状块已更新
 - [ ] D 完成:eval 50/50 落地,读数入账;rollout 收尾后本文归档
+
+执行备注:run38.sh 的 stop_runner 会 `docker rm -f` 全部容器,run38b/run_eval 的
+清理改为按 result_dir 模式 pkill + 共存时跳过 docker 清理;发现 5 个历史积累的
+eval38 隧道副本(pkill -f 匹配不到 env 变量),待两 campaign 之间清理。
 
 ## 预算
 

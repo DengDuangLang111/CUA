@@ -2,8 +2,11 @@
 
 ## 现状(2026-08-15,过时即改;历史快照看 git log)
 
-- **v11-500 教师 rollout 进行中**:261/444,`results_generated/qwen38-27b-local/v11-500-t1ms50-20260814`,
-  Qwen3.8-27B FP8 · thinking on · 3 VM · serve 链 232417 在班(12h 墙自动续)。
+- **v11-500 教师 rollout 进行中**:291/444 起降为 **2 VM** 续跑(run38b.sh,同 result_dir;
+  PLAN-20260815),`results_generated/qwen38-27b-local/v11-500-t1ms50-20260814`,
+  Qwen3.8-27B FP8 · thinking on · serve 链在班。
+- **rich/rich eval 同时在跑**(第 3 个 VM):q38e3-rich checkpoint-450 · keepthink 模板
+  (render 对照验证生效)· `--preserve_thinking` · eval-50 non-proxy · serve 232766 @18011。
 - **双臂 SFT 完成**(08-15):rich/lean 各 3 epoch 收敛到 loss .07 / acc 97.78%,
   checkpoint 150/300/450 在 `sft/out/q38e3-{rich,lean}/`。→ `sft/TRAINING.md` 现状块。
 - **eval 矩阵排队**(等 v11-500 空出 VM):base-stock → rich-keepthink →

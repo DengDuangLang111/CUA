@@ -6,7 +6,9 @@
   (false,4:55:21),同数据(q38-v11100,1,196 样本)同配方,一个 flag 之差。
   终点同(loss .069/.074,acc 均 97.78%),lean 起步更难(0.80 vs 0.62)——
   机制符合预期,训练侧分不出高下。checkpoint 150/300/450(= epoch 边界)。
-- **eval 矩阵待跑**(VM 等 v11-500 rollout 释放):base-stock → rich-keepthink →
+- **rich/rich 已开跑**(2026-08-15 17:21,PLAN-20260815:rollout 让出 1 VM):serve 232766
+  = checkpoint-450 + keepthink(render 对照验证:历史 think 38 vs 30 tokens),runner
+  `--preserve_thinking`,50 题约 6–8 h。其余臂顺序不变:base-stock → rich-keepthink →
   lean-keepthink → lean-stock,verified-eval-50(`eval/verified_eval50_nonproxy.json`),
   keepthink 模板 `eval/qwen35_4b_keepthink.jinja`,serve 时 `--chat-template` 注入。
 - 下一批数据:v11-500 rollout 收尾后按 `sft/pipeline.sh` 一键构建。
