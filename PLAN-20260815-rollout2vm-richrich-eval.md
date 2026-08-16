@@ -28,6 +28,11 @@
       (同对话带/不带历史 think 渲染 38 vs 30 tokens,差值恰为 think 块)
 - [x] B4 eval runner 起跑 17:21(pass 1 at 0/50,`--preserve_thinking` + `num_envs 1` 验证)
 - [x] C 两路监控挂上(DONE|FATAL 过滤);现状块已更新
+- [x] D2 **再平衡(2026-08-15 19:45,用户决定)**:eval 提速为主 —— rollout 降到
+      **1 VM**(run38c.sh,同 result_dir 续跑),rich/rich eval 升到 **2 VM**
+      (同脚本改 `--num_envs 2`,断点续跑自 13/50)。预计 eval ~4 分钟/题,
+      剩余 ~35 题 ≈ 2.5h;rollout 剩 ~145 题 @1VM 会拖到数天 —— 预期是 eval
+      矩阵(base 等臂)接着占这 2 VM,矩阵跑完再还给 rollout。
 - [ ] D 完成:eval 50/50 落地,读数入账;rollout 收尾后本文归档
 
 执行备注:run38.sh 的 stop_runner 会 `docker rm -f` 全部容器,run38b/run_eval 的
