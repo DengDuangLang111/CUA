@@ -25,6 +25,9 @@ RESULT_DIR=$1; TASKS_DIR=$2; OUT_DIR=$3
 P=${OSTG_PYTHON:-/mnt/d/research/OSWorld/.venv/bin/python}
 export PYTHONPATH=.:${OSWORLD_ROOT:-/mnt/d/research/OSWorld}
 
+echo "== census (report-only pre-build gate)"
+$P -m ostg.sft.census "$RESULT_DIR"
+
 echo "== build"
 $P -m ostg.sft.build "$RESULT_DIR" --tasks "$TASKS_DIR" --out "$OUT_DIR" \
     --initial-fallback mp4
