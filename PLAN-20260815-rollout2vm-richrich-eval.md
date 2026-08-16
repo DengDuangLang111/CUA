@@ -32,7 +32,10 @@
 
 执行备注:run38.sh 的 stop_runner 会 `docker rm -f` 全部容器,run38b/run_eval 的
 清理改为按 result_dir 模式 pkill + 共存时跳过 docker 清理;发现 5 个历史积累的
-eval38 隧道副本(pkill -f 匹配不到 env 变量),待两 campaign 之间清理。
+eval38 隧道副本(pkill -f 匹配不到 env 变量)+ 1 条 18001 死隧道(evalfp8)。
+**已清理(2026-08-15 用户批准)**:杀 5 留 2 —— 18020/18011 各留实际持有端口的
+那个实例,清后双端点复检 200/200。根治(run38 系脚本改 pidfile 式去重)是程序
+修改,留待下次 campaign 启动前提 diff。
 
 ## 预算
 
