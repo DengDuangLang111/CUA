@@ -219,7 +219,12 @@ def audit(corpus_dirs, results_root, baseline_dirs, harness_root, noop_names,
                     missing.append(full)
                 elif os.path.getsize(full) == 0:
                     empty.append(full)
-                d = os.path.dirname(p)
+                # Ownership must be keyed on the ABSOLUTE directory. Two pools
+                # built into separate dirs can legitimately hold the same
+                # relative path (images/<slug>/...) for two different tasks --
+                # those files never overwrite each other, so keying on the
+                # relative path invents collisions that do not exist.
+                d = os.path.dirname(full)
                 own = dir_owner.setdefault(d, key)
                 if own != key:
                     shared.append({"dir": d, "a": list(own), "b": list(key)})
