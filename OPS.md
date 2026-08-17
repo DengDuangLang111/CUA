@@ -451,3 +451,11 @@ docker provider 的 `revert_to_snapshot`(`providers/docker/provider.py:153`)
   而且 `python -O` 下两者都会消失。打错的 type/func 要等到 `env.reset()` 才炸,此时 VM 已经起了。
 - **`evaluation_examples/README.md` 是错的**:它写 `"config": {对象}`、
   `"evaluator": "路径字符串"`,实际全是 list 和 dict。**不要照官方 README 写任务。**
+
+## 拥堵时的 serve 抢跑通道(2026-08-17 实操验证)
+
+集群满员时,1-GPU 的 eval serve 可走 `--qos=interactive`(优先级 35 vs
+normal 25,MaxWall 8h;sbatch 命令行覆盖即可,不改文件)插队到全部 normal
+排队之前;eval 驱动按作业名+端口找 serve,换道零兼容成本。训练大作业不适用
+(interactive 墙 8h 且属交互用途)。QOS 全表:normal 25/24h · interactive
+35/8h · debug 50/1h(限1卡) · urgent 200(勿动) · long 25/7d。
