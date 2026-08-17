@@ -248,8 +248,17 @@ def eval50():
                      "label": label, "group": group, "note": note,
                      "scored": len(got),
                      "passed": sum(1 for r in got.values() if r["score"] == 1.0),
+                     # Denominator is the FROZEN PANEL (50), never the number
+                     # of tasks that happened to finish: a task the harness
+                     # never completed scores 0, per the accounting policy
+                     # (OPS.md, 2026-08-17). Dividing by len(got) silently
+                     # rewarded arms that lost tasks to VM stalls -- gb64keep
+                     # read 44.5% on 47 tasks where the panel score is 41.8%.
                      "mean": (round(sum(r["score"] or 0 for r in got.values())
-                                    / len(got), 4) if got else None),
+                                    / len(order), 4) if got else None),
+                     "mean_scored": (round(sum(r["score"] or 0 for r in got.values())
+                                           / len(got), 4) if got else None),
+                     "missing": len(order) - len(got),
                      "tasks": got})
     return {"panel": order, "n": len(order), "arms": arms}
 

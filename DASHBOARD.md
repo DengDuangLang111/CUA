@@ -308,3 +308,17 @@ with `--ignore-existing`, and only the small mutable files (`traj.jsonl`,
 b1epkeep/gb128ep2keep/gb64keep/gb128keep/richstock/leanstock/**bskeep/
 bhqskeep/lorakeep**(后三个 2026-08-17 加)。
 改完这个文件后要把 WSL 侧和 `tools/control/` 两边同步,md5 对齐。
+
+## 为什么网站数字比 git 里的旧(2026-08-17 澄清)
+
+`dashboard/vercel.json` 的 `ignoreCommand`:**只动 `status.json`/`sft.json` 的
+提交跳过部署**,动了任何其他文件才部署。这是刻意的额度节流(守护进程 30 分钟
+一次 = 48 次/天,加轨迹推送会超 hobby 档 ~100/天)。
+
+**后果**:数据每 30 分钟进 git,但**网站停在最近一次"非数据提交"的快照**。
+想立刻看到新数字,提交任何一个非 JSON 文件即可触发部署。
+
+**分数口径(2026-08-17 修正)**:`mean` 的分母改为**冻结面板的 50**,不是
+已跑题数——未跑完的题按 0 计(政策见 `OPS.md`)。旧口径会**系统性抬高
+缺题的臂**:gb64keep 在 47 题上读作 44.5%,面板分实为 41.8%。生成器同时
+输出 `mean_scored`(÷已跑,备查)与 `missing`(缺题数)。
