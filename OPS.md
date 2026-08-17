@@ -459,3 +459,39 @@ normal 25,MaxWall 8h;sbatch 命令行覆盖即可,不改文件)插队到全部 n
 排队之前;eval 驱动按作业名+端口找 serve,换道零兼容成本。训练大作业不适用
 (interactive 墙 8h 且属交互用途)。QOS 全表:normal 25/24h · interactive
 35/8h · debug 50/1h(限1卡) · urgent 200(勿动) · long 25/7d。
+
+## eval runner 僵死:成因与看门狗(2026-08-17)
+
+**症状**:eval 停在 47/50 四十分钟,runner 进程活着、端点 HTTP 200、
+docker 只剩 1 个容器(应 3 个)。
+
+**链条**(日志实证):
+```
+TypeError: a bytes-like object is required, not 'NoneType'   ← obs['screenshot'] 是 None
+ERROR: An error occurred while trying to stop recording: ConnectionResetError(104)
+INFO:  Retrying to stop recording.        ← 无上限重试
+```
+OSWorld 每任务重启 VM(设计如此)。某步撞上重启窗口 → 截图取回 None →
+任务抛异常退出且**不写 result.txt** → 清理阶段对已关闭容器"停止录屏" →
+连接重置 → **重试循环没有上限** → env 进程永远转 → runner 不退出 →
+驱动的 TRY 轮次被堵死 → 整条 eval 链停摆。
+
+**排除项**:docker 根盘 1TB 用 4%(923G 空闲)、WSL 内存 19G 空闲、
+容器退出码 0(正常关闭)。`docker system df` 报的 10.2TB 卷是稀疏文件表观
+大小,不占实际盘(264 个泄漏卷是垃圾,不是成因)。
+
+**另一个被误认成故障的现象**:`5bc63fb9` 的 step 41 重复 217 次 —— 不是重试,
+是**模型一步吐 217 个动作**(逐行 typewrite 一个 Python 文件),每动作 ~4s,
+一步烧 15 分钟。它每 4 秒写一条 traj,**不会被看门狗误杀**。
+
+**看门狗**(`tools/eval_watchdog.sh`,不改 OSWorld 一字节以保 eval 可比性):
+整个 run 目录 `STALE_MIN`(默认 15)分钟无 traj 写入 → 杀该 run 的 runner,
+驱动自行用新 VM 进入下一轮。
+**阈值依据(实测 3 个完整 run 的 6,168 个写入间隔)**:中位 5-6s、p99 19-59s、
+**史上最大 487s(8.1min)、>10min 的 0 个、>15min 的 0 个**;且判据是"整个 run
+目录静默",需 3 个环境同时哑 15 分钟才触发 —— 那种情况基本只有端点挂了,
+此时杀掉正确。
+
+**缺题记账政策(用户令 2026-08-17)**:未跑完的题**按 0 计**(所以 gb64o 的
+41.8% 是 47 题摊 50 题的**下限**,ep2 的 43.8% 是 49 题);整条 eval 链跑完后
+做一次**统一补漏轮**,用同一批 VM 状态补齐所有臂的缺题,可比性最好。
