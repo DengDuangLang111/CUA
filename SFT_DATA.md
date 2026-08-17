@@ -438,3 +438,29 @@ model/run 下都有轨迹**(`results_generated/<model>/<run>/<domain>/<task_id>`
 于是拿 `qwen36-27b-bf16-local` 的轨迹去比 `qwen38-27b-local` 的语料,报出"28 条
 异常、1257 个动作被删"的假结论。改为按 `meta['run']` 定位 + 用 `orig_steps` 校验
 步数后才得到上表。**任何按 task_id 找轨迹的脚本都必须同时锁定 model 和 run。**
+
+### 修复(2026-08-17 当日):判据改对 + 加硬门
+
+**代码改动(ostg@4ca4cae2 / 后续)**:
+
+| 位置 | 改动 | 理由 |
+|---|---|---|
+| `stalled_tail()` | `any(a=="WAIT")` → `all(is_noop(a))` | "含一个 WAIT"≠"什么都没干";agent 的固有习惯就是「点一下+等一下」 |
+| `decide_keep_to()`(新) | 切点定了之后**强制比对终止步截图与原末步截图的 md5**,不一致整条退回 last-only,记 `tail_gate="reverted"` | checker 打分打的是原末步状态;只有画面逐字节相同,截尾才是可证安全的 |
+| `--recompute-tails`(新) | 只重算 keep_to:位置没动的行保留教师原文,动了的才回炉 | 全量重写会把 300+ 条本来没问题的目标静默改掉,而且浪费 |
+| `ask_anthropic/ask_qwen` | 返回 `(reason, error)`,错误写进 `teacher_error` 并计数 | 见下 |
+
+**顺带挖出的第二个静默失败**:`ask_anthropic` 原本把异常吞掉返回空串,而
+`canonical_response("")` 会替换成兜底句。于是**漏传 `--model`(anthropic_cfg
+原样透传模型名)会让整批理由变成同一句话,而日志里一切正常**。首次重跑就踩中:
+7 条理由全空。现在错误会 surface,且**空理由本身被判为 stale,下次重跑自动回炉**。
+
+**两个 pipeline 陷阱(写进 RUNBOOK)**:
+- `--tasks` 传 **run 目录**,不是 `examples/`——`load_instruction` 自己拼 `examples/`。
+- `--backend anthropic` **必须**显式给 `--model claude-opus-5`。
+
+**审计脚本自己的两个 bug(都会造成假警报,记下来免得重犯)**:
+1. 图片路径是**相对于各自 build 目录**的(ship 时才转绝对),按进程 cwd 解析
+   → 报"60,903 张全部缺失"。
+2. 图片目录归属键用了**相对路径** → 两个 pool 各自 build 目录下的同名相对路径
+   被判成冲突,给 Bs 报出 281 处不存在的"共享目录"。**必须用绝对路径做键。**
