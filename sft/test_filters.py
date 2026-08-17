@@ -94,6 +94,7 @@ def test_whole_traj_reject():
 
 
 def test_think_est_tokens():
+    from ostg.sft import traj
     assert traj.think_est_tokens("<think>" + "a" * 350 + "</think>x") == 100
     assert traj.think_est_tokens("no think here") == 0
     assert traj.think_est_tokens("") == 0
