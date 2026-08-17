@@ -216,12 +216,18 @@ quarantine 逐条出审计表(动作/位置/后续步走势/judge 四分类初�
 困难态 action 决策("token 占比 2.9% ≠ action 无价值")。
 优先级公式:rewrite > target-mask > 整条删;改 action 必须 replay,禁止
 静态改 JSON(反事实不一致)。cap-1024 仅作二阶消融。
-**pipeline 优化项(Phase 3 前实现)**:build 加 `--image-cache RAW_DIR`——
-派生构建引用图先查 raw 构建目录,命中即硬链接(零拷贝、目录仍自包含、
-不破坏快照隔离),未命中才重编码;派生构建图片阶段 15min → 秒级。
-动机:DrvFs 上全量重编码每次 ~15-45min,tailclean/rewrite/未来每个派生集
-都重复付费;自包含与溯源原则不变(硬链接后文件独立存在,report 记
-cache 命中数)。
+**pipeline 优化项(已实现,2026-08-17,CUA+ostg@0ee4f290)**:build
+`--image-cache RAW_DIR` 硬链接复用 + pipeline `IMAGE_CACHE` 直通;命中记
+`images_cache_hits`。派生构建图片阶段 15-45min → 秒级;自包含与溯源不变
+(硬链接文件独立存在)。小文件跨机移动继续走 tar 流(ship_dataset 既有)。
+
+**Phase 1.5|训练仪表(探针式,twin 训练窗口内实现)**:在线全套需动 swift
+训练器内部(魔改,不上对照臂);等价交付 = **离线 per-checkpoint 探针**
+`ostg.sft.ckptprobe`(1-GPU 小作业):对每个 checkpoint 算 ①‖θ‖、
+②‖θₖ−θₖ₋₁‖(位移理论直接度量)、③update/weight ratio、④固定探针集上的
+think-loss / action-loss / action-token-acc(区域掩码分通道 CE),回填
+wandb。三存制下曲线密度 = 9 点/3ep + init。派生指标 clip_scale /
+post_clip_norm = min(1, 1/grad_norm) 由已记 grad_norm 后处理补写。
 
 ### 裁决后的优先级分叉(预登记)
 
