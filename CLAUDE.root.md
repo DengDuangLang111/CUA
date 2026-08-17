@@ -76,6 +76,7 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && set -a && . 
 | 运维深度:魔改明细/代理/隧道/资源/任务 JSON 语义与坑 | `CUA/OPS.md` |
 | Dashboard/Vercel 契约 | `CUA/DASHBOARD.md` |
 | 论文与创新点 | `CUA/READING.md` |
+| 候选实验/改进方向的评估与排队 | `CUA/IDEAS.md` |
 | ostg 分支史 / main 是谁 | `CUA/taskgen/GIT_HISTORY.md` |
 | 官方 361/V2 任务运行条件(冻结参考) | `CUA/reference/OSWORLD_VERIFIED_RUNTIME_REQUIREMENTS.md` · `..._V2_...` |
 | 历史方案(v7 计划/配对组/旧状态页) | `CUA/outdated/` |
