@@ -155,15 +155,32 @@ def curate(traj_files, arb_files, step_files, min_conf, min_score=0,
             # terminal stratum steps come from checker-passed trajs only
             flags[k].add("weak_terminal" if r["step"] == r.get("n_steps")
                          else "weak_step")
-    verdicts = {}
+    # Verdict selection used to be "later file with >= confidence wins",
+    # which made the --arb argument ORDER decide the outcome and treated a
+    # v1 ruling as equal to a v2 one. The adversarial pass exposed it: 8 of
+    # 16 revoked rescues had a v2 ruling of checker_right that a v1 ruling
+    # had silently overridden. Now: v2 outranks v1 (two-stage arbitration
+    # derives its own audit before seeing the verdict, so it is the less
+    # anchored protocol), and a rescue needs UNANIMITY among the rulings at
+    # the top rank -- contested evidence does not enter training data.
+    all_rulings = defaultdict(list)
     for p in arb_files:
         for r in rows(p):
-            if r.get("judge_status") != "ok":
-                continue
-            k = (r["domain"], r["task_id"])
-            old = verdicts.get(k)
-            if old is None or r.get("a_confidence", 0) >= old.get("a_confidence", 0):
-                verdicts[k] = r
+            if r.get("judge_status") == "ok" and r.get("a_verdict"):
+                c = r.get("a_confidence")
+                if not isinstance(c, int) or not 0 <= c <= 2:
+                    r["a_confidence"] = 0      # schema violation seen in the
+                                               # wild (conf=96); do not trust
+                all_rulings[(r["domain"], r["task_id"])].append(r)
+    verdicts, contested = {}, set()
+    for k, rs in all_rulings.items():
+        top = 2 if any(r.get("protocol") == "v2" for r in rs) else 1
+        cand = [r for r in rs
+                if (2 if r.get("protocol") == "v2" else 1) == top]
+        kinds = {r["a_verdict"] for r in cand}
+        if len(kinds) > 1:
+            contested.add(k)
+        verdicts[k] = max(cand, key=lambda r: r.get("a_confidence", 0))
 
     rescue, drop, tier1, tier2 = [], [], [], []
     for k in sorted(truth):
@@ -171,7 +188,8 @@ def curate(traj_files, arb_files, step_files, min_conf, min_score=0,
         base = {"domain": k[0], "task_id": k[1], "truth": truth[k]}
         if truth[k] != 1.0:
             if v and v["a_verdict"] == "checker_bug_strict" \
-                    and v.get("a_confidence", 0) >= min_conf:
+                    and v.get("a_confidence", 0) >= min_conf \
+                    and k not in contested:
                 hard = {f for f in flags.get(k, ()) if f.startswith("req_hard_")}
                 if hard:
                     drop.append({**base, "flags": sorted(hard),
@@ -217,7 +235,7 @@ def curate(traj_files, arb_files, step_files, min_conf, min_score=0,
                 r["revoked_by_adversarial"] = True
                 drop.append(r)
         rescue = kept
-    return rescue, drop, tier1, tier2, flags
+    return rescue, drop, tier1, tier2, flags, contested
 
 
 def main(argv=None):
@@ -242,9 +260,8 @@ def main(argv=None):
                          "tier1 + tier2 since suspicion alone never drops)")
     a = ap.parse_args(argv)
 
-    rescue, drop, tier1, tier2, flags = curate(a.traj, a.arb, a.step,
-                                               a.min_conf, a.min_score,
-                                               a.result_dir, a.adv)
+    rescue, drop, tier1, tier2, flags, contested = curate(
+        a.traj, a.arb, a.step, a.min_conf, a.min_score, a.result_dir, a.adv)
     out = {}
     # keep = what the corpus should contain on the pass side: clean plus
     # flagged-but-unconvicted. Only hard defects and arbitration
@@ -258,6 +275,7 @@ def main(argv=None):
     flag_inv = Counter(f for s in flags.values() for f in s)
     doms = Counter(r["domain"] for r in rescue)
     report = {"counts": out, "corpus_size": len(keep) + len(rescue),
+              "contested_rulings": len(contested),
               "flag_inventory": dict(flag_inv),
               "rescue_by_domain": dict(doms),
               "inputs": {"traj": [str(p) for p in a.traj],
