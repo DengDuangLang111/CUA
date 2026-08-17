@@ -348,6 +348,26 @@ def refresh_tails(result_dir, rows, tail_policy, stall_min):
     return kept, stale
 
 
+def observation_at(td, steps, k):
+    """The screen the model is CONDITIONED on when it produces step k.
+
+    build renders step k's observation as `obs_files[k-1]`, i.e. the initial
+    screenshot for k=1 and step k-1's post-action screenshot otherwise
+    (build.py: `obs_files = [init] + [s.screenshot for s in steps[:-1]]`).
+
+    The first version showed the teacher `steps[k-1].screenshot` -- the screen
+    AFTER step k's own action, one frame in the future. The teacher then cited
+    evidence the model cannot see at the moment it has to decide to stop, and
+    the corpus taught it to assert that evidence anyway. On truncated tails the
+    two frames are entirely different screens.
+    """
+    if k <= 1:
+        p = td / "initial_state.png"
+        return p if p.is_file() else None
+    shot = steps[k - 2].screenshot
+    return (td / shot) if shot else None
+
+
 def render_prompt(tasks_dir, domain, task_id, steps, keep_to, image_path):
     """The teacher sees the task, what was done, and the screen it stops on."""
     instr = load_instruction(tasks_dir, domain, task_id)
@@ -446,10 +466,8 @@ def canonicalise(key, args, cfg, api_key, parse, infeasible):
         row["statement"] = visible_text(last.response)[:600]
         return row
 
-    fallback = td / (steps[keep_to - 2].screenshot if keep_to > 1
-                     else "initial_state.png")
-    screen = td / last.screenshot if last.screenshot else fallback
-    if not screen.is_file():
+    screen = observation_at(td, steps, keep_to)
+    if screen is None or not screen.is_file():
         return None
     instr, digest, img = render_prompt(args.tasks, domain, task_id, steps,
                                        keep_to, screen)
