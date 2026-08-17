@@ -1,35 +1,30 @@
 # Synthetic task generation for OSWorld — design, experiments, results
 
-## 现状(2026-08-16,过时即改;历史快照看 git log)
+## 现状(2026-08-17,过时即改;历史快照看 git log)
 
-- **arm B 训练中,三作业:235322(3ep)+ 235323(1ep 独立臂)+ 235364
-  (gb128 优化域臂)**(同一 B 语料:v11-100+500 并集,312 轨迹 / 5,659 步样本,
-  整条过滤剔 8)。前两个 **2×H200、全局 batch 8 与 arm A 同配方**(3ep ~19h /
-  1ep ~6.5h);**gb128 = OpenWebRL A.5 优化域复刻**(8×H200 数据并行、全局
-  batch 128、cosine warmup 0.1、3ep ≈133 步,~5h)——数据不变,只动优化域,
-  测 batch/warmup 是否影响 SFT 损伤方向。1ep 独立臂 = 学习率单 epoch 完整
-  退火,区别于 3ep 的 ep1 中途快照。sbatch = CUA@a17e564d + bbdf542b。
-- **eval-50 四行闭合:base 38% > rich 28% ≈ ep1 26% > lean 22%** —— SFT 全臂
-  低于 base,lean 垫底,渲染线关闭。rich/stock(Verified 默认口径)已自动
-  接力开跑。详 → `sft/TRAINING.md` 现状块。
-- **v11-500 教师 rollout 完成:444/444,250 过 / 194 败 = 56.3%**。census 终版:
-  B 原料 = 严格过滤后 **312 条轨迹**(arm A 的 4.7 倍),整条级
-  毒点仅 8/320。v11-100 重跑二进行中。
-- **eval-50 epochs 曲线闭合:base 38% → ep1 26% → ep3 28%** —— 损伤在第一个
-  epoch 就全额安装且不随深度变化;训练深度无罪,语料迁移全责。详情
-  → `sft/TRAINING.md`。
-- **eval-50 头两臂完成:base/keepthink 19/50 = 38% > rich/rich 14/50 = 28%**
-  —— 原版反超 SFT 十个点(McNemar 7:2,p≈.18);损伤集中在语料稀薄域
-  (impress/thunderbird/vs_code),窄化签名。模型卡 35.6 在我们严口径下复现
-  (38%)。详情 → `sft/TRAINING.md`。lean 双臂接续中。
-- **双臂 SFT 完成**(08-15):rich/lean 各 3 epoch 收敛到 loss .07 / acc 97.78%,
-  checkpoint 150/300/450 在 `sft/out/q38e3-{rich,lean}/`。→ `sft/TRAINING.md` 现状块。
-- **eval 矩阵排队**(等 v11-500 空出 VM):base-stock → rich-keepthink →
-  lean-keepthink → lean-stock,verified-eval-50 non-proxy,~5–6.5h/臂。
-- **v11q2(qwen3.8-max 生成)已 ship**:剔 28 → 460 specs → 459 task JSON,
-  accept 全绿(§11d);待办:4 个 scan review 项裁决 + VM control 轮(probe 容错 34% vs 67% 定价)。
-- 谱系:**v11.1 = main = 标准流水线**(4 轴 1300 格);任务源
-  `os-simple-taskgen-v8/out/runs/`;分支史 → `taskgen/GIT_HISTORY.md`。
+- **eval-50 矩阵(全部收官行)**:base 38% > richstock 30% = **B-1ep 30%**
+  > rich 28% ≈ ep1 26% > leankeep 22% —— 4.8× 数据未翻转损伤号(量票 1)。
+  在跑/排队:ep2 抢救 eval → gb64keep eval;B-3ep 训练下午落地;
+  **Bs 清尾孪生**训练中(显存 126.1G,比 raw 低 6.5G = 剪尾的物理回执);
+  LoRA-Bs-o 排队。**gb64o 训毕**(266/267,checkpoint-267 + 密集内点)。
+  详 → `sft/TRAINING.md` 现状块。
+- **数据质检战役(08-17,新)**:盲审判官考试 AUC 跨池稳定(Opus .763/.771,
+  Qwen .774);步级审计坐实 cap-2048 断崖(>2k 带弱步 41%,"想完不做"主模式);
+  **仲裁 100 池 23 条分歧:10 条 checker 冤案(全过严向,3/3 抽查代码坐实),
+  真实 pass 率 ≈80% 非 70%**。问卷拆账:Qwen v2 白改、medium 有害,
+  最优 v1+low;**生产问卷定为 v2req**(清单+证据,为成功轨迹分层),
+  v1 冻结为校准基线。筛选流水线跑动中:Qwen v2req 批两池 → 500 池仲裁
+  (~110 条)→ 三张名单(keep 高质/赎回冤案/剔除假 pass)→ **B-rescue 语料**
+  候选。详 → `SFT_DATA.md` 盲审章 + `IDEAS.md` §J。
+- **v11-500 教师 rollout:444/444,checker 口径 250 过/56.3%——仲裁修正后
+  真实率待 500 池裁决**。B 原料 312 轨迹(arm A 的 4.7 倍)。
+- **eval-50 epochs 曲线**:base 38% → ep1 26% → ep3 28% —— 损伤第一个 epoch
+  全额安装;训练深度无罪。四行史:rich/rich 28%、leankeep 22%(渲染线闭)。
+- **v11q2(qwen3.8-max 生成)已 ship**:459 task JSON,accept 全绿;待办:
+  scan review 4 项 + VM control 轮 + **checker 生成端静态检查清单**(仲裁
+  病理反哺:禁硬编码未给定细节/round 语义/枚举值核对)。
+- 谱系:**v11.1 = main = 标准流水线**;任务源 `os-simple-taskgen-v8/out/runs/`;
+  分支史 → `taskgen/GIT_HISTORY.md`。
 
 Sections 1–4 describe the system design; §5 onward are the experiments that
 produced it, newest last, with sample sizes attached so weak evidence can be

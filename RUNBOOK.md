@@ -1046,3 +1046,10 @@ $P -m ostg.sft.arb RESULT_DIR --tasks TASKS_DIR \
 - `--rubric v1` 是默认且与 8-17 考试逐字节一致,复跑可复现;v2 系列另起 --out,不覆写 v1。
 - 盲评(trajaudit)永不见 checker;仲裁(arb)专职分歧集,故意亮 checker——两阶段不可混。
 - 长跑必须由持住 ssh 的后台任务驱动;瞬时 ssh + nohup 会被 WSL 掐死(8-17 实测,连日志都不落)。
+- `--effort`(qwen 后端)默认 low = 实测最优;medium 实测**降** AUC(.774→.698,
+  自我说服效应),别调高。qwen 后端 v2* 问卷自动换"只回一个 JSON"契约
+  (无工具通道,serve 静默忽略 guided_json)。
+- **生产判官政策(08-17)**:全池扫描 = Qwen v2req low(免费、并发 10);
+  Opus 只精判嫌疑区/仲裁(付费,勿全池 req 扫);新判官/新问卷上岗前
+  必须与 v1 基线同卷比 AUC。error 行不计分,补跑前先从 jsonl 剥掉
+  error 行(resume 会把 error 当已完成跳过)。
