@@ -271,3 +271,28 @@ eval-50 分析必要)排队;关键帧 diff 采样等 v2 错例证据再定(不�
 措辞无效、medium 有害 → 弱判官上限在模型不在 prompt;v2req 因分层+可审计
 证据留任生产问卷,v2 退役。checker 生成端静态检查清单(禁硬编码未给定
 细节/round 语义/枚举核对/勿在应用运行时读配置)反哺 taskgen 控制门。
+
+### K. 终止信号修复(2026-08-17,已从设想进入执行)
+
+**发现**:DONE 有三条来路——`terminate` 工具调用、`call_user`(也判 DONE)、
+**"没有任何工具调用"的 harness 兜底**。实测(仓库 parser 重放,非正则):
+生成语料 72% 散文兜底 / 13% call_user / 15% 显式 terminate;**4B 学生 SFT 前
+eval-50 上 100% 显式终止,SFT 后 0%**,撞上限 28%→34%。
+
+**归因**:同一批 v11-100 任务上,Qwen3.6 用 terminate 96%,Qwen3.8 只有 13%
+—— **是教师模型版本(和采样温度 0.6 vs 1.0,两者混杂),不是任务集**。
+base-vs-SFT 那一对无混杂,坐实语料的责任。
+
+**已执行**:`terminalfix` 模块(教师写理由 + 确定性 terminate + auto 尾巴
+策略)、build `--terminal-rewrite`、verify `--require-terminate`。
+第一个臂 = **Bhqs-2-terminal**(rev2 筛选 + 终止规范化,两个变量同时变;
+用户决定跳过 plain 臂以省 eval 槽位,分解留待后补)。
+
+**待验证**:温度重放实验(末步上下文在 temp 1.0 与 0.6 各采一次)。若 0.6
+下 terminate 率回到 80%+,则未来 rollout 改温度即可,不必长期依赖事后重写;
+若不回,则 rollout prompt 需硬约束"末步必须 terminate"。
+
+**下一步指标**(eval 侧要新增,尚未实现):显式 terminate 率、
+**terminate precision(发了 terminate 后 checker 通过率)**、terminate recall、
+call_user 率、散文率、撞上限率、成功任务平均步数。**precision 必须与 rate
+同看**——只追 terminate 率会训出早停,那比现状更糟。

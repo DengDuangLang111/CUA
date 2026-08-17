@@ -99,6 +99,10 @@ def main(argv=None):
              "referenced images are HARDLINKED from it instead of re-encoded "
              "(deterministic process_image => byte-identical; dirs stay "
              "self-contained -- hardlinked files survive cache deletion)")
+    ap.add_argument("--terminal-rewrite", type=Path, default=None,
+        help="jsonl from ostg.sft.terminalfix: replaces each trajectory's "
+             "FINAL target with a canonical explicit terminate(success), and "
+             "honours its keep_to to drop a stalled tail")
     ap.add_argument("--think-cap", type=int, default=0,
         help="drop STEPS whose current-target <think> exceeds N estimated "
              "tokens (chars/3.5); dropped steps stay in later contexts. "
@@ -149,6 +153,20 @@ def main(argv=None):
     run_id = args.result_dir.name
     slug_owner = {}          # slug -> first task_id that claimed it
     rep["slug_collisions"] = 0
+    # Canonical endings. The corpus taught stopping as a NEGATIVE action --
+    # 72% of trajectories ended by simply not calling a tool, which the
+    # harness scores as DONE -- and the 4B student went from terminating
+    # explicitly on 100% of eval-50 before SFT to 0% after. terminalfix
+    # rewrites the final target only; the teacher supplies task-specific
+    # reasoning so the corpus does not fill up with one recited sentence.
+    rewrite = {}
+    if args.terminal_rewrite:
+        for line in args.terminal_rewrite.read_text().splitlines():
+            if line.strip():
+                r = json.loads(line)
+                rewrite[(r["domain"], r["task_id"])] = r
+    rep["terminal_rewritten"] = 0
+    rep["terminal_tail_truncated"] = 0
 
     def slugs(path):
         return {(json.loads(l)["domain"], json.loads(l)["task_id"])
@@ -247,12 +265,20 @@ def main(argv=None):
             continue
         obs_files = [init] + [td / s.screenshot for s in steps[:-1]]
 
+        rw = rewrite.get((td.parent.name, td.name))
         keep = len(steps)
         cap_hit = len(steps) >= 50
         t = traj.low_diversity_tail(steps) if cap_hit else traj.tail_run(steps)
         if t >= (8 if cap_hit else args.tail_run):
             keep = len(steps) - t
             rep["dropped_tail_steps"] += t
+        if rw:
+            # keep_to is where the work actually stopped; anything after it
+            # was a WAIT or a step that moved nothing.
+            kt = int(rw.get("keep_to") or keep)
+            if 0 < kt < keep:
+                rep["terminal_tail_truncated"] += keep - kt
+                keep = kt
         mid_drops = traj.identical_runs(steps[:keep])
 
         written = {}   # obs index -> relative path, copied on first reference
@@ -299,6 +325,8 @@ def main(argv=None):
             if args.think_cap and k == keep and \
                     traj.think_est_tokens(step.response) > args.think_cap:
                 rep["terminal_exempt_from_cap"] += 1
+            if rw and k == keep:
+                rep["terminal_rewritten"] += 1
             if (k - 1) in mid_drops:
                 rep["dropped_mid_loop"] += 1
                 continue
@@ -336,7 +364,7 @@ def main(argv=None):
                 rep["over_length_estimate"] += 1
             (val_f if is_val else samples_f).write(json.dumps({
                 "messages": msgs,
-                "response": step.response,
+                "response": (rw["response"] if (rw and k == keep) else step.response),
                 "meta": {"run": run_id, "domain": domain, "slug": slug,
                          "task_id": task_id, "step": k, "n_steps": len(steps),
                          "difficulty": ost.get("difficulty"),

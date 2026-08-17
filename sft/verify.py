@@ -11,10 +11,11 @@ pipeline so nobody has to re-invent it per run.
 """
 import json
 import os
+import re
 import sys
 
 
-def verify(out_dir):
+def verify(out_dir, require_terminate=False):
     bad = []
     samples = refs = 0
     # Which task owns each image dir. Existence is not enough: with a
@@ -33,6 +34,12 @@ def verify(out_dir):
     # (a turn with no tool call), so the final response is often plain prose.
     # The checkable invariant is step coverage: max(step) must equal n_steps.
     last_step = {}
+    # Terminal FORM (only checked with --require-terminate, i.e. on corpora
+    # built from a terminalfix pass). Existence and coverage are not enough:
+    # the harness scores "no tool call" as DONE, so a corpus can be complete
+    # and still teach stopping as a negative action. These counts make the
+    # ending explicit and auditable.
+    term_form = {}
     for name in ("samples.jsonl", "val_samples.jsonl"):
         p = os.path.join(out_dir, name)
         if not os.path.exists(p):
@@ -47,6 +54,9 @@ def verify(out_dir):
             step, n = meta.get("step") or 0, meta.get("n_steps") or 0
             seen_max, _ = last_step.get(key, (0, n))
             last_step[key] = (max(seen_max, step), n)
+            prev_form = term_form.get(key)
+            if prev_form is None or step >= prev_form[0]:
+                term_form[key] = (step, s.get("response", ""))
             for m in s.get("messages", []):
                 c = m.get("content")
                 if not isinstance(c, list):
@@ -66,19 +76,34 @@ def verify(out_dir):
                     if prev != tid:
                         shared.append((d, prev, tid))
     no_done = sorted(k for k, (mx, n) in last_step.items() if n and mx < n)
+    bad_form = []
+    if require_terminate:
+        for k, (_, resp) in sorted(term_form.items()):
+            acts = re.findall(r"<parameter=action>\s*([a-z_]+)\s*</parameter>", resp)
+            if not acts:
+                bad_form.append((k, "no tool call (prose fallback)"))
+            elif acts[-1] != "terminate":
+                bad_form.append((k, "ends with %s" % acts[-1]))
+            elif re.search(r"<parameter=status>\s*(fail|failure|infeasible)",
+                           resp, re.I):
+                bad_form.append((k, "terminate(failure)"))
     uniq_shared = sorted(set(shared))
     print("verify: %d samples, %d image refs, %d missing-or-empty, "
           "%d image dirs shared across tasks, %d trajectories missing their "
-          "terminal step"
-          % (samples, refs, len(bad), len(uniq_shared), len(no_done)))
+          "terminal step, %d endings not terminate(success)"
+          % (samples, refs, len(bad), len(uniq_shared), len(no_done),
+             len(bad_form)))
     for name, slug, path in bad[:50]:
         print("  BAD %s %s -> %s" % (name, slug, path))
     for d, a, b in uniq_shared[:20]:
         print("  SHARED-IMAGE-DIR %s claimed by %s and %s" % (d, a, b))
     for k in no_done[:20]:
         print("  TERMINAL-STEP-MISSING %s/%s" % k)
-    return 1 if (bad or uniq_shared or no_done) else 0
+    for k, why in bad_form[:20]:
+        print("  ENDING-NOT-TERMINATE %s/%s: %s" % (k[0], k[1], why))
+    return 1 if (bad or uniq_shared or no_done or bad_form) else 0
 
 
 if __name__ == "__main__":
-    sys.exit(verify(sys.argv[1]))
+    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    sys.exit(verify(args[0], "--require-terminate" in sys.argv))

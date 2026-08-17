@@ -1098,6 +1098,38 @@ $P -m ostg.sft.arb RESULT_DIR --tasks TASKS_DIR --targets out/curate_POOL_tier2.
    --qwen J1.jsonl --out out/arb_POOL.jsonl    # 裁完回到 ③ 重出名单
 ```
 
+### 终止规范化(Bhqs-2-terminal 起,2026-08-17)
+
+```bash
+# ① 教师重写末步理由 + 确定性拼 terminate;auto 尾巴策略只截真空转
+$P -m ostg.sft.terminalfix RESULT_DIR --tasks TASKS_DIR \
+   --targets out/final_POOL_keep.jsonl --targets out/final_POOL_rescue.jsonl \
+   --endpoint http://127.0.0.1:18020/v1 --workers 8 \
+   --tail-policy auto --stall-min 2 --out out/terminal_POOL.jsonl
+
+# ② build 接入重写(替换末步目标 + 按 keep_to 截尾)
+$P -m ostg.sft.build RESULT_DIR --tasks TASKS_DIR --out OUT \
+   --include ..._rescue.jsonl --exclude ..._drop.jsonl \
+   --whole-traj-filter --think-cap 2048 --image-cache PRIOR \
+   --terminal-rewrite out/terminal_POOL.jsonl
+
+# ③ 出包前的终止形式硬门(只对规范化过的语料用)
+$P -m ostg.sft.verify OUT --require-terminate
+```
+`--require-terminate` 检查每条轨迹的**末步目标必须解析出 `terminate` 且
+status 非 failure**;散文兜底、`call_user`、terminate(failure) 一律 exit 1。
+实测对未规范化的旧语料报 55 条不合格,对规范化后应为 0。
+report.json 增 `terminal_rewritten` / `terminal_tail_truncated` 两个计数。
+
+**为什么要做**:harness 把"没有工具调用"直接判 DONE
+(`actions.py: if not pyautogui_code: append(DONE)`),于是 72% 的轨迹用散文
+结束、13% 用 `call_user` 结束,显式 `terminate` 只占 15%。4B 学生在 SFT 前
+eval-50 上 **100% 显式终止,SFT 后 0%**,撞上限 28%→34%。**停止是我们监督
+最少、而且被教成负动作的信号。**
+
+**为什么不用固定模板**:319 条逐字节相同的 response 会占语料 6%,模型学到的
+是背诵那句话。教师按各自任务写 ≤60 词的确认,动作部分才由脚本确定性拼接。
+
 产物语义:`_rescue`(checker 冤案 → 候选**加入**语料)、`_drop`(仲裁坐实
 假 pass → 候选**移出**)、`_tier1`(干净 pass = 一等品)、`_tier2`(pass 但
 有瑕疵标记 → 送 ④,**不得仅凭判官怀疑丢弃**)、`_report.json`(计数/标记
