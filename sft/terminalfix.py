@@ -44,13 +44,23 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from ostg.sft import traj
-from ostg.sft.stepaudit import ask, b64, load_instruction
+from ostg.sft.stepaudit import anthropic_cfg, ask, b64, load_instruction
 
 SYSTEM = """You are writing the final assistant turn of a completed GUI-agent trajectory.
 
 The task has been verified as done. You are given the task, the screen as it looks at the final step, and the actions that led here. Write ONLY the short justification the agent should give before it stops: name the concrete evidence on screen that the requested state exists -- the file that is listed, the value in the cell, the setting that reads as expected.
 
 Rules: at most 60 words. No preamble, no restating the instruction, no markdown, no tool call (one is appended for you). Present tense, concrete nouns from this task. If the screen shows a verification the agent itself ran (a listing, a printed value), cite that."""
+
+REASON_TOOL = {
+    "name": "justify",
+    "description": "Report the short justification for stopping.",
+    "input_schema": {
+        "type": "object",
+        "properties": {"justification": {"type": "string"}},
+        "required": ["justification"],
+    },
+}
 
 TERMINATE_CALL = """
 
@@ -123,6 +133,11 @@ def main(argv=None):
     ap.add_argument("--model", default="qwen38-27b-local")
     ap.add_argument("--key", default=None)
     ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--backend", choices=("qwen", "anthropic"), default="qwen",
+                    help="anthropic writes the justification through ppapi -- "
+                         "needed when the cluster has no free GPU for the "
+                         "teacher serve, and defensible here because the "
+                         "ending's style is being replaced anyway")
     ap.add_argument("--effort", default="low")
     ap.add_argument("--tail-policy", choices=("last-only", "truncate", "auto"),
                     default="auto")
@@ -134,6 +149,9 @@ def main(argv=None):
 
     import os
     key = a.key or os.environ.get("OPENAI_API_KEY") or "EMPTY"
+    cfg = anthropic_cfg(a.model) if a.backend == "anthropic" else None
+    if cfg:
+        cfg["max_tokens"] = 300
     todo = []
     for p in a.targets:
         for line in p.read_text().splitlines():
@@ -181,15 +199,40 @@ def main(argv=None):
                 {"type": "text", "text": "Final screen:"},
                 {"type": "image_url",
                  "image_url": {"url": "data:image/png;base64," + b64(post)}}]
-        v = ask(a.endpoint, a.model, key,
-                [{"role": "system", "content": SYSTEM},
-                 {"role": "user", "content": user}],
-                effort=a.effort)
-        reason = v.get("reason") if isinstance(v, dict) else None
-        if isinstance(v, dict) and "error" in v and not reason:
-            # ask() returns {"error": raw} when the reply is not JSON -- which
-            # is the normal case here, since we asked for prose.
-            reason = str(v.get("error") or "")
+        if a.backend == "anthropic":
+            from ostg import llm
+            blocks = [{"type": "text", "text": user[0]["text"]},
+                      {"type": "text", "text": user[1]["text"]},
+                      {"type": "text", "text": "Final screen:"},
+                      {"type": "image", "source": {
+                          "type": "base64", "media_type": "image/png",
+                          "data": b64(post)}}]
+            reason = ""
+            for attempt in range(3):
+                try:
+                    r = llm.call([{"role": "user", "content": blocks}],
+                                 [{"type": "text", "text": SYSTEM}],
+                                 cfg, tool=REASON_TOOL)
+                    for blk in r.get("content", []):
+                        if blk.get("type") == "tool_use":
+                            reason = blk["input"].get("justification", "")
+                    break
+                except Exception as e:  # noqa: BLE001
+                    if not getattr(e, "transient", False) or attempt == 2:
+                        reason = ""
+                        break
+                    import time
+                    time.sleep(8 * (attempt + 1))
+        else:
+            v = ask(a.endpoint, a.model, key,
+                    [{"role": "system", "content": SYSTEM},
+                     {"role": "user", "content": user}],
+                    effort=a.effort)
+            reason = v.get("reason") if isinstance(v, dict) else None
+            if isinstance(v, dict) and "error" in v and not reason:
+                # ask() returns {"error": raw} when the reply is not JSON --
+                # the normal case here, since we asked for prose.
+                reason = str(v.get("error") or "")
         row = {"domain": domain, "task_id": task_id,
                "orig_steps": len(steps), "keep_to": keep_to,
                "stalled_tail": stalled, "tail_policy": a.tail_policy,
