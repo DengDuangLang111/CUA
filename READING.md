@@ -148,6 +148,20 @@ InSTA-v3(共 912 轨迹)。他们 eval 解码:temp 0.6 / top-p 0.95 / **top-k 20
 max response 4096 / rep-pen 1.0(top-k 20 与我们同,max response 比我们的
 81920 狠 20 倍 —— 他们根本不给长思考留空间)。
 
+Paper↔repo audit (2026-08-16 深夜,论文 PDF 逐节 vs 本地 clone 逐行):
+**一致**——K=1 截图窗论文页 5 明文申报("retaining only the current
+screenshot (K = 1)",训练 eval 双侧同款);per-turn 损失掩码(页 6);
+3ep/lr 1e-5/cosine/warmup 10%;历史 reasoning 保留(−14.6…−23.7 消融
+的默认侧);412 轨迹/70 站,8B=+500 InSTA-v3=912;每 worker 有效 batch 16。
+**矛盾**——eval 解码:论文 A.6 申报随机采样 temp 0.6/top-p .95/top-k 20/
+max 4096(还引文献论证随机优于确定),但 released 评测脚本
+`run_evaluation_local.sh:57` 默认 **TEMPERATURE=0.0(贪心)**;引用他们
+分数时注意口径。batch 拆法字面不同(paper: 2×8;repo: 1×16;有效等价)。
+**论文未申报、仓库才有**——cutoff_len 36,864;image_max_pixels 262,144
+(512²);**vision tower+projector 冻结**("freeze"全篇未出现);
+apply_chat_template 逐字节一致机制。开发残留:4B RL 脚本 save-dir 命名
+含 "fromSFT912",与正文"4B 默认 412"叙事有出入(非声明,存疑不定罪)。
+
 Primary-source pass (2026-08-16 深夜,本地 clone 逐文件读完,不再经摘要器):
 launcher `run_sft_with_llamafactory.sh:76` **PER_TURN 默认 1**,注释原文
 "reproducing the released recipe" —— 发布模型 = per-turn 训练实锤;
