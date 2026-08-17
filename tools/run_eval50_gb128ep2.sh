@@ -1,18 +1,18 @@
 #!/bin/bash
-# run_eval50_gb128.sh -- B-gb128 arm (global batch 128, OpenWebRL regime)
+# run_eval50_gb128ep2.sh -- B-gb128 EPOCH-2 salvage arm (global batch 128)
 # under keepthink serving, 3 VMs. SECOND in the eval chain (user reorder
 # 2026-08-17: b1ep first). Gates: b1ep eval DONE + gb128 final checkpoint.
 # Then: cancel the b1ep serve, bring up the gb128 serve + tunnel
 # (18016->8016), run the frozen eval-50 with num_envs 3.
 set -u
 CTL=/mnt/d/research/osworld-verified-control
-LOG=$CTL/logs/eval50_gb128.log
+LOG=$CTL/logs/eval50_gb128ep2.log
 exec >>$LOG 2>&1
 cd /mnt/d/research/OSWorld; set -a; . ./.env; set +a
 SSHT="ssh -n -S $HOME/.ssh/cm/qwen36-tillicum-login -o ControlMaster=no -o BatchMode=yes jy050706@tillicum-login02.hyak.uw.edu"
-MODEL=q38e3B-gb64o
-PORT=18016
-TAG=eval50-gb64keep-20260817
+MODEL=q38e3B-gb128ep2
+PORT=18018
+TAG=eval50-gb128ep2keep-20260817
 C=/mnt/d/research/OSWorld/evaluation_examples
 META=$C/verified_eval50_nonproxy.json
 R=/mnt/d/research/OSWorld/results_generated/qwen35-4b-sft/$TAG
@@ -26,35 +26,35 @@ stop_eval(){
   echo "[$(date '+%F %T')] eval runner stopped"
 }
 
-# Gate 1: the gb128-ep2 salvage eval must be fully done (chain position 3).
+# Gate 1: the b1ep eval must be fully done (user order: 1ep first).
 for i in $(seq 1 1440); do
-  grep -q "EVAL50_GB128EP2_DONE" $CTL/logs/eval50_gb128ep2.log 2>/dev/null && break
+  grep -q "EVAL50_B1EP_DONE" $CTL/logs/eval50_b1ep.log 2>/dev/null && break
   sleep 30
 done
-grep -q "EVAL50_GB128EP2_DONE" $CTL/logs/eval50_gb128ep2.log 2>/dev/null || \
-  { echo "[$(date '+%F %T')] FATAL: gb128ep2 eval never finished (6h gate)"; exit 1; }
+grep -q "EVAL50_B1EP_DONE" $CTL/logs/eval50_b1ep.log 2>/dev/null || \
+  { echo "[$(date '+%F %T')] FATAL: b1ep eval never finished (6h gate)"; exit 1; }
 # Gate 2: gb64o final checkpoint on Tillicum.
 for i in $(seq 1 240); do
-  $SSHT 'ls -d /gpfs/scrubbed/jy050706/sft/out/q38e3B-gb64o/v*/checkpoint-* >/dev/null 2>&1' && break
+  $SSHT 'ls -d /gpfs/scrubbed/jy050706/sft/out/q38e3B-gb128/v7-20260816-224140/checkpoint-90 >/dev/null 2>&1' && break
   sleep 60
 done
-$SSHT 'ls -d /gpfs/scrubbed/jy050706/sft/out/q38e3B-gb64o/v*/checkpoint-* >/dev/null 2>&1' || \
-  { echo "[$(date '+%F %T')] FATAL: gb64o checkpoint never appeared (4h gate)"; exit 1; }
+$SSHT 'ls -d /gpfs/scrubbed/jy050706/sft/out/q38e3B-gb128/v7-20260816-224140/checkpoint-90 >/dev/null 2>&1' || \
+  { echo "[$(date '+%F %T')] FATAL: gb128 ep2 checkpoint missing (4h gate)"; exit 1; }
 
 
-$SSHT "scancel -n eval4bg2 -u jy050706" 2>/dev/null
-JID=$($SSHT "sbatch --parsable /gpfs/scrubbed/jy050706/qwen-serve/serve-chain-4b-gb128.sbatch" 2>/dev/null | tr -dc 0-9)
+$SSHT "scancel -n eval4b1 -u jy050706" 2>/dev/null
+JID=$($SSHT "sbatch --parsable /gpfs/scrubbed/jy050706/qwen-serve/serve-chain-4b-gb128ep2.sbatch" 2>/dev/null | tr -dc 0-9)
 echo "[$(date '+%F %T')] gb128 serve job $JID"
-JOB=eval4bg LPORT=$PORT RPORT=8016 setsid nohup $CTL/tunnel_qwen36_auto.sh > $HOME/tunnel_4bg.log 2>&1 < /dev/null &
+JOB=eval4bg2 LPORT=$PORT RPORT=8018 setsid nohup $CTL/tunnel_qwen36_auto.sh > $HOME/tunnel_4bg2.log 2>&1 < /dev/null &
 for i in $(seq 1 120); do up && break; sleep 20; done
 up || { echo "[$(date '+%F %T')] FATAL: gb128 endpoint never came up"; exit 1; }
 echo "[$(date '+%F %T')] gb128 endpoint UP"
 
 cat > $R/MODEL_BOUNDARY.json <<JSON
-{"model":"Qwen3.5-4B SFT arm B-gb64o: B corpus (312 trajs/5,659 samples), global batch 64 = 16xH200 x accum 4, 3ep, cosine warmup 0.1, wd 0.0, beta2 0.999 -- OpenWebRL-aligned optimizer, half-scale batch lever",
- "served_model_name":"q38e3B-gb64o","precision":"BF16 weights, fp8 kv-cache",
+{"model":"Qwen3.5-4B SFT arm B-gb128 EPOCH-2 (salvaged from job 235513, checkpoint-90): B corpus, global batch 128 = 16xH200 x accum 8, 2 full epochs, wd 0.1, beta2 0.95",
+ "served_model_name":"q38e3B-gb128ep2","precision":"BF16 weights, fp8 kv-cache",
  "chat_template":"qwen35_4b_keepthink.jinja (same as richrich/leankeep/basekeep)",
- "preserve_thinking":true,"cell":"gb64keep -- optimization-regime lever (8x batch vs B) + aligned optimizer",
+ "preserve_thinking":true,"cell":"gb128ep2keep -- the batch-128 data point via ep2 salvage (flat-damage law: ep2~ep3)",
  "sampling":{"temperature":1.0,"top_p":0.95,"top_k":20,"min_p":0.0,"presence_penalty":0.0,
              "repetition_penalty":1.0,"profile":"official general thinking; temp/top_p from client, rest from serve override"},
  "max_steps":50,"sleep_after_execution":3,"num_envs":3,
@@ -80,5 +80,5 @@ for TRY in 1 2 3; do
     --test_config_base_dir $C --test_all_meta_path $META --result_dir $R
   stop_eval
 done
-echo "[$(date '+%F %T')] === eval50 gb64keep RESULT: $(find $R -name result.txt -exec cat {} \; 2>/dev/null | sort | uniq -c | tr '\n' ' ')"
-echo "EVAL50_GB128_DONE"
+echo "[$(date '+%F %T')] === eval50 gb128ep2keep RESULT: $(find $R -name result.txt -exec cat {} \; 2>/dev/null | sort | uniq -c | tr '\n' ' ')"
+echo "EVAL50_GB128EP2_DONE"
