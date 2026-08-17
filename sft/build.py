@@ -22,6 +22,7 @@ import base64
 import collections
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -89,6 +90,11 @@ def main(argv=None):
     ap.add_argument("--limit", type=int, default=0, help="max tasks, for smoke runs")
     ap.add_argument("--whole-traj-filter", action="store_true",
         help="drop cap-hit / DONE-less / illegal-action passing trajectories whole (PLAN-20260816)")
+    ap.add_argument("--image-cache", type=Path, default=None,
+        help="a prior build dir whose images/ holds identical re-encodes; "
+             "referenced images are HARDLINKED from it instead of re-encoded "
+             "(deterministic process_image => byte-identical; dirs stay "
+             "self-contained -- hardlinked files survive cache deletion)")
     ap.add_argument("--think-cap", type=int, default=0,
         help="drop STEPS whose current-target <think> exceeds N estimated "
              "tokens (chars/3.5); dropped steps stay in later contexts. "
@@ -126,7 +132,7 @@ def main(argv=None):
                           "samples", "dropped_hallucinated_target",
                           "dropped_tail_steps", "dropped_missing_initial",
                           "tasks_initial_from_mp4", "images_written", "dropped_mid_loop",
-                          "recovery_samples",
+                          "recovery_samples", "images_cache_hits",
                           "val_tasks", "val_samples", "over_length_estimate")}
     rep["dropped_whole_traj"] = {}
     rep["dropped_think_cap"] = 0
@@ -213,10 +219,18 @@ def main(argv=None):
         def obs_path(i):
             if i not in written:
                 rel = "images/%s/obs_%03d.png" % (slug, i + 1)
-                # the agent's own resize: pixels on disk == pixels it saw
-                b64 = process_image(obs_files[i].read_bytes())
-                (out / rel).write_bytes(base64.b64decode(b64))
-                rep["images_written"] += 1
+                cached = args.image_cache / rel if args.image_cache else None
+                if cached and cached.is_file() and cached.stat().st_size > 0:
+                    try:
+                        os.link(cached, out / rel)
+                    except OSError:
+                        shutil.copyfile(cached, out / rel)
+                    rep["images_cache_hits"] += 1
+                else:
+                    # the agent's own resize: pixels on disk == pixels it saw
+                    b64 = process_image(obs_files[i].read_bytes())
+                    (out / rel).write_bytes(base64.b64decode(b64))
+                    rep["images_written"] += 1
                 written[i] = rel
             return written[i]
 
