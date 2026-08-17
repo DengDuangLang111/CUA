@@ -30,6 +30,9 @@ Checks, each independently pass/fail:
   tail_safety     truncated tails: is the terminate screen the approved screen
   invariance      vs a baseline corpus: non-terminal targets byte-identical
   justification   rewritten endings: distinct, short, no canned flood
+  pixels          (--verify-pixels) each image re-derived from the raw
+                  trajectory and compared byte for byte -- the only check that
+                  catches poisoned pixels carried in by --image-cache
 """
 import argparse
 import hashlib
@@ -153,7 +156,7 @@ def resolve(results_root, run, domain, task_id, orig_steps, load_steps):
 
 
 def audit(corpus_dirs, results_root, baseline_dirs, harness_root, noop_names,
-          label, load_steps):
+          label, load_steps, verify_pixels=0):
     H = Harness(harness_root)
     corpus = load_corpus(corpus_dirs)
     noop = tuple(x.strip() for x in noop_names.split(",") if x.strip())
@@ -234,6 +237,61 @@ def audit(corpus_dirs, results_root, baseline_dirs, harness_root, noop_names,
         "shared_dirs": shared[:20], "n_shared": len(shared),
         "examples_missing": missing[:5],
     }
+
+    # ---- pixels ----------------------------------------------------------
+    # Existence and unique ownership still do not prove the bytes are right.
+    # The slug-collision fix disambiguated image DIRECTORIES for new builds,
+    # but a build run with --image-cache copies whatever the older cache
+    # holds, so already-poisoned pixels propagate into a corpus whose
+    # directories are provably unshared. The only conclusive test is to
+    # re-derive each image from the raw trajectory through the agent's own
+    # process_image and compare bytes.
+    if verify_pixels:
+        from mm_agents.qwen.images import process_image
+        mism, checked, tasks = [], 0, Counter()
+        keys = sorted(corpus)
+        if verify_pixels > 0:
+            keys = keys[:verify_pixels]
+        for key in keys:
+            steps = corpus[key]
+            meta = steps[max(steps)].get("meta") or {}
+            base, st, status = resolve(results_root, meta.get("run"), key[0],
+                                       key[1], meta.get("orig_steps"),
+                                       load_steps)
+            if status != "ok" or not st:
+                continue
+            src = [base / "initial_state.png"] + [base / s.screenshot
+                                                  for s in st[:-1]]
+            for s in steps.values():
+                for i, rel in enumerate(images_of(s)):
+                    if i >= len(src) or not src[i].is_file():
+                        continue
+                    want = process_image(src[i].read_bytes())
+                    if isinstance(want, str):
+                        import base64
+                        want = base64.b64decode(want)
+                    full = rel if os.path.isabs(rel) \
+                        else os.path.join(s["_dir"], rel)
+                    try:
+                        got = open(full, "rb").read()
+                    except OSError:
+                        continue
+                    checked += 1
+                    if hashlib.md5(want).digest() != hashlib.md5(got).digest():
+                        tasks[key] += 1
+                        if len(mism) < 30:
+                            mism.append({"domain": key[0], "task_id": key[1],
+                                         "path": rel})
+        rep["checks"]["pixels"] = {
+            "ok": not tasks,
+            "compared": checked, "mismatching": sum(tasks.values()),
+            "trajectories_affected": len(tasks),
+            "worst": [{"domain": k[0], "task_id": k[1], "n": n}
+                      for k, n in tasks.most_common(10)],
+            "examples": mism,
+            "note": "an image whose bytes differ from a fresh re-derivation is "
+                    "another task's screenshot carried in by --image-cache",
+        }
 
     # ---- step coverage ---------------------------------------------------
     # Two different things, deliberately not conflated. A MISSING TERMINAL STEP
@@ -389,6 +447,10 @@ def main(argv=None):
     ap.add_argument("--ostg", default=None,
                     help="ostg root, if not already importable")
     ap.add_argument("--noop-actions", default=DEFAULT_NOOP)
+    ap.add_argument("--verify-pixels", type=int, default=0,
+                    help="re-derive N trajectories' images from the raw "
+                         "trajectory and compare bytes (-1 = all). Off by "
+                         "default: it re-encodes every screenshot.")
     ap.add_argument("--label", default="corpus")
     ap.add_argument("--json", default=None)
     ap.add_argument("--text", action="store_true")
@@ -399,7 +461,7 @@ def main(argv=None):
     from ostg.sft.traj import load_steps
 
     rep = audit(a.corpus, a.results_root, a.baseline, a.harness,
-                a.noop_actions, a.label, load_steps)
+                a.noop_actions, a.label, load_steps, a.verify_pixels)
     if a.json:
         Path(a.json).write_text(json.dumps(rep, indent=2, ensure_ascii=False),
                                 encoding="utf-8")
