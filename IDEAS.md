@@ -156,6 +156,44 @@ intervention round-0 之后;其价值兑现场景 = intervention 跨环境复用
 语义不动"的既有成功样板。**引文红线**:Harness-Bench(2605.27922)、
 AgentCompass(2607.13705)、Qwen-CUA(2608.02352)均未核实,引用前必查。
 
+### H. Prompt 三层解剖与长尾根因序(2026-08-17)
+
+**三层分解**(我们与 OpenWebRL 同构):benchmark 只给 task instruction;
+agent policy prompt(角色/推理要求/动作协议)与 runtime 序列化(工具
+schema/历史/折叠/终止/模板)都是各家 harness 自己的设计。报告口径必须写
+"Qwen3.5-4B + OSWorld Verified + upstream Qwen agent harness + 我方设置"。
+
+**长尾根因序(嫌疑从重到轻,自家证据背书)**:
+1. **Qwen3.8 模板默认 `reasoning_effort='xhigh'`**(RUNBOOK:343-355 实证:
+   三档中唯一无前导语的是 medium;我们的栈从未设置 → 全战役 xhigh)。
+   内部对照:同一 harness prompt 下 3.6 vs 3.8 的 think p90 = 755 vs
+   6,495 字符(9×)——协议不变、教师换代,尾巴爆炸 → 根因在教师生成策略
+   不在 OSWorld prompt。**一行修复候选:未来 rollout 传
+   `chat_template_kwargs: {reasoning_effort: "medium"}`,生成端直接产
+   匀质思考,比事后清尾便宜**(当前 rollout 停摆中,记档待启用)。
+2. 600s + 81920 budget 放行政策(有意取舍,已档)。
+3. 无 shortest-success 策展(对照 OpenWebRL 每任务 4 选 1 最短)。
+4. current-target 清尾(census/build 的 --think-cap 设计,见下)。
+5. system policy 简洁化——最后才动。
+
+**清尾 pipeline 设计(待用户点火)**:census 加 think 长度分层报告标准段;
+build 加 `--think-cap 2048`(字符近似,quarantine 桶不销毁,>4096 的 28 个
+强制人工审计);单边削尾不设下限(短 think 层 action 占比 29.8% 是最健康
+地层);历史 think 不动(独立的 train-infer 一致性问题,先做 preserve_
+thinking 渲染的字节级验证再裁决)。派生集 B-tailclean,raw 永不改。
+
+**concise-policy 变体(下一批教师 rollout 用,不重写不换)**:附加软约束
+"从当前截图与进度简洁推理;不复述任务;可行动作一旦可辨立即执行;仅
+blocker/恢复/多约束校验允许加长"。不写死 token 上限(硬限会逼教师删证据
+换速错)。**先行 2×2 因果试验**:{现行 policy, concise} × {xhigh, medium},
+固定状态集比 p50/p90/p99、parse 率、动作接地、time-to-tool-call,选
+"action 质量不降而 p99 大降"的格子,再 10-20 任务闭环确认。
+
+**铁律**:teacher rollout prompt = SFT 渲染 = student eval prompt(policy/
+工具/语法/坐标/历史可见性/折叠/终止/模板/思考序列化九层全等)。最危险的
+操作 = 用一种风格生成训练、换另一种风格评测。跨 bench 的 canonical
+contract 归 G 节 adapter 管,不让学生直接学各家方言。
+
 ### 裁决后的优先级分叉(预登记)
 
 若今日 B 四臂 eval 确认损伤依旧:静态语料扩张(含 best-of-3/C 臂)的
