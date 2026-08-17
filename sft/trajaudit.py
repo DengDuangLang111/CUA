@@ -227,27 +227,63 @@ def digest(steps):
     return "\n".join(lines)
 
 
-def build_blocks(rubric, instr, frames, steps, dig):
-    """Ordered (kind, value) blocks, backend-agnostic. v1 reproduces the
-    shipped exam exactly; v2* labels every frame and fences the inputs."""
+JSON_SPEC = {
+    "grade": ('{"completion": 0-10, "efficiency": 0-3, "grounded": 0-3, '
+              '"termination": 0-3, "confidence": 0-2, "note": "<=30 words"}'),
+    "grade_req": ('{"requirements": [{"id": "R1", "text": "...", '
+                  '"critical": true/false, "status": "satisfied|'
+                  'mostly_satisfied|partial|weak_evidence|not_satisfied|'
+                  'unverifiable", "evidence_steps": [step numbers], '
+                  '"evidence_frames": [frame numbers], "evidence": "..."}, '
+                  '...], "completion": 0-10, "efficiency": 0-3, '
+                  '"grounded": 0-3, "termination": 0-3, "confidence": 0-2, '
+                  '"note": "<=30 words"}'),
+}
+
+
+def qwen_contract(system, tool):
+    """The local judge has no tool channel (and the serve silently ignores
+    guided_json -- measured 2026-08-17: told to 'call the grade tool' it
+    emits its chat template's <tool_call> XML, unparseable). Swap the
+    tool-call instruction for v1's proven reply-ONE-JSON contract with the
+    schema inlined."""
+    spec = JSON_SPEC["grade_req" if tool is GRADE_TOOL_REQ else "grade"]
+    for sent in ("Report your grade by calling the grade tool.",
+                 "Report the requirements and your grade together in one "
+                 "call of the grade tool."):
+        system = system.replace(
+            sent, "Reply with ONE JSON object only, exactly this shape: "
+            + spec + " No other text before or after the JSON.")
+    return system
+
+
+def build_blocks(rubric, instr, frames, steps, dig, backend="anthropic"):
+    """Ordered (kind, value) blocks. v1 reproduces the shipped exam
+    exactly; v2* labels every frame and fences the inputs, with the output
+    contract phrased per backend (tool call vs bare JSON)."""
     if rubric == "v1":
         out = [("text", "Task: " + instr)]
         out += [("image", p) for _, p in frames]
         out.append(("text", f"Actions and reasoning digests ({len(steps)} "
                     f"steps):\n" + dig))
         return out, SYSTEM, GRADE_TOOL
+    final = ("Grade the trajectory now by calling the grade tool."
+             if backend == "anthropic"
+             else "Grade the trajectory now: reply with the single JSON "
+                  "object and nothing else.")
     parts = [("text", "<task_instruction>\n" + instr + "\n</task_instruction>"
               + f"\n\n{len(frames)} screenshots follow, each labeled.")]
     for i, (lbl, p) in enumerate(frames, 1):
         parts.append(("text", f"Frame {i} ({lbl}):"))
         parts.append(("image", p))
     parts.append(("text", f"<action_history>\n({len(steps)} steps)\n" + dig
-                  + "\n</action_history>\n\nGrade the trajectory now by "
-                  "calling the grade tool. Screenshots outrank the agent's "
-                  "claims."))
-    if rubric == "v2":
-        return parts, SYSTEM_V2, GRADE_TOOL
-    return parts, SYSTEM_V2REQ, GRADE_TOOL_REQ
+                  + "\n</action_history>\n\n" + final
+                  + " Screenshots outrank the agent's claims."))
+    system, tool = ((SYSTEM_V2, GRADE_TOOL) if rubric == "v2"
+                    else (SYSTEM_V2REQ, GRADE_TOOL_REQ))
+    if backend != "anthropic":
+        system = qwen_contract(system, tool)
+    return parts, system, tool
 
 
 def audit(a):
@@ -294,7 +330,7 @@ def audit(a):
         instr = load_instruction(a.tasks, domain, task_id)
         frames = frames_for(td, steps)
         ordered, system, tool = build_blocks(a.rubric, instr, frames, steps,
-                                             digest(steps))
+                                             digest(steps), backend=a.backend)
         if a.backend == "anthropic":
             blocks = []
             for kind, val in ordered:
@@ -316,9 +352,11 @@ def audit(a):
             v = ask(a.endpoint, a.model, key,
                     [{"role": "system", "content": system},
                      {"role": "user", "content": user}],
+                    effort=a.effort,
                     guided=tool["input_schema"] if a.rubric != "v1" else None)
         row = {"domain": domain, "task_id": task_id, "n_steps": len(steps),
                "truth": truth, "rubric": a.rubric,
+               **({"effort": a.effort} if a.backend == "qwen" else {}),
                "judge_status": "error" if "error" in v else "ok",
                **{f"j_{k}": val for k, val in v.items()}}
         if a.rubric == "v2req" and isinstance(v.get("requirements"), list):
@@ -397,6 +435,8 @@ def main(argv=None):
     ap.add_argument("--backend", choices=("qwen", "anthropic"), default="qwen")
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--rubric", choices=("v1", "v2", "v2req"), default="v1")
+    ap.add_argument("--effort", default="low",
+                    help="qwen backend reasoning_effort (low/medium/high)")
     a = ap.parse_args(argv)
     if a.report:
         report(a.report, a.score_field)
