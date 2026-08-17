@@ -88,6 +88,10 @@ def main(argv=None):
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--osworld", type=Path, default=Path("/mnt/d/research/OSWorld"))
     ap.add_argument("--limit", type=int, default=0, help="max tasks, for smoke runs")
+    ap.add_argument("--include", type=Path, default=None,
+        help="jsonl of domain/task_id to admit despite a failing checker (curate _rescue)")
+    ap.add_argument("--exclude", type=Path, default=None,
+        help="jsonl of domain/task_id to drop despite a passing checker (curate _drop / _tier2)")
     ap.add_argument("--whole-traj-filter", action="store_true",
         help="drop cap-hit / DONE-less / illegal-action passing trajectories whole (PLAN-20260816)")
     ap.add_argument("--image-cache", type=Path, default=None,
@@ -142,13 +146,32 @@ def main(argv=None):
 
     task_dirs = sorted(p for p in args.result_dir.glob("*/*") if p.is_dir())
     run_id = args.result_dir.name
+
+    def slugs(path):
+        return {(json.loads(l)["domain"], json.loads(l)["task_id"])
+                for l in Path(path).read_text().splitlines() if l.strip()}
+
+    # The checker's verdict is the default admission rule; curate lists
+    # override it in both directions -- --include admits trajectories the
+    # checker failed but arbitration ruled checker_bug_strict (冤案赎回),
+    # --exclude drops passes arbitration convicted (or any list you hand it).
+    inc = slugs(args.include) if args.include else set()
+    exc = slugs(args.exclude) if args.exclude else set()
+
+    def admitted(td):
+        k = (td.parent.name, td.name)
+        if k in exc:
+            return False
+        return traj.score(td) == 1.0 or k in inc
+    rep["admitted_via_include"] = 0
+    rep["excluded_by_list"] = 0
     # A requested split must never come back empty (a hash draw over few
     # tasks can miss everyone): reserve the lexicographically first passing
     # slug as guaranteed val when the draw selects none.
     fallback_val_slug = None
     if args.val_ratio > 0:
         for td in task_dirs:
-            if traj.score(td) == 1.0:
+            if admitted(td):
                 _, o = load_task_meta(args.tasks, td.parent.name, td.name)
                 s = o.get("slug") or td.name
                 if (fallback_val_slug is None or s < fallback_val_slug) and \
@@ -159,15 +182,18 @@ def main(argv=None):
             int(hashlib.md5((load_task_meta(args.tasks, td.parent.name, td.name)[1].get("slug")
                              or td.name).encode()).hexdigest(), 16) % 1000
             < args.val_ratio * 1000
-            for td in task_dirs if traj.score(td) == 1.0)
+            for td in task_dirs if admitted(td))
         if drawn:
             fallback_val_slug = None
     for td in task_dirs:
         if args.limit and rep["tasks_passed"] >= args.limit:
             break
         rep["tasks_seen"] += 1
-        if traj.score(td) != 1.0:
+        k = (td.parent.name, td.name)
+        if not admitted(td):
+            rep["excluded_by_list"] += 1 if k in exc else 0
             continue
+        rep["admitted_via_include"] += 1 if traj.score(td) != 1.0 else 0
         steps = traj.load_steps(td)
         if not steps:
             continue
