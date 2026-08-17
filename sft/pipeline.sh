@@ -17,6 +17,8 @@
 #   2. verify   -- every image referenced by every sample exists and is
 #                  non-empty; HARD FAIL otherwise (nothing half-broken ships)
 #   3. report   -- print report.json so the drop counts are on the record
+# Optional: THINK_CAP=N drops steps whose current-target <think> exceeds N
+# estimated tokens (quarantined to think_quarantine.jsonl; B-tailclean flow).
 # Changing WHAT the pipeline does happens in ostg/sft/*.py through review,
 # never by editing this file per run.
 set -e
@@ -30,7 +32,7 @@ $P -m ostg.sft.census "$RESULT_DIR"
 
 echo "== build"
 $P -m ostg.sft.build "$RESULT_DIR" --tasks "$TASKS_DIR" --out "$OUT_DIR" \
-    --initial-fallback mp4 --whole-traj-filter
+    --initial-fallback mp4 --whole-traj-filter ${THINK_CAP:+--think-cap $THINK_CAP}
 echo "== verify"
 $P -m ostg.sft.verify "$OUT_DIR"
 echo "== report"
