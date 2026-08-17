@@ -146,6 +146,8 @@ def main(argv=None):
 
     task_dirs = sorted(p for p in args.result_dir.glob("*/*") if p.is_dir())
     run_id = args.result_dir.name
+    slug_owner = {}          # slug -> first task_id that claimed it
+    rep["slug_collisions"] = 0
 
     def slugs(path):
         return {(json.loads(l)["domain"], json.loads(l)["task_id"])
@@ -216,9 +218,21 @@ def main(argv=None):
         if is_val:
             rep["val_tasks"] += 1
 
+        # v11-500 has 3 slug collisions across 444 tasks (441 unique). With a
+        # slug-keyed image dir the second task silently OVERWRITES the first's
+        # screenshots, leaving the first trajectory's samples pointing at
+        # another task's pixels -- invisible until a hardlink trips over it
+        # (2026-08-17). Colliding tasks get a task-id suffix; everyone else
+        # keeps the bare slug so --image-cache still hits.
+        if slug_owner.setdefault(slug, task_id) == task_id:
+            img_key = slug
+        else:
+            img_key = "%s-%s" % (slug, task_id[:8])
+            rep["slug_collisions"] += 1
+
         # obs_files[i] is what the model saw before step i+1: the initial
         # observation, then each step's LAST screenshot (SFT_DATA.md 1.2/1.3)
-        img_dir = out / "images" / slug
+        img_dir = out / "images" / img_key
         img_dir.mkdir(parents=True, exist_ok=True)
         initial_from = "initial_state.png"
         init = td / "initial_state.png"
@@ -244,7 +258,7 @@ def main(argv=None):
 
         def obs_path(i):
             if i not in written:
-                rel = "images/%s/obs_%03d.png" % (slug, i + 1)
+                rel = "images/%s/obs_%03d.png" % (img_key, i + 1)
                 cached = args.image_cache / rel if args.image_cache else None
                 if cached and cached.is_file() and cached.stat().st_size > 0:
                     try:

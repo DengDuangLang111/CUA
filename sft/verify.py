@@ -17,6 +17,14 @@ import sys
 def verify(out_dir):
     bad = []
     samples = refs = 0
+    # Which task owns each image dir. Existence is not enough: with a
+    # slug-keyed image dir, two tasks sharing a slug silently overwrite each
+    # other's screenshots and every file still exists, so the old check
+    # passed a corpus whose samples pointed at another task's pixels
+    # (v11-500, 3 collisions, ~29 samples -- found 2026-08-17). Any image
+    # directory referenced by more than one task_id is a hard failure.
+    dir_owner = {}
+    shared = []
     for name in ("samples.jsonl", "val_samples.jsonl"):
         p = os.path.join(out_dir, name)
         if not os.path.exists(p):
@@ -36,12 +44,23 @@ def verify(out_dir):
                     refs += 1
                     ip = os.path.join(out_dir, part["path"])
                     if not (os.path.exists(ip) and os.path.getsize(ip) > 0):
-                        bad.append((name, s.get("slug", "?"), part["path"]))
-    print("verify: %d samples, %d image refs, %d missing-or-empty"
-          % (samples, refs, len(bad)))
+                        bad.append((name, (s.get("meta") or {}).get("slug", "?"),
+                                    part["path"]))
+                    d = os.path.dirname(part["path"])
+                    meta = s.get("meta") or {}
+                    tid = meta.get("task_id") or meta.get("slug") or "?"
+                    prev = dir_owner.setdefault(d, tid)
+                    if prev != tid:
+                        shared.append((d, prev, tid))
+    uniq_shared = sorted(set(shared))
+    print("verify: %d samples, %d image refs, %d missing-or-empty, "
+          "%d image dirs shared across tasks"
+          % (samples, refs, len(bad), len(uniq_shared)))
     for name, slug, path in bad[:50]:
         print("  BAD %s %s -> %s" % (name, slug, path))
-    return 1 if bad else 0
+    for d, a, b in uniq_shared[:20]:
+        print("  SHARED-IMAGE-DIR %s claimed by %s and %s" % (d, a, b))
+    return 1 if (bad or uniq_shared) else 0
 
 
 if __name__ == "__main__":

@@ -22,6 +22,7 @@ import glob
 import json
 import os
 import re
+from pathlib import Path
 import statistics
 import sys
 
@@ -118,11 +119,37 @@ def show(name, c):
             ">%d: %d steps/%.0f%% tokens" % (t, n, 100 * s / tot) for t, n, s in over))
 
 
+def slug_gate(tasks_dir):
+    """Pool-level slug uniqueness. Collisions are born when per-shard pools
+    (each internally unique) are MERGED into a *-final pool: v11-500-final
+    carries 3, and a slug-keyed image dir turns each into one trajectory
+    silently wearing another's screenshots. build now disambiguates and
+    verify hard-fails on a shared dir; this gate names them before the run."""
+    import glob
+    from collections import defaultdict
+    seen = defaultdict(list)
+    for f in glob.glob(str(Path(tasks_dir) / "examples" / "*" / "*.json")):
+        try:
+            t = json.loads(Path(f).read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            continue
+        s_ = (t.get("ostg") or {}).get("slug") or Path(f).stem
+        seen[s_].append("%s/%s" % (Path(f).parent.name, Path(f).stem))
+    dup = {k: v for k, v in seen.items() if len(v) > 1}
+    print("slug gate: %d tasks, %d unique slugs, %d collisions"
+          % (sum(len(v) for v in seen.values()), len(seen), len(dup)))
+    for k, v in sorted(dup.items()):
+        print("  SLUG-COLLISION %s: %s" % (k, ", ".join(v)))
+    return len(dup)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("dirs", nargs="+")
     ap.add_argument("--max-steps", type=int, default=50)
     ap.add_argument("--json", dest="json_out")
+    ap.add_argument("--tasks", default=None,
+                    help="task pool dir: also run the slug-uniqueness gate")
     a = ap.parse_args(argv)
     legal, src = harness_enum()
     print("action enum source: %s (%d names)" % (src, len(legal)))
@@ -144,6 +171,8 @@ def main(argv=None):
                 agg["illegal_names"][b] = agg["illegal_names"].get(b, 0) + n
     if len(a.dirs) > 1 and agg:
         show("AGGREGATE", agg)
+    if a.tasks:
+        slug_gate(a.tasks)
     if a.json_out:
         json.dump(out, open(a.json_out, "w"), indent=1)
     return 0
