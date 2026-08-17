@@ -92,6 +92,12 @@ best-of-3 选择 → C 数据构建 → C 训练 → C eval                  ←
       prefill)永远先于客户端挂断到达 → 超时与双层重试结构性休眠,慢步全部
       产出真实数据。timeout 只影响哪些生成被丢弃、不改模型策略,臂内混合
       时限已在此註记。
+- [~] **rich/stock 臂**(用户 2026-08-16 晚拍板):rich-450 权重 + 官方模板
+      serving = OSWorld-Verified 默认口径(历史 think 渲染时被剥,当前步照常思考,
+      client 与上游恒等行为一致)。与 rich/rich 同权重成对,单独隔离"eval 期历史
+      think 可见性";兼作与排行榜可比的外部口径。serve-chain-4b-rich-official
+      (:8015)+ run_eval50_richstock.sh(CUA@4c7c9864),驱动自动等 leankeep
+      收尾→撤 lean serve→起 serve→2 VM 开跑;dashboard 已注册 richstock。
 - [ ] 重跑一完成 / [ ] 重跑二完成
 - [ ] B-ep1 eval / [ ] B-ep3 eval → 量的裁决入 TRAINING.md
 - [ ] best-of-3 选择脚本 + C 构建(选择统计入账)
