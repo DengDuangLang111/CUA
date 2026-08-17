@@ -1,6 +1,7 @@
 #!/bin/bash
 # run_eval50_lora.sh -- Bs-LoRA arm from MERGED weights, keepthink, 3 VMs.
-# FOURTH in the chain. Single variable vs Bs: full-FT vs LoRA.
+# THIRD in the chain (the lr3e6 link was removed: LR sweep paused until
+# the termination question resolves). Single variable vs Bs: full-FT vs LoRA.
 set -u
 CTL=/mnt/d/research/osworld-verified-control
 LOG=$CTL/logs/eval50_lora.log
@@ -24,10 +25,10 @@ stop_eval(){
 
 # Gate: previous arm in the chain must be finished.
 for i in $(seq 1 2880); do
-  grep -q "EVAL50_BHQS2LR_DONE" $CTL/logs/eval50_bhqs2lr.log 2>/dev/null && break
+  grep -q "EVAL50_BHQS_DONE" $CTL/logs/eval50_bhqs.log 2>/dev/null && break
   sleep 30
 done
-grep -q "EVAL50_BHQS2LR_DONE" $CTL/logs/eval50_bhqs2lr.log 2>/dev/null || { echo "[$(date '+%F %T')] FATAL: gate EVAL50_BHQS2LR_DONE never fired"; exit 1; }
+grep -q "EVAL50_BHQS_DONE" $CTL/logs/eval50_bhqs.log 2>/dev/null || { echo "[$(date '+%F %T')] FATAL: gate EVAL50_BHQS_DONE never fired"; exit 1; }
 # Gate: the checkpoint this arm needs.
 for i in $(seq 1 480); do
   $SSHT 'test -f /gpfs/scrubbed/jy050706/sft/out/q38Bs-lora-merged/config.json' && break
@@ -35,7 +36,7 @@ for i in $(seq 1 480); do
 done
 $SSHT 'test -f /gpfs/scrubbed/jy050706/sft/out/q38Bs-lora-merged/config.json' || { echo "[$(date '+%F %T')] FATAL: checkpoint missing"; exit 1; }
 # Retire the previous serve, bring up ours.
-$SSHT "scancel -n eval4b2lr -u jy050706" 2>/dev/null
+$SSHT "scancel -n eval4bhq -u jy050706" 2>/dev/null
 JID=$($SSHT "sbatch --parsable /gpfs/scrubbed/jy050706/qwen-serve/serve-chain-4b-lora.sbatch" 2>/dev/null | tr -dc 0-9)
 echo "[$(date '+%F %T')] serve job $JID (serve-chain-4b-lora.sbatch)"
 JOB=eval4blo LPORT=$PORT RPORT=$((PORT-10000)) setsid nohup $CTL/tunnel_qwen36_auto.sh > $HOME/tunnel_eval4blo.log 2>&1 < /dev/null &

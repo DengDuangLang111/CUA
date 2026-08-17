@@ -11,6 +11,13 @@
 #SBATCH --output=/gpfs/scrubbed/jy050706/qwen-serve/serve4bhq_%j.out
 #SBATCH --signal=B:USR1@600
 #
+# Bhqs-2-terminal arm: rev2 curation PLUS canonicalised endings -- every
+# trajectory now stops with an explicit terminate(success) whose reasoning
+# the teacher wrote for that task (85% of endings were prose fallback or
+# call_user before). The plain rev2 arm was skipped (user call: eval is the
+# 5h-per-arm bottleneck), so this arm carries two changes against Bs --
+# curation and endings -- and a decomposition needs the plain arm later.
+# Original rev2 rationale follows.
 # Bhqs-2 arm: the curation redone on evidence-based rules (rev2).
 # The first Bhqs gated on the free 0-10 score, which our own band
 # study showed has no ranking power inside the good band -- 39 of
@@ -25,7 +32,7 @@ set -uo pipefail
 PROJ=/gpfs/scrubbed/jy050706/qwen-serve
 SELF="$PROJ/serve-chain-4b-bhqs.sbatch"
 B=/gpfs/scrubbed/jy050706/sft
-MODEL=$(ls -d $B/out/q38Bhqs2-gb64/v*/checkpoint-* 2>/dev/null | sort -t- -k2 -n | tail -1)
+MODEL=$(ls -d $B/out/q38Bhqs2t-gb64/v*/checkpoint-* 2>/dev/null | sort -t- -k2 -n | tail -1)
 TEMPLATE=/gpfs/scrubbed/jy050706/sft/eval/qwen35_4b_keepthink.jinja
 KEYFILE="${VLLM_API_KEY_FILE:-$PROJ/.vllm_api_key}"
 CHAIN_IDX="${CHAIN_IDX:-1}"; CHAIN_MAX="${CHAIN_MAX:-2}"
@@ -52,7 +59,7 @@ case "$perm" in 600|400) : ;; *) echo "FATAL: $KEYFILE perms=$perm (want 600/400
 export VLLM_API_KEY="$(cat "$KEYFILE")"
 [ -n "$VLLM_API_KEY" ] || { echo "FATAL: $KEYFILE is empty"; exit 1; }
 [ -f "$TEMPLATE" ] || { echo "FATAL: chat template $TEMPLATE missing"; exit 1; }
-[ -n "$MODEL" ] && [ -d "$MODEL" ] || { echo "FATAL: no q38Bhqs2-gb64 checkpoint found"; exit 1; }
+[ -n "$MODEL" ] && [ -d "$MODEL" ] || { echo "FATAL: no q38Bhqs2t-gb64 checkpoint found"; exit 1; }
 echo ">>> serving checkpoint: $MODEL"
 
 RESUBMITTED=0
@@ -67,11 +74,11 @@ resubmit() {
 trap resubmit USR1
 
 source "$PROJ/.venv/bin/activate"
-echo ">>> [q38Bhqs2-gb64 chain $CHAIN_IDX/$CHAIN_MAX] node=$(hostname) job=$SLURM_JOB_ID bind=127.0.0.1:8020"
+echo ">>> [q38Bhqs2t-gb64 chain $CHAIN_IDX/$CHAIN_MAX] node=$(hostname) job=$SLURM_JOB_ID bind=127.0.0.1:8020"
 python -c "import vllm; print('>>> vllm', vllm.__version__)" 2>/dev/null || true
 
 vllm serve "$MODEL" \
-  --served-model-name q38Bhqs2-gb64 \
+  --served-model-name q38Bhqs2t-gb64 \
   --chat-template "$TEMPLATE" \
   --tensor-parallel-size 1 \
   --max-model-len 262144 \
@@ -83,4 +90,4 @@ vllm serve "$MODEL" \
   --port 8020 &
 VLLM_PID=$!
 while kill -0 "$VLLM_PID" 2>/dev/null; do wait "$VLLM_PID"; done
-echo ">>> [q38Bhqs2-gb64 chain $CHAIN_IDX] vLLM exited; this link ends."
+echo ">>> [q38Bhqs2t-gb64 chain $CHAIN_IDX] vLLM exited; this link ends."

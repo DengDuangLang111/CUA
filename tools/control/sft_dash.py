@@ -96,6 +96,15 @@ EVAL50_ARMS = {
                   " plus 54 checker-bug trajectories rescued by arbitration."
                   " 304 trajs / 5,367 samples, same cap 2048 and gb64 config"
                   " as Bs -- curation is the only variable"),
+    "bhqs2tkeep": ("Bhqs-2-terminal · keepthink (endings canonicalised)", "sft",
+                  "rev2 curation PLUS every trajectory ending rewritten to an"
+                  " explicit terminate(success) -- the teacher writes the"
+                  " task-specific justification, the tool call is appended"
+                  " deterministically. Before this, 85% of endings were bare"
+                  " prose or call_user, and the 4B student went from 100%"
+                  " explicit termination pre-SFT to 0% post-SFT. Two changes"
+                  " against Bs (curation + endings): a decomposition needs the"
+                  " plain rev2 arm, which was skipped to save eval slots"),
     "bhqs2keep": ("Bhqs-2 · keepthink (curation rev2)", "sft",
                   "corpus curated on EVIDENCE only -- a hard requirement"
                   " defect or an arbitration conviction removes a trajectory;"
