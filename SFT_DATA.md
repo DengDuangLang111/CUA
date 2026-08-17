@@ -267,3 +267,40 @@ impress 36 / thunderbird 36 / gimp 19 / chrome 15 条 **not_satisfied**
 
 **难度信号**:pass 中位 17 步 vs fail 中位 19 步 —— 失败**不是**步数爆炸型,
 是"走完了但没走对"型,与步级"想完不做"发现同源。
+
+## 事故:slug 冲突导致图片张冠李戴(2026-08-17 发现,追溯到 08-15)
+
+**症状**:Bhqs 构建时 `--image-cache` 的硬链接抛 `SameFileError` —— 目标文件
+已是源文件的硬链接。追下去发现是**图片目录被两条不同轨迹共用**。
+
+**根因(双层,两层都漏)**:
+1. **合并层**:`ostg` 的 slug 在**每个分片内唯一,合并成 `*-final` 池后不唯一**。
+   全量排查 40 个任务池:分片池(v11-500-s0..s3、v11q2-500-s*、v9/v8big 各片)
+   **全部 0 冲突**;只有合并池出问题——**v11-500-final 3 组、v11-500-recheck 4、
+   recheck2 3、v500-all 4**。08-15 的 accept 门(`slug collisions across shards`)
+   发现过 v11q2 的 5 组并做了 cull,**但 v11-500 是在那之前合并的,从未回补**。
+2. **构建层**:`build.py` 用 slug 当图片目录名(假定唯一),第二条轨迹**静默覆盖**
+   第一条的截图;而 `verify.py` 只验"图片存在且非空"——**被覆盖的图片依然存在**,
+   所以这道门永远查不出来。
+
+**实际损坏(B 与 Bs 两个语料,已训练)**:
+| 冲突组 | 后果 |
+|---|---|
+| `campaign-brief-broken-links` | chrome/16d30a31(23 步)先写 → os/b132cf79(24 步)全覆盖:**chrome 那条 23 个样本全部配错图** |
+| `retainer-trust-balance-sheet` | calc/15bcfb49(11 步)→ calc/318c3734(6 步)覆盖前 6:**15bcfb49 前 6 个样本配错图** |
+| `retainer-deck-notes-to-handout` | 只 1 条过 checker,**无损坏** |
+
+合计 **~29 / 5,586 样本(0.5%)** 的截图与文本不匹配。**已训练的 B、Bs、gb64o、
+Bs-LoRA 各臂都含此缺陷**;量级远小于臂间差异(±1 任务 = 噪声),**不重训**,
+但所有基于这些臂的结论都带这一句脚注。**Bhqs 起已修复**。
+
+**三层防线(已固化,ostg@1df5c975)**:
+1. `build.py`:冲突 slug 的图片目录加 task_id 后缀(`<slug>-<tid8>`),非冲突项
+   保持裸 slug 以维持 `--image-cache` 命中;`report.json` 记 `slug_collisions`。
+2. `verify.py`:**任一图片目录被两个 task_id 引用即硬失败**(exit 1,
+   `pipeline.sh` 的 `set -e` 直接中止)。对旧语料实测精确报出 2 处。
+3. `census.py --tasks`:构建前打印池级 slug 唯一性(`SLUG-COLLISION` 行),
+   `pipeline.sh` 自动传 `--tasks`。
+
+**教训**:存在性检查 ≠ 正确性检查。凡是"用业务字段当文件路径"的地方都要在
+写入层假定冲突会发生(唯一化 + 事后交叉引用检查),不能依赖上游保证唯一。
