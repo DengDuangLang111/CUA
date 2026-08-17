@@ -479,6 +479,10 @@ def canonicalise(key, args, cfg, api_key, parse, infeasible):
     thinking = " ".join(str(parts.get("thinking") or "").split())[:600]
     statement = " ".join(str(parts.get("statement") or "").split())[:600]
     row["thinking"], row["statement"] = thinking, statement
+    # Which model wrote this ending. The trajectories are Qwen3.8's; an ending
+    # written by a different model changes what the arm distils, and the only
+    # place that can be recovered later is the row itself.
+    row["teacher"] = "%s/%s" % (args.backend, args.model)
     row["response"] = compose_response(thinking, statement)
     if err:
         row["teacher_error"] = err
