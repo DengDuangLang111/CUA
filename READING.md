@@ -148,6 +148,17 @@ InSTA-v3(共 912 轨迹)。他们 eval 解码:temp 0.6 / top-p 0.95 / **top-k 20
 max response 4096 / rep-pen 1.0(top-k 20 与我们同,max response 比我们的
 81920 狠 20 倍 —— 他们根本不给长思考留空间)。
 
+Context handling (2026-08-16 核实,repo sft/README + generate_browser.py):
+训练默认 **PER_TURN=1 = 每轮一个样本**(与我们同粒度),**历史截图全剥、每样本
+只带当前 1 张图**,mask_history=true(loss 只在当轮)——"整集截图全保留"是
+备选 PER_TURN=0 模式(mask_history=false,loss 全轮)。**Eval/rollout 默认
+`context_num_screenshots=1`:评测时也只看当前 1 张截图**;文本史默认
+`turn_history_reasoning_mode="full"`(**历史 thinking 保留**,另有
+hide_thinking/action_only 档,`browser_history_reasoning_max_turns` 限制
+更老回合)。即:他们的"lean"是图片维度的(1 张图),文本+思考维度反而 rich;
+我们的 20 图窗口 + keepthink 在两个维度上都 rich。两家 per-turn 展开的动机
+相同:历史渲染都不是 append-only(他们剥旧图,我们折叠旧图),打包不等价。
+
 Teacher provenance note (2026-08-15): OpenWebRL's demonstrations came from
 Qwen3-VL-235B, 4 independent rollouts per task, GPT-4.1-judged, then curated
 to 412. Same-family same-generation distillation gave them template
