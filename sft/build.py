@@ -366,7 +366,13 @@ def main(argv=None):
                 "messages": msgs,
                 "response": (rw["response"] if (rw and k == keep) else step.response),
                 "meta": {"run": run_id, "domain": domain, "slug": slug,
-                         "task_id": task_id, "step": k, "n_steps": len(steps),
+                         # n_steps describes the trajectory AS BUILT: with a
+                         # terminal rewrite the tail may be truncated, and a
+                         # coverage check against the original count would
+                         # then flag every truncated trajectory as missing its
+                         # ending. orig_steps keeps the provenance.
+                         "task_id": task_id, "step": k, "n_steps": keep,
+                         "orig_steps": len(steps),
                          "difficulty": ost.get("difficulty"),
                          "ambiguity": ost.get("ambiguity"),
                          "coord": "relative-0-999",
