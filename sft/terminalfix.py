@@ -26,10 +26,13 @@ sentence -- which teaches the sentence, not the decision.
 
 Tail handling (--tail-policy):
   last-only   rewrite the final step, leave any trailing WAITs as they are
-  truncate    also drop trailing steps that changed nothing (no screenshot
-              delta) and move the terminate to the first such step, so the
-              corpus stops where the work stopped rather than where the
-              episode did
+  truncate    also drop trailing steps that did no work (a WAIT, or no
+              screenshot delta) and put the terminate at the step where the
+              work actually stopped -- so the corpus stops when the task is
+              done rather than when the episode ran out of patience
+  auto        truncate only where a real stall exists (>=2 dead trailing
+              steps), last-only otherwise. The default: 88% of trajectories
+              have no stall and do not need their tail touched.
 `traj.tail_run` already truncates a trailing run of >=5 identical steps at
 build time; this is the finer-grained version aimed at 1-4 step stalls.
 """
@@ -78,18 +81,32 @@ def sha(p):
         return None
 
 
-def stalled_tail(td, steps, max_look=8):
-    """How many trailing steps changed nothing on screen.
+def stalled_tail(td, steps, max_look=10):
+    """Trailing steps that did no work: WAITs, or steps whose screenshot is
+    identical to the one before.
 
-    Compares consecutive screenshot bytes from the end. A stall means the
-    agent kept acting (or waiting) after the world stopped responding --
-    those steps teach nothing about finishing and are candidates to drop.
+    Measured on the Bhqs-2 candidates (374): 293 have no trailing WAIT at
+    all, 53 have one, 28 have two or more (worst: 9 WAITs in an 11-step
+    trajectory). Screen stagnation of exactly 1 is NORMAL -- the terminal
+    step is a stop, so it changes nothing -- which is why the count below
+    starts from the step BEFORE the last one. Only ~12% of trajectories have
+    a real stall; for the rest the ending is fine and only its FORM is wrong,
+    so the default policy leaves the tail alone.
     """
-    tail = [s for s in steps[-max_look:] if s.screenshot]
-    shas = [sha(td / s.screenshot) for s in tail]
+    if len(steps) < 2:
+        return 0
     n = 0
-    for i in range(len(shas) - 1, 0, -1):
-        if shas[i] and shas[i] == shas[i - 1]:
+    body = steps[:-1]                       # exclude the terminal step
+    prev_sha = None
+    shas = {}
+    for s in body[-max_look:]:
+        shas[s.num] = sha(td / s.screenshot) if s.screenshot else None
+    for i in range(len(body) - 1, 0, -1):
+        s = body[i]
+        waited = any(a.strip() == "WAIT" for a in s.actions)
+        same = (shas.get(s.num) is not None
+                and shas.get(s.num) == shas.get(body[i - 1].num))
+        if waited or same:
             n += 1
         else:
             break
@@ -107,8 +124,11 @@ def main(argv=None):
     ap.add_argument("--key", default=None)
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--effort", default="low")
-    ap.add_argument("--tail-policy", choices=("last-only", "truncate"),
-                    default="last-only")
+    ap.add_argument("--tail-policy", choices=("last-only", "truncate", "auto"),
+                    default="auto")
+    ap.add_argument("--stall-min", type=int, default=2,
+                    help="auto policy: truncate only when this many trailing "
+                         "steps did no work")
     ap.add_argument("--dry", type=int, default=0)
     a = ap.parse_args(argv)
 
@@ -144,6 +164,8 @@ def main(argv=None):
         keep_to = len(steps)
         stalled = stalled_tail(td, steps)
         if a.tail_policy == "truncate" and stalled:
+            keep_to = max(1, len(steps) - stalled)
+        elif a.tail_policy == "auto" and stalled >= a.stall_min:
             keep_to = max(1, len(steps) - stalled)
         last = steps[keep_to - 1]
         pre = td / (steps[keep_to - 2].screenshot if keep_to > 1
