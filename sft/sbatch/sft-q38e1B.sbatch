@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=sft-q38B
+#SBATCH --job-name=sft-q38e1B
 #SBATCH --account=video
 #SBATCH --partition=gpu-h200
 #SBATCH --qos=normal
@@ -7,13 +7,13 @@
 #SBATCH --gpus=2
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=300G
-#SBATCH --time=24:00:00
-#SBATCH --output=/gpfs/scrubbed/jy050706/sft/sft_q38B_%j.out
-# Arm B: teacher = Qwen3.8-27B on v11-100 + v11-500 (312 trajs / 5,659 samples
-# after the whole-trajectory filter). Recipe = e3 UNCHANGED except parallelism:
-# 2x H200 data-parallel with accumulation 4, so the GLOBAL batch stays 8 ==
-# arm A exactly. 3 epochs on one GPU (~25h) does not fit the 24h QOS wall;
-# on two it is ~14h. Question under test: does 8x data change the SFT delta.
+#SBATCH --time=10:00:00
+#SBATCH --output=/gpfs/scrubbed/jy050706/sft/sft_q38e1B_%j.out
+# Arm B, dedicated 1-epoch run: same corpus and parallelism as sft-q38B
+# (v11-100 + v11-500, 312 trajs / 5,659 samples, 2x H200 DP, global batch 8);
+# the ONLY delta is num_train_epochs=1, so the LR anneals to zero within one
+# epoch. This is a true 1-epoch model, not the e3 run's mid-schedule ep1
+# snapshot -- the pair separates "less training" from "unfinished schedule".
 umask 077
 set -x
 B=/gpfs/scrubbed/jy050706/sft
@@ -38,10 +38,10 @@ print(f"preflight {ds}: {tot} image refs, {bad} unresolved")
 sys.exit(1 if bad else 0)
 PY
 done
-REPORT=none; RUN_NAME=q38e3B-${SLURM_JOB_ID}
+REPORT=none; RUN_NAME=q38e1B-${SLURM_JOB_ID}
 if [ -f "$B/wandb.env" ]; then set +x; source "$B/wandb.env"; set -x
   export WANDB_PROJECT="${WANDB_PROJECT:-cua-sft}"; REPORT=wandb; fi
-export WANDB_NOTES="q38 teacher, B=v11100+v11500, 312 trajs/5659 samples, 3ep, 2xH200 global-batch 8"
+export WANDB_NOTES="q38 teacher, B=v11100+v11500, 312 trajs/5659 samples, 1ep full anneal, 2xH200 global-batch 8"
 PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True' \
 IMAGE_MAX_TOKEN_NUM=2048 \
 NPROC_PER_NODE=2 \
@@ -53,11 +53,11 @@ swift sft \
   --preserve_thinking true \
   --attn_impl sdpa --deepspeed zero2_offload \
   --torch_dtype bfloat16 \
-  --num_train_epochs 3 --per_device_train_batch_size 1 \
+  --num_train_epochs 1 --per_device_train_batch_size 1 \
   --learning_rate 1e-5 --warmup_ratio 0.05 \
   --max_length 65536 --gradient_checkpointing true \
-  --save_strategy epoch --save_total_limit 4 \
+  --save_strategy epoch --save_total_limit 2 \
   --logging_steps 4 \
   --report_to $REPORT --run_name $RUN_NAME \
-  --output_dir $B/out/q38e3B
-echo "EXIT_q38e3B $?"
+  --output_dir $B/out/q38e1B
+echo "EXIT_q38e1B $?"
