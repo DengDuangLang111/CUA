@@ -216,6 +216,12 @@ quarantine 逐条出审计表(动作/位置/后续步走势/judge 四分类初�
 困难态 action 决策("token 占比 2.9% ≠ action 无价值")。
 优先级公式:rewrite > target-mask > 整条删;改 action 必须 replay,禁止
 静态改 JSON(反事实不一致)。cap-1024 仅作二阶消融。
+**pipeline 优化项(Phase 3 前实现)**:build 加 `--image-cache RAW_DIR`——
+派生构建引用图先查 raw 构建目录,命中即硬链接(零拷贝、目录仍自包含、
+不破坏快照隔离),未命中才重编码;派生构建图片阶段 15min → 秒级。
+动机:DrvFs 上全量重编码每次 ~15-45min,tailclean/rewrite/未来每个派生集
+都重复付费;自包含与溯源原则不变(硬链接后文件独立存在,report 记
+cache 命中数)。
 
 ### 裁决后的优先级分叉(预登记)
 
