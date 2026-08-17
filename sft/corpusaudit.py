@@ -54,7 +54,13 @@ def sha(path):
 
 
 def load_corpus(dirs):
-    """-> {(domain, task_id): {step: sample}}, over one or more build dirs."""
+    """-> {(domain, task_id): {step: sample}}, over one or more build dirs.
+
+    Image paths inside samples.jsonl are relative to the build dir they came
+    from (ship rewrites them to absolute later), so each sample carries the dir
+    it was read from -- resolving them against the process cwd instead reports
+    every image in the corpus as missing.
+    """
     out = defaultdict(dict)
     for d in dirs:
         for name in ("samples.jsonl", "val_samples.jsonl"):
@@ -65,6 +71,7 @@ def load_corpus(dirs):
                 if not line.strip():
                     continue
                 s = json.loads(line)
+                s["_dir"] = str(d)
                 m = s.get("meta") or {}
                 out[(m.get("domain"), m.get("task_id"))][m.get("step")] = s
     return out
@@ -207,10 +214,11 @@ def audit(corpus_dirs, results_root, baseline_dirs, harness_root, noop_names,
     for key, steps in corpus.items():
         for s in steps.values():
             for p in images_of(s):
-                if not os.path.exists(p):
-                    missing.append(p)
-                elif os.path.getsize(p) == 0:
-                    empty.append(p)
+                full = p if os.path.isabs(p) else os.path.join(s["_dir"], p)
+                if not os.path.exists(full):
+                    missing.append(full)
+                elif os.path.getsize(full) == 0:
+                    empty.append(full)
                 d = os.path.dirname(p)
                 own = dir_owner.setdefault(d, key)
                 if own != key:
@@ -223,18 +231,35 @@ def audit(corpus_dirs, results_root, baseline_dirs, harness_root, noop_names,
     }
 
     # ---- step coverage ---------------------------------------------------
-    gaps = []
+    # Two different things, deliberately not conflated. A MISSING TERMINAL STEP
+    # is a defect: the corpus never shows the model the moment of stopping.
+    # An INTERIOR GAP is intended -- build's think-cap quarantines any step
+    # whose reasoning exceeds the budget, and the terminal step is exempt. The
+    # gap is still worth counting, because a quarantined step is a
+    # (context -> action) pair the model never sees.
+    missing_terminal, interior = [], []
+    quarantined = 0
     for key, steps in corpus.items():
         nums = sorted(steps)
         n = (steps[nums[-1]].get("meta") or {}).get("n_steps")
         if n is not None and nums[-1] != n:
-            gaps.append({"domain": key[0], "task_id": key[1],
-                         "max_step": nums[-1], "n_steps": n,
-                         "why": "terminal step missing"})
-        elif nums != list(range(nums[0], nums[0] + len(nums))):
-            gaps.append({"domain": key[0], "task_id": key[1],
-                         "why": "non-contiguous", "steps": nums})
-    rep["checks"]["coverage"] = {"ok": not gaps, "problems": gaps}
+            missing_terminal.append({"domain": key[0], "task_id": key[1],
+                                     "max_step": nums[-1], "n_steps": n})
+        span = list(range(1, (n or nums[-1]) + 1))
+        gone = [x for x in span if x not in steps]
+        if gone:
+            quarantined += len(gone)
+            interior.append({"domain": key[0], "task_id": key[1],
+                             "n_steps": n, "absent": gone})
+    rep["checks"]["coverage"] = {
+        "ok": not missing_terminal,
+        "missing_terminal": missing_terminal,
+        "trajectories_with_interior_gaps": len(interior),
+        "steps_quarantined_by_cap": quarantined,
+        "gap_examples": interior[:8],
+        "note": "interior gaps are the think-cap working as designed; only a "
+                "missing TERMINAL step is a defect",
+    }
 
     # ---- tail safety -----------------------------------------------------
     truncated, safe, unsafe, unresolved, branch = [], [], [], [], Counter()
