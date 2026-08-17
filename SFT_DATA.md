@@ -122,3 +122,18 @@ model actually see" is not auditable.
 (固化为 census 长度分层报告);② 核实 swift loss 分母(token 级 vs
 样本级,决定尾巴权重 60× 还是 1×);③ 清尾消融四臂(token 配平)见
 IDEAS.md。在飞三臂不动。原始文件:Tillicum tmp_owrl/(审计后可删)。
+
+### 组成解剖补遗(2026-08-17)
+
+| 段 | B 语料 | OpenWebRL |
+|---|---:|---:|
+| think 通道 | 68.7% | **0(通道不存在)** |
+| 可见叙述 | 12.6%(人均 ~40 tok) | **84.4%(人均 ~282)** |
+| tool_call | 17.4% | 14.3% |
+| 结构 | 100% think;96% tool;4% 裸文本终止(DONE/FAIL) | 0 think;100% tool;**终止也走工具调用** |
+
+判决:**重尾 100% 住在 think 通道**(去掉 think 我们人均 ~100 tok 比他们
+还匀);他们均匀的四机制 = 无 think 通道(可见叙述有文体自限)+
+keep-shortest-of-4 策展 + 主场短任务 + (我们侧)600s 放行政策。
+Reasoning-cap 消融臂的施工图:think 重写为 ≤300 tok 可见叙述 = 复刻
+他们的组成结构。终止格式差异(裸文本 vs 工具调用)入跨代/格式档案。
