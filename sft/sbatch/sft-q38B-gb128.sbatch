@@ -3,25 +3,25 @@
 #SBATCH --account=video
 #SBATCH --partition=gpu-h200
 #SBATCH --qos=normal
-#SBATCH --nodes=1
-#SBATCH --gpus=2
-#SBATCH --cpus-per-gpu=8
-#SBATCH --mem=300G
-#SBATCH --time=22:00:00
+#SBATCH --nodes=2
+#SBATCH --gpus-per-node=8
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=64
+#SBATCH --mem=600G
+#SBATCH --time=06:00:00
 #SBATCH --output=/gpfs/scrubbed/jy050706/sft/sft_q38B_gb128_%j.out
-# Arm B-gb128: same B corpus (v11-100 + v11-500, 312 trajs / 5,659 samples),
-# OpenWebRL's optimization regime (paper A.5, verified 2026-08-16): global
-# batch 128 (here 2x H200, per-device 1 x accum 64 -- attempt 5: 8-way and
-# 4-way both OOMed at 138-139/139.79 on long v11-500 samples; the corpus
-# ATTEMPT 7: ZeRO-3 offload. Established law: this stack's memory scales
-# with accum count under stage 2 (4 ok / 16 slow-dies / 32,64 die pre-step-1;
-# channel_loss exonerated -- byte-identical OOM with it off; upstream
-# ms-swift issue #5230 same symptom). Stage 3 partitions gradients per
-# micro-batch (no stage-2 deferral path) and shards weights (~6 GiB back).
-# If this survives accum 64 on 2 GPUs, no multinode needed), cosine LR with 10% warmup, 3 epochs -> ~44 optimizer steps per
-# epoch, ~133 total (vs sft-q38B's 2,124 at global batch 8, warmup 0.05).
-# Question under test: does the optimization regime change the SFT delta on
-# OUR corpus, holding data constant. lr/loss/render all unchanged from B.
+# Arm B-gb128, ATTEMPT 8: 16x H200 across 2 nodes, per-device batch 1,
+# accum 8 -> global batch 128 (exact OpenWebRL A.5 replication), 3 epochs.
+# Why this shape: seven single-node attempts established two hard laws --
+#   (1) per-device batch is pinned at 1 (one 65k-token/20-image sample's
+#       activations + response-logits already sit at ~131 GiB of 139.79);
+#   (2) memory grows ~250 MB per accumulated micro-batch (ms-swift external
+#       last_round loss path retains per-microbatch logits until the
+#       boundary; upstream issue #5230 family; invariant to ZeRO stage,
+#       channel_loss, width). accum 4 proven (B jobs), accum 8 proven on
+#       arm A (450 steps); accum >=16 dies at 137-139.
+# So global 128 = 16 ranks x 8 accum is the only lawful factorization.
+# NCCL_P2P_DISABLE kept (free, measured); cross-node traffic rides IB.
 umask 077
 set -x
 B=/gpfs/scrubbed/jy050706/sft
@@ -31,11 +31,9 @@ export PATH="$HOME/.local/bin:$PATH"
 cd $B/runcwd && source $B/venv/bin/activate
 export CUDA_HOME=$B/cuda13 PATH="$B/cuda13/bin:$PATH"
 export LD_LIBRARY_PATH="$B/cuda13/lib64:$B/cuda13/lib:${LD_LIBRARY_PATH:-}"
-# 8-way NCCL over NVLink P2P crashed twice at ~step 8 on DIFFERENT nodes
-# (235364/g017, 235400/g014: "Invalid access of peer GPU memory over nvlink")
-# -- a stack-level P2P fault, not bad hardware. Route via host shared memory;
-# slower per step but immune. The 2-GPU jobs never trip this.
 export NCCL_P2P_DISABLE=1
+export PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True'
+export IMAGE_MAX_TOKEN_NUM=2048
 for DS in $DS1 $DS2; do
 python - "$DS" <<'PY' || { echo "PREFLIGHT FAILED — aborting"; exit 1; }
 import json, os, sys
@@ -54,23 +52,28 @@ done
 REPORT=none; RUN_NAME=q38e3B-gb128-${SLURM_JOB_ID}
 if [ -f "$B/wandb.env" ]; then set +x; source "$B/wandb.env"; set -x
   export WANDB_PROJECT="${WANDB_PROJECT:-cua-sft}"; REPORT=wandb; fi
-export WANDB_NOTES="q38 teacher, B=v11100+v11500, 3ep, OpenWebRL regime: global batch 128 (8xH200 x accum16), cosine warmup 0.1"
-PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True' \
-IMAGE_MAX_TOKEN_NUM=2048 \
-NPROC_PER_NODE=2 \
-swift sft \
-  --model $B/models/Qwen3.5-4B \
-  --dataset $DS1/train_swift.jsonl $DS2/train_swift.jsonl \
-  --enable_channel_loss true \
-  --tuner_type full --loss_scale last_round --gradient_accumulation_steps 64 \
-  --preserve_thinking true \
-  --attn_impl sdpa --deepspeed zero3_offload \
-  --torch_dtype bfloat16 \
-  --num_train_epochs 3 --per_device_train_batch_size 1 \
-  --learning_rate 1e-5 --warmup_ratio 0.1 \
-  --max_length 65536 --gradient_checkpointing true \
-  --save_strategy epoch --save_total_limit 4 \
-  --logging_steps 2 \
-  --report_to $REPORT --run_name $RUN_NAME \
-  --output_dir $B/out/q38e3B-gb128
+export WANDB_NOTES="q38 teacher, B=v11100+v11500, 3ep, OpenWebRL regime: global batch 128 = 16xH200 (2 nodes) x accum 8, cosine warmup 0.1"
+export B DS1 DS2 REPORT RUN_NAME
+export MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n1)
+export MASTER_PORT=29500 NNODES=2 NPROC_PER_NODE=8
+echo ">>> multinode: nodes=$SLURM_JOB_NODELIST master=$MASTER_ADDR"
+srun --ntasks=2 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
+  export NODE_RANK=$SLURM_NODEID
+  echo ">>> node $SLURM_NODEID ($(hostname)) launching NPROC=8"
+  swift sft \
+    --model $B/models/Qwen3.5-4B \
+    --dataset $DS1/train_swift.jsonl $DS2/train_swift.jsonl \
+    --enable_channel_loss true \
+    --tuner_type full --loss_scale last_round --gradient_accumulation_steps 8 \
+    --preserve_thinking true \
+    --attn_impl sdpa --deepspeed zero2_offload \
+    --torch_dtype bfloat16 \
+    --num_train_epochs 3 --per_device_train_batch_size 1 \
+    --learning_rate 1e-5 --warmup_ratio 0.1 \
+    --max_length 65536 --gradient_checkpointing true \
+    --save_strategy epoch --save_total_limit 4 \
+    --logging_steps 2 \
+    --report_to $REPORT --run_name $RUN_NAME \
+    --output_dir $B/out/q38e3B-gb128
+'
 echo "EXIT_q38e3B_gb128 $?"
