@@ -1102,10 +1102,22 @@ $P -m ostg.sft.arb RESULT_DIR --tasks TASKS_DIR --targets out/curate_POOL_tier2.
 
 ```bash
 # ① 教师重写末步理由 + 确定性拼 terminate;auto 尾巴策略只截真空转
+#    --tasks 传 run 目录(load_instruction 自己拼 examples/,别传到 examples)
+#    --backend anthropic 时 **必须** 给 --model claude-opus-5:
+#    anthropic_cfg 原样透传模型名,漏传会静默返回空理由
 $P -m ostg.sft.terminalfix RESULT_DIR --tasks TASKS_DIR \
    --targets out/final_POOL_keep.jsonl --targets out/final_POOL_rescue.jsonl \
    --endpoint http://127.0.0.1:18020/v1 --workers 8 \
    --tail-policy auto --stall-min 2 --out out/terminal_POOL.jsonl
+
+# ①b 尾巴策略改过之后(不要删档重跑):只重算 keep_to,
+#     位置没动的行保留教师原文,动了的 / 理由为空的才回炉
+cp -n out/terminal_POOL.jsonl out/terminal_POOL.v1.jsonl     # 先留快照
+$P -m ostg.sft.terminalfix RESULT_DIR --tasks TASKS_DIR \
+   --targets out/final_POOL_keep.jsonl --targets out/final_POOL_rescue.jsonl \
+   --out out/terminal_POOL.jsonl --recompute-tails \
+   --backend anthropic --model claude-opus-5 --workers 6 \
+   --tail-policy auto --stall-min 2
 
 # ② build 接入重写(替换末步目标 + 按 keep_to 截尾)
 $P -m ostg.sft.build RESULT_DIR --tasks TASKS_DIR --out OUT \
@@ -1115,11 +1127,29 @@ $P -m ostg.sft.build RESULT_DIR --tasks TASKS_DIR --out OUT \
 
 # ③ 出包前的终止形式硬门(只对规范化过的语料用)
 $P -m ostg.sft.verify OUT --require-terminate
+
+# ④ 语料审计:verify 查不了的那一半 —— 语料描述的还是 checker 验收的那条轨迹吗
+$P -m ostg.sft.corpusaudit --corpus OUT_100 --corpus OUT_500 \
+   --results-root /mnt/d/research/OSWorld/results_generated \
+   --baseline PREV_ARM_100 --baseline PREV_ARM_500 \
+   --harness /mnt/d/research/OSWorld --json out/audit_ARM.json --text
 ```
 `--require-terminate` 检查每条轨迹的**末步目标必须解析出 `terminate` 且
 status 非 failure**;散文兜底、`call_user`、terminate(failure) 一律 exit 1。
 实测对未规范化的旧语料报 55 条不合格,对规范化后应为 0。
 report.json 增 `terminal_rewritten` / `terminal_tail_truncated` 两个计数。
+
+**截尾的硬门(2026-08-17 加,起因见 SFT_DATA.md)**:`decide_keep_to()` 在启发式
+提出切点之后,强制比对**终止步截图与原末步截图的 md5**;不一致就整条退回
+last-only 并记 `tail_gate="reverted"`。checker 打分打的是原末步的状态,
+所以只有画面逐字节相同时截尾才是可证安全的。**启发式可以错,硬门不该缺。**
+
+**`corpusaudit` 八项检查**:composition / ending_form / infeasible /
+images / coverage / tail_safety / invariance / justification,任一 FAIL 则
+exit 1。它读**原始轨迹**,所以比 verify 慢得多(约 3-5 分钟/臂),定位在
+build 之后、ship 之前跑一次,不进每次 build 的快路径。
+**轨迹定位一律按 `meta['run']` 并用 `orig_steps` 校验步数**——同一 task_id
+在多个 model/run 下都存在且轨迹完全不同,按 task_id 瞎找会得出假结论。
 
 **为什么要做**:harness 把"没有工具调用"直接判 DONE
 (`actions.py: if not pyautogui_code: append(DONE)`),于是 72% 的轨迹用散文
