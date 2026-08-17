@@ -20,10 +20,51 @@ drift to a noncommittal 7. Metadata, never a filter.
 import argparse
 import json
 import re
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from ostg.sft import traj
 from ostg.sft.stepaudit import ask, b64, load_instruction, THINK_RE
+
+GRADE_TOOL = {
+    "name": "grade",
+    "description": "Report the trajectory grade.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "completion": {"type": "integer", "minimum": 0, "maximum": 10},
+            "efficiency": {"type": "integer", "minimum": 0, "maximum": 3},
+            "grounded": {"type": "integer", "minimum": 0, "maximum": 3},
+            "termination": {"type": "integer", "minimum": 0, "maximum": 3},
+            "confidence": {"type": "integer", "minimum": 0, "maximum": 2},
+            "note": {"type": "string"},
+        },
+        "required": ["completion", "efficiency", "grounded",
+                     "termination", "confidence", "note"],
+    },
+}
+
+
+def ask_anthropic(cfg, user_blocks):
+    """Same rubric, Claude backend: thinking disabled + forced grade tool,
+    so the schema is structural rather than regex-extracted. 10-way pools
+    are safe -- ppapi rate limits far above that."""
+    from ostg import llm
+    msgs = [{"role": "user", "content": user_blocks}]
+    sysb = [{"type": "text", "text": SYSTEM}]
+    for i in range(3):
+        try:
+            r = llm.call(msgs, sysb, cfg, tool=GRADE_TOOL)
+            for blk in r.get("content", []):
+                if blk.get("type") == "tool_use":
+                    return blk["input"]
+            return {"error": "no tool_use in reply"}
+        except Exception as e:  # noqa: BLE001
+            if not getattr(e, "transient", False) or i == 2:
+                return {"error": str(e)[:200]}
+            import time
+            time.sleep(10 * (i + 1))
 
 SYSTEM = (
     "You are grading a completed GUI-agent trajectory from partial evidence: "
@@ -70,14 +111,20 @@ def digest(steps):
 def audit(a):
     import os
     key = a.key or os.environ.get("OPENAI_API_KEY") or "EMPTY"
+    cfg = None
+    if a.backend == "anthropic":
+        from ostg import llm
+        llm.load_env("/mnt/d/research/ostg-v11.1/.env")
+        cfg = {"model": a.model, "max_tokens": 2048, "thinking": False,
+               "base": os.environ.get("PPAPI_BASE_URL", "https://app-us.ppapi.ai").rstrip("/"),
+               "key": os.environ.get("PPAPI_API_KEY", "")}
     done = set()
     if a.out.exists():
         for line in a.out.read_text().splitlines():
             if line.strip():
                 r = json.loads(line)
                 done.add((r["domain"], r["task_id"]))
-    out_f = a.out.open("a", encoding="utf-8")
-    n = 0
+    jobs = []
     for rt in sorted(a.result_dir.glob("*/*/result.txt")):
         td = rt.parent
         domain, task_id = td.parent.name, td.name
@@ -87,25 +134,45 @@ def audit(a):
         steps = traj.load_steps(td)
         if truth is None or not steps:
             continue
-        user = [{"type": "text", "text": "Task: " +
-                 load_instruction(a.tasks, domain, task_id)}]
-        for p in frames_for(td, steps):
-            user.append({"type": "image_url", "image_url":
-                         {"url": "data:image/png;base64," + b64(p)}})
-        user.append({"type": "text", "text":
-                     f"Actions and reasoning digests ({len(steps)} steps):\n"
-                     + digest(steps)})
-        v = ask(a.endpoint, a.model, key,
-                [{"role": "system", "content": SYSTEM},
-                 {"role": "user", "content": user}])
+        jobs.append((td, domain, task_id, truth, steps))
+    if a.limit:
+        jobs = jobs[:a.limit]
+    out_f = a.out.open("a", encoding="utf-8")
+    lock = threading.Lock()
+    n = [0]
+
+    def one(job):
+        td, domain, task_id, truth, steps = job
+        text_head = "Task: " + load_instruction(a.tasks, domain, task_id)
+        tail = (f"Actions and reasoning digests ({len(steps)} steps):\n"
+                + digest(steps))
+        if a.backend == "anthropic":
+            blocks = [{"type": "text", "text": text_head}]
+            for p in frames_for(td, steps):
+                blocks.append({"type": "image", "source":
+                               {"type": "base64", "media_type": "image/png",
+                                "data": b64(p)}})
+            blocks.append({"type": "text", "text": tail})
+            v = ask_anthropic(cfg, blocks)
+        else:
+            user = [{"type": "text", "text": text_head}]
+            for p in frames_for(td, steps):
+                user.append({"type": "image_url", "image_url":
+                             {"url": "data:image/png;base64," + b64(p)}})
+            user.append({"type": "text", "text": tail})
+            v = ask(a.endpoint, a.model, key,
+                    [{"role": "system", "content": SYSTEM},
+                     {"role": "user", "content": user}])
         row = {"domain": domain, "task_id": task_id, "n_steps": len(steps),
                "truth": truth, **{f"j_{k}": val for k, val in v.items()}}
-        out_f.write(json.dumps(row, ensure_ascii=False) + "\n")
-        out_f.flush()
-        n += 1
-        print(f"[{n}] {domain}/{task_id[:8]} truth={truth} -> {v}")
-        if a.limit and n >= a.limit:
-            break
+        with lock:
+            out_f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            out_f.flush()
+            n[0] += 1
+            print(f"[{n[0]}] {domain}/{task_id[:8]} truth={truth} -> {v}")
+
+    with ThreadPoolExecutor(max_workers=a.workers) as ex:
+        list(ex.map(one, jobs))
     out_f.close()
 
 
@@ -157,6 +224,8 @@ def main(argv=None):
     ap.add_argument("--out", type=Path, default=Path("trajaudit.jsonl"))
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--report", type=Path, default=None)
+    ap.add_argument("--backend", choices=("qwen", "anthropic"), default="qwen")
+    ap.add_argument("--workers", type=int, default=1)
     a = ap.parse_args(argv)
     if a.report:
         report(a.report)
