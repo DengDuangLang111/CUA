@@ -2631,3 +2631,26 @@ steps (grinding) ③ terminate calibration incl. false completion claims
 trajectory on the same task (`check.py --reference`) ⑥ think-action consistency
 by reading ⑦ per-domain channel split. To be run on all four eval-50 arms the
 day scores land.
+
+## 优化域各臂的真实超参(2026-08-17,从 checkpoint 的 args.json 读出)
+
+我一直把 gb128 与 gb64o 统称"优化域臂",**但它们差三个变量,不是一个**:
+
+| 臂 | 全局 batch | weight_decay | adam_beta2 | warmup | eval |
+|---|---|---|---|---|---|
+| **gb128**(ep2 存档) | 128 | **0.1** | **0.95** | 0.1 | **43.8%**(49 题) |
+| gb64o | 64 | **0.0** | **0.999** | 0.1 | **41.8%**(47 题) |
+| Bs-gb64 / Bhqs-gb64 | 64 | 0.0 | 0.999 | 0.1 | 排队 |
+| B(基线 3ep) | 8 | 0.1 | 0.95 | **0.05** | 待 |
+
+gb128 的 wd=0.1 / β₂=0.95 是**框架默认**(sbatch 未显式设);gb64o 起显式对齐
+OpenWebRL(wd 0.0 / β₂ 0.999)。**结果是"没对齐"的那个分更高**——但两条限定:
+①gb128 那个是 3ep 训练中途夭折抢救出的 **epoch-2 存档**,gb64o 是完整 3ep 终点,
+**训练进度不同**;②2 个点在 eval-50 上 = 1 个任务,噪声带内;③两者都被
+VM 僵死故障扣过题(47/49 题)。**"对齐 OpenWebRL 优化器是改进"这个假设,
+数据不支持,也还没被证伪**——要回答需同 batch 同 epoch 只切 wd/β₂ 的干净臂
+(4h,记入 IDEAS 排队)。基线 B 的 warmup 0.05 vs gb 系列 0.1 是第四个变量。
+
+**教训**:未显式设置的超参会被框架默认值填上,而"默认值"在不同臂之间可能
+不同(改了一个就固化了另一个)。**引用优化域结论前,一律读 checkpoint 里的
+`args.json`,不读 sbatch 注释。**
