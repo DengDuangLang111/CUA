@@ -73,6 +73,7 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && set -a && . 
 | 生成流水线的设计与各层职责 | `CUA/TASKGEN_PIPELINE.md` |
 | 实验结果与决策依据(账本) | `CUA/EXPERIMENTS.md` |
 | SFT:环境/配方/数据构建/训练/eval 协议 | `CUA/sft/TRAINING.md`(顶部有现状块)· `CUA/SFT_DATA.md` · `CUA/sft/CONTEXT.md` |
+| rollout 打分体系:judge 输入/刻度/schema、仲裁协议、判官对照 | `CUA/JUDGING.md` |
 | 运维深度:魔改明细/代理/隧道/资源/任务 JSON 语义与坑 | `CUA/OPS.md` |
 | Dashboard/Vercel 契约 | `CUA/DASHBOARD.md` |
 | 论文与创新点 | `CUA/READING.md` |

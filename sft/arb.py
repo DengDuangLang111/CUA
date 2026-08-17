@@ -70,6 +70,71 @@ Rules of evidence: screenshots outrank every textual claim, including the agent'
 
 Report via the arbitrate tool: verdict, what the checker actually verifies (one line), what the blind judges missed (or "" if nothing), the checker's flaw (or "" if none), the decisive evidence, confidence 0-2, and a note under 40 words."""
 
+# --- protocol v2: stage A derives independently, stage B is told the verdict.
+# Splitting the call is the only real isolation -- inside one prompt the model
+# sees everything at once, so "reason before you look" cannot be enforced.
+
+AUDIT_TOOL = {
+    "name": "audit",
+    "description": "Report the independent pre-verdict audit.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "checks": {
+                "type": "array", "minItems": 1, "maxItems": 12,
+                "items": {"type": "object", "properties": {
+                    "what": {"type": "string"},
+                    "in_instruction": {"type": "string", "enum": [
+                        "required", "implied", "not_required"]},
+                    "observed": {"type": "string", "enum": [
+                        "satisfied", "not_satisfied", "cannot_tell"]},
+                    "evidence": {"type": "string"}},
+                    "required": ["what", "in_instruction", "observed",
+                                 "evidence"]}},
+            "missing_checks": {"type": "string"},
+            "predicted_outcome": {"type": "string", "enum": [
+                "should_pass", "should_fail", "cannot_tell"]},
+            "config_readable": {"type": "boolean"},
+            "note": {"type": "string"},
+        },
+        "required": ["checks", "missing_checks", "predicted_outcome",
+                     "config_readable", "note"],
+    },
+}
+
+SYSTEM_A = """You are auditing one GUI-agent trajectory on an OSWorld-style desktop task, together with the programmatic checker written for that task. You are NOT told the checker's verdict, and you must not guess at it from tone: derive everything yourself.
+
+Do two independent things:
+1. Read the checker code and enumerate what it actually verifies, one entry per check. For each, say whether the task instruction requires it (required), leaves it implied (implied), or never asks for it (not_required) -- a check on something the instruction never specifies is how a checker becomes wrong.
+2. Read the screenshots and action history and say, per check, whether the evidence shows it satisfied, not satisfied, or cannot be told from the available evidence. Screenshots outrank every textual claim, including the agent's own verification commands whose output is not visible in a frame.
+
+Also state any requirement the instruction makes that the checker does NOT verify, and your predicted outcome from your own reading alone.
+
+Report via the audit tool."""
+
+SYSTEM_B = SYSTEM + """
+
+You have already audited this trajectory independently, before seeing any verdict; your own findings are included below. Now you are shown the checker's verdict and the blind judges' scores. Reconcile them.
+
+If your final verdict contradicts what your own pre-verdict audit predicted, you must say why in reversal_reason -- new evidence you had missed, or a check you had misread. "The checker says so" is not a reason. If your audit still stands, leave reversal_reason empty.
+
+Use ambiguous when two or more checks came back cannot_tell, or when the checker's faithfulness is doubtful and no frame settles it; in that case what_would_settle_it must name the single observation that would decide it."""
+
+ARB_TOOL_V2 = {
+    "name": ARB_TOOL["name"],
+    "description": ARB_TOOL["description"],
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            **ARB_TOOL["input_schema"]["properties"],
+            "reversal_reason": {"type": "string"},
+            "what_would_settle_it": {"type": "string"},
+        },
+        "required": ARB_TOOL["input_schema"]["required"]
+        + ["reversal_reason", "what_would_settle_it"],
+    },
+}
+
 
 def judge_rows(path):
     out = {}
@@ -109,13 +174,13 @@ def load_task(tasks_dir, domain, task_id):
     return json.loads(p.read_text(encoding="utf-8"))
 
 
-def ask_arb(cfg, blocks):
+def ask_arb(cfg, blocks, system=SYSTEM, tool=ARB_TOOL):
     from ostg import llm
     msgs = [{"role": "user", "content": blocks}]
-    sysb = [{"type": "text", "text": SYSTEM}]
+    sysb = [{"type": "text", "text": system}]
     for i in range(4):   # thinking + auto tool_choice: the call may end in
         try:             # text; retry until a tool_use block appears
-            r = llm.call(msgs, sysb, cfg, tool=ARB_TOOL)
+            r = llm.call(msgs, sysb, cfg, tool=tool)
             for blk in r.get("content", []):
                 if blk.get("type") == "tool_use":
                     return blk["input"]
@@ -139,6 +204,10 @@ def main(argv=None):
     ap.add_argument("--model", default="claude-opus-5")
     ap.add_argument("--workers", type=int, default=2)
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--protocol", choices=("v1", "v2"), default="v1",
+                    help="v1 = single call, verdict visible (frozen "
+                         "baseline); v2 = independent audit call, then "
+                         "reconcile with the verdict revealed")
     ap.add_argument("--targets", type=Path, default=None,
                     help="jsonl of domain/task_id rows to arbitrate even "
                          "without judge disagreement (e.g. curate tier2 / "
@@ -181,6 +250,28 @@ def main(argv=None):
     lock = threading.Lock()
     n = [0]
 
+    def evidence(td, steps, instr, ev_json, truncated):
+        """Shared prompt body: instruction, checker CODE (no verdict),
+        labeled frames, action history, and the final steps' full reasoning
+        (the 90-char digests hide what the agent thought it was verifying)."""
+        head = ("<task_instruction>\n" + instr + "\n</task_instruction>\n\n"
+                "<checker_code>\n" + ev_json
+                + ("\n[TRUNCATED]" if truncated else "")
+                + "\n</checker_code>\n\nScreenshots follow, each labeled.")
+        blocks = [{"type": "text", "text": head}]
+        for i, (lbl, p) in enumerate(frames_for(td, steps), 1):
+            blocks.append({"type": "text", "text": f"Frame {i} ({lbl}):"})
+            blocks.append({"type": "image", "source":
+                           {"type": "base64", "media_type": "image/png",
+                            "data": b64(p)}})
+        tail = [f"<action_history>\n({len(steps)} steps)\n" + digest(steps)
+                + "\n</action_history>"]
+        for s in steps[-3:]:
+            tail.append(f"<step_{s.num}_reasoning>\n{s.response[:3000]}"
+                        f"\n</step_{s.num}_reasoning>")
+        blocks.append({"type": "text", "text": "\n\n".join(tail)})
+        return blocks
+
     def one(k):
         domain, task_id = k
         why, q, o = picks[k]
@@ -190,7 +281,9 @@ def main(argv=None):
         if not steps or truth is None:
             return
         task = load_task(a.tasks, domain, task_id)
-        ev = json.dumps(task.get("evaluator", {}), ensure_ascii=False)[:4000]
+        full = json.dumps(task.get("evaluator", {}), ensure_ascii=False)
+        cap = 4000 if a.protocol == "v1" else 12000
+        ev, truncated = full[:cap], len(full) > cap
         jl = []
         if k in qwen:
             jl.append(f'judge A (blind): completion {qwen[k]["j_completion"]}'
@@ -198,27 +291,46 @@ def main(argv=None):
         if k in opus:
             jl.append(f'judge B (blind): completion {opus[k]["j_completion"]}'
                       f'/10 -- "{opus[k].get("j_note", "")}"')
-        blocks = [{"type": "text", "text":
-                   "<task_instruction>\n" + task["instruction"]
-                   + "\n</task_instruction>\n\n<checker>\nverdict: "
-                   + ("PASS" if truth == 1.0 else f"FAIL (score {truth})")
-                   + "\nevaluator config: " + ev + "\n</checker>\n\n"
-                   + "<blind_judges>\n" + "\n".join(jl) + "\n</blind_judges>"
-                   + "\n\nScreenshots follow, each labeled."}]
-        frames = frames_for(td, steps)
-        for i, (lbl, p) in enumerate(frames, 1):
-            blocks.append({"type": "text", "text": f"Frame {i} ({lbl}):"})
-            blocks.append({"type": "image", "source":
-                           {"type": "base64", "media_type": "image/png",
-                            "data": b64(p)}})
-        blocks.append({"type": "text", "text":
-                       f"<action_history>\n({len(steps)} steps)\n"
-                       + digest(steps) + "\n</action_history>\n\n"
-                       "Arbitrate now by calling the arbitrate tool."})
-        v = ask_arb(cfg, blocks)
+        verdict_txt = ("PASS" if truth == 1.0 else f"FAIL (score {truth})")
+        audit = None
+        if a.protocol == "v1":
+            blocks = [{"type": "text", "text":
+                       "<task_instruction>\n" + task["instruction"]
+                       + "\n</task_instruction>\n\n<checker>\nverdict: "
+                       + verdict_txt + "\nevaluator config: " + ev
+                       + "\n</checker>\n\n<blind_judges>\n" + "\n".join(jl)
+                       + "\n</blind_judges>\n\nScreenshots follow, each labeled."}]
+            for i, (lbl, p) in enumerate(frames_for(td, steps), 1):
+                blocks.append({"type": "text", "text": f"Frame {i} ({lbl}):"})
+                blocks.append({"type": "image", "source":
+                               {"type": "base64", "media_type": "image/png",
+                                "data": b64(p)}})
+            blocks.append({"type": "text", "text":
+                           f"<action_history>\n({len(steps)} steps)\n"
+                           + digest(steps) + "\n</action_history>\n\n"
+                           "Arbitrate now by calling the arbitrate tool."})
+            v = ask_arb(cfg, blocks)
+        else:
+            base = evidence(td, steps, task["instruction"], ev, truncated)
+            audit = ask_arb(cfg, base + [{"type": "text", "text":
+                            "Audit now by calling the audit tool."}],
+                            SYSTEM_A, AUDIT_TOOL)
+            if "error" in audit:
+                v = audit
+            else:
+                v = ask_arb(cfg, base + [{"type": "text", "text":
+                            "<your_pre_verdict_audit>\n"
+                            + json.dumps(audit, ensure_ascii=False)
+                            + "\n</your_pre_verdict_audit>\n\n<checker_verdict>"
+                            + verdict_txt + "</checker_verdict>\n\n"
+                            "<blind_judges>\n" + "\n".join(jl)
+                            + "\n</blind_judges>\n\nArbitrate now by calling "
+                            "the arbitrate tool."}], SYSTEM_B, ARB_TOOL_V2)
         row = {"domain": domain, "task_id": task_id, "truth": truth,
-               "why": why, "qwen": q, "opus": o,
+               "why": why, "qwen": q, "opus": o, "protocol": a.protocol,
+               "config_truncated": truncated,
                "judge_status": "error" if "error" in v else "ok",
+               **({"stage_a": audit} if audit else {}),
                **{f"a_{key}": val for key, val in v.items()}}
         with lock:
             out_f.write(json.dumps(row, ensure_ascii=False) + "\n")
