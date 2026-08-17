@@ -10,9 +10,9 @@ LOG=$CTL/logs/eval50_gb128.log
 exec >>$LOG 2>&1
 cd /mnt/d/research/OSWorld; set -a; . ./.env; set +a
 SSHT="ssh -n -S $HOME/.ssh/cm/qwen36-tillicum-login -o ControlMaster=no -o BatchMode=yes jy050706@tillicum-login02.hyak.uw.edu"
-MODEL=q38e3B-gb128
+MODEL=q38e3B-gb64o
 PORT=18016
-TAG=eval50-gb128keep-20260817
+TAG=eval50-gb64keep-20260817
 C=/mnt/d/research/OSWorld/evaluation_examples
 META=$C/verified_eval50_nonproxy.json
 R=/mnt/d/research/OSWorld/results_generated/qwen35-4b-sft/$TAG
@@ -33,13 +33,13 @@ for i in $(seq 1 1440); do
 done
 grep -q "EVAL50_B1EP_DONE" $CTL/logs/eval50_b1ep.log 2>/dev/null || \
   { echo "[$(date '+%F %T')] FATAL: b1ep eval never finished (6h gate)"; exit 1; }
-# Gate 2: gb128 final checkpoint on Tillicum (training 235513, ~05:30).
+# Gate 2: gb64o final checkpoint on Tillicum.
 for i in $(seq 1 240); do
-  $SSHT 'ls -d /gpfs/scrubbed/jy050706/sft/out/q38e3B-gb128/v*/checkpoint-* >/dev/null 2>&1' && break
+  $SSHT 'ls -d /gpfs/scrubbed/jy050706/sft/out/q38e3B-gb64o/v*/checkpoint-* >/dev/null 2>&1' && break
   sleep 60
 done
-$SSHT 'ls -d /gpfs/scrubbed/jy050706/sft/out/q38e3B-gb128/v*/checkpoint-* >/dev/null 2>&1' || \
-  { echo "[$(date '+%F %T')] FATAL: gb128 checkpoint never appeared (4h gate)"; exit 1; }
+$SSHT 'ls -d /gpfs/scrubbed/jy050706/sft/out/q38e3B-gb64o/v*/checkpoint-* >/dev/null 2>&1' || \
+  { echo "[$(date '+%F %T')] FATAL: gb64o checkpoint never appeared (4h gate)"; exit 1; }
 
 
 $SSHT "scancel -n eval4b1 -u jy050706" 2>/dev/null
@@ -51,10 +51,10 @@ up || { echo "[$(date '+%F %T')] FATAL: gb128 endpoint never came up"; exit 1; }
 echo "[$(date '+%F %T')] gb128 endpoint UP"
 
 cat > $R/MODEL_BOUNDARY.json <<JSON
-{"model":"Qwen3.5-4B SFT arm B-gb128 (job 235513): B corpus (v11-100+500, 312 trajs/5,659 samples), global batch 128 = 16xH200 x accum 8, 3ep, cosine warmup 0.1 -- OpenWebRL optimization regime",
- "served_model_name":"q38e3B-gb128","precision":"BF16 weights, fp8 kv-cache",
+{"model":"Qwen3.5-4B SFT arm B-gb64o: B corpus (312 trajs/5,659 samples), global batch 64 = 16xH200 x accum 4, 3ep, cosine warmup 0.1, wd 0.0, beta2 0.999 -- OpenWebRL-aligned optimizer, half-scale batch lever",
+ "served_model_name":"q38e3B-gb64o","precision":"BF16 weights, fp8 kv-cache",
  "chat_template":"qwen35_4b_keepthink.jinja (same as richrich/leankeep/basekeep)",
- "preserve_thinking":true,"cell":"gb128/keepthink -- optimization-regime lever vs richrich(3ep,gb8)+B corpus",
+ "preserve_thinking":true,"cell":"gb64keep -- optimization-regime lever (8x batch vs B) + aligned optimizer",
  "sampling":{"temperature":1.0,"top_p":0.95,"top_k":20,"min_p":0.0,"presence_penalty":0.0,
              "repetition_penalty":1.0,"profile":"official general thinking; temp/top_p from client, rest from serve override"},
  "max_steps":50,"sleep_after_execution":3,"num_envs":3,
@@ -80,5 +80,5 @@ for TRY in 1 2 3; do
     --test_config_base_dir $C --test_all_meta_path $META --result_dir $R
   stop_eval
 done
-echo "[$(date '+%F %T')] === eval50 gb128/keepthink RESULT: $(find $R -name result.txt -exec cat {} \; 2>/dev/null | sort | uniq -c | tr '\n' ' ')"
+echo "[$(date '+%F %T')] === eval50 gb64keep RESULT: $(find $R -name result.txt -exec cat {} \; 2>/dev/null | sort | uniq -c | tr '\n' ' ')"
 echo "EVAL50_GB128_DONE"

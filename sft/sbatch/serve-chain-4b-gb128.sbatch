@@ -11,8 +11,9 @@
 #SBATCH --output=/gpfs/scrubbed/jy050706/qwen-serve/serve4bg_%j.out
 #SBATCH --signal=B:USR1@600
 #
-# B-gb128 arm (job 235513: 16x H200 x accum 8 = global batch 128, 3ep,
-# OpenWebRL optimization regime on the B corpus), FINAL checkpoint, served
+# B-gb64o arm: 16x H200 x accum 4 = global batch 64 (user fallback after
+# repeated multinode global-128 deaths), OpenWebRL-aligned optimizer
+# (wd 0.0, beta2 0.999), 3ep, dense checkpoints. FINAL checkpoint, served
 # under keepthink + the official general-thinking sampling profile -- the
 # same serving as rich/rich & leankeep so the eval-50 matrix stays
 # one-variable. Port 8016 per the port-per-role convention. CHAIN_MAX=2.
@@ -21,7 +22,7 @@ set -uo pipefail
 PROJ=/gpfs/scrubbed/jy050706/qwen-serve
 SELF="$PROJ/serve-chain-4b-gb128.sbatch"
 B=/gpfs/scrubbed/jy050706/sft
-MODEL=$(ls -d $B/out/q38e3B-gb128o/v*/checkpoint-* 2>/dev/null | sort -t- -k2 -n | tail -1)
+MODEL=$(ls -d $B/out/q38e3B-gb64o/v*/checkpoint-* 2>/dev/null | sort -t- -k2 -n | tail -1)
 TEMPLATE=/gpfs/scrubbed/jy050706/sft/eval/qwen35_4b_keepthink.jinja
 KEYFILE="${VLLM_API_KEY_FILE:-$PROJ/.vllm_api_key}"
 CHAIN_IDX="${CHAIN_IDX:-1}"; CHAIN_MAX="${CHAIN_MAX:-2}"
@@ -41,7 +42,7 @@ case "$perm" in 600|400) : ;; *) echo "FATAL: $KEYFILE perms=$perm (want 600/400
 export VLLM_API_KEY="$(cat "$KEYFILE")"
 [ -n "$VLLM_API_KEY" ] || { echo "FATAL: $KEYFILE is empty"; exit 1; }
 [ -f "$TEMPLATE" ] || { echo "FATAL: chat template $TEMPLATE missing"; exit 1; }
-[ -n "$MODEL" ] && [ -d "$MODEL" ] || { echo "FATAL: no gb128 checkpoint found"; exit 1; }
+[ -n "$MODEL" ] && [ -d "$MODEL" ] || { echo "FATAL: no gb64o checkpoint found"; exit 1; }
 echo ">>> serving checkpoint: $MODEL"
 
 RESUBMITTED=0
@@ -60,7 +61,7 @@ echo ">>> [q38e3B-gb128 chain $CHAIN_IDX/$CHAIN_MAX] node=$(hostname) job=$SLURM
 python -c "import vllm; print('>>> vllm', vllm.__version__)" 2>/dev/null || true
 
 vllm serve "$MODEL" \
-  --served-model-name q38e3B-gb128 \
+  --served-model-name q38e3B-gb64o \
   --chat-template "$TEMPLATE" \
   --tensor-parallel-size 1 \
   --max-model-len 262144 \
