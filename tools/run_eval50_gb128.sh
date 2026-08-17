@@ -46,7 +46,7 @@ $SSHT "scancel -n eval4bg2 -u jy050706" 2>/dev/null
 JID=$($SSHT "sbatch --parsable /gpfs/scrubbed/jy050706/qwen-serve/serve-chain-4b-gb128.sbatch" 2>/dev/null | tr -dc 0-9)
 echo "[$(date '+%F %T')] gb128 serve job $JID"
 JOB=eval4bg LPORT=$PORT RPORT=8016 setsid nohup $CTL/tunnel_qwen36_auto.sh > $HOME/tunnel_4bg.log 2>&1 < /dev/null &
-for i in $(seq 1 120); do up && break; sleep 20; done
+for i in $(seq 1 720); do up && break; sleep 20; done
 up || { echo "[$(date '+%F %T')] FATAL: gb128 endpoint never came up"; exit 1; }
 echo "[$(date '+%F %T')] gb128 endpoint UP"
 
