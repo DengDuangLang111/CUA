@@ -425,15 +425,17 @@ def ask_qwen(endpoint, model, key, effort, instr, digest, image_b64):
                 {"type": "text", "text": "Final screen:"},
                 {"type": "image_url", "image_url": {
                     "url": "data:image/png;base64," + image_b64}}]}]
-    v = ask(endpoint, model, key, msgs, effort=effort)
+    # guided_json constrains vLLM's reply to the schema instead of fishing a
+    # blob out of free text. Without it the teacher answers in prose with
+    # markdown headers ("**thinking:** ...") and both fields land in one
+    # string -- observed on the first qwen run.
+    v = ask(endpoint, model, key, msgs, effort=effort,
+            guided=REASON_TOOL["input_schema"])
     if not isinstance(v, dict):
         return {}, "unexpected reply type %s" % type(v).__name__
     if v.get("thinking") or v.get("statement"):
         return v, None
-    # ask() returns {"error": raw} when the reply is not JSON -- expected when
-    # the local server answers in prose rather than the requested object.
-    text = v.get("reason") or str(v.get("error") or "")
-    return ({"statement": text} if text else {}), None if text else "empty reply"
+    return {}, str(v.get("error") or "empty reply")[:160]
 
 
 def canonicalise(key, args, cfg, api_key, parse, infeasible):
