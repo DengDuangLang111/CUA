@@ -63,10 +63,53 @@ eval-50 的损伤(base 38% > 全部 SFT 臂)分解为两个独立机制:
 
 ### D. 前置验证事项
 
-- [ ] **tokenizer 一致性**:Qwen3.8-27B vs Qwen3.5-4B 词表是否逐 token
-  相同——不同则 logit 级 GKD/KL 蒸馏出局,只能文本级 DAgger。
+- [x] **tokenizer 一致性(2026-08-17 验毕:完全相同)**——vocab dict 相等、
+  探针编码(think 标签/tool_call/中文/动作词/特殊 token)逐 token 相等,
+  md5 差异仅文件格式。**logit 级 OPD/KL 蒸馏技术可行**。
 - [ ] 3.6 时代 rollout 与 v11 任务集的重叠面(intersection 可行性 census)。
 - [ ] 外部桌面轨迹数据集候选清单 + 污染筛查协议。
+
+### E. Teacher intervention(DAgger 落地形态)【2026-08-17 深夜评估】
+
+外部讨论给出三种干预策略,采纳其推荐 + 我方修正:
+
+| 方案 | 形态 | 判决 |
+|---|---|---|
+| A 教师接管到底 | 错误点后教师跑完 | 只作"可救性验证/完整参考"独立桶,**不当主训练数据**(后缀重新 off-policy 化) |
+| B 教师只纠一步 | 单步纠正即交还 | 默认起点,但 GUI 错误常需连招(关弹窗→切 app→恢复焦点) |
+| **C 恢复即交还(主推)** | 教师做最短恢复段(预算 3-5 步)→ 学生续跑 | on-policy 保留最多 + 可测"被救后能否自主完成";教师干预长度本身是指标 |
+
+**采纳的设计件**:交还判据用可观测条件(无阻塞弹窗/app-tab 对/上一动作改变了画面/学生下一步不再重复或幻觉),不信教师自我宣告;触发分三层(确定性检测→规则+LLM→离线回溯),第一层就是我们现成的检测器(enum 违例/连续重复/截图不变/假终止=DONE+0分);学生错误动作存 negative bucket(rejected/chosen/error_type)——**天然是 DPO 三元组**;效率指标用 autonomy-adjusted success(成功率 − λ·教师步占比),防"教师强≠学生学会";迭代轮次 π0→π1→π2 每轮必须用当前学生重采样,旧轮次降权。
+
+**我方修正/现实约束**:
+1. **round-0 可以离线白嫖**:历年 eval 的失败轨迹(ep1/ep3/lean/richstock
+   各 ~36-39 条,含完整截图+历史)就是现成的学生失败态库——教师纠正 =
+   纯 prompt 查询,**零新 harness、零 VM**,先出第一批金/银级纠正样本;
+2. 交互式中途换手(episode 内 student↔teacher 端点切换)需要 harness
+   动刀(agent 按触发条件换 base_url + 记录归属)——round-1 再建;
+3. 反事实定位(VM snapshot 回滚验证 causal step)在 docker 栈上偏重,
+   先用三层触发的离线回溯替代;
+4. 起点模型用 base(38%)而非窄 SFT checkpoint(22-28%)——采纳;
+5. 训练纠正数据只用生成任务池,**永不碰冻结 eval-50**——采纳(污染红线)。
+
+### F. 严格 OPD(Thinking Machines 式 reverse-KL)【远期,闸门陆续开】
+
+学生自己跑完整轨迹(环境不被教师触碰),教师只对学生每个 token 打
+logprob,按 reverse KL 更新;retention 可加第二通道(冻结 base 的 KL,
+λ_new·KL(π_S‖π_3.8) + λ_retain·KL(π_S‖π_base))——比 replay 更直接的
+防遗忘机制(在学生当前分布上持续回拉,而非模仿固定样本)。
+**闸门清单**:tokenizer ✓(已验相同);教师多模态 logprob 前向(vLLM
+prompt_logprobs 回放学生上下文,技术可行未打通);RL 式训练环
+(ms-swift 无现成 OPD trainer,自建工作量最大);每轮学生重采样的 VM
+预算(我们的真瓶颈)。cookbook 已有 multi-turn tool-use 版本
+(on_policy_distillation_harbor_multi_turn.py)可作参考实现。
+**排序**:E 的 round-0(离线)→ E 的 round-1(交互式)→ F。
+
+### 裁决后的优先级分叉(预登记)
+
+若今日 B 四臂 eval 确认损伤依旧:静态语料扩张(含 best-of-3/C 臂)的
+边际价值存疑,**A(replay)与 E(intervention)有资格插队到 C 臂之前**
+——届时与用户重排,不默认执行。
 
 ### 排队关系(2026-08-17 时点)
 
