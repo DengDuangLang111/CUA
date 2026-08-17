@@ -52,21 +52,29 @@ def stream_norms(dir_a, dir_b=None):
             h = safe_open(f, framework="pt")
             for k in h.keys():
                 b_handles[k] = (h, k)
+    # Chunked along dim 0: the embedding matrix alone is ~1.5 GB in fp32 and
+    # a naive (t, ref, diff) triple peaked near 4.7 GB, which the login
+    # node's cgroup killed. ROWS keeps peak in the hundreds of MB, so the
+    # probe needs NO allocation at all -- it runs on the login node.
+    ROWS = 4096
     for f in tensor_files(dir_a):
         h = safe_open(f, framework="pt")
         for k in h.keys():
-            t = h.get_tensor(k)
-            if not torch.is_floating_point(t):
+            t0 = h.get_tensor(k)
+            if not torch.is_floating_point(t0):
                 continue
-            t = t.float()
-            nn += float((t * t).sum())
-            if dir_b:
-                hb = b_handles.get(k)
-                if hb is None:
-                    print(f"WARN: {k} missing in reference")
-                    continue
-                d = t - hb[0].get_tensor(hb[1]).float()
-                dd += float((d * d).sum())
+            hb = b_handles.get(k) if dir_b else None
+            if dir_b and hb is None:
+                print(f"WARN: {k} missing in reference")
+            b0 = hb[0].get_tensor(hb[1]) if hb else None
+            n = t0.shape[0] if t0.dim() else 1
+            for i in range(0, max(n, 1), ROWS):
+                a = (t0[i:i + ROWS] if t0.dim() else t0).float()
+                nn += float((a * a).sum())
+                if b0 is not None:
+                    a -= (b0[i:i + ROWS] if b0.dim() else b0).float()
+                    dd += float((a * a).sum())
+                del a
     return nn, dd
 
 
