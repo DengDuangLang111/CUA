@@ -163,7 +163,13 @@ sharding needs a single ordered manifest, so assembly is a standard step:
 PYTHONPATH=. $P -m ostg.taskgen.merge out/runs/<set>-s0 out/runs/<set>-s1 --out out/runs/<set>-all
 ```
 
-Exits loudly on id collisions; sources are untouched. Re-merge after any cull.
+Exits loudly on **id 冲突**与 **slug 冲突**;sources 不动。任何 cull 之后要重新 merge。
+
+> **slug 门(2026-08-17 加装,事故见 `SFT_DATA.md`)**:id 是 UUID 永不撞,
+> 但 slug 由任务内容派生,**两个分片可以各自唯一、合并后同名**。merge 现在
+> 直接拒绝并列出重复项(输出目录不写),要么 cull 掉一员再 merge,要么显式
+> `--allow-slug-collision`。历史遗留:`v11-500-final`(3)、`-recheck`(4)、
+> `-recheck2`(3)、`v500-all`(4)都带冲突,SFT 侧靠下面四道门自保。
 
 ## 4 Control (negative checks — run before every rollout)
 
@@ -1023,6 +1029,23 @@ $P -m ostg.sft.stepaudit RESULT_DIR --tasks TASKS_DIR --strata terminal,recovery
 $P -m ostg.sft.trajaudit RESULT_DIR --tasks TASKS_DIR --out trajaudit.jsonl
 $P -m ostg.sft.trajaudit --report trajaudit.jsonl   # AUC/分离度/混淆/分域
 ```
+
+### 数据完整性四道门(2026-08-17 固化,ostg@1df5c975)
+
+按流水线顺序,任一门失败即停:
+
+| # | 门 | 在哪 | 查什么 |
+|---|---|---|---|
+| 1 | **merge slug 门** | `ostg.taskgen.merge` | 合并分片时拒绝重复 slug(**冲突的诞生地**) |
+| 2 | **census slug 门** | `ostg.sft.census --tasks` | 构建前打印池级 slug 唯一性(`SLUG-COLLISION` 行) |
+| 3 | **build 唯一化** | `ostg.sft.build` | 冲突 slug 的图片目录加 task_id 后缀;`report.json` 记 `slug_collisions` |
+| 4 | **verify 交叉引用** | `ostg.sft.verify` | 图片存在且非空 **+ 任一图片目录被两个 task_id 引用即硬失败** |
+
+`pipeline.sh` 已自动串起 2→3→4(`set -e`,任一门失败中止)。
+体检历史语料:`for d in out/sft-*/; do $P -m ostg.sft.verify $d; done`。
+
+**原则**:存在性检查 ≠ 正确性检查。凡拿业务字段当文件路径,写入层就要假定
+冲突会发生(唯一化 + 事后交叉引用),不能依赖上游保证唯一。
 
 judge 端点默认打教师 serve(:18020 隧道);运行前 source OSWorld/.env。
 judge 未过校准考试(report 的 AUC/分离度)前,其分数不得用于任何过滤或加权。
