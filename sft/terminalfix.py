@@ -209,6 +209,10 @@ def refresh_tails(result_dir, rows, tail_policy, stall_min):
     cut moves is stale -- its justification describes a screen we no longer
     stop on -- so it goes back to the teacher. Rewriting all of them instead
     would silently change hundreds of targets that nothing was wrong with.
+
+    An empty justification is also stale regardless of the cut: it means the
+    teacher call failed and canonical_response substituted the canned
+    sentence, so a re-run should retry it rather than bake the fallback in.
     """
     kept, stale = [], []
     for row in rows:
@@ -218,12 +222,15 @@ def refresh_tails(result_dir, rows, tail_policy, stall_min):
             kept.append(row)
             continue
         new_keep, _, gate = decide_keep_to(td, steps, tail_policy, stall_min)
-        if new_keep == row.get("keep_to"):
+        moved = new_keep != row.get("keep_to")
+        failed = not (row.get("reason") or "").strip()
+        if moved or failed:
+            stale.append({"key": key_of(row), "was": row.get("keep_to"),
+                          "now": new_keep, "gate": gate,
+                          "why": "cut moved" if moved else "no justification"})
+        else:
             row["tail_gate"] = gate
             kept.append(row)
-        else:
-            stale.append({"key": key_of(row), "was": row.get("keep_to"),
-                          "now": new_keep, "gate": gate})
     return kept, stale
 
 
@@ -236,6 +243,13 @@ def render_prompt(tasks_dir, domain, task_id, steps, keep_to, image_path):
 
 
 def ask_anthropic(cfg, instr, digest, image_b64, retries=3):
+    """-> (justification, error).
+
+    The error is returned rather than swallowed. A failed call used to come
+    back as an empty string, which canonical_response silently turned into the
+    canned fallback sentence -- so a misconfigured model id produced a corpus
+    full of identical endings and nothing anywhere said so.
+    """
     from ostg import llm
     blocks = [{"type": "text", "text": "Task: " + instr},
               {"type": "text", "text": "Actions so far:\n" + digest},
@@ -250,16 +264,18 @@ def ask_anthropic(cfg, instr, digest, image_b64, retries=3):
                          tool=REASON_TOOL)
             for blk in r.get("content", []):
                 if blk.get("type") == "tool_use":
-                    return blk["input"].get("justification", "")
-            return ""
+                    return blk["input"].get("justification", ""), None
+            return "", "no tool_use block in reply"
         except Exception as e:                               # noqa: BLE001
+            err = "%s: %s" % (type(e).__name__, str(e)[:160])
             if not getattr(e, "transient", False) or attempt == retries - 1:
-                return ""
+                return "", err
             time.sleep(8 * (attempt + 1))
-    return ""
+    return "", "retries exhausted"
 
 
 def ask_qwen(endpoint, model, key, effort, instr, digest, image_b64):
+    """-> (justification, error). See ask_anthropic on why errors surface."""
     msgs = [{"role": "system", "content": SYSTEM},
             {"role": "user", "content": [
                 {"type": "text", "text": "Task: " + instr},
@@ -269,10 +285,11 @@ def ask_qwen(endpoint, model, key, effort, instr, digest, image_b64):
                     "url": "data:image/png;base64," + image_b64}}]}]
     v = ask(endpoint, model, key, msgs, effort=effort)
     if not isinstance(v, dict):
-        return ""
+        return "", "unexpected reply type %s" % type(v).__name__
     # ask() returns {"error": raw} when the reply is not JSON -- the normal
     # case here, because we asked for prose, not a JSON object.
-    return v.get("reason") or str(v.get("error") or "")
+    text = v.get("reason") or str(v.get("error") or "")
+    return text, None if text else "empty reply"
 
 
 def canonicalise(key, args, cfg, api_key):
@@ -293,15 +310,18 @@ def canonicalise(key, args, cfg, api_key):
     instr, digest, img = render_prompt(args.tasks, domain, task_id, steps,
                                        keep_to, screen)
     if args.backend == "anthropic":
-        reason = ask_anthropic(cfg, instr, digest, img)
+        reason, err = ask_anthropic(cfg, instr, digest, img)
     else:
-        reason = ask_qwen(args.endpoint, args.model, api_key, args.effort,
-                          instr, digest, img)
+        reason, err = ask_qwen(args.endpoint, args.model, api_key, args.effort,
+                               instr, digest, img)
     reason = " ".join(str(reason or "").split())[:600]
-    return {"domain": domain, "task_id": task_id, "orig_steps": len(steps),
-            "keep_to": keep_to, "stalled_tail": stalled, "tail_gate": gate,
-            "tail_policy": args.tail_policy, "reason": reason,
-            "response": canonical_response(reason)}
+    row = {"domain": domain, "task_id": task_id, "orig_steps": len(steps),
+           "keep_to": keep_to, "stalled_tail": stalled, "tail_gate": gate,
+           "tail_policy": args.tail_policy, "reason": reason,
+           "response": canonical_response(reason)}
+    if err:
+        row["teacher_error"] = err
+    return row
 
 
 def main(argv=None):
@@ -348,9 +368,9 @@ def main(argv=None):
         print("recompute: %d rows unchanged, %d stale and queued for rewrite"
               % (len(kept), len(stale)))
         for s in sorted(stale, key=lambda s: s["key"]):
-            print("   %-20s %s  keep_to %s -> %s (%s)"
+            print("   %-20s %s  keep_to %s -> %s (%s, %s)"
                   % (s["key"][0], s["key"][1][:8], s["was"], s["now"],
-                     s["gate"]))
+                     s["gate"], s["why"]))
         todo = [s["key"] for s in stale] + todo
 
     done = {key_of(r) for r in prior}
@@ -360,7 +380,7 @@ def main(argv=None):
     print("%d trajectories to canonicalise" % len(todo))
 
     lock = threading.Lock()
-    written = [0]
+    written, failed = [0], [0]
 
     def run(key):
         row = canonicalise(key, a, cfg, api_key)
@@ -370,14 +390,19 @@ def main(argv=None):
             with a.out.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
             written[0] += 1
+            if row.get("teacher_error"):
+                failed[0] += 1
             print("[%d] %s/%s keep_to=%d/%d stall=%d gate=%s :: %s"
                   % (written[0], row["domain"], row["task_id"][:8],
                      row["keep_to"], row["orig_steps"], row["stalled_tail"],
-                     row["tail_gate"], row["reason"][:60]))
+                     row["tail_gate"],
+                     row.get("teacher_error") or row["reason"][:60]))
 
     with ThreadPoolExecutor(max_workers=a.workers) as ex:
         list(ex.map(run, todo))
-    return 0
+    print("wrote %d rows, %d with a failed teacher call" % (written[0],
+                                                            failed[0]))
+    return 1 if failed[0] and failed[0] == written[0] else 0
 
 
 if __name__ == "__main__":
