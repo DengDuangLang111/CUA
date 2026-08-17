@@ -262,10 +262,19 @@ def ask_anthropic(cfg, instr, digest, image_b64, retries=3):
             r = llm.call([{"role": "user", "content": blocks}],
                          [{"type": "text", "text": SYSTEM}], cfg,
                          tool=REASON_TOOL)
+            text = ""
             for blk in r.get("content", []):
                 if blk.get("type") == "tool_use":
                     return blk["input"].get("justification", ""), None
-            return "", "no tool_use block in reply"
+                if blk.get("type") == "text":
+                    text += blk.get("text") or ""
+            # Occasionally the model answers in prose instead of calling the
+            # tool. Its prose IS the justification we asked for, so use it --
+            # falling through to the canned sentence would discard a good
+            # answer over a formatting miss.
+            if text.strip():
+                return text.strip(), None
+            return "", "no tool_use and no text in reply"
         except Exception as e:                               # noqa: BLE001
             err = "%s: %s" % (type(e).__name__, str(e)[:160])
             if not getattr(e, "transient", False) or attempt == retries - 1:
