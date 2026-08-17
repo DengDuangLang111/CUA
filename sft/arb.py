@@ -120,6 +120,33 @@ If your final verdict contradicts what your own pre-verdict audit predicted, you
 
 Use ambiguous when two or more checks came back cannot_tell, or when the checker's faithfulness is doubtful and no frame settles it; in that case what_would_settle_it must name the single observation that would decide it."""
 
+SYSTEM_ADV = """You are the checker's defence counsel. A programmatic checker FAILED this GUI-agent trajectory, and a reviewer then ruled the checker itself is buggy -- that the agent did the task and the checker is wrong. That ruling is about to promote this trajectory into training data, so it must survive an adversarial test.
+
+Your job is to argue the opposite: find the reason the CHECKER IS RIGHT. Read its code line by line and look for a requirement the reviewer glossed over -- a file path, a name, an ordering, a value, a format, a clause of the instruction the agent only appeared to satisfy. Screenshots showing a plausible end state are not proof; a command typed without visible output is not proof; the agent's own claim of success is never proof.
+
+Rule out the easy escapes: "the checker is over-strict" is only true if the thing it checks is genuinely absent from the instruction, explicitly and implicitly. If the instruction implies it, the checker is entitled to check it.
+
+Only if you honestly cannot mount that argument should you concede that the reviewer was right. Report via the defend tool: verdict 'checker_defensible' when you found a real reason the checker is right (the rescue should be REVOKED), 'rescue_survives' when the reviewer's ruling withstands your attack, 'unclear' only when the code itself is unreadable or the evidence is absent. Give your strongest argument either way, and cite the checker line or instruction clause it rests on."""
+
+DEFEND_TOOL = {
+    "name": "defend",
+    "description": "Report the adversarial re-check of a rescue.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "verdict": {"type": "string", "enum": [
+                "checker_defensible", "rescue_survives", "unclear"]},
+            "strongest_argument": {"type": "string"},
+            "checker_line_or_clause": {"type": "string"},
+            "what_reviewer_missed": {"type": "string"},
+            "confidence": {"type": "integer", "minimum": 0, "maximum": 2},
+        },
+        "required": ["verdict", "strongest_argument",
+                     "checker_line_or_clause", "what_reviewer_missed",
+                     "confidence"],
+    },
+}
+
 ARB_TOOL_V2 = {
     "name": ARB_TOOL["name"],
     "description": ARB_TOOL["description"],
@@ -204,10 +231,13 @@ def main(argv=None):
     ap.add_argument("--model", default="claude-opus-5")
     ap.add_argument("--workers", type=int, default=2)
     ap.add_argument("--limit", type=int, default=0)
-    ap.add_argument("--protocol", choices=("v1", "v2"), default="v1",
+    ap.add_argument("--protocol", choices=("v1", "v2", "adv"), default="v1",
                     help="v1 = single call, verdict visible (frozen "
                          "baseline); v2 = independent audit call, then "
                          "reconcile with the verdict revealed")
+    ap.add_argument("--prior", type=Path, action="append", default=[],
+                    help="earlier arbitration jsonl(s); adv protocol attacks "
+                         "their rulings")
     ap.add_argument("--targets", type=Path, default=None,
                     help="jsonl of domain/task_id rows to arbitrate even "
                          "without judge disagreement (e.g. curate tier2 / "
@@ -226,6 +256,13 @@ def main(argv=None):
 
     qwen, opus = judge_rows(a.qwen), judge_rows(a.opus)
     picks = pick_disagreements(qwen, opus)
+    prior_rulings = {}
+    for p in (a.prior or []):
+        for line in Path(p).read_text().splitlines():
+            if line.strip():
+                r = json.loads(line)
+                if r.get("judge_status") == "ok":
+                    prior_rulings[(r["domain"], r["task_id"])] = r
     if a.targets:
         for line in a.targets.read_text().splitlines():
             if line.strip():
@@ -293,6 +330,27 @@ def main(argv=None):
                       f'/10 -- "{opus[k].get("j_note", "")}"')
         verdict_txt = ("PASS" if truth == 1.0 else f"FAIL (score {truth})")
         audit = None
+        if a.protocol == "adv":
+            prior = (prior_rulings.get(k) or {})
+            base = evidence(td, steps, task["instruction"], ev, truncated)
+            v = ask_arb(cfg, base + [{"type": "text", "text":
+                        "<checker_verdict>" + verdict_txt + "</checker_verdict>\n"
+                        "<reviewer_ruling>\nverdict: "
+                        + str(prior.get("a_verdict")) + "\nclaimed checker flaw: "
+                        + str(prior.get("a_checker_flaw"))
+                        + "\ndecisive evidence cited: "
+                        + str(prior.get("a_decisive_evidence"))
+                        + "\n</reviewer_ruling>\n\nMount your defence now by "
+                        "calling the defend tool."}], SYSTEM_ADV, DEFEND_TOOL)
+            row = {"domain": domain, "task_id": task_id, "truth": truth,
+                   "protocol": "adv", "prior_verdict": prior.get("a_verdict"),
+                   "judge_status": "error" if "error" in v else "ok",
+                   **{f"d_{key}": val for key, val in v.items()}}
+            with lock:
+                out_f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                out_f.flush(); n[0] += 1
+                print(f"[{n[0]}] {domain}/{task_id[:8]} -> {v.get('verdict', v)}")
+            return
         if a.protocol == "v1":
             blocks = [{"type": "text", "text":
                        "<task_instruction>\n" + task["instruction"]

@@ -25,8 +25,46 @@ Authority rule (user 2026-08-17): 判官提名,仲裁定罪 -- only an
 arbitration verdict moves a trajectory across the checker's line; judge
 scores and step flags alone can only place a pass into tier2. An
 arbitration verdict of checker_right on a flagged pass clears the judge
-doubt it examined (the flag drops), because the 6/6 record so far says
+doubt it examined (the flag drops), because the record so far says
 trajectory-level judge doubt against a pass is judge error.
+
+WHAT BLOCKS, AND WHY THE FIRST VERSION GOT IT WRONG (rev 2, 2026-08-17)
+----------------------------------------------------------------------
+The first Bhqs build gated tier1 on the FREE 0-10 score (--min-score 9).
+That was backwards, by our own measurements:
+
+  * The free score does not stratify. 137 of 181 passing trajectories sat
+    on 9, and INSIDE band 9 every signal we could compute (steps, derived
+    score, all four subscores, difficulty, app count, citation errors)
+    separated checker-passes from checker-failures by ~0.0. The judge has
+    no ranking power in the region the gate operated in.
+  * The requirement checklist does stratify: critical-requirement miss
+    rate runs 12.4% / 6.9% / 0.2% / 0% across bands 7 / 8 / 9 / 10.
+  * Consequence: of 62 removals, 39 were removed for scoring 8 instead of
+    9, and 15 had a PERFECT checklist (derived 10.0). Band 8 carries a
+    ~7% real-defect rate, so those 39 removals cost ~36 good trajectories
+    to clear ~3 flawed ones.
+
+So free score is now RECORDED, never gating. Blocking is evidence-based:
+
+    hard requirement defect   status not_satisfied / partial -- the judge
+                              points at a specific thing the evidence
+                              shows was not done.   BLOCKS.
+    arbitration conviction    checker_bug_lenient.  BLOCKS.
+    soft requirement flag     weak_evidence / unverifiable -- the judge
+                              saying it cannot SEE (a file on disk, a
+                              dialog that closed). Records, never blocks:
+                              filtering on it removes tasks whose success
+                              is invisible in screenshots, i.e. the
+                              office half of the corpus.
+    weak terminal step        step-level doubt. tier2 (send to arb), stays
+                              in the corpus until arbitration convicts.
+    judge_low on a pass       tier2 only. Every such case we arbitrated
+                              came back "judge was wrong".
+
+tier2 is IN the corpus by default -- it is a work list for arbitration,
+not a bin. Dropping on suspicion is exactly what the authority rule
+forbids.
 """
 import argparse
 import json
@@ -61,7 +99,7 @@ def rows(path):
 
 
 def curate(traj_files, arb_files, step_files, min_conf, min_score=0,
-           result_dirs=()):
+           result_dirs=(), adv_files=(), tier2_out=False):
     truth, flags = {}, defaultdict(set)
     for p in traj_files:
         for r in rows(p):
@@ -69,26 +107,26 @@ def curate(traj_files, arb_files, step_files, min_conf, min_score=0,
                 continue
             k = (r["domain"], r["task_id"])
             truth[k] = r["truth"]
+            # Requirement flags are computed for FAILURES too: a rescue has
+            # to clear the same hard-defect bar as a pass, or the corpus
+            # would hold rescues to a looser standard than the trajectories
+            # it already contains.
+            for q in r.get("j_requirements") or []:
+                if isinstance(q, dict) and q.get("status") in HARD_REQ:
+                    flags[k].add(f"req_hard_{q['status']}")
             if r["truth"] != 1.0:
                 continue
             if r["j_completion"] <= JUDGE_LOW:
                 flags[k].add("judge_low")
-            # band anatomy (2026-08-17): 7/8 carry real defects (critical
-            # requirement miss 12.4%/6.9%), 9 and 10 are equally clean
-            # (0.2%/0%) and pass at the same rate -- so the meaningful cut
-            # is >=9, and 10 must NOT outrank 9 (that only selects short
-            # tasks: median 11 steps vs 16).
-            # only on the rubric the band study measured (v2req, which
-            # carries a checklist): judge scales are NOT comparable --
-            # Opus's 8 sits where Qwen's 9 does, so one numeric cut across
-            # both families would flag half the corpus by accident.
+            # Recorded, never blocking (see the module docstring): the
+            # free score has no ranking power inside the good band. Kept
+            # as a flag so tier2 work lists can still sort by it.
             if min_score and r.get("j_requirements") is not None \
                     and r["j_completion"] < min_score:
-                flags[k].add(f"below_{min_score}")
+                flags[k].add(f"note_below_{min_score}")
             for q in r.get("j_requirements") or []:
-                if isinstance(q, dict) and q.get("status") in BAD_REQ:
-                    kind = "hard" if q["status"] in HARD_REQ else "soft"
-                    flags[k].add(f"req_{kind}_{q['status']}")
+                if isinstance(q, dict) and q.get("status") in SOFT_REQ:
+                    flags[k].add(f"req_soft_{q['status']}")
     steps_cache = {}
 
     def next_action(k, num):
@@ -134,8 +172,13 @@ def curate(traj_files, arb_files, step_files, min_conf, min_score=0,
         if truth[k] != 1.0:
             if v and v["a_verdict"] == "checker_bug_strict" \
                     and v.get("a_confidence", 0) >= min_conf:
-                rescue.append({**base, "conf": v["a_confidence"],
-                               "checker_flaw": v.get("a_checker_flaw", "")})
+                hard = {f for f in flags.get(k, ()) if f.startswith("req_hard_")}
+                if hard:
+                    drop.append({**base, "flags": sorted(hard),
+                                 "reason": "rescue_with_hard_defect"})
+                else:
+                    rescue.append({**base, "conf": v["a_confidence"],
+                                   "checker_flaw": v.get("a_checker_flaw", "")})
             continue
         fl = set(flags.get(k, ()))
         if v:
@@ -147,14 +190,33 @@ def curate(traj_files, arb_files, step_files, min_conf, min_score=0,
                 continue
             if v["a_verdict"] == "checker_right_judge_fooled":
                 fl.discard("judge_low")   # doubt examined and refuted
-        blocking = {f for f in fl
-                    if f.startswith("req_hard_") or f == "weak_terminal"
-                    or f == "judge_low" or f.startswith("below_")}
+        # Evidence-based blocking only. weak_terminal / judge_low /
+        # req_soft_* / note_below_* are work-list markers, not evictions.
+        blocking = {f for f in fl if f.startswith("req_hard_")}
         if blocking:
+            drop.append({**base, "conf": None, "checker_flaw": "",
+                         "flags": sorted(fl), "reason": "hard_requirement_defect"})
+            continue
+        if fl:
             tier2.append({**base, "flags": sorted(fl),
                           "arb": v["a_verdict"] if v else None})
         else:
-            tier1.append({**base, **({"soft_flags": sorted(fl)} if fl else {})})
+            tier1.append(base)
+    # An adversarial pass defends the checker against each rescue ruling;
+    # a rescue that the defence overturns never enters the corpus.
+    revoked = set()
+    for p in adv_files:
+        for r in rows(p):
+            if r.get("judge_status") == "ok" and \
+                    r.get("d_verdict") == "checker_defensible":
+                revoked.add((r["domain"], r["task_id"]))
+    if revoked:
+        kept = [r for r in rescue if (r["domain"], r["task_id"]) not in revoked]
+        for r in rescue:
+            if (r["domain"], r["task_id"]) in revoked:
+                r["revoked_by_adversarial"] = True
+                drop.append(r)
+        rescue = kept
     return rescue, drop, tier1, tier2, flags
 
 
@@ -169,22 +231,34 @@ def main(argv=None):
                     help="rollout dirs, enables the look-ahead exemption "
                          "for typed-but-not-yet-run steps")
     ap.add_argument("--min-score", type=int, default=0,
-                    help="passes scoring below this land in tier2 (band "
-                         "anatomy says 9 is the meaningful cut; 0 = off)")
+                    help="RECORD-ONLY marker for passes scoring below this "
+                         "(free score never gates; see module docstring)")
+    ap.add_argument("--adv", type=Path, action="append", default=[],
+                    help="adversarial re-check jsonl (arb --protocol adv); "
+                         "rescues ruled checker_defensible are revoked")
+    ap.add_argument("--corpus-includes-tier2", action="store_true",
+                    help="write tier2 into <prefix>_keep.jsonl together with "
+                         "tier1 (default: tier2 is a work list, and keep = "
+                         "tier1 + tier2 since suspicion alone never drops)")
     a = ap.parse_args(argv)
 
     rescue, drop, tier1, tier2, flags = curate(a.traj, a.arb, a.step,
                                                a.min_conf, a.min_score,
-                                               a.result_dir)
+                                               a.result_dir, a.adv)
     out = {}
+    # keep = what the corpus should contain on the pass side: clean plus
+    # flagged-but-unconvicted. Only hard defects and arbitration
+    # convictions leave.
+    keep = tier1 + [{k: v for k, v in r.items() if k != "arb"} for r in tier2]
     for name, lst in (("rescue", rescue), ("drop", drop),
-                      ("tier1", tier1), ("tier2", tier2)):
+                      ("tier1", tier1), ("tier2", tier2), ("keep", keep)):
         p = Path(f"{a.out_prefix}_{name}.jsonl")
         p.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in lst))
         out[name] = len(lst)
     flag_inv = Counter(f for s in flags.values() for f in s)
     doms = Counter(r["domain"] for r in rescue)
-    report = {"counts": out, "flag_inventory": dict(flag_inv),
+    report = {"counts": out, "corpus_size": len(keep) + len(rescue),
+              "flag_inventory": dict(flag_inv),
               "rescue_by_domain": dict(doms),
               "inputs": {"traj": [str(p) for p in a.traj],
                          "arb": [str(p) for p in a.arb],
