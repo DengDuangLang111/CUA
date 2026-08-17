@@ -355,3 +355,45 @@ thunderbird 净变 0 却换掉了 4 条 —— **只看总数会以为没动过*
 **仲裁协议差异**:Bhqs 建立在 **v1 仲裁**名单上。全量 v2 重裁后名单差异为
 **1 条该撤 + 6 条该加 = 7 条 / 304 = 2.3%**,远小于臂间差异,**不重建**;
 v2 版名单存于 `out/v2only_*`,下一轮语料直接用。
+
+## 终止信号:SFT 训掉了显式 terminate(2026-08-17)
+
+**DONE 的三条来路**(读 `mm_agents/qwen/actions.py:363-377`,用仓库自己的
+`iter_tool_call_params` 重放判定,不靠正则):
+```
+for params in iter_tool_call_params(response): process(params)
+if not pyautogui_code:                      # 没产生任何动作码
+    append("FAIL" if infeasible_response else "DONE")
+```
+1. `terminate` 工具调用(status≠fail)→ DONE
+2. `call_user`(向用户求助)→ **也判 DONE**,episode 结束并按当前状态打分
+3. **无动作码 → 兜底判 DONE**:模型只写散文、或调用格式坏掉、或动作名未处理
+
+**跨模型/跨任务集实测(同一 harness)**:
+| 模型 | 任务集 | 通过 | terminate | 散文兜底 | call_user | ≥50 步 |
+|---|---|---|---|---|---|---|
+| Qwen3.6-27B | 真实 Verified 361 | 45% | **82%** | 4% | 9% | 18% |
+| Qwen3.6-27B | **生成任务 v11-100** | 39% | **96%** | 0% | 4% | 48% |
+| Qwen3.8-27B | **同一批 v11-100** | 70% | **13%** | **72%** | 15% | 8% |
+| Qwen3.8-27B | 生成任务 v11-500 | 56% | 13% | 68% | 18% | 9% |
+| 4B base | eval-50 | 38% | **100%** | 0% | 0% | 28% |
+| 4B SFT(gb64o) | eval-50 | 43% | **0%** | **81%** | 16% | 34% |
+
+**结论(注意变量归属)**:
+- **不是任务集的问题**:3.6 和 3.8 跑同一批 v11-100,terminate 率 96% vs 13%
+  —— **是教师模型版本**;3.8 自己就改用散文让 harness 兜底。
+  (限定:3.6 那两批是 think-nopreserve,3.8 是 preserve,serving 也差一项。)
+- **最干净的一对无混杂**:4B base 与 SFT 后的 4B 跑同一批 eval-50、同一 serving,
+  **terminate 100% → 0%**,散文 0% → 81%,撞上限 28% → 34%。
+  **学生忠实继承了教师的散文终止风格,把自己原有的显式终止能力训没了。**
+- **`call_user` 占 14-18% 且通过率最低**(48.3% vs terminate 69.1% / 散文 65.9%):
+  语料在教"卡住时喊人,而且这算正常结束"。
+- **未爆的雷**:`looks_infeasible_response` 是对整段 response 的子串匹配
+  ("infeasible/not possible/impossible/cannot be completed"…),**think 里随口
+  一句就能把兜底从 DONE 翻成 FAIL**。实测目前 1/465(0.3%)命中。
+
+**因此 cap 豁免终止步**(build,2026-08-17):终止监督只占 13-15% 的显式信号,
+是最不能再损失的部分;verify 增加 `TERMINAL-STEP-MISSING` 硬检查(末步目标
+被 cap 摘掉即 exit 1),实测抓出 1 条(vs_code/7de2a092,26 步里第 12 和 26 步
+都被摘)。**Phase-3 重写的首要目标随之改为:把末步改写成"简短确认 +
+显式 terminate",不动其余轨迹** —— 比删数据划算,且直击 eval 的早停/晚停失败。
