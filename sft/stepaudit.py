@@ -49,9 +49,13 @@ def b64(p):
     return base64.b64encode(Path(p).read_bytes()).decode()
 
 
-def ask(endpoint, model, key, payload_msgs, retries=3):
+def ask(endpoint, model, key, payload_msgs, retries=3, effort="low"):
+    # judge runs the teacher template at LOW reasoning effort (user decision
+    # 2026-08-17): grading needs looking, not deliberating; xhigh default
+    # would triple latency for no rubric benefit.
     body = json.dumps({"model": model, "messages": payload_msgs,
-                       "max_tokens": 4096, "temperature": 0.0}).encode()
+                       "max_tokens": 4096, "temperature": 0.0,
+                       "chat_template_kwargs": {"reasoning_effort": effort}}).encode()
     req = urllib.request.Request(
         endpoint.rstrip("/") + "/chat/completions", data=body,
         headers={"Content-Type": "application/json",
