@@ -140,6 +140,7 @@ def main(argv=None):
                           "val_tasks", "val_samples", "over_length_estimate")}
     rep["dropped_whole_traj"] = {}
     rep["dropped_think_cap"] = 0
+    rep["terminal_exempt_from_cap"] = 0
     quarantine_f = (out / "think_quarantine.jsonl").open("w", encoding="utf-8")
     samples_f = (out / "samples.jsonl").open("w", encoding="utf-8")
     val_f = (out / "val_samples.jsonl").open("w", encoding="utf-8")
@@ -279,7 +280,14 @@ def main(argv=None):
             if step.hallucinated:
                 rep["dropped_hallucinated_target"] += 1
                 continue
-            if args.think_cap:
+            # The terminal step is exempt from the cap (user call 2026-08-17).
+            # Termination is the supervision we can least afford to lose: only
+            # 13-15% of terminal targets carry an explicit terminate call at
+            # all -- the rest stop by simply not calling a tool -- so the stop
+            # signal is already weak, and dropping a terminal target leaves a
+            # trajectory that never shows the model the moment of stopping.
+            # Measured cost of the exemption: 1 trajectory in v11-500.
+            if args.think_cap and k < keep:
                 _est = traj.think_est_tokens(step.response)
                 if _est > args.think_cap:
                     rep["dropped_think_cap"] += 1
@@ -288,6 +296,9 @@ def main(argv=None):
                         "est_think_tokens": _est,
                         "response": step.response}, ensure_ascii=False) + "\n")
                     continue
+            if args.think_cap and k == keep and \
+                    traj.think_est_tokens(step.response) > args.think_cap:
+                rep["terminal_exempt_from_cap"] += 1
             if (k - 1) in mid_drops:
                 rep["dropped_mid_loop"] += 1
                 continue
