@@ -2,12 +2,12 @@
 #SBATCH --job-name=eval4blo
 #SBATCH --account=video
 #SBATCH --partition=gpu-h200
-#SBATCH --qos=normal
+#SBATCH --qos=interactive
 #SBATCH --nodes=1
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=100G
-#SBATCH --time=12:00:00
+#SBATCH --time=04:00:00
 #SBATCH --output=/gpfs/scrubbed/jy050706/qwen-serve/serve4blo_%j.out
 #SBATCH --signal=B:USR1@600
 #
@@ -23,7 +23,7 @@ B=/gpfs/scrubbed/jy050706/sft
 MODEL=$B/out/q38Bs-lora-merged
 TEMPLATE=/gpfs/scrubbed/jy050706/sft/eval/qwen35_4b_keepthink.jinja
 KEYFILE="${VLLM_API_KEY_FILE:-$PROJ/.vllm_api_key}"
-CHAIN_IDX="${CHAIN_IDX:-1}"; CHAIN_MAX="${CHAIN_MAX:-2}"
+CHAIN_IDX="${CHAIN_IDX:-1}"; CHAIN_MAX="${CHAIN_MAX:-3}"
 
 export UV_CACHE_DIR=/gpfs/scrubbed/jy050706/uv-cache
 export HF_HUB_OFFLINE=1
