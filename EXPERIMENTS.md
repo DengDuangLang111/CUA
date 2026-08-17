@@ -9,9 +9,12 @@
   batch 128、cosine warmup 0.1、3ep ≈133 步,~5h)——数据不变,只动优化域,
   测 batch/warmup 是否影响 SFT 损伤方向。1ep 独立臂 = 学习率单 epoch 完整
   退火,区别于 3ep 的 ep1 中途快照。sbatch = CUA@a17e564d + bbdf542b。
+- **eval-50 四行闭合:base 38% > rich 28% ≈ ep1 26% > lean 22%** —— SFT 全臂
+  低于 base,lean 垫底,渲染线关闭。rich/stock(Verified 默认口径)已自动
+  接力开跑。详 → `sft/TRAINING.md` 现状块。
 - **v11-500 教师 rollout 完成:444/444,250 过 / 194 败 = 56.3%**。census 终版:
   B 原料 = 严格过滤后 **312 条轨迹**(arm A 的 4.7 倍),整条级
-  毒点仅 8/320。lean/rich eval 同步在跑(矩阵第四格);v11-100 重跑二进行中。
+  毒点仅 8/320。v11-100 重跑二进行中。
 - **eval-50 epochs 曲线闭合:base 38% → ep1 26% → ep3 28%** —— 损伤在第一个
   epoch 就全额安装且不随深度变化;训练深度无罪,语料迁移全责。详情
   → `sft/TRAINING.md`。

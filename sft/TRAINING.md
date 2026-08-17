@@ -1,17 +1,23 @@
 # Training on Tillicum — environment, flags, and what the smoke test taught
 
-## 现状(2026-08-15,过时即改)
+## 现状(2026-08-16 深夜,过时即改)
 
-- **双臂完成**:232347 rich(preserve_thinking true,5:19:53)/ 232348 lean
-  (false,4:55:21),同数据(q38-v11100,1,196 样本)同配方,一个 flag 之差。
-  终点同(loss .069/.074,acc 均 97.78%),lean 起步更难(0.80 vs 0.62)——
-  机制符合预期,训练侧分不出高下。checkpoint 150/300/450(= epoch 边界)。
-- **rich/rich 已开跑**(2026-08-15 17:21,PLAN-20260815:rollout 让出 1 VM):serve 232766
-  = checkpoint-450 + keepthink(render 对照验证:历史 think 38 vs 30 tokens),runner
-  `--preserve_thinking`,50 题约 6–8 h。其余臂顺序不变:base-stock → rich-keepthink →
-  lean-keepthink → lean-stock,verified-eval-50(`eval/verified_eval50_nonproxy.json`),
-  keepthink 模板 `eval/qwen35_4b_keepthink.jinja`,serve 时 `--chat-template` 注入。
-- 下一批数据:v11-500 rollout 收尾后按 `sft/pipeline.sh` 一键构建。
+- **eval-50 矩阵四行闭合(arm A 语料)**:base/keepthink **19/50=38%** >
+  rich/rich **14/50=28%** ≈ ep1 快照 **13/50=26%** > lean/keepthink
+  **11/50=22%**(+1 题 0.90 部分分,严口径不计)。SFT 全臂低于 base;
+  lean 垫底 —— OpenWebRL 式"瘦文本史训练"在跨代跨分布设置下没有救赎力,
+  渲染这条线关闭(除非后续被翻案)。50 题单 seed 幅度噪声 ±2-3 题,
+  臂间 2-6 题差距只作方向证据。
+- **rich/stock 在跑**(2026-08-16 20:40 自动接力):同 rich-450 权重 + 官方
+  模板(历史 think 渲染剥除)= OSWorld-Verified 默认口径,serve 235405
+  (:8015),与 rich/rich 成对隔离"eval 期历史 think 可见性";2×2 的
+  base/stock 角待 richstock 出分后裁决要不要补。
+- **B 语料三训练并行**:235322(3ep,~19h)/ 235323(1ep 独立退火)/
+  235400(gb128 = OpenWebRL 优化域,8×H200 batch128,首发 235364 死于
+  g017 NVLink 硬件故障,已排除该节点重提)。落地后按 ep1/ep3/1ep/gb128
+  依次 eval,量与优化域两案分开裁决。
+- OpenWebRL 对照的一手核实(含 per-turn/1 图/冻结方案/HF 公开语料)
+  → `CUA/READING.md`;移植对照实验的数据来源已就位。
 
 ---
 
