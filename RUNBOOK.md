@@ -1008,3 +1008,21 @@ and `docker stop` the leftovers yourself.
 Slurm serving chain: the vLLM job self-renews every 24 h (USR1 → successor,
 14-link cap). Each handoff is a ~5–10 minute service gap; up to num_envs
 in-flight tasks abort and are healed by the §5 relaunch.
+
+
+## 质量审计三命令(固化,2026-08-17;全部为元数据不做过滤)
+
+```bash
+# 0) 规则层(构建前自动跑,census 含 think 长度分层报告)
+$P -m ostg.sft.census RESULT_DIR
+
+# 1) 步级 judge 审计(前后截图证据;--targets 供 quarantine 清单,--strata terminal,recovery)
+$P -m ostg.sft.stepaudit RESULT_DIR --tasks TASKS_DIR --strata terminal,recovery --out stepaudit.jsonl
+
+# 2) 轨迹级盲评 0-10 + judge 校准考试(judge 不见 checker 真值)
+$P -m ostg.sft.trajaudit RESULT_DIR --tasks TASKS_DIR --out trajaudit.jsonl
+$P -m ostg.sft.trajaudit --report trajaudit.jsonl   # AUC/分离度/混淆/分域
+```
+
+judge 端点默认打教师 serve(:18020 隧道);运行前 source OSWorld/.env。
+judge 未过校准考试(report 的 AUC/分离度)前,其分数不得用于任何过滤或加权。
