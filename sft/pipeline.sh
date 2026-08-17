@@ -30,7 +30,7 @@ $P -m ostg.sft.census "$RESULT_DIR"
 
 echo "== build"
 $P -m ostg.sft.build "$RESULT_DIR" --tasks "$TASKS_DIR" --out "$OUT_DIR" \
-    --initial-fallback mp4
+    --initial-fallback mp4 --whole-traj-filter
 echo "== verify"
 $P -m ostg.sft.verify "$OUT_DIR"
 echo "== report"

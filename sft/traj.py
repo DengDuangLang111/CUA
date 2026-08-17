@@ -102,6 +102,25 @@ def load_steps(task_dir):
     return [steps[k] for k in sorted(steps)]
 
 
+def whole_traj_reject(steps, max_steps=50):
+    """Whole-trajectory rejection for PASSING trajectories (PLAN-20260816
+    strict policy, B corpora onward). Returns a reason string or None.
+    One implementation, two callers: census reports it, build enforces it.
+      cap-hit   len(steps) >= max_steps -- ended by budget, not by decision
+      no-done   never emitted DONE -- the labels never demonstrate finishing
+      illegal   a step names an action outside DECLARED (Step.hallucinated)
+    """
+    if len(steps) >= max_steps:
+        return "cap-hit"
+    if not any(a.strip() == "DONE" for s in steps for a in s.actions):
+        return "no-done"
+    bad = sorted({m for s in steps if s.hallucinated
+                  for m in ACTION_TAG.findall(s.response) if m not in DECLARED})
+    if bad:
+        return "illegal:" + ",".join(bad)
+    return None
+
+
 def tail_run(steps):
     """Length of the trailing run of identical action-lists.
 

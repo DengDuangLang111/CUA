@@ -71,3 +71,23 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+def test_whole_traj_reject():
+    from ostg.sft.traj import whole_traj_reject, Step
+    def mk(n, done=True, bad_at=None):
+        steps = []
+        for i in range(1, n + 1):
+            r = "<tool_call><parameter=action>\nleft_click\n</parameter></tool_call>"
+            h = False
+            if bad_at == i:
+                r = "<tool_call><parameter=action>\nctrl_scroll\n</parameter></tool_call>"
+                h = True
+            steps.append(Step(num=i, response=r, actions=["pyautogui.click(1,1)"], hallucinated=h))
+        if done:
+            steps[-1].actions = ["DONE"]
+        return steps
+    assert whole_traj_reject(mk(10)) is None
+    assert whole_traj_reject(mk(50)) == "cap-hit"
+    assert whole_traj_reject(mk(10, done=False)) == "no-done"
+    assert whole_traj_reject(mk(10, bad_at=3)) == "illegal:ctrl_scroll"

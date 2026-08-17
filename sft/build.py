@@ -87,6 +87,8 @@ def main(argv=None):
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--osworld", type=Path, default=Path("/mnt/d/research/OSWorld"))
     ap.add_argument("--limit", type=int, default=0, help="max tasks, for smoke runs")
+    ap.add_argument("--whole-traj-filter", action="store_true",
+        help="drop cap-hit / DONE-less / illegal-action passing trajectories whole (PLAN-20260816)")
     ap.add_argument("--tail-run", type=int, default=5,
                     help="truncate a trailing run of >= N identical steps")
     ap.add_argument("--initial-fallback", choices=["none", "mp4"], default="none",
@@ -122,6 +124,7 @@ def main(argv=None):
                           "tasks_initial_from_mp4", "images_written", "dropped_mid_loop",
                           "recovery_samples",
                           "val_tasks", "val_samples", "over_length_estimate")}
+    rep["dropped_whole_traj"] = {}
     samples_f = (out / "samples.jsonl").open("w", encoding="utf-8")
     val_f = (out / "val_samples.jsonl").open("w", encoding="utf-8")
 
@@ -156,6 +159,11 @@ def main(argv=None):
         steps = traj.load_steps(td)
         if not steps:
             continue
+        if args.whole_traj_filter:
+            why = traj.whole_traj_reject(steps)
+            if why:
+                rep["dropped_whole_traj"][f"{td.parent.name}/{td.name}"] = why
+                continue
         rep["tasks_passed"] += 1
         rep["steps_total"] += len(steps)
         domain, task_id = td.parent.name, td.name

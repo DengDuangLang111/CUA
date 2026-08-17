@@ -31,19 +31,22 @@ _ACTION_RE = re.compile(r"<parameter=action>\s*([a-zA-Z_]+)\s*</parameter>")
 
 
 def harness_enum():
-    """The action enum, from the harness itself when importable."""
+    """traj.DECLARED is the working enum; the harness import is a live
+    consistency check so drift between the two becomes loud, not silent."""
+    legal = set(traj.DECLARED)
     try:
         from mm_agents.qwen.prompts import build_internal_tools_def
         blob = json.dumps(build_internal_tools_def(1920, 1080, "relative"))
         m = re.search(r'"enum": \[([^\]]+)\]', blob)
         if m:
-            return set(x.strip().strip('"') for x in m.group(1).split(",")), "harness"
+            h = set(x.strip().strip('"') for x in m.group(1).split(","))
+            if h != legal:
+                print("WARNING: harness enum differs from traj.DECLARED: %s"
+                      % sorted(h ^ legal))
+            return legal, "DECLARED (harness-checked)"
     except Exception:
         pass
-    return {"key", "key_down", "key_up", "left_mouse_down", "left_mouse_up",
-            "type", "mouse_move", "left_click", "left_click_drag", "right_click",
-            "middle_click", "double_click", "triple_click", "scroll", "hscroll",
-            "screenshot", "wait", "terminate", "call_user"}, "frozen-fallback"
+    return legal, "DECLARED (harness not importable)"
 
 
 def census_dir(result_dir, legal, max_steps):
@@ -81,9 +84,10 @@ def census_dir(result_dir, legal, max_steps):
             c["cap_nodone"] += 1
         if not cap and not has_done:
             c["nodone"] += 1
-        if (not cap) and has_done and not bad:
+        why = traj.whole_traj_reject(steps, max_steps=max_steps)
+        if why is None:
             c["strict"].append(ns)
-        if not (cap and not has_done) and has_done and not bad:
+        if why is None or (why == "cap-hit" and has_done):
             c["lenient"].append(ns)
     return c
 
