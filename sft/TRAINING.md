@@ -2,6 +2,12 @@
 
 ## 现状(2026-08-16 深夜,过时即改)
 
+- **checkpoint 密度标准(用户 2026-08-17 立规)**:此后所有训练 sbatch 用
+  `--save_strategy steps`,`save_steps ≈ 每epoch步数/3`(每 epoch 三存:
+  1/3、2/3、边界),`save_total_limit ≈ 3×epochs+2`。动机:细粒度损伤
+  曲线 + 崩溃止损(235513 死于 120/135 丢 30 步;三存制最多丢 15)。
+  在飞作业(235820/235322,epoch 存)不追改。
+
 - **eval-50 矩阵四行闭合(arm A 语料)**:base/keepthink **19/50=38%** >
   rich/rich **14/50=28%** ≈ ep1 快照 **13/50=26%** > lean/keepthink
   **11/50=22%**(+1 题 0.90 部分分,严口径不计)。SFT 全臂低于 base;

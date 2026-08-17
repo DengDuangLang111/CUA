@@ -76,7 +76,7 @@ srun --ntasks=2 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
     --learning_rate 1e-5 --warmup_ratio 0.1 \
     --weight_decay 0.0 --adam_beta2 0.999 \
     --max_length 65536 --gradient_checkpointing true \
-    --save_strategy epoch --save_total_limit 4 \
+    --save_strategy steps --save_steps 30 --save_total_limit 12 \
     --logging_steps 2 \
     --report_to $REPORT --run_name $RUN_NAME \
     --output_dir $B/out/q38e3B-gb64o
