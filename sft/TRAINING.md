@@ -22,11 +22,14 @@
   用户第一时间的判断正确)、channel_loss(关掉后 137.87 分毫不变)。
   尝试史:235364(8卡)→235400(8卡+exclude)→235420(+P2P off,步14 死)
   →235467(4卡 accum32)→235475(2卡 accum64)→235490(+channel_loss off)。
-  **晨会菜单**:a) zero3 + accum64 一次 20min 受控试(stage-3 逐微批分片
-  梯度,机制上绕开 stage-2 的累积驻留,还白捡 ~6GB 权重分片);b) 16 卡
-  ×accum8 多机;c) 降格全局 64(8卡×8);d) 弃臂。1ep 跑完整 epoch =
-  全语料 2 卡profile 通过证明(侦察兵)。落地后按 ep1/ep3/1ep(/gb128)
-  eval,量的裁决优先。
+  第七发(zero3_offload + accum64)同点死 137.78 → 泄漏对 ZeRO 阶段免疫,
+  结案:泄漏源 = last_round 外部 loss 路径按微批持有 ~250MB(≈响应 logits
+  尺寸),channel_loss 关闭无效因为 last_round 本身走该路径。可行域收敛为
+  **batch=1(激活顶)且 accum≤8(泄漏顶)**。
+  **第八发通关(2026-08-17 凌晨,用户拍板):235513 = 16×H200 跨 2 节点
+  × accum 8 = 精确全局 128**,srun+NNODES/NODE_RANK/MASTER_ADDR 多机
+  首战成功;实测水位 132.6 与泄漏定律内插预测 ~133 吻合(定律双向验证),
+  79s/步、~3h 总时长。落地后按 ep1/ep3/1ep/gb128 eval,量的裁决优先。
 - OpenWebRL 对照的一手核实(含 per-turn/1 图/冻结方案/HF 公开语料)
   → `CUA/READING.md`;移植对照实验的数据来源已就位。
 
