@@ -63,8 +63,15 @@ best-of-3 选择 → C 数据构建 → C 训练 → C eval                  ←
 - [x] 质量普查固化:`ostg.sft.census`(复用 build 同款 traj 加载器,枚举自
       harness import;pipeline.sh 第 0 步 + 可独立调用)—— B 构建前的对表会
       用它出数(用户规矩:检测走 pipeline,不写一次性脚本)
-- [ ] B 数据构建(含新过滤,剔除清单入账)
-- [ ] B 训练完成(ep1/ep3 checkpoint 齐)
+- [x] B 数据构建 + 到仓(2026-08-16 晚):census 后 build `--whole-traj-filter`,
+      剔除整条 8(v11-100 1 条 cap-hit;v11-500 7 条,见 report.json 的
+      dropped_whole_traj 名单)→ **312 轨迹 / 5,659 步样本**(1,181 + 4,478),
+      `ship_dataset.sh` 双边校验 SHIP OK(q38e3B-v11100、q38e3B-v11500)
+- [~] B 训练**已提交:job 235308**(2026-08-16,sbatch 入库 CUA@9cc722d3)。
+      3ep 用户拍板;单卡 ~25h 超 24h QOS 墙 → **2×H200 数据并行,accum 8→4,
+      全局 batch 保持 8 与 arm A 逐位同配方**,预计 ~14h,墙 20h。
+      `--save_strategy epoch` 取精确 ep1/ep2/ep3 checkpoint(供量的裁决 eval)。
+      预检两数据集 55,736 图片引用 0 失效,已进 swift 启动。
 - [x] ep1(A-ckpt150)eval **完成:13/50 = 26% ≈ ep3 的 28% —— epochs 判据出局,损伤属于语料本身**(详 TRAINING.md);原 [~] 记录保留:
 - [~] ep1(A-ckpt150)eval **提前开跑**(2026-08-16 02:36,用户决定:信息价值
       最高,先于 500 收尾执行)—— serve 233719,keepthink+preserve,2 VM;

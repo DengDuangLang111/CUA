@@ -1,10 +1,14 @@
 # Synthetic task generation for OSWorld — design, experiments, results
 
-## 现状(2026-08-15,过时即改;历史快照看 git log)
+## 现状(2026-08-16,过时即改;历史快照看 git log)
 
+- **arm B 训练中:job 235308**(v11-100+500 并集,312 轨迹 / 5,659 步样本,
+  整条过滤剔 8)。3ep;**2×H200 数据并行、accum 4,全局 batch 保持 8 与 arm A
+  同配方**(单卡 ~25h 超 24h QOS 墙,双卡 ~14h);`--save_strategy epoch` 存
+  精确 ep1/ep2/ep3。sbatch = CUA@9cc722d3。数据经 `ship_dataset.sh` 双边校验。
 - **v11-500 教师 rollout 完成:444/444,250 过 / 194 败 = 56.3%**。census 终版:
-  B 原料 = 严格过滤后 **312 条轨迹 / 5,674 步样本**(arm A 的 4.7 倍),整条级
-  毒点仅 8/320。lean/rich eval 同步在跑(矩阵第四格);B 构建随后。
+  B 原料 = 严格过滤后 **312 条轨迹**(arm A 的 4.7 倍),整条级
+  毒点仅 8/320。lean/rich eval 同步在跑(矩阵第四格);v11-100 重跑二进行中。
 - **eval-50 epochs 曲线闭合:base 38% → ep1 26% → ep3 28%** —— 损伤在第一个
   epoch 就全额安装且不随深度变化;训练深度无罪,语料迁移全责。详情
   → `sft/TRAINING.md`。
