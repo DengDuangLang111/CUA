@@ -38,6 +38,8 @@ $P -m ostg.sft.build "$RESULT_DIR" --tasks "$TASKS_DIR" --out "$OUT_DIR" \
     ${IMAGE_CACHE:+--image-cache $IMAGE_CACHE}
 echo "== verify"
 $P -m ostg.sft.verify "$OUT_DIR"
+echo "== to_swift"
+$P -m ostg.sft.to_swift "$OUT_DIR"
 echo "== report"
 cat "$OUT_DIR/report.json"
 echo
