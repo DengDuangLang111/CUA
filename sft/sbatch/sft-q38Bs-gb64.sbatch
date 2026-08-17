@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=sft-q38Btc-gb64
+#SBATCH --job-name=sft-q38Bs-gb64
 #SBATCH --account=video
 #SBATCH --partition=gpu-h200
 #SBATCH --qos=normal
@@ -9,7 +9,7 @@
 #SBATCH --cpus-per-task=64
 #SBATCH --mem=600G
 #SBATCH --time=06:00:00
-#SBATCH --output=/gpfs/scrubbed/jy050706/sft/sft_q38Btc_gb64_%j.out
+#SBATCH --output=/gpfs/scrubbed/jy050706/sft/sft_q38Bs_gb64_%j.out
 # Arm B-gb128-owo: identical to the successful 16x H200 multinode gb128
 # (235513) EXCEPT the two framework-default optimizer deltas vs OpenWebRL
 # are aligned too: weight_decay 0.1->0.0, adam_beta2 0.95->0.999
@@ -53,10 +53,10 @@ print(f"preflight {ds}: {tot} image refs, {bad} unresolved")
 sys.exit(1 if bad else 0)
 PY
 done
-REPORT=none; RUN_NAME=q38Btc-gb64-${SLURM_JOB_ID}
+REPORT=none; RUN_NAME=q38Bs-gb64-${SLURM_JOB_ID}
 if [ -f "$B/wandb.env" ]; then set +x; source "$B/wandb.env"; set -x
   export WANDB_PROJECT="${WANDB_PROJECT:-cua-sft}"; REPORT=wandb; fi
-export WANDB_NOTES="tailclean-2048 twin of gb64o: same recipe, corpus = B minus 77 pathological-think targets (step-level mask); single-variable tail ablation"
+export WANDB_NOTES="Bs (=B tailclean-2048) twin of gb64o: same recipe, corpus = B minus 73 pathological-think targets (step-level mask, 312 trajs intact); single-variable tail ablation"
 export B DS1 DS2 REPORT RUN_NAME
 export MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n1)
 export MASTER_PORT=29500 NNODES=2 NPROC_PER_NODE=8
@@ -79,6 +79,6 @@ srun --ntasks=2 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
     --save_strategy steps --save_steps 30 --save_total_limit 12 \
     --logging_steps 2 \
     --report_to $REPORT --run_name $RUN_NAME \
-    --output_dir $B/out/q38Btc-gb64
+    --output_dir $B/out/q38Bs-gb64
 '
 echo "EXIT_q38e3B_gb128 $?"
