@@ -1026,3 +1026,23 @@ $P -m ostg.sft.trajaudit --report trajaudit.jsonl   # AUC/分离度/混淆/分�
 
 judge 端点默认打教师 serve(:18020 隧道);运行前 source OSWorld/.env。
 judge 未过校准考试(report 的 AUC/分离度)前,其分数不得用于任何过滤或加权。
+
+### v2 rubric 与仲裁(2026-08-17 晚,v1 考试后加装;代码 557e170b)
+
+```bash
+# 轨迹级 v2:结构化 prompt(标号帧、截图>自述规则、temp0、本地 judge 走 guided_json)
+$P -m ostg.sft.trajaudit RESULT_DIR --tasks TASKS_DIR --rubric v2 --out t2.jsonl
+# v2req:先拆 requirement(六档 status+指认证据帧/步)再打分;脚本反算 derived 分
+$P -m ostg.sft.trajaudit RESULT_DIR --tasks TASKS_DIR --rubric v2req --out t2r.jsonl
+$P -m ostg.sft.trajaudit --report t2r.jsonl --score-field j_derived   # 用推导分复算校准
+
+# 仲裁(assisted 二阶段):对 checker-vs-judge 分歧集亮出 evaluator 配置,
+# Opus5 开 thinking 裁决谁错(checker_right_judge_fooled / checker_bug_lenient
+# / checker_bug_strict / ambiguous)。产出 checker 缺陷清单,仍是元数据。
+$P -m ostg.sft.arb RESULT_DIR --tasks TASKS_DIR \
+  --qwen trajaudit.jsonl --opus trajaudit_opus.jsonl --out arb.jsonl
+```
+
+- `--rubric v1` 是默认且与 8-17 考试逐字节一致,复跑可复现;v2 系列另起 --out,不覆写 v1。
+- 盲评(trajaudit)永不见 checker;仲裁(arb)专职分歧集,故意亮 checker——两阶段不可混。
+- 长跑必须由持住 ssh 的后台任务驱动;瞬时 ssh + nohup 会被 WSL 掐死(8-17 实测,连日志都不落)。

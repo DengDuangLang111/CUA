@@ -240,3 +240,27 @@ post_clip_norm = min(1, 1/grad_norm) 由已记 grad_norm 后处理补写。
 主线不变:B 四臂 eval(量+优化域裁决)→ rerun3/best-of-3 → C 臂(质裁决)。
 本档案的 A 在 C 臂裁决后第一顺位;B 在 A 之后;C/NLL 探针可与任何阶段
 并行(只读+纯前向,不占 VM)。
+
+### J. Judge 体系 v2 与 checker 仲裁(2026-08-17 晚,GPT 大方案裁剪后落地)
+
+外部 LLM 提出全量 judge 研究计划(650-800 研究集/150 人工 gold/四消融/
+12 指标);裁剪原则 = 判官是仪器不是课题,**人工环节全删(用户令:全 prompt)**。
+吸收落地(代码 557e170b):①**v2req rubric**:先拆 requirement(六档
+status、critical 加权、指认证据帧/步)再打分,脚本反算 derived 分,
+free-vs-derived gap 当自一致探针,幻觉引用计数(evidence_violations);
+②v2 rubric:标号帧 + 截图>自述规则 + XML 围栏,Claude 推荐写法;
+③Opus 判官 temperature 钉 0(llm.py cfg 直通,thinking 时禁传);
+④本地判官 vLLM guided_json 替代 regex 抠 JSON;⑤judge_status 字段,
+error 永不计 0 分;⑥**arb.py 仲裁**:分歧集(fp/fn/duel 规则)亮 checker
+evaluator 配置,Opus5+thinking 裁 checker_right_judge_fooled /
+checker_bug_lenient / checker_bug_strict / ambiguous → checker 缺陷清单。
+拒收/降级:人工 gold(→checker 真值+双判官交叉+temp0 重复一致性)、
+四消融留 think 消融一个(**用户令:暂不做**)、Brier 全家桶(AUC 够用)、
+650-800 拼集(v11 全量 ~550 成败混合已够)。
+仲裁首战:chrome/04624efc 坐实 checker_bug_strict(硬编码 /370 违反
+自家字母平局规则)= 被误标失败的成功轨迹;chrome/13594739 = 判官排序
+算错,checker 无辜。**双向 bug 率待全裁决后入账**;若 strict-bug 率非零,
+rollout pass 率系统性低估 → 生成侧 checker 质检(控制门)优先级上调。
+待办:terminal 语义 parser(infeasible/cap-hit 区分,对 v11 无用、
+eval-50 分析必要)排队;关键帧 diff 采样等 v2 错例证据再定(不为想象
+中的病动手术);1k-2k 带补审 30-50 步加固 n=11 小样本。
