@@ -290,3 +290,21 @@ with `--ignore-existing`, and only the small mutable files (`traj.jsonl`,
   which silently reinstated stale verdicts once).
 - **Corpus size = emitted tasks, not spec lines.** Gate-blocked specs stay
   in `specs.jsonl` but never become tasks.
+
+## 生成器与版本管理(2026-08-17 补)
+
+站点由 WSL 上 `/mnt/d/research/osworld-verified-control/` 的三个脚本驱动,
+**该目录不在任何 git 里**——镜像已收进 `CUA/tools/control/`(md5 核对):
+
+| 文件 | 作用 |
+|---|---|
+| `sft_dash.py` | 扫 `results_generated/*/eval50-<key>-<日期>/` 生成 `dashboard/sft.json`;`status`/`publish` 两个子命令,**退出码 3 = 无变化**(不是错误) |
+| `sft_dash_daemon.sh` | 30 分钟一轮:status → publish → 提交推送 |
+| `dash_status_daemon.sh` | 状态面板同路 |
+
+**加新 eval 臂时**:`EVAL50_ARMS` 里补一行 `key: (label, group, note)`。
+**不注册也会显示**(裸 key 当标签)——设计如此:"未标注的行是可见的缺口,
+丢掉的行才是隐形的"。已注册:base/basekeep/rich150/richrich/leankeep/
+b1epkeep/gb128ep2keep/gb64keep/gb128keep/richstock/leanstock/**bskeep/
+bhqskeep/lorakeep**(后三个 2026-08-17 加)。
+改完这个文件后要把 WSL 侧和 `tools/control/` 两边同步,md5 对齐。
