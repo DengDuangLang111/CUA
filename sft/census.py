@@ -52,7 +52,7 @@ def harness_enum():
 def census_dir(result_dir, legal, max_steps):
     c = dict(n=0, cap_done=0, cap_nodone=0, nodone=0, illegal_trajs=0,
              illegal_names={}, wait_heavy=0, grind_steps=0, total_steps=0,
-             strict=[], lenient=[])
+             strict=[], lenient=[], think_lens=[])
     for rt in sorted(glob.glob(os.path.join(result_dir, "*", "*", "result.txt"))):
         td = os.path.dirname(rt)
         if traj.score(td) != 1.0:
@@ -78,6 +78,7 @@ def census_dir(result_dir, legal, max_steps):
         if sum(1 for a in acts if a.strip() == "WAIT") > 0.3 * max(len(acts), 1):
             c["wait_heavy"] += 1
         c["grind_steps"] += len(traj.identical_runs(steps))
+        c["think_lens"].extend(traj.think_est_tokens(s.response) for s in steps)
         if cap and has_done:
             c["cap_done"] += 1
         if cap and not has_done:
@@ -104,6 +105,17 @@ def show(name, c):
           % (len(c["strict"]), sum(c["strict"]), med))
     print("   lenient survivors: %d trajs / %d step-samples"
           % (len(c["lenient"]), sum(c["lenient"])))
+    tl = sorted(c["think_lens"])
+    if tl:
+        tot = sum(tl) or 1
+        pc = lambda p: tl[min(len(tl) - 1, int(len(tl) * p / 100))]
+        top5 = sum(tl[-max(1, len(tl) * 5 // 100):])
+        over = [(t, sum(1 for x in tl if x > t), sum(x for x in tl if x > t))
+                for t in (1024, 2048, 4096)]
+        print("   think est-tokens: p50 %d p90 %d p99 %d max %d · top-5%% share %.0f%%"
+              % (pc(50), pc(90), pc(99), tl[-1], 100 * top5 / tot))
+        print("   over-cap: " + " · ".join(
+            ">%d: %d steps/%.0f%% tokens" % (t, n, 100 * s / tot) for t, n, s in over))
 
 
 def main(argv=None):

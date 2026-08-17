@@ -89,6 +89,10 @@ def main(argv=None):
     ap.add_argument("--limit", type=int, default=0, help="max tasks, for smoke runs")
     ap.add_argument("--whole-traj-filter", action="store_true",
         help="drop cap-hit / DONE-less / illegal-action passing trajectories whole (PLAN-20260816)")
+    ap.add_argument("--think-cap", type=int, default=0,
+        help="drop STEPS whose current-target <think> exceeds N estimated "
+             "tokens (chars/3.5); dropped steps stay in later contexts. "
+             "Quarantined to think_quarantine.jsonl, never silently lost")
     ap.add_argument("--tail-run", type=int, default=5,
                     help="truncate a trailing run of >= N identical steps")
     ap.add_argument("--initial-fallback", choices=["none", "mp4"], default="none",
@@ -125,6 +129,8 @@ def main(argv=None):
                           "recovery_samples",
                           "val_tasks", "val_samples", "over_length_estimate")}
     rep["dropped_whole_traj"] = {}
+    rep["dropped_think_cap"] = 0
+    quarantine_f = (out / "think_quarantine.jsonl").open("w", encoding="utf-8")
     samples_f = (out / "samples.jsonl").open("w", encoding="utf-8")
     val_f = (out / "val_samples.jsonl").open("w", encoding="utf-8")
 
@@ -219,6 +225,15 @@ def main(argv=None):
             if step.hallucinated:
                 rep["dropped_hallucinated_target"] += 1
                 continue
+            if args.think_cap:
+                _est = traj.think_est_tokens(step.response)
+                if _est > args.think_cap:
+                    rep["dropped_think_cap"] += 1
+                    quarantine_f.write(json.dumps({
+                        "domain": domain, "task_id": task_id, "step": k,
+                        "est_think_tokens": _est,
+                        "response": step.response}, ensure_ascii=False) + "\n")
+                    continue
             if (k - 1) in mid_drops:
                 rep["dropped_mid_loop"] += 1
                 continue
@@ -270,6 +285,7 @@ def main(argv=None):
 
     samples_f.close()
     val_f.close()
+    quarantine_f.close()
     (out / "report.json").write_text(json.dumps(rep, indent=1))
     print(json.dumps(rep, indent=1))
     return 0

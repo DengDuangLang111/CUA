@@ -91,3 +91,9 @@ def test_whole_traj_reject():
     assert whole_traj_reject(mk(50)) == "cap-hit"
     assert whole_traj_reject(mk(10, done=False)) == "no-done"
     assert whole_traj_reject(mk(10, bad_at=3)) == "illegal:ctrl_scroll"
+
+
+def test_think_est_tokens():
+    assert traj.think_est_tokens("<think>" + "a" * 350 + "</think>x") == 100
+    assert traj.think_est_tokens("no think here") == 0
+    assert traj.think_est_tokens("") == 0

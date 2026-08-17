@@ -102,6 +102,20 @@ def load_steps(task_dir):
     return [steps[k] for k in sorted(steps)]
 
 
+THINK_RE = re.compile(r"<think>(.*?)</think>", re.DOTALL)
+CHARS_PER_TOKEN = 3.5   # calibrated 2026-08-17 vs exact tokenizer counts (±10% at the 2k boundary)
+
+
+def think_est_tokens(response):
+    """Estimated token length of the CURRENT target's <think> content.
+
+    Char-based (chars / 3.5) so callers need no tokenizer; the exact-count
+    battery lives in SFT_DATA.md 2026-08-17. History is never measured here:
+    the tail filter is a current-target policy only."""
+    m = THINK_RE.search(response or "")
+    return int(len(m.group(1)) / CHARS_PER_TOKEN) if m else 0
+
+
 def whole_traj_reject(steps, max_steps=50):
     """Whole-trajectory rejection for PASSING trajectories (PLAN-20260816
     strict policy, B corpora onward). Returns a reason string or None.
