@@ -13,9 +13,12 @@
 # OpenWebRL's optimization regime (paper A.5, verified 2026-08-16): global
 # batch 128 (here 2x H200, per-device 1 x accum 64 -- attempt 5: 8-way and
 # 4-way both OOMed at 138-139/139.79 on long v11-500 samples; the corpus
-# holds samples whose backward brushes the physical limit, and only the
-# 2-GPU profile (131.9 water mark, ~8 GiB headroom, proven by the live B
-# jobs) fits them. Global batch unchanged; wall pays), cosine LR with 10% warmup, 3 epochs -> ~44 optimizer steps per
+# ATTEMPT 6 DIAGNOSIS: memory scales with ACCUM COUNT (4->131.9 stable;
+# 16/32/64 all OOM at 137-139 regardless of GPU width) -- something retains
+# ~200MB per micro-batch across the accumulation window. Prime suspect:
+# enable_channel_loss holding per-microbatch tensors. This attempt = accum 64
+# with channel_loss OFF as the controlled test; per-domain loss logging is
+# sacrificed for this arm only), cosine LR with 10% warmup, 3 epochs -> ~44 optimizer steps per
 # epoch, ~133 total (vs sft-q38B's 2,124 at global batch 8, warmup 0.05).
 # Question under test: does the optimization regime change the SFT delta on
 # OUR corpus, holding data constant. lr/loss/render all unchanged from B.
@@ -58,7 +61,7 @@ NPROC_PER_NODE=2 \
 swift sft \
   --model $B/models/Qwen3.5-4B \
   --dataset $DS1/train_swift.jsonl $DS2/train_swift.jsonl \
-  --enable_channel_loss true \
+  --enable_channel_loss false \
   --tuner_type full --loss_scale last_round --gradient_accumulation_steps 64 \
   --preserve_thinking true \
   --attn_impl sdpa --deepspeed zero2_offload \
