@@ -25,6 +25,11 @@ export PATH="$HOME/.local/bin:$PATH"
 cd $B/runcwd && source $B/venv/bin/activate
 export CUDA_HOME=$B/cuda13 PATH="$B/cuda13/bin:$PATH"
 export LD_LIBRARY_PATH="$B/cuda13/lib64:$B/cuda13/lib:${LD_LIBRARY_PATH:-}"
+# 8-way NCCL over NVLink P2P crashed twice at ~step 8 on DIFFERENT nodes
+# (235364/g017, 235400/g014: "Invalid access of peer GPU memory over nvlink")
+# -- a stack-level P2P fault, not bad hardware. Route via host shared memory;
+# slower per step but immune. The 2-GPU jobs never trip this.
+export NCCL_P2P_DISABLE=1
 for DS in $DS1 $DS2; do
 python - "$DS" <<'PY' || { echo "PREFLIGHT FAILED — aborting"; exit 1; }
 import json, os, sys
