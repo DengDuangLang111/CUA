@@ -21,7 +21,7 @@ set -uo pipefail
 PROJ=/gpfs/scrubbed/jy050706/qwen-serve
 SELF="$PROJ/serve-chain-4b-gb128.sbatch"
 B=/gpfs/scrubbed/jy050706/sft
-MODEL=$(ls -d $B/out/q38e3B-gb128/v*/checkpoint-* 2>/dev/null | sort -t- -k2 -n | tail -1)
+MODEL=$(ls -d $B/out/q38e3B-gb128o/v*/checkpoint-* 2>/dev/null | sort -t- -k2 -n | tail -1)
 TEMPLATE=/gpfs/scrubbed/jy050706/sft/eval/qwen35_4b_keepthink.jinja
 KEYFILE="${VLLM_API_KEY_FILE:-$PROJ/.vllm_api_key}"
 CHAIN_IDX="${CHAIN_IDX:-1}"; CHAIN_MAX="${CHAIN_MAX:-2}"
