@@ -128,6 +128,34 @@ prompt_logprobs 回放学生上下文,技术可行未打通);RL 式训练环
 (on_policy_distillation_harbor_multi_turn.py)可作参考实现。
 **排序**:E 的 round-0(离线)→ E 的 round-1(交互式)→ F。
 
+### G. 薄 adapter harness / 防 harness 过拟合【2026-08-17 评估:架构对,时序缓】
+
+外部方案:canonical policy 接口 + 各 benchmark 薄包装(内部仍调官方
+reset/step/executor/evaluator)+ 官方口径复验;三层分离(policy /
+env adapter / evaluator adapter);最小共享动作核 + capability manifest;
+parity test 把关。原则:**Normalize the interface, not the semantics**。
+
+**定位判断**:harness 过拟合**不是我们当前的病**——base 同 harness 38% >
+SFT 22-28%(学生没学好自家 harness,谈不上过拟合);richstock 消融实测
+serving 层 surface 扰动 = ±1 题。全面 adapter 化 phase-gate 在 B 裁决 +
+intervention round-0 之后;其价值兑现场景 = intervention 跨环境复用 +
+论文 generalization 断言。
+
+**立刻白捡的三样(与 adapter 无关,独立有价值)**:
+- [ ] **Official parity test**:固定动作脚本在魔改 harness vs 纯净
+  upstream worktree 双跑,逐步比对截图/评分/终止——把"披露魔改"升级为
+  "等价性证据",一个下午成本;
+- [ ] 轨迹 provenance 字段(benchmark_commit/adapter_commit/
+  harness_profile)——MODEL_BOUNDARY.json 实践的逐轨迹化;
+- [x] Model+Harness 报告口径(已在执行:魔改披露/keepthink 注记/
+  serving 消融)。
+
+**缓行项**:统一动作空间、多 renderer、多 benchmark 接入。真到 Phase 2,
+第一个 adapter 目标 = Mac 上现成的 **OSWorld-V2**(同源异 benchmark,
+抽象试金石),不外求。先例纪律:build.py import agent 构建器 = "接口归一
+语义不动"的既有成功样板。**引文红线**:Harness-Bench(2605.27922)、
+AgentCompass(2607.13705)、Qwen-CUA(2608.02352)均未核实,引用前必查。
+
 ### 裁决后的优先级分叉(预登记)
 
 若今日 B 四臂 eval 确认损伤依旧:静态语料扩张(含 best-of-3/C 臂)的
