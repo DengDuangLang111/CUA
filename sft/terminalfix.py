@@ -91,36 +91,88 @@ def sha(p):
         return None
 
 
-def stalled_tail(td, steps, max_look=10):
-    """Trailing steps that did no work: WAITs, or steps whose screenshot is
-    identical to the one before.
+NOOP = ("WAIT", "DONE", "FAIL")
 
-    Measured on the Bhqs-2 candidates (374): 293 have no trailing WAIT at
-    all, 53 have one, 28 have two or more (worst: 9 WAITs in an 11-step
-    trajectory). Screen stagnation of exactly 1 is NORMAL -- the terminal
-    step is a stop, so it changes nothing -- which is why the count below
-    starts from the step BEFORE the last one. Only ~12% of trajectories have
-    a real stall; for the rest the ending is fine and only its FORM is wrong,
-    so the default policy leaves the tail alone.
+
+def is_noop(action):
+    """True when this action executed nothing on the screen.
+
+    WAIT/DONE/FAIL are the harness's own sentinels; `screenshot` is undeclared
+    upstream (actions.py logs it and lets it fall through to the WAIT
+    fallback), so it also executes nothing.
+    """
+    a = (action or "").strip()
+    return (not a) or a in NOOP or a.lower().startswith("screenshot")
+
+
+def stalled_tail(td, steps, max_look=10):
+    """Trailing steps that did no work: steps that executed NOTHING, or whose
+    screenshot is identical to the previous step's.
+
+    A step counts as dead only when EVERY one of its actions is a no-op. The
+    first version tested `any(a == "WAIT")`, which condemned the agent's most
+    common idiom -- click, then wait for the UI -- as if it were idling. The
+    backward walk then ate whole trajectories: one 11-step trajectory was cut
+    to 2. Measured over the 33 truncations that shipped in Bhqs-2-terminal,
+    that single test condemned 41 productive steps, against 56 correctly
+    condemned by "did nothing at all" and 10 by an unchanged screen; 13
+    trajectories lost 109 real actions (SFT_DATA.md).
+
+    The screenshot test is sound as written: traj.py records the screenshot
+    taken AFTER a step's last action, so an unchanged screen indicts that
+    step's own actions, not the previous step's. Its residual blind spot --
+    work that changes no pixels, e.g. a background file write -- is covered by
+    the hard gate in decide_keep_to, not here.
+
+    Screen stagnation of exactly 1 is NORMAL (the terminal step is a stop, so
+    it changes nothing), which is why the count starts from the step BEFORE
+    the last one.
     """
     if len(steps) < 2:
         return 0
     n = 0
     body = steps[:-1]                       # exclude the terminal step
-    prev_sha = None
     shas = {}
     for s in body[-max_look:]:
         shas[s.num] = sha(td / s.screenshot) if s.screenshot else None
     for i in range(len(body) - 1, 0, -1):
         s = body[i]
-        waited = any(a.strip() == "WAIT" for a in s.actions)
+        dead = bool(s.actions) and all(is_noop(a) for a in s.actions)
         same = (shas.get(s.num) is not None
                 and shas.get(s.num) == shas.get(body[i - 1].num))
-        if waited or same:
+        if dead or same:
             n += 1
         else:
             break
     return n
+
+
+def decide_keep_to(td, steps, tail_policy, stall_min):
+    """Where to put the terminate -> (keep_to, stalled, gate).
+
+    The heuristic above proposes a cut; this gate decides whether we are
+    allowed to take it. The checker approved the state at the FINAL step, so
+    truncating is only provably safe when the screen we stop on is byte-
+    identical to the screen the checker scored. Anything else -- including a
+    stall the heuristic called dead but that actually changed the screen --
+    falls back to last-only. A heuristic may be wrong; the gate may not.
+    """
+    keep_to, gate = len(steps), "none"
+    stalled = stalled_tail(td, steps)
+    if tail_policy == "truncate" and stalled:
+        keep_to = max(1, len(steps) - stalled)
+    elif tail_policy == "auto" and stalled >= stall_min:
+        keep_to = max(1, len(steps) - stalled)
+    if keep_to < len(steps):
+        stop_shot = steps[keep_to - 1].screenshot
+        end_shot = steps[-1].screenshot
+        a = sha(td / stop_shot) if stop_shot else None
+        b = sha(td / end_shot) if end_shot else None
+        if not (a and b and a == b):
+            keep_to, gate = len(steps), "reverted"
+        else:
+            gate = "verified"
+    return keep_to, stalled, gate
 
 
 def main(argv=None):
@@ -144,6 +196,10 @@ def main(argv=None):
     ap.add_argument("--stall-min", type=int, default=2,
                     help="auto policy: truncate only when this many trailing "
                          "steps did no work")
+    ap.add_argument("--recompute-tails", action="store_true",
+                    help="the tail policy changed: re-derive keep_to for every "
+                         "row already in --out, keep the rows whose cut did "
+                         "not move, and rewrite only the ones that did")
     ap.add_argument("--dry", type=int, default=0)
     a = ap.parse_args(argv)
 
@@ -159,11 +215,47 @@ def main(argv=None):
                 r = json.loads(line)
                 todo.append((r["domain"], r["task_id"]))
     done = set()
+    prior = {}
     if a.out.exists():
         for line in a.out.read_text().splitlines():
             if line.strip():
                 r = json.loads(line)
-                done.add((r["domain"], r["task_id"]))
+                k = (r["domain"], r["task_id"])
+                done.add(k)
+                prior[k] = r
+
+    if a.recompute_tails and prior:
+        # The tail policy changed under an existing output. A row whose cut
+        # still lands in the same place keeps its justification -- the teacher
+        # wrote it for that screen and the screen has not moved. A row whose
+        # cut moves is stale: its justification describes a screen that is no
+        # longer the one we stop on, so it must be rewritten. Rewriting all of
+        # them instead would be both wasteful and a silent change to 300+
+        # targets that nothing was wrong with.
+        keep, stale = [], []
+        for k, r in prior.items():
+            td = a.result_dir / k[0] / k[1]
+            steps = traj.load_steps(td)
+            if not steps:
+                keep.append(r)
+                continue
+            new_keep, stalled, gate = decide_keep_to(td, steps, a.tail_policy,
+                                                     a.stall_min)
+            if new_keep == r.get("keep_to"):
+                r["tail_gate"] = gate
+                keep.append(r)
+            else:
+                stale.append((k, r.get("keep_to"), new_keep, gate))
+        a.out.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n"
+                                 for r in keep), encoding="utf-8")
+        done = {(r["domain"], r["task_id"]) for r in keep}
+        print("recompute: %d rows unchanged, %d stale and queued for rewrite"
+              % (len(keep), len(stale)))
+        for (dom, tid), old, new, gate in sorted(stale):
+            print("   %-20s %s  keep_to %s -> %s (%s)"
+                  % (dom, tid[:8], old, new, gate))
+        todo = [k for k, _, _, _ in stale] + [k for k in todo if k not in prior]
+
     todo = [k for k in dict.fromkeys(todo) if k not in done]
     if a.dry:
         todo = todo[:a.dry]
@@ -179,12 +271,8 @@ def main(argv=None):
         steps = traj.load_steps(td)
         if not steps:
             return
-        keep_to = len(steps)
-        stalled = stalled_tail(td, steps)
-        if a.tail_policy == "truncate" and stalled:
-            keep_to = max(1, len(steps) - stalled)
-        elif a.tail_policy == "auto" and stalled >= a.stall_min:
-            keep_to = max(1, len(steps) - stalled)
+        keep_to, stalled, gate = decide_keep_to(td, steps, a.tail_policy,
+                                                a.stall_min)
         last = steps[keep_to - 1]
         pre = td / (steps[keep_to - 2].screenshot if keep_to > 1
                     else "initial_state.png")
@@ -235,7 +323,8 @@ def main(argv=None):
                 reason = str(v.get("error") or "")
         row = {"domain": domain, "task_id": task_id,
                "orig_steps": len(steps), "keep_to": keep_to,
-               "stalled_tail": stalled, "tail_policy": a.tail_policy,
+               "stalled_tail": stalled, "tail_gate": gate,
+               "tail_policy": a.tail_policy,
                "reason": " ".join(str(reason or "").split())[:600]}
         row["response"] = canonical_response(row["reason"])
         with lock:
