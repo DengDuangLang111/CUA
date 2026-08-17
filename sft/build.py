@@ -246,10 +246,21 @@ def main(argv=None):
         # slug-keyed image dir the second task silently OVERWRITES the first's
         # screenshots, leaving the first trajectory's samples pointing at
         # another task's pixels -- invisible until a hardlink trips over it
-        # (2026-08-17). Colliding tasks get a task-id suffix; everyone else
-        # keeps the bare slug so --image-cache still hits.
+        # (2026-08-17).
+        #
+        # The first fix suffixed only the SECOND colliding task and let
+        # everyone else keep the bare slug "so --image-cache still hits". That
+        # left the FIRST task reading `images/<slug>/` out of an older cache --
+        # which is exactly where the second task's pixels had been written. The
+        # fix propagated the poison it was meant to stop (confirmed 2026-08-17
+        # by re-deriving through process_image).
+        #
+        # So the key now carries the task id ALWAYS. It is globally unique, no
+        # cache entry can alias another task, and a cache written before this
+        # change simply misses and re-encodes. Correctness over a speed
+        # optimisation that has now caused two incidents.
         if slug_owner.setdefault(slug, task_id) == task_id:
-            img_key = slug
+            img_key = "%s-%s" % (slug, task_id[:8])
         else:
             img_key = "%s-%s" % (slug, task_id[:8])
             rep["slug_collisions"] += 1
