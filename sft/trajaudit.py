@@ -114,6 +114,8 @@ def audit(a):
     cfg = None
     if a.backend == "anthropic":
         from ostg import llm
+        # ppapi credentials live in the wrapper repo's .env (check.py lineage)
+        llm.load_env("/mnt/d/research/os-simple-taskgen-v8/.env")
         llm.load_env("/mnt/d/research/ostg-v11.1/.env")
         cfg = {"model": a.model, "max_tokens": 2048, "thinking": False,
                "base": os.environ.get("PPAPI_BASE_URL", "https://app-us.ppapi.ai").rstrip("/"),
