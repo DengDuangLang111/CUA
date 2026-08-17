@@ -136,6 +136,14 @@ not forbid heavier SFT helping SFT-only, so arm B stands. Unchanged: the
 scarce asset remains the verifiable RL task pool, which our generator
 manufactures with a difficulty scale.
 
+Released SFT config (fetched 2026-08-16 from repo `sft/run_sft_with_llamafactory.sh`,
+LlamaFactory defaults): per_device batch 1 × **accum 16**(全局 batch = 16×GPU 数,
+GPU 数脚本未写死)、lr 1e-5、3 epochs、warmup **0.1**、cutoff_len **36,864**、
+ZeRO-2、**image_max_pixels 262,144(≈512²)** —— 图片预算是我们 1920×1088
+(≈2.09M 像素)的 1/8:web 任务耐得住狠降采样,OS 桌面点击耐不住。与我们
+同:per-device 1、lr 1e-5、3ep、ZeRO-2;异:accum(16 vs 8/4)、warmup
+(0.1 vs 0.05)、截断(36.9k vs 65.5k)、图片分辨率(8×)。
+
 Teacher provenance note (2026-08-15): OpenWebRL's demonstrations came from
 Qwen3-VL-235B, 4 independent rollouts per task, GPT-4.1-judged, then curated
 to 412. Same-family same-generation distillation gave them template
