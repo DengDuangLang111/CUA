@@ -28,11 +28,56 @@ import argparse
 import base64
 import json
 import re
+import threading
 import time
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from ostg.sft import traj
+
+VERDICT_TOOL = {
+    "name": "verdict",
+    "description": "Report the step audit verdict.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "action_grounded": {"type": "integer", "minimum": 0, "maximum": 2},
+            "outcome_intended": {"type": "integer", "minimum": 0, "maximum": 2},
+            "necessary": {"type": "integer", "minimum": 0, "maximum": 2},
+            "is_recovery": {"type": "boolean"},
+            "lucky": {"type": "boolean"},
+            "note": {"type": "string"},
+        },
+        "required": ["action_grounded", "outcome_intended", "necessary",
+                     "is_recovery", "lucky", "note"],
+    },
+}
+
+
+def anthropic_cfg(model):
+    from ostg import llm
+    import os
+    llm.load_env("/mnt/d/research/os-simple-taskgen-v8/.env")
+    return {"model": model, "max_tokens": 1024, "thinking": False,
+            "base": os.environ.get("PPAPI_BASE_URL", "https://app-us.ppapi.ai").rstrip("/"),
+            "key": os.environ.get("PPAPI_API_KEY", "")}
+
+
+def ask_anthropic(cfg, system_text, user_blocks, tool):
+    from ostg import llm
+    for i in range(3):
+        try:
+            r = llm.call([{"role": "user", "content": user_blocks}],
+                         [{"type": "text", "text": system_text}], cfg, tool=tool)
+            for blk in r.get("content", []):
+                if blk.get("type") == "tool_use":
+                    return blk["input"]
+            return {"error": "no tool_use"}
+        except Exception as e:  # noqa: BLE001
+            if not getattr(e, "transient", False) or i == 2:
+                return {"error": str(e)[:200]}
+            time.sleep(10 * (i + 1))
 
 THINK_RE = re.compile(r"<think>(.*?)</think>", re.S)
 
@@ -108,6 +153,8 @@ def main(argv=None):
     ap.add_argument("--key", default=None)
     ap.add_argument("--out", type=Path, default=Path("stepaudit.jsonl"))
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--backend", choices=("qwen", "anthropic"), default="qwen")
+    ap.add_argument("--workers", type=int, default=1)
     a = ap.parse_args(argv)
 
     import os
@@ -131,43 +178,68 @@ def main(argv=None):
                 r = json.loads(line)
                 done.add((r["domain"], r["task_id"], r["step"]))
 
+    cfg = anthropic_cfg(a.model) if a.backend == "anthropic" else None
     out_f = a.out.open("a", encoding="utf-8")
-    n_ok = 0
-    for domain, task_id, num in todo:
+    lock = threading.Lock()
+    n_ok = [0]
+
+    def one(target):
+        domain, task_id, num = target
         if (domain, task_id, num) in done:
-            continue
+            return
         td = a.result_dir / domain / task_id
         steps = traj.load_steps(td)
         by_num = {s.num: (i, s) for i, s in enumerate(steps)}
         if num not in by_num:
-            continue
+            return
         i, s = by_num[num]
         pre = td / steps[i - 1].screenshot if i else td / "initial_state.png"
         post = td / s.screenshot
         if not pre.is_file() or not post.is_file():
-            continue
+            return
         think = (THINK_RE.search(s.response) or [None, ""])[1]
         think = think[:1500] + ("…[truncated]" if len(think) > 1500 else "")
-        user = [
-            {"type": "text", "text": "Task instruction: " + load_instruction(a.tasks, domain, task_id)},
-            {"type": "text", "text": f"Step {num}/{steps[-1].num}. Screenshot BEFORE the action:"},
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64," + b64(pre)}},
-            {"type": "text", "text": "Agent's reasoning (may be truncated): " + think},
-            {"type": "text", "text": "Executed action(s): " + " | ".join(s.actions)},
-            {"type": "text", "text": "Screenshot AFTER the action:"},
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64," + b64(post)}},
+        texts = [
+            "Task instruction: " + load_instruction(a.tasks, domain, task_id),
+            f"Step {num}/{steps[-1].num}. Screenshot BEFORE the action:",
+            "Agent's reasoning (may be truncated): " + think,
+            "Executed action(s): " + " | ".join(s.actions),
+            "Screenshot AFTER the action:",
         ]
-        verdict = ask(a.endpoint, a.model, key,
-                      [{"role": "system", "content": SYSTEM},
-                       {"role": "user", "content": user}])
+        if a.backend == "anthropic":
+            user = [{"type": "text", "text": texts[0]},
+                    {"type": "text", "text": texts[1]},
+                    {"type": "image", "source": {"type": "base64",
+                     "media_type": "image/png", "data": b64(pre)}},
+                    {"type": "text", "text": texts[2]},
+                    {"type": "text", "text": texts[3]},
+                    {"type": "text", "text": texts[4]},
+                    {"type": "image", "source": {"type": "base64",
+                     "media_type": "image/png", "data": b64(post)}}]
+            verdict = ask_anthropic(cfg, SYSTEM, user, VERDICT_TOOL)
+        else:
+            user = [{"type": "text", "text": texts[0]},
+                    {"type": "text", "text": texts[1]},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64," + b64(pre)}},
+                    {"type": "text", "text": texts[2]},
+                    {"type": "text", "text": texts[3]},
+                    {"type": "text", "text": texts[4]},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64," + b64(post)}}]
+            verdict = ask(a.endpoint, a.model, key,
+                          [{"role": "system", "content": SYSTEM},
+                           {"role": "user", "content": user}])
         row = {"domain": domain, "task_id": task_id, "step": num,
                "n_steps": steps[-1].num,
                "think_est_tokens": traj.think_est_tokens(s.response),
                "actions": s.actions, **{f"j_{k}": v for k, v in verdict.items()}}
-        out_f.write(json.dumps(row, ensure_ascii=False) + "\n")
-        out_f.flush()
-        n_ok += 1
-        print(f"[{n_ok}] {domain}/{task_id[:8]} step {num}: {verdict}")
+        with lock:
+            out_f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            out_f.flush()
+            n_ok[0] += 1
+            print(f"[{n_ok[0]}] {domain}/{task_id[:8]} step {num}: {verdict}")
+
+    with ThreadPoolExecutor(max_workers=a.workers) as ex:
+        list(ex.map(one, todo))
     out_f.close()
     return 0
 
