@@ -1,11 +1,9 @@
 #!/bin/bash
 # run_eval50_gb128.sh -- B-gb128 arm (global batch 128, OpenWebRL regime)
-# under keepthink serving, 3 VMs (user directive 2026-08-17: gb128 evals
-# first with all VMs; rerun2 pauses and resumes later). Canonical run
-# location: WSL osworld-verified-control/ (this CUA copy = version control).
-# Gates: richstock eval DONE + gb128 final checkpoint exists on Tillicum.
-# Then: pause rerun2, cancel the rich-official serve, bring up the gb128
-# serve + tunnel (18016->8016), run the frozen eval-50 with num_envs 3.
+# under keepthink serving, 3 VMs. SECOND in the eval chain (user reorder
+# 2026-08-17: b1ep first). Gates: b1ep eval DONE + gb128 final checkpoint.
+# Then: cancel the b1ep serve, bring up the gb128 serve + tunnel
+# (18016->8016), run the frozen eval-50 with num_envs 3.
 set -u
 CTL=/mnt/d/research/osworld-verified-control
 LOG=$CTL/logs/eval50_gb128.log
@@ -28,13 +26,13 @@ stop_eval(){
   echo "[$(date '+%F %T')] eval runner stopped"
 }
 
-# Gate 1: richstock must be fully done (its 2 VMs + the serve slot free up).
-for i in $(seq 1 720); do
-  grep -q "EVAL50_RICHSTOCK_DONE" $CTL/logs/eval50_richstock.log 2>/dev/null && break
+# Gate 1: the b1ep eval must be fully done (user order: 1ep first).
+for i in $(seq 1 1440); do
+  grep -q "EVAL50_B1EP_DONE" $CTL/logs/eval50_b1ep.log 2>/dev/null && break
   sleep 30
 done
-grep -q "EVAL50_RICHSTOCK_DONE" $CTL/logs/eval50_richstock.log 2>/dev/null || \
-  { echo "[$(date '+%F %T')] FATAL: richstock never finished (6h gate)"; exit 1; }
+grep -q "EVAL50_B1EP_DONE" $CTL/logs/eval50_b1ep.log 2>/dev/null || \
+  { echo "[$(date '+%F %T')] FATAL: b1ep eval never finished (6h gate)"; exit 1; }
 # Gate 2: gb128 final checkpoint on Tillicum (training 235513, ~05:30).
 for i in $(seq 1 240); do
   $SSHT 'ls -d /gpfs/scrubbed/jy050706/sft/out/q38e3B-gb128/v*/checkpoint-* >/dev/null 2>&1' && break
@@ -43,15 +41,8 @@ done
 $SSHT 'ls -d /gpfs/scrubbed/jy050706/sft/out/q38e3B-gb128/v*/checkpoint-* >/dev/null 2>&1' || \
   { echo "[$(date '+%F %T')] FATAL: gb128 checkpoint never appeared (4h gate)"; exit 1; }
 
-# User directive: gb128 eval gets all 3 VMs -- pause rerun2 (driver first,
-# then runner; results persist, unfinished tasks resume on a later relaunch).
-N2=$(find /mnt/d/research/OSWorld/results_generated/qwen38-27b-local/v11-100-t1-rerun2-20260816 -name result.txt 2>/dev/null | wc -l)
-echo "[$(date '+%F %T')] pausing rerun2 at $N2/100 (resume later)"
-pkill -f "run100r2.sh" 2>/dev/null
-pkill -f "run_multienv_qwen.*v11-100-t1-rerun2" 2>/dev/null
-sleep 5; pkill -9 -f "run_multienv_qwen.*v11-100-t1-rerun2" 2>/dev/null
 
-$SSHT "scancel -n eval4bro -u jy050706" 2>/dev/null
+$SSHT "scancel -n eval4b1 -u jy050706" 2>/dev/null
 JID=$($SSHT "sbatch --parsable /gpfs/scrubbed/jy050706/qwen-serve/serve-chain-4b-gb128.sbatch" 2>/dev/null | tr -dc 0-9)
 echo "[$(date '+%F %T')] gb128 serve job $JID"
 JOB=eval4bg LPORT=$PORT RPORT=8016 setsid nohup $CTL/tunnel_qwen36_auto.sh > $HOME/tunnel_4bg.log 2>&1 < /dev/null &
