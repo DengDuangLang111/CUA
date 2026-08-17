@@ -8,7 +8,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=64
 #SBATCH --mem=600G
-#SBATCH --time=06:00:00
+#SBATCH --time=04:00:00
 #SBATCH --output=/gpfs/scrubbed/jy050706/sft/sft_q38Bhqs_gb64_%j.out
 # Arm Bhqs-gb64: EXACT twin of Bs-gb64 (235926) -- same 16xH200 shape, same
 # global batch 64, same aligned optimizer, same think-cap 2048 -- with the
