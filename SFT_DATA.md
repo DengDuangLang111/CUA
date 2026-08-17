@@ -101,3 +101,24 @@ screen size (1920×1080), coordinate convention (`relative 0–999`), template
 kwargs used for rendering, and whether the trajectory was truncated/filtered
 and why. A sample that cannot answer "which run, which step, what did the
 model actually see" is not auditable.
+
+## B 语料 target-token 分布 vs OpenWebRL(2026-08-17,tokenizer 对齐实测)
+
+同一把 Qwen3.5 tokenizer 重算双方(他们的 1.71GB 原始 jsonl 拉到 Tillicum
+重数;卡片 max 1,324 vs 我们数出 1,325,口径可比成立)。
+
+| | B 语料 | OpenWebRL 0.4K |
+|---|---:|---:|
+| N / 总 target | 5,659 / 1,809,926 | 3,085 / 1,030,942 |
+| p50 / p90 / p99 / max | 146 / 675 / 2,770 / **9,712** | 314 / 469 / 773 / **1,325** |
+| top-1% / 5% token 份额 | **13.4% / 33.5%** | 2.7% / 10.4% |
+| >2048 样本/token | 1.7% / **18.3%** | 0 / 0 |
+| >4096 | 28 个 / 8.2% | 0 |
+| think 占比 | 68.7% | **0%(无 think 标签,推理裸文本 85.7%)** |
+| action 占比(≤512 → >4096) | 29.8% → **2.3%** | 11.4%(无长桶) |
+
+判决:双峰分布——典型步比他们短一半,尾巴重一个量级;action 随长度
+崩塌 = 超长样本几乎纯教推理不教动手。**待办**:① 审计 28 个 >4k 样本
+(固化为 census 长度分层报告);② 核实 swift loss 分母(token 级 vs
+样本级,决定尾巴权重 60× 还是 1×);③ 清尾消融四臂(token 配平)见
+IDEAS.md。在飞三臂不动。原始文件:Tillicum tmp_owrl/(审计后可删)。
