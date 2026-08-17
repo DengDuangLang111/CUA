@@ -67,11 +67,14 @@ best-of-3 选择 → C 数据构建 → C 训练 → C eval                  ←
       剔除整条 8(v11-100 1 条 cap-hit;v11-500 7 条,见 report.json 的
       dropped_whole_traj 名单)→ **312 轨迹 / 5,659 步样本**(1,181 + 4,478),
       `ship_dataset.sh` 双边校验 SHIP OK(q38e3B-v11100、q38e3B-v11500)
-- [~] B 训练**已提交:job 235308**(2026-08-16,sbatch 入库 CUA@9cc722d3)。
-      3ep 用户拍板;单卡 ~25h 超 24h QOS 墙 → **2×H200 数据并行,accum 8→4,
-      全局 batch 保持 8 与 arm A 逐位同配方**,预计 ~14h,墙 20h。
-      `--save_strategy epoch` 取精确 ep1/ep2/ep3 checkpoint(供量的裁决 eval)。
-      预检两数据集 55,736 图片引用 0 失效,已进 swift 启动。
+- [~] B 训练**双作业在跑:235322(3ep,24h 墙)+ 235323(1ep 独立,10h 墙)**
+      (2026-08-16;首提 235308 实测 ~31-34s/步,20h 墙贴脸,10 分钟处撤销重提,
+      sbatch 入库 CUA@9cc722d3→a17e564d)。**2×H200 数据并行,accum 8→4,全局
+      batch 保持 8 与 arm A 逐位同配方**;总步数 2,124 验证并集加载正确;
+      `--save_strategy epoch`。**1ep 是用户加的独立臂:学习率单 epoch 完整退火,
+      与 3ep 的 ep1 中途快照分离"训得少"与"日程没走完"两个变量**。
+      预检两数据集 55,736 图片引用 0 失效。B-eval 时 235322 出 ep1/ep2/ep3
+      快照,235323 出真 1ep 模型。
 - [x] ep1(A-ckpt150)eval **完成:13/50 = 26% ≈ ep3 的 28% —— epochs 判据出局,损伤属于语料本身**(详 TRAINING.md);原 [~] 记录保留:
 - [~] ep1(A-ckpt150)eval **提前开跑**(2026-08-16 02:36,用户决定:信息价值
       最高,先于 500 收尾执行)—— serve 233719,keepthink+preserve,2 VM;
