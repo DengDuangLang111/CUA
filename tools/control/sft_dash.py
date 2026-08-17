@@ -96,6 +96,18 @@ EVAL50_ARMS = {
                   " plus 54 checker-bug trajectories rescued by arbitration."
                   " 304 trajs / 5,367 samples, same cap 2048 and gb64 config"
                   " as Bs -- curation is the only variable"),
+    "bhqs2keep": ("Bhqs-2 · keepthink (curation rev2)", "sft",
+                  "corpus curated on EVIDENCE only -- a hard requirement"
+                  " defect or an arbitration conviction removes a trajectory;"
+                  " the free 0-10 score never gates (it has no ranking power"
+                  " inside the good band). Every rescue survived an"
+                  " adversarial defence of its checker. Same cap 2048 and"
+                  " gb64 config as Bs, so curation is the only variable"),
+    "bhqs2lrkeep": ("Bhqs-2 · lr 3e-6 · keepthink (displacement probe)", "sft",
+                  "same rev2 corpus at lr 3e-6: cumulative LR 3.78e-4, which"
+                  " is 0.6x our best observed point and within 1% of"
+                  " OpenWebRL's own SFT budget -- a second point on the"
+                  " displacement axis with the corpus held fixed"),
     "lorakeep":  ("Bs-LoRA · keepthink (adapter vs full FT)", "sft",
                   "same Bs corpus, LoRA r=32 alpha=64 on all linear layers"
                   " (lr 1e-4), merged into full weights before serving so the"

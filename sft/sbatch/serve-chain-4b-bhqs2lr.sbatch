@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=eval4bhq
+#SBATCH --job-name=eval4b2lr
 #SBATCH --account=video
 #SBATCH --partition=gpu-h200
 #SBATCH --qos=normal
@@ -8,9 +8,14 @@
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=100G
 #SBATCH --time=12:00:00
-#SBATCH --output=/gpfs/scrubbed/jy050706/qwen-serve/serve4bhq_%j.out
+#SBATCH --output=/gpfs/scrubbed/jy050706/qwen-serve/serve4b2lr_%j.out
 #SBATCH --signal=B:USR1@600
 #
+# Bhqs-2 at lr 3e-6: same rev2 corpus, cumulative LR 3.78e-4 (0.6x the
+# best observed point, and within 1% of OpenWebRL's own SFT budget).
+# Pairs with the Bhqs-2 main arm to put a second point on the
+# displacement axis with the corpus held fixed.
+# Original rev2 rationale follows.
 # Bhqs-2 arm: the curation redone on evidence-based rules (rev2).
 # The first Bhqs gated on the free 0-10 score, which our own band
 # study showed has no ranking power inside the good band -- 39 of
@@ -23,9 +28,9 @@
 set -uo pipefail
 
 PROJ=/gpfs/scrubbed/jy050706/qwen-serve
-SELF="$PROJ/serve-chain-4b-bhqs.sbatch"
+SELF="$PROJ/serve-chain-4b-bhqs2lr.sbatch"
 B=/gpfs/scrubbed/jy050706/sft
-MODEL=$(ls -d $B/out/q38Bhqs2-gb64/v*/checkpoint-* 2>/dev/null | sort -t- -k2 -n | tail -1)
+MODEL=$(ls -d $B/out/q38Bhqs2-lr3e6/v*/checkpoint-* 2>/dev/null | sort -t- -k2 -n | tail -1)
 TEMPLATE=/gpfs/scrubbed/jy050706/sft/eval/qwen35_4b_keepthink.jinja
 KEYFILE="${VLLM_API_KEY_FILE:-$PROJ/.vllm_api_key}"
 CHAIN_IDX="${CHAIN_IDX:-1}"; CHAIN_MAX="${CHAIN_MAX:-2}"
@@ -52,7 +57,7 @@ case "$perm" in 600|400) : ;; *) echo "FATAL: $KEYFILE perms=$perm (want 600/400
 export VLLM_API_KEY="$(cat "$KEYFILE")"
 [ -n "$VLLM_API_KEY" ] || { echo "FATAL: $KEYFILE is empty"; exit 1; }
 [ -f "$TEMPLATE" ] || { echo "FATAL: chat template $TEMPLATE missing"; exit 1; }
-[ -n "$MODEL" ] && [ -d "$MODEL" ] || { echo "FATAL: no q38Bhqs2-gb64 checkpoint found"; exit 1; }
+[ -n "$MODEL" ] && [ -d "$MODEL" ] || { echo "FATAL: no q38Bhqs2-lr3e6 checkpoint found"; exit 1; }
 echo ">>> serving checkpoint: $MODEL"
 
 RESUBMITTED=0
@@ -67,11 +72,11 @@ resubmit() {
 trap resubmit USR1
 
 source "$PROJ/.venv/bin/activate"
-echo ">>> [q38Bhqs2-gb64 chain $CHAIN_IDX/$CHAIN_MAX] node=$(hostname) job=$SLURM_JOB_ID bind=127.0.0.1:8020"
+echo ">>> [q38Bhqs2-lr3e6 chain $CHAIN_IDX/$CHAIN_MAX] node=$(hostname) job=$SLURM_JOB_ID bind=127.0.0.1:8023"
 python -c "import vllm; print('>>> vllm', vllm.__version__)" 2>/dev/null || true
 
 vllm serve "$MODEL" \
-  --served-model-name q38Bhqs2-gb64 \
+  --served-model-name q38Bhqs2-lr3e6 \
   --chat-template "$TEMPLATE" \
   --tensor-parallel-size 1 \
   --max-model-len 262144 \
@@ -80,7 +85,7 @@ vllm serve "$MODEL" \
   --override-generation-config '{"temperature": 1.0, "top_p": 0.95, "top_k": 20, "min_p": 0.0, "presence_penalty": 0.0, "repetition_penalty": 1.0, "max_new_tokens": 81920}' \
   --limit-mm-per-prompt '{"image": 20}' \
   --host 127.0.0.1 \
-  --port 8020 &
+  --port 8023 &
 VLLM_PID=$!
 while kill -0 "$VLLM_PID" 2>/dev/null; do wait "$VLLM_PID"; done
-echo ">>> [q38Bhqs2-gb64 chain $CHAIN_IDX] vLLM exited; this link ends."
+echo ">>> [q38Bhqs2-lr3e6 chain $CHAIN_IDX] vLLM exited; this link ends."
