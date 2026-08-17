@@ -148,6 +148,18 @@ InSTA-v3(共 912 轨迹)。他们 eval 解码:temp 0.6 / top-p 0.95 / **top-k 20
 max response 4096 / rep-pen 1.0(top-k 20 与我们同,max response 比我们的
 81920 狠 20 倍 —— 他们根本不给长思考留空间)。
 
+Primary-source pass (2026-08-16 深夜,本地 clone 逐文件读完,不再经摘要器):
+launcher `run_sft_with_llamafactory.sh:76` **PER_TURN 默认 1**,注释原文
+"reproducing the released recipe" —— 发布模型 = per-turn 训练实锤;
+`prepare_openai_for_llamafactory.py:167` keep_flags 只留最后一张图(当前
+截图)。**冻结方案**(launcher 95-97):vision tower + projector 冻结,只训
+语言模型 —— 与我们 swift 默认(freeze_vit/aligner true, freeze_llm false,
+已从 q38e3B args.json 核实)**完全一致**,此轴无差异。他们 Stage-2 用模型
+官方 apply_chat_template 渲染以与推理逐字节一致 —— 与我们 build.py import
+agent 自身构建器同一哲学。SFT 语料已公开:HF dataset
+`OpenWebRL/OpenWebRL-SFT-Trajectories`(移植对照实验的数据来源,现成可下)。
+save_strategy 也是 epoch。
+
 Context handling (2026-08-16 核实,repo sft/README + generate_browser.py):
 训练默认 **PER_TURN=1 = 每轮一个样本**(与我们同粒度),**历史截图全剥、每样本
 只带当前 1 张图**,mask_history=true(loss 只在当轮)——"整集截图全保留"是
