@@ -99,7 +99,11 @@ best-of-3 选择 → C 数据构建 → C 训练 → C eval                  ←
       (:8015)+ run_eval50_richstock.sh(CUA@4c7c9864),驱动自动等 leankeep
       收尾→撤 lean serve→起 serve→2 VM 开跑;dashboard 已注册 richstock。
 - [ ] 重跑一完成 / [ ] 重跑二完成
-- [ ] B-ep1 eval / [ ] B-ep3 eval → 量的裁决入 TRAINING.md
+- **eval 发车序(用户 2026-08-17 凌晨拍板)**:① gb128(**3 VM 全上**,
+  rerun2 暂停让位,驱动 run_eval50_gb128.sh 已挂,双门闩:richstock 完 +
+  checkpoint 落地)→ ② B-1ep → ③ B-3ep → ④ base/1pic → ⑤ **base/3pic
+  (新增:1/3/20 三点剂量-响应曲线)**;base/stock **撤单**。
+- [ ] gb128 eval / [ ] B-1ep eval / [ ] B-ep3 eval → 量与优化域裁决入 TRAINING.md
 - [ ] best-of-3 选择脚本 + C 构建(选择统计入账)
 - [ ] C 训练 + eval → 质的裁决入 TRAINING.md
 - [ ] 全部入账后:本文与 PLAN-20260815 一起归档 outdated/
