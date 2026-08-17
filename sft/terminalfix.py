@@ -14,15 +14,35 @@ Stopping is the supervision we have least of, and it is taught as a negative
 action ("stop calling tools"), which is exactly the signal that fails first
 at inference.
 
-What this writes: for each targeted trajectory, a REPLACEMENT for the final
-step's target only. Everything earlier is untouched, so the trajectory's
-causal chain is intact and the images are reused.
+What this writes: one row per trajectory saying how its ending is repaired.
+Only the FINAL step's target is ever touched; everything earlier is untouched,
+so the causal chain is intact and the images are reused.
 
-Two-part construction, deliberately not one canned string: the teacher writes
-the JUSTIFICATION from the step's own context (short, task-specific), and the
-tool call is appended DETERMINISTICALLY. A fixed template would put hundreds
-of byte-identical responses into the corpus -- 6% of samples reciting one
-sentence -- which teaches the sentence, not the decision.
+Three paths, least intervention first (`mode` in each row):
+
+  already-terminate  The ending is already an explicit terminate(success).
+                     54 of 376 were. Leave it completely alone -- the row
+                     carries `response: null` and build skips it. Replacing
+                     these with a synthetic ending was a regression.
+  append             A prose ending that is complete: keep the teacher's own
+                     words verbatim and add only the missing tool call. The
+                     trajectory already stopped here (the harness scores an
+                     absent tool call as DONE) and the checker passed the
+                     state, so the sole defect is that stopping was implicit.
+                     246 of 376.
+  rewrite            The ending cannot be reused -- it calls the user, ends on
+                     a real action, trips looks_infeasible_response, or the
+                     tail was truncated so this step was never an ending. Only
+                     here does the teacher write a new turn.
+
+The written turn keeps the natural shape: `<think>` reasoning, then a visible
+statement, then the tool call, appended DETERMINISTICALLY. Every one of the 68
+endings the teacher produced with a real terminate call has that visible
+statement, as do 75% of all other targets; an earlier version emitted nothing
+visible and made the terminal step the only turn in the corpus with its shape.
+The teacher's text is task-specific rather than a fixed template, because
+hundreds of byte-identical responses would teach the sentence, not the
+decision.
 
 Tail handling (--tail-policy):
   last-only   rewrite the final step, leave any trailing WAITs as they are
@@ -40,8 +60,11 @@ import argparse
 import hashlib
 import json
 import os
+import re
+import sys
 import threading
 import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -50,17 +73,23 @@ from ostg.sft.stepaudit import anthropic_cfg, ask, b64, load_instruction
 
 SYSTEM = """You are writing the final assistant turn of a completed GUI-agent trajectory.
 
-The task has been verified as done. You are given the task, the screen as it looks at the final step, and the actions that led here. Write ONLY the short justification the agent should give before it stops: name the concrete evidence on screen that the requested state exists -- the file that is listed, the value in the cell, the setting that reads as expected.
+The task has been verified as done. You are given the task, the screen as it looks at the final step, and the actions that led here. Write the two parts of that turn:
 
-Rules: at most 60 words. No preamble, no restating the instruction, no markdown, no tool call (one is appended for you). Present tense, concrete nouns from this task. If the screen shows a verification the agent itself ran (a listing, a printed value), cite that."""
+1. `thinking` -- the agent's own private check before it stops: what it looked at to be sure the requested state exists. First person, present tense.
+2. `statement` -- what the agent says out loud to the user: that the task is done, and the concrete evidence for it. Name the file that is listed, the value in the cell, the setting that reads as expected. If the screen shows a verification the agent itself ran (a listing, a printed value), cite it.
+
+Rules: each part at most 60 words. No preamble, no restating the instruction, no tool call (one is appended for you). Concrete nouns from this task. Never say the task is impossible, infeasible, or cannot be completed -- it has already been verified as done, and those words are parsed by the harness as a failure signal."""
 
 REASON_TOOL = {
     "name": "justify",
-    "description": "Report the short justification for stopping.",
+    "description": "Report the agent's final turn: private check, then what it tells the user.",
     "input_schema": {
         "type": "object",
-        "properties": {"justification": {"type": "string"}},
-        "required": ["justification"],
+        "properties": {
+            "thinking": {"type": "string"},
+            "statement": {"type": "string"},
+        },
+        "required": ["thinking", "statement"],
     },
 }
 
@@ -78,12 +107,33 @@ success
 </tool_call>"""
 
 
-def canonical_response(reason):
-    """<think>reason</think> + the deterministic terminate call."""
-    reason = " ".join((reason or "").split())
-    if not reason:
-        reason = "The requested state is present on screen; the task is complete."
-    return "<think>\n%s\n</think>%s" % (reason, TERMINATE_CALL)
+def compose_response(thinking, statement):
+    """The natural shape of a teacher ending: private reasoning, then the
+    conclusion said out loud, then the terminate call.
+
+    Measured on this corpus: all 68 endings the teacher produced with a real
+    terminate call have a visible statement between </think> and <tool_call>,
+    and so do 75% of every other target. The first version put the whole
+    justification inside <think> and emitted nothing visible, which made the
+    terminal step the only turn in the corpus with that shape -- and the
+    failure being repaired here is precisely that the student copies the
+    teacher's terminal STYLE.
+    """
+    thinking = " ".join((thinking or "").split())
+    statement = " ".join((statement or "").split())
+    if not statement:
+        statement = "The task is complete: the requested state is present on screen."
+    if not thinking:
+        thinking = "The screen shows the requested state, so the task is done."
+    return "<think>\n%s\n</think>\n\n%s%s" % (thinking, statement, TERMINATE_CALL)
+
+
+def append_terminate(response):
+    """Keep a prose ending exactly as the teacher wrote it, add the missing
+    action. The trajectory already ended here -- the harness scored the absent
+    tool call as DONE and the checker passed the state -- so the only thing
+    wrong with this turn is that stopping was implicit."""
+    return response.rstrip() + TERMINATE_CALL
 
 
 def sha(p):
@@ -177,6 +227,67 @@ def decide_keep_to(td, steps, tail_policy, stall_min):
     return keep_to, stalled, gate
 
 
+# How a trajectory's ending is repaired. Least intervention that fixes it.
+KEEP = "already-terminate"   # nothing to do; no row is written for these
+APPEND = "append"            # teacher's own words kept, terminate call added
+REWRITE = "rewrite"          # the ending cannot be reused; teacher writes one
+
+_VISIBLE_STRIP = (re.compile(r"<think>.*?</think>", re.S),
+                  re.compile(r"<tool_call>.*?</tool_call>", re.S))
+# "I'll now open...", not "Let me know if..." (a closing) or "Now if..." (an
+# explanation). Measured over 259 prose endings: the narrow form flags none,
+# the loose form flagged 13 and every one was a false positive.
+_CONTINUES = re.compile(r"^(let me (?!know)|i'?ll now|i will now|next[,:] i|"
+                        r"now i (?:will|'ll|need|should))", re.I)
+
+
+def visible_text(response):
+    """What the user sees: the response minus thinking and tool calls."""
+    out = response or ""
+    for pat in _VISIBLE_STRIP:
+        out = pat.sub("", out)
+    return out.strip()
+
+
+def load_parser(harness_root):
+    """The harness's own parser -- termination is a parsed action, not a
+    string, so classification must not guess at it."""
+    if harness_root:
+        sys.path.insert(0, str(harness_root))
+    from mm_agents.qwen.parser import (iter_tool_call_params,
+                                       looks_infeasible_response)
+    return iter_tool_call_params, looks_infeasible_response
+
+
+def classify_ending(response, truncated, parse, infeasible):
+    """-> (mode, why). See KEEP / APPEND / REWRITE above."""
+    if truncated:
+        return REWRITE, "tail truncated, this step was not the ending"
+    params = list(parse(response or ""))
+    actions = [str(p.get("action")) for p in params if p.get("action")]
+    if infeasible(response or ""):
+        return REWRITE, "trips looks_infeasible_response (DONE would become FAIL)"
+    if "terminate" in actions:
+        status = ""
+        for p in params:
+            if str(p.get("action")) == "terminate":
+                status = str(p.get("status") or "").lower()
+        if status and status != "success":
+            return REWRITE, "terminate(%s)" % status
+        return KEEP, "already ends in terminate(success)"
+    if "call_user" in actions:
+        return REWRITE, "ends by calling the user"
+    if actions:
+        return REWRITE, "ends with a real action (%s)" % actions[-1]
+    seen = visible_text(response)
+    if not seen:
+        return REWRITE, "no visible statement to keep"
+    last = [s for s in re.split(r"(?<=[.!?])\s+", seen) if s.strip()]
+    if last and _CONTINUES.match(last[-1].strip()):
+        return REWRITE, "closing sentence announces more work"
+    return APPEND, "prose ending, complete -- add the missing action"
+
+
 def read_rows(path):
     if not Path(path).exists():
         return []
@@ -210,9 +321,11 @@ def refresh_tails(result_dir, rows, tail_policy, stall_min):
     stop on -- so it goes back to the teacher. Rewriting all of them instead
     would silently change hundreds of targets that nothing was wrong with.
 
-    An empty justification is also stale regardless of the cut: it means the
-    teacher call failed and canonical_response substituted the canned
-    sentence, so a re-run should retry it rather than bake the fallback in.
+    A teacher-written row with no statement is also stale regardless of the
+    cut: the call failed and compose_response substituted its canned fallback,
+    so a re-run should retry it rather than bake the fallback in. Rows the
+    teacher never touched (already-terminate, append) are exempt from that
+    test -- they have no teacher output to be missing.
     """
     kept, stale = [], []
     for row in rows:
@@ -223,11 +336,12 @@ def refresh_tails(result_dir, rows, tail_policy, stall_min):
             continue
         new_keep, _, gate = decide_keep_to(td, steps, tail_policy, stall_min)
         moved = new_keep != row.get("keep_to")
-        failed = not (row.get("reason") or "").strip()
-        if moved or failed:
+        blank = (row.get("mode") == REWRITE
+                 and not (row.get("statement") or "").strip())
+        if moved or blank:
             stale.append({"key": key_of(row), "was": row.get("keep_to"),
                           "now": new_keep, "gate": gate,
-                          "why": "cut moved" if moved else "no justification"})
+                          "why": "cut moved" if moved else "no statement"})
         else:
             row["tail_gate"] = gate
             kept.append(row)
@@ -243,12 +357,12 @@ def render_prompt(tasks_dir, domain, task_id, steps, keep_to, image_path):
 
 
 def ask_anthropic(cfg, instr, digest, image_b64, retries=3):
-    """-> (justification, error).
+    """-> ({thinking, statement}, error).
 
     The error is returned rather than swallowed. A failed call used to come
-    back as an empty string, which canonical_response silently turned into the
-    canned fallback sentence -- so a misconfigured model id produced a corpus
-    full of identical endings and nothing anywhere said so.
+    back empty, which compose_response silently turned into its canned
+    fallback -- so a misconfigured model id produced a batch of identical
+    endings and nothing anywhere said so.
     """
     from ostg import llm
     blocks = [{"type": "text", "text": "Task: " + instr},
@@ -265,26 +379,25 @@ def ask_anthropic(cfg, instr, digest, image_b64, retries=3):
             text = ""
             for blk in r.get("content", []):
                 if blk.get("type") == "tool_use":
-                    return blk["input"].get("justification", ""), None
+                    return blk["input"], None
                 if blk.get("type") == "text":
                     text += blk.get("text") or ""
             # Occasionally the model answers in prose instead of calling the
-            # tool. Its prose IS the justification we asked for, so use it --
-            # falling through to the canned sentence would discard a good
-            # answer over a formatting miss.
+            # tool. Its prose is a usable statement, so keep it rather than
+            # discard a good answer over a formatting miss.
             if text.strip():
-                return text.strip(), None
-            return "", "no tool_use and no text in reply"
+                return {"statement": text.strip()}, None
+            return {}, "no tool_use and no text in reply"
         except Exception as e:                               # noqa: BLE001
             err = "%s: %s" % (type(e).__name__, str(e)[:160])
             if not getattr(e, "transient", False) or attempt == retries - 1:
-                return "", err
+                return {}, err
             time.sleep(8 * (attempt + 1))
-    return "", "retries exhausted"
+    return {}, "retries exhausted"
 
 
 def ask_qwen(endpoint, model, key, effort, instr, digest, image_b64):
-    """-> (justification, error). See ask_anthropic on why errors surface."""
+    """-> ({thinking, statement}, error). See ask_anthropic on surfaced errors."""
     msgs = [{"role": "system", "content": SYSTEM},
             {"role": "user", "content": [
                 {"type": "text", "text": "Task: " + instr},
@@ -294,15 +407,22 @@ def ask_qwen(endpoint, model, key, effort, instr, digest, image_b64):
                     "url": "data:image/png;base64," + image_b64}}]}]
     v = ask(endpoint, model, key, msgs, effort=effort)
     if not isinstance(v, dict):
-        return "", "unexpected reply type %s" % type(v).__name__
-    # ask() returns {"error": raw} when the reply is not JSON -- the normal
-    # case here, because we asked for prose, not a JSON object.
+        return {}, "unexpected reply type %s" % type(v).__name__
+    if v.get("thinking") or v.get("statement"):
+        return v, None
+    # ask() returns {"error": raw} when the reply is not JSON -- expected when
+    # the local server answers in prose rather than the requested object.
     text = v.get("reason") or str(v.get("error") or "")
-    return text, None if text else "empty reply"
+    return ({"statement": text} if text else {}), None if text else "empty reply"
 
 
-def canonicalise(key, args, cfg, api_key):
-    """One trajectory -> its replacement final turn, or None if unusable."""
+def canonicalise(key, args, cfg, api_key, parse, infeasible):
+    """One trajectory -> the row describing how its ending is repaired.
+
+    Every trajectory gets a row, including the ones needing no change: the
+    file is then a complete record of what was decided for each. Rows with a
+    null response are skipped by build.
+    """
     domain, task_id = key
     td = args.result_dir / domain / task_id
     steps = traj.load_steps(td)
@@ -311,6 +431,21 @@ def canonicalise(key, args, cfg, api_key):
     keep_to, stalled, gate = decide_keep_to(td, steps, args.tail_policy,
                                             args.stall_min)
     last = steps[keep_to - 1]
+    row = {"domain": domain, "task_id": task_id, "orig_steps": len(steps),
+           "keep_to": keep_to, "stalled_tail": stalled, "tail_gate": gate,
+           "tail_policy": args.tail_policy}
+
+    mode, why = classify_ending(last.response, keep_to < len(steps),
+                                parse, infeasible)
+    row["mode"], row["why"] = mode, why
+    if mode == KEEP:
+        row["response"] = None
+        return row
+    if mode == APPEND:
+        row["response"] = append_terminate(last.response)
+        row["statement"] = visible_text(last.response)[:600]
+        return row
+
     fallback = td / (steps[keep_to - 2].screenshot if keep_to > 1
                      else "initial_state.png")
     screen = td / last.screenshot if last.screenshot else fallback
@@ -319,15 +454,14 @@ def canonicalise(key, args, cfg, api_key):
     instr, digest, img = render_prompt(args.tasks, domain, task_id, steps,
                                        keep_to, screen)
     if args.backend == "anthropic":
-        reason, err = ask_anthropic(cfg, instr, digest, img)
+        parts, err = ask_anthropic(cfg, instr, digest, img)
     else:
-        reason, err = ask_qwen(args.endpoint, args.model, api_key, args.effort,
-                               instr, digest, img)
-    reason = " ".join(str(reason or "").split())[:600]
-    row = {"domain": domain, "task_id": task_id, "orig_steps": len(steps),
-           "keep_to": keep_to, "stalled_tail": stalled, "tail_gate": gate,
-           "tail_policy": args.tail_policy, "reason": reason,
-           "response": canonical_response(reason)}
+        parts, err = ask_qwen(args.endpoint, args.model, api_key, args.effort,
+                              instr, digest, img)
+    thinking = " ".join(str(parts.get("thinking") or "").split())[:600]
+    statement = " ".join(str(parts.get("statement") or "").split())[:600]
+    row["thinking"], row["statement"] = thinking, statement
+    row["response"] = compose_response(thinking, statement)
     if err:
         row["teacher_error"] = err
     return row
@@ -354,6 +488,9 @@ def main(argv=None):
     ap.add_argument("--stall-min", type=int, default=2,
                     help="auto policy: truncate only when this many trailing "
                          "steps did no work")
+    ap.add_argument("--harness", default=None,
+                    help="OSWorld root, for the action parser used to decide "
+                         "how each ending is repaired")
     ap.add_argument("--recompute-tails", action="store_true",
                     help="the tail policy changed: re-derive keep_to for every "
                          "row already in --out, keep the rows whose cut did "
@@ -388,29 +525,32 @@ def main(argv=None):
         todo = todo[:a.dry]
     print("%d trajectories to canonicalise" % len(todo))
 
+    parse, infeasible = load_parser(a.harness)
     lock = threading.Lock()
-    written, failed = [0], [0]
+    written, failed, modes = [0], [0], Counter()
 
     def run(key):
-        row = canonicalise(key, a, cfg, api_key)
+        row = canonicalise(key, a, cfg, api_key, parse, infeasible)
         if row is None:
             return
         with lock:
             with a.out.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
             written[0] += 1
+            modes[row["mode"]] += 1
             if row.get("teacher_error"):
                 failed[0] += 1
-            print("[%d] %s/%s keep_to=%d/%d stall=%d gate=%s :: %s"
-                  % (written[0], row["domain"], row["task_id"][:8],
-                     row["keep_to"], row["orig_steps"], row["stalled_tail"],
+            print("[%d] %-9s %s/%s keep_to=%d/%d gate=%s :: %s"
+                  % (written[0], row["mode"], row["domain"],
+                     row["task_id"][:8], row["keep_to"], row["orig_steps"],
                      row["tail_gate"],
-                     row.get("teacher_error") or row["reason"][:60]))
+                     row.get("teacher_error")
+                     or (row.get("statement") or row["why"])[:58]))
 
     with ThreadPoolExecutor(max_workers=a.workers) as ex:
         list(ex.map(run, todo))
-    print("wrote %d rows, %d with a failed teacher call" % (written[0],
-                                                            failed[0]))
+    print("wrote %d rows %s, %d with a failed teacher call"
+          % (written[0], dict(modes), failed[0]))
     return 1 if failed[0] and failed[0] == written[0] else 0
 
 

@@ -164,7 +164,12 @@ def main(argv=None):
         for line in args.terminal_rewrite.read_text().splitlines():
             if line.strip():
                 r = json.loads(line)
-                rewrite[(r["domain"], r["task_id"])] = r
+                # A null response means terminalfix decided this trajectory
+                # already ends in an explicit terminate(success) and must not
+                # be touched. The row exists so the file is a complete record
+                # of what was decided for every trajectory.
+                if r.get("response"):
+                    rewrite[(r["domain"], r["task_id"])] = r
     rep["terminal_rewritten"] = 0
     rep["terminal_tail_truncated"] = 0
 
