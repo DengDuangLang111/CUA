@@ -1053,3 +1053,31 @@ $P -m ostg.sft.arb RESULT_DIR --tasks TASKS_DIR \
   Opus 只精判嫌疑区/仲裁(付费,勿全池 req 扫);新判官/新问卷上岗前
   必须与 v1 基线同卷比 AUC。error 行不计分,补跑前先从 jsonl 剥掉
   error 行(resume 会把 error 当已完成跳过)。
+
+### 筛选四步全流水(2026-08-17 固化,ostg@dbb0d892)
+
+```bash
+# ① 全池判官(生产问卷 v2req,本地 27B,10 并发)
+$P -m ostg.sft.trajaudit RESULT_DIR --tasks TASKS_DIR --rubric v2req \
+   --effort low --workers 10 --out out/trajaudit2req_POOL_qwen.jsonl
+
+# ② 流式仲裁:判官边跑边裁,不等收卷(每 INTERVAL 秒一遍,断点续传)
+POOL=v11500 RESULT_DIR=... TASKS=... \
+QWEN=out/trajaudit2req_v11500_qwen.jsonl OPUS=out/trajaudit_v11500_opus.jsonl \
+  bash ostg/sft/tools/arb_stream.sh          # 前台跑;nohup+瞬时 ssh 会被 WSL 杀
+
+# ③ 三张名单(纯读,原始轨迹零改动)
+$P -m ostg.sft.curate --traj J1.jsonl [--traj J2...] --arb arb.jsonl \
+   --step S1.jsonl [--step S2...] --out-prefix out/curate_POOL
+
+# ④ tier2 复核:把"过了但被标瑕疵"的轨迹送仲裁定罪(非分歧也强制裁)
+$P -m ostg.sft.arb RESULT_DIR --tasks TASKS_DIR --targets out/curate_POOL_tier2.jsonl \
+   --qwen J1.jsonl --out out/arb_POOL.jsonl    # 裁完回到 ③ 重出名单
+```
+
+产物语义:`_rescue`(checker 冤案 → 候选**加入**语料)、`_drop`(仲裁坐实
+假 pass → 候选**移出**)、`_tier1`(干净 pass = 一等品)、`_tier2`(pass 但
+有瑕疵标记 → 送 ④,**不得仅凭判官怀疑丢弃**)、`_report.json`(计数/标记
+清单/分域)。**权限铁律:判官提名、仲裁定罪**——只有仲裁裁决能让轨迹越过
+checker 划的线;`checker_right_judge_fooled` 会清掉它审过的 judge_low 标记
+(至今 6/6 该方向都是判官错)。名单是候选,建语料仍走 stage+swap+snapshot。

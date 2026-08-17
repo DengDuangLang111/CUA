@@ -231,3 +231,15 @@ Opus5+thinking 仲裁定罪(500 池 ~110 条)→ 三张名单:keep 高质(pass �
 坐实假 pass)→ **B-rescue 语料候选**。原始数据只读;名单过目后才建语料
 (stage+swap+snapshot)。步审 9 条弱终端步(过松嫌疑)需 arb --targets
 扩展单独喂(待实现,diff 先行)。
+
+### 筛选流水线首跑(v11-500 部分数据,2026-08-17 06:0x)
+
+curate 首报(判官 246/444 + 仲裁 23 条时的快照):**rescue 19 / drop 0 /
+tier1 199 / tier2 38**。标记清单:weak_terminal 18、req_weak_evidence 19、
+judge_low 4、req_not_satisfied 4、req_partial 3、req_unverifiable 1。
+赎回分域:chrome 9 / calc 8 / gimp 2 —— **chrome 冤案新病种 = 联网 checker
+硬编码易变外部引用**(e-Laws 锚点实为顺序书签、CELEX 需合并版编号 0…、
+WHO ICD-11 换路径、期望域名拼写错)。两个方向极不对称:
+**fail 侧分歧 123 条(冤案率 ~64%),pass 侧只有 4 条判官低分且 6/6 全判
+"判官错"** → **B 语料主要病是"漏掉好数据",不是"混进坏数据"**;
+真正的放水嫌疑全部来自步级终端步(18 条 weak_terminal),需 ④ 定罪。

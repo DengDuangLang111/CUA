@@ -139,6 +139,10 @@ def main(argv=None):
     ap.add_argument("--model", default="claude-opus-5")
     ap.add_argument("--workers", type=int, default=2)
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--targets", type=Path, default=None,
+                    help="jsonl of domain/task_id rows to arbitrate even "
+                         "without judge disagreement (e.g. curate tier2 / "
+                         "step-audit lenient suspects)")
     a = ap.parse_args(argv)
 
     import os
@@ -153,6 +157,15 @@ def main(argv=None):
 
     qwen, opus = judge_rows(a.qwen), judge_rows(a.opus)
     picks = pick_disagreements(qwen, opus)
+    if a.targets:
+        for line in a.targets.read_text().splitlines():
+            if line.strip():
+                r = json.loads(line)
+                k = (r["domain"], r["task_id"])
+                if k not in picks:
+                    picks[k] = (["target"],
+                                qwen.get(k, {}).get("j_completion"),
+                                opus.get(k, {}).get("j_completion"))
     done = set()
     if a.out.exists():
         for line in a.out.read_text().splitlines():
