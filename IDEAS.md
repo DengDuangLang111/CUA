@@ -194,6 +194,29 @@ blocker/恢复/多约束校验允许加长"。不写死 token 上限(硬限会�
 操作 = 用一种风格生成训练、换另一种风格评测。跨 bench 的 canonical
 contract 归 G 节 adapter 管,不让学生直接学各家方言。
 
+### I. Tailclean 三阶段计划(2026-08-17,GPT 意见验收后定稿)
+
+**Phase 0 验收(已满足,零返工)**:我们的 --think-cap 实现即 GPT 推荐的
+step-level target masking——摘目标不摘环境步、历史保留被摘步原文、无重编号
+无拼接、轨迹过滤先行、quarantine 不销毁(五条不变量逐条对照通过;哲学同
+幻觉步过滤一脉)。整条删除的 B 型错误从未存在。
+
+**Phase 1|tailclean-2048 消融臂**(用户批准执行):q38e3B-tc2048-* 语料,
+gb64o 孪生配置(16卡 全局64、wd 0.0/β₂ 0.999、3ep、三存制),与 raw-gb64o
+单变量对照 → 回答"摘极端 reasoning 监督改不改善"。token 差 −16.2% 如实
+披露;loss 分母未验前不把 token 差等同梯度权重差。
+
+**Phase 2|77 步语义 census**(待批):固化 `ostg.sft.tailaudit`——对
+quarantine 逐条出审计表(动作/位置/后续步走势/judge 四分类初判:keep 原样
+/rewrite/仅 mask/整条存疑),LLM 初判 + 人工终审(28 个 >4k 必过人眼)。
+
+**Phase 3|rewrite 流程**(待批,production v2):对 rewrite 标签步,教师在
+逐字节复刻的原上下文中产 ≤300 token 接地短推理;**tool_call 逐字节不变**
+(校验 assert)+ 禁未来信息;产 `B-rewrite` = tailclean + 回填——赎回 77 个
+困难态 action 决策("token 占比 2.9% ≠ action 无价值")。
+优先级公式:rewrite > target-mask > 整条删;改 action 必须 replay,禁止
+静态改 JSON(反事实不一致)。cap-1024 仅作二阶消融。
+
 ### 裁决后的优先级分叉(预登记)
 
 若今日 B 四臂 eval 确认损伤依旧:静态语料扩张(含 best-of-3/C 臂)的
