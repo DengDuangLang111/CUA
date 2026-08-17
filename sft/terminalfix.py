@@ -39,7 +39,9 @@ build time; this is the finer-grained version aimed at 1-4 step stalls.
 import argparse
 import hashlib
 import json
+import os
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -175,6 +177,133 @@ def decide_keep_to(td, steps, tail_policy, stall_min):
     return keep_to, stalled, gate
 
 
+def read_rows(path):
+    if not Path(path).exists():
+        return []
+    return [json.loads(line) for line in Path(path).read_text().splitlines()
+            if line.strip()]
+
+
+def write_rows(path, rows):
+    Path(path).write_text("".join(json.dumps(r, ensure_ascii=False) + "\n"
+                                  for r in rows), encoding="utf-8")
+
+
+def key_of(row):
+    return (row["domain"], row["task_id"])
+
+
+def load_target_keys(paths):
+    """The trajectories to canonicalise, in order, de-duplicated."""
+    keys = []
+    for p in paths:
+        keys.extend(key_of(r) for r in read_rows(p))
+    return list(dict.fromkeys(keys))
+
+
+def refresh_tails(result_dir, rows, tail_policy, stall_min):
+    """Re-derive every row's cut under the current policy -> (kept, stale).
+
+    A row whose cut still lands in the same place keeps its justification: the
+    teacher wrote it for that screen and the screen has not moved. A row whose
+    cut moves is stale -- its justification describes a screen we no longer
+    stop on -- so it goes back to the teacher. Rewriting all of them instead
+    would silently change hundreds of targets that nothing was wrong with.
+    """
+    kept, stale = [], []
+    for row in rows:
+        td = Path(result_dir) / row["domain"] / row["task_id"]
+        steps = traj.load_steps(td)
+        if not steps:
+            kept.append(row)
+            continue
+        new_keep, _, gate = decide_keep_to(td, steps, tail_policy, stall_min)
+        if new_keep == row.get("keep_to"):
+            row["tail_gate"] = gate
+            kept.append(row)
+        else:
+            stale.append({"key": key_of(row), "was": row.get("keep_to"),
+                          "now": new_keep, "gate": gate})
+    return kept, stale
+
+
+def render_prompt(tasks_dir, domain, task_id, steps, keep_to, image_path):
+    """The teacher sees the task, what was done, and the screen it stops on."""
+    instr = load_instruction(tasks_dir, domain, task_id)
+    digest = "\n".join("step %d: %s" % (s.num, " | ".join(s.actions)[:110])
+                       for s in steps[:keep_to])
+    return instr, digest, b64(image_path)
+
+
+def ask_anthropic(cfg, instr, digest, image_b64, retries=3):
+    from ostg import llm
+    blocks = [{"type": "text", "text": "Task: " + instr},
+              {"type": "text", "text": "Actions so far:\n" + digest},
+              {"type": "text", "text": "Final screen:"},
+              {"type": "image", "source": {"type": "base64",
+                                           "media_type": "image/png",
+                                           "data": image_b64}}]
+    for attempt in range(retries):
+        try:
+            r = llm.call([{"role": "user", "content": blocks}],
+                         [{"type": "text", "text": SYSTEM}], cfg,
+                         tool=REASON_TOOL)
+            for blk in r.get("content", []):
+                if blk.get("type") == "tool_use":
+                    return blk["input"].get("justification", "")
+            return ""
+        except Exception as e:                               # noqa: BLE001
+            if not getattr(e, "transient", False) or attempt == retries - 1:
+                return ""
+            time.sleep(8 * (attempt + 1))
+    return ""
+
+
+def ask_qwen(endpoint, model, key, effort, instr, digest, image_b64):
+    msgs = [{"role": "system", "content": SYSTEM},
+            {"role": "user", "content": [
+                {"type": "text", "text": "Task: " + instr},
+                {"type": "text", "text": "Actions so far:\n" + digest},
+                {"type": "text", "text": "Final screen:"},
+                {"type": "image_url", "image_url": {
+                    "url": "data:image/png;base64," + image_b64}}]}]
+    v = ask(endpoint, model, key, msgs, effort=effort)
+    if not isinstance(v, dict):
+        return ""
+    # ask() returns {"error": raw} when the reply is not JSON -- the normal
+    # case here, because we asked for prose, not a JSON object.
+    return v.get("reason") or str(v.get("error") or "")
+
+
+def canonicalise(key, args, cfg, api_key):
+    """One trajectory -> its replacement final turn, or None if unusable."""
+    domain, task_id = key
+    td = args.result_dir / domain / task_id
+    steps = traj.load_steps(td)
+    if not steps:
+        return None
+    keep_to, stalled, gate = decide_keep_to(td, steps, args.tail_policy,
+                                            args.stall_min)
+    last = steps[keep_to - 1]
+    fallback = td / (steps[keep_to - 2].screenshot if keep_to > 1
+                     else "initial_state.png")
+    screen = td / last.screenshot if last.screenshot else fallback
+    if not screen.is_file():
+        return None
+    instr, digest, img = render_prompt(args.tasks, domain, task_id, steps,
+                                       keep_to, screen)
+    if args.backend == "anthropic":
+        reason = ask_anthropic(cfg, instr, digest, img)
+    else:
+        reason = ask_qwen(args.endpoint, args.model, api_key, args.effort,
+                          instr, digest, img)
+    reason = " ".join(str(reason or "").split())[:600]
+    return {"domain": domain, "task_id": task_id, "orig_steps": len(steps),
+            "keep_to": keep_to, "stalled_tail": stalled, "tail_gate": gate,
+            "tail_policy": args.tail_policy, "reason": reason,
+            "response": canonical_response(reason)}
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("result_dir", type=Path)
@@ -203,141 +332,51 @@ def main(argv=None):
     ap.add_argument("--dry", type=int, default=0)
     a = ap.parse_args(argv)
 
-    import os
-    key = a.key or os.environ.get("OPENAI_API_KEY") or "EMPTY"
+    api_key = a.key or os.environ.get("OPENAI_API_KEY") or "EMPTY"
     cfg = anthropic_cfg(a.model) if a.backend == "anthropic" else None
     if cfg:
         cfg["max_tokens"] = 300
-    todo = []
-    for p in a.targets:
-        for line in p.read_text().splitlines():
-            if line.strip():
-                r = json.loads(line)
-                todo.append((r["domain"], r["task_id"]))
-    done = set()
-    prior = {}
-    if a.out.exists():
-        for line in a.out.read_text().splitlines():
-            if line.strip():
-                r = json.loads(line)
-                k = (r["domain"], r["task_id"])
-                done.add(k)
-                prior[k] = r
+
+    todo = load_target_keys(a.targets)
+    prior = read_rows(a.out)
 
     if a.recompute_tails and prior:
-        # The tail policy changed under an existing output. A row whose cut
-        # still lands in the same place keeps its justification -- the teacher
-        # wrote it for that screen and the screen has not moved. A row whose
-        # cut moves is stale: its justification describes a screen that is no
-        # longer the one we stop on, so it must be rewritten. Rewriting all of
-        # them instead would be both wasteful and a silent change to 300+
-        # targets that nothing was wrong with.
-        keep, stale = [], []
-        for k, r in prior.items():
-            td = a.result_dir / k[0] / k[1]
-            steps = traj.load_steps(td)
-            if not steps:
-                keep.append(r)
-                continue
-            new_keep, stalled, gate = decide_keep_to(td, steps, a.tail_policy,
-                                                     a.stall_min)
-            if new_keep == r.get("keep_to"):
-                r["tail_gate"] = gate
-                keep.append(r)
-            else:
-                stale.append((k, r.get("keep_to"), new_keep, gate))
-        a.out.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n"
-                                 for r in keep), encoding="utf-8")
-        done = {(r["domain"], r["task_id"]) for r in keep}
+        kept, stale = refresh_tails(a.result_dir, prior, a.tail_policy,
+                                    a.stall_min)
+        write_rows(a.out, kept)
+        prior = kept
         print("recompute: %d rows unchanged, %d stale and queued for rewrite"
-              % (len(keep), len(stale)))
-        for (dom, tid), old, new, gate in sorted(stale):
+              % (len(kept), len(stale)))
+        for s in sorted(stale, key=lambda s: s["key"]):
             print("   %-20s %s  keep_to %s -> %s (%s)"
-                  % (dom, tid[:8], old, new, gate))
-        todo = [k for k, _, _, _ in stale] + [k for k in todo if k not in prior]
+                  % (s["key"][0], s["key"][1][:8], s["was"], s["now"],
+                     s["gate"]))
+        todo = [s["key"] for s in stale] + todo
 
+    done = {key_of(r) for r in prior}
     todo = [k for k in dict.fromkeys(todo) if k not in done]
     if a.dry:
         todo = todo[:a.dry]
     print("%d trajectories to canonicalise" % len(todo))
 
-    out_f = a.out.open("a", encoding="utf-8")
     lock = threading.Lock()
-    n = [0]
+    written = [0]
 
-    def one(k):
-        domain, task_id = k
-        td = a.result_dir / domain / task_id
-        steps = traj.load_steps(td)
-        if not steps:
+    def run(key):
+        row = canonicalise(key, a, cfg, api_key)
+        if row is None:
             return
-        keep_to, stalled, gate = decide_keep_to(td, steps, a.tail_policy,
-                                                a.stall_min)
-        last = steps[keep_to - 1]
-        pre = td / (steps[keep_to - 2].screenshot if keep_to > 1
-                    else "initial_state.png")
-        post = td / last.screenshot if last.screenshot else pre
-        if not post.is_file():
-            return
-        instr = load_instruction(a.tasks, domain, task_id)
-        digest = "\n".join("step %d: %s" % (s.num, " | ".join(s.actions)[:110])
-                           for s in steps[:keep_to])
-        user = [{"type": "text", "text": "Task: " + instr},
-                {"type": "text", "text": "Actions so far:\n" + digest},
-                {"type": "text", "text": "Final screen:"},
-                {"type": "image_url",
-                 "image_url": {"url": "data:image/png;base64," + b64(post)}}]
-        if a.backend == "anthropic":
-            from ostg import llm
-            blocks = [{"type": "text", "text": user[0]["text"]},
-                      {"type": "text", "text": user[1]["text"]},
-                      {"type": "text", "text": "Final screen:"},
-                      {"type": "image", "source": {
-                          "type": "base64", "media_type": "image/png",
-                          "data": b64(post)}}]
-            reason = ""
-            for attempt in range(3):
-                try:
-                    r = llm.call([{"role": "user", "content": blocks}],
-                                 [{"type": "text", "text": SYSTEM}],
-                                 cfg, tool=REASON_TOOL)
-                    for blk in r.get("content", []):
-                        if blk.get("type") == "tool_use":
-                            reason = blk["input"].get("justification", "")
-                    break
-                except Exception as e:  # noqa: BLE001
-                    if not getattr(e, "transient", False) or attempt == 2:
-                        reason = ""
-                        break
-                    import time
-                    time.sleep(8 * (attempt + 1))
-        else:
-            v = ask(a.endpoint, a.model, key,
-                    [{"role": "system", "content": SYSTEM},
-                     {"role": "user", "content": user}],
-                    effort=a.effort)
-            reason = v.get("reason") if isinstance(v, dict) else None
-            if isinstance(v, dict) and "error" in v and not reason:
-                # ask() returns {"error": raw} when the reply is not JSON --
-                # the normal case here, since we asked for prose.
-                reason = str(v.get("error") or "")
-        row = {"domain": domain, "task_id": task_id,
-               "orig_steps": len(steps), "keep_to": keep_to,
-               "stalled_tail": stalled, "tail_gate": gate,
-               "tail_policy": a.tail_policy,
-               "reason": " ".join(str(reason or "").split())[:600]}
-        row["response"] = canonical_response(row["reason"])
         with lock:
-            out_f.write(json.dumps(row, ensure_ascii=False) + "\n")
-            out_f.flush()
-            n[0] += 1
-            print("[%d] %s/%s keep_to=%d/%d stall=%d :: %s"
-                  % (n[0], domain, task_id[:8], keep_to, len(steps), stalled,
-                     row["reason"][:70]))
+            with a.out.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            written[0] += 1
+            print("[%d] %s/%s keep_to=%d/%d stall=%d gate=%s :: %s"
+                  % (written[0], row["domain"], row["task_id"][:8],
+                     row["keep_to"], row["orig_steps"], row["stalled_tail"],
+                     row["tail_gate"], row["reason"][:60]))
 
     with ThreadPoolExecutor(max_workers=a.workers) as ex:
-        list(ex.map(one, todo))
-    out_f.close()
+        list(ex.map(run, todo))
     return 0
 
 
