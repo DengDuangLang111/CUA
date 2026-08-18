@@ -71,6 +71,7 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && set -a && . 
 | 现在跑到哪了 / 下一步 | `CUA/EXPERIMENTS.md` 顶部"现状"块 |
 | 生成任务:gen→ship→cull→merge→control→rollout 全部命令 | `CUA/RUNBOOK.md`(唯一 runbook;WSL 侧同名文件是指路桩) |
 | 生成流水线的设计与各层职责 | `CUA/TASKGEN_PIPELINE.md` |
+| **SFT 数据流水线:每层职责、五道闸、像素审计、排错** | `CUA/sft/DATA_PIPELINE.md` |
 | 实验结果与决策依据(账本) | `CUA/EXPERIMENTS.md` |
 | SFT:环境/配方/数据构建/训练/eval 协议 | `CUA/sft/TRAINING.md`(顶部有现状块)· `CUA/SFT_DATA.md` · `CUA/sft/CONTEXT.md` |
 | rollout 打分体系:judge 输入/刻度/schema、仲裁协议、判官对照 | `CUA/JUDGING.md` |
