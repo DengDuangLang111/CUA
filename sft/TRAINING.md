@@ -2399,6 +2399,26 @@ Question forced by our launch preflight: the student's template strips historica
 `<think>` unconditionally (measured; no `preserve_thinking` var exists in its
 jinja), so training must pick a side. What do Qwen-CUA and OpenWebRL do?
 
+> **The premise in that sentence is false for our harness — corrected
+> 2026-08-18, and it is the premise the whole keepthink effort rested on.**
+> The measurement was real but was taken on generic multi-turn messages. The
+> stock template's keep/strip decision hangs on `ns.last_query_index`, computed
+> by a backward scan (`:67-77`) that **skips user turns wrapped in
+> `<tool_response>`**. OSWorld's qwen agent wraps every non-first user turn
+> that way (`history.py:27-32`, `55-72`), so `last_query_index` is pinned at 1
+> and the keep branch (`:101`) fires for every historical assistant turn. On
+> generic chat messages the template does strip; **on the message shape this
+> harness actually produces it does not**. Verified on 100 cached real payloads
+> (stock vs keepthink: 100/100 byte-identical) with a sensitivity control
+> (unwrap one user turn → they diverge immediately) and a live
+> `/v1/chat/completions/render` call. Full account: `sft/RESULTS.md` §5.7.
+>
+> Note how the section below corroborates rather than contradicts this:
+> OpenWebRL's template does strip, and they defeat it CLIENT-SIDE with
+> `_restore_assistant_history_blocks_in_prompt`. We reach the same end state,
+> but through the tool_response wrapping instead of a post-render patch — which
+> is why our stock arms and keepthink arms were never actually different.
+
 **OpenWebRL: lean SFT warm start, rich RL and rich eval — CORRECTED
 2026-08-15** (an earlier revision of this section wrongly called them
 lean/lean throughout). The template does strip history think — verified
