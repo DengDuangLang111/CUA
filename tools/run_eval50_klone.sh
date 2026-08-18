@@ -25,6 +25,13 @@ case "$ARM" in
   kE) W=q38Bhqs2t-lr3e6-e300;   MN=q38Bhqs2t-lr3e6  ;;   # 全量 x r5 lr3e-6
   kF) W=q38Bhqs2t-loralean-e300;MN=q38Bhqs2t-loralean;;  # LoRA x r5 lean
   kG) W=q38Bhqs2t-loranp-e300;  MN=q38Bhqs2t-loranp ;;   # LoRA x r5 no-prose
+  # D again at ~1 epoch. Every arm that currently beats the base was served
+  # an accidental ~1-epoch checkpoint (the lexicographic picker bug), so the
+  # epoch question has never been asked deliberately on a full fine-tune.
+  # checkpoint-90 is epoch 0.90, the closest saved point to one epoch; named
+  # for its real epoch rather than rounded, because a mislabelled checkpoint
+  # already cost this project a week.
+  kD1) W=q38Bhqs2t-gb64-e090;   MN=q38Bhqs2t-gb64-e090 ;;  # 全量 x r5 @e0.90
   *) echo "unknown arm: $ARM" >&2; exit 2 ;;
 esac
 
