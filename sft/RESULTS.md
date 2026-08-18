@@ -413,6 +413,81 @@ LoRA 臂在评测时都翻到 11–12%,是微调共有的漂移,不是 r5 特有
 
 ---
 
+## 5.9 结尾如何影响分数:代码层面的确认(2026-08-18)
+
+### 普通题:结尾方式不影响分数,除了 FAIL
+
+`env.evaluate()` 在循环外无条件执行(`lib_run_single.py:102`),所以
+`terminate(success)`、撞 50 步上限、散文收尾在 **45 道 feasible 题上得分完全
+相同** —— 分数只由检查器看 VM 状态决定。**唯一的例外是 FAIL**:
+
+```python
+# desktop_env/desktop_env.py:475-479   (feasible 分支)
+else:
+    if len(self.action_history) > 0:
+        last_action = self.action_history[-1]
+        if last_action == "FAIL" or (type(last_action) == dict and
+                                     last_action.get('action_type') == 'FAIL'):
+            return 0          # ← metric(:481 起)根本不执行
+```
+
+**在普通题上以 FAIL 收尾 = 把已经做对的状态清零。**
+
+### 而 FAIL 可以是 harness 替模型发的
+
+```python
+# mm_agents/qwen/actions.py:367-377
+if not pyautogui_code:
+    pyautogui_code.append("FAIL" if infeasible_response else "DONE")
+# :253
+infeasible_response = looks_infeasible_response(response)   # response 是整条,含 <think>
+```
+
+`looks_infeasible_response`(`parser.py:97`)把整条响应小写化后匹配
+`"infeasible"` / `"not possible"` / `"impossible"` 等字面词。**模型在私有思考里
+写一句"这看起来做不到",只要那一步恰好解析不出任何 tool call,就会被判成
+FAIL。**
+
+### 实测代价
+
+| | |
+|---|---|
+| 所有臂的 feasible 任务单元合计 | 567 |
+| 最后一步执行成 FAIL 的 | **41(7.23%)** |
+| 其中记 0 分的 | **41 / 41** |
+| 贡献最多的臂 | rich ep1 15 个,rich·stock 4,gb128ep2 / lean·stock / Bs-LoRA 各 3 |
+
+### infeasible 题:只看最后一个动作,不看 VM
+
+```python
+# desktop_env/desktop_env.py:469-474
+if self.evaluator['func'] == "infeasible":
+    ... if last_action == "FAIL" ...: return 1
+    return 0
+```
+
+得 1 分的充要条件是 `action_history` 末项为 `"FAIL"`,**VM 状态完全不看**。
+eval-50 里有 5 道这种题(占 10%),各臂目前只拿到 1–2 分。
+
+### 由此得到的三条硬约束
+
+1. **语料绝不能教"说做不到"。** `terminalfix.py:92` 已经明确指示教师
+   `Never say the task is impossible, infeasible, or cannot be completed`,
+   这条是对的,而且理由现在有了代码依据。
+2. **每一步都应该是合法的 tool call。** 裸文本结尾把结局交给一张 57 词的词表
+   掷骰子 —— 这正是那 41 个被强制归零的来源。r5 已把裸文本结尾从 21-23/50
+   压到 1/40,方向正确。
+3. **"教模型主动 fail"现阶段不该做。** 奖池只有 5 题(10 分),而误报直接吃
+   45 道普通题的分;语料里也没有任何 failure 正例可教(`build.py:198` 只收
+   score==1.0 的轨迹),生成任务集 544 个任务里 infeasible 型 **0 个**。要做
+   必须先造 infeasible 任务,否则是在只有正类的数据上训二分类器。
+
+> 若要给"我卡住了"一个诚实信号,**必须做成 tool call 的一个参数,绝不能做成
+> 散文** —— 一个被正常处理的 tool call 会填满 `pyautogui_code`,从而在
+> `actions.py:367` 的 `if not pyautogui_code:` 处**抑制**这条兜底路径。
+
+---
+
 ## 6 结果
 
 得分 = 缺题按 0 计入,分母恒为 50。
