@@ -96,5 +96,11 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && set -a && . 
 ## 7 用户约定(跨会话有效)
 
 - **任何程序修改前先给 diff 和理由征求同意**;测量(只读)随时可做。
+- **不确定的改动不许落在 main 上。** 为一个实验臂加的开关、还没被结果验证的
+  改法、"试试看"性质的东西,一律开分支或 worktree:CUA 侧 `git checkout -b`,
+  WSL ostg 侧 `git worktree add /mnt/d/research/ostg-<名字>/ostg -b <分支> v11.1`
+  (该仓库本来就按时代分 worktree)。主干只接已经被结果证明该留下的东西 ——
+  `build.py` 这类被所有语料共用的文件尤其如此,动一处牵全身。
+  验证通过再合回 main,不通过就丢掉分支,主干始终干净。
 - **查到的东西除了更新 md,还要在聊天里完整展示**。
 - 中文交流;结论先行,依据跟上;不确定就说不确定,先验证再断言。
