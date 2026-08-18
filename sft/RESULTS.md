@@ -136,7 +136,7 @@ OSWorld 有一个名为 `multi_apps` 的域。ostg 生成的任务没有这个�
 
 | 臂 | 实际服务的 checkpoint | 该 ckpt 的 epoch | 该次训练的终点 | 是否终点 |
 |---|---|---|---|---|
-| Bs-LoRA | `q38Bs-lora/v0-20260817-043913/checkpoint-264`(merged) | **3.00** | 264 | 是 |
+| Bs-LoRA | `q38Bs-lora/v0-20260817-043913/checkpoint-90`(merged) | **1.02** | 264 | **否** |
 | Bs-gb64 | `q38Bs-gb64/v0-20260817-032220/checkpoint-90` | **1.02** | 264 | **否** |
 | B-gb128 ep2 | `q38e3B-gb128/v7-20260816-224140/checkpoint-90` | **2.00** | 135 | 否(名称即 ep2) |
 | B-gb64o | `q38e3B-gb64o/v0-20260817-013858/checkpoint-90` | **1.01** | 267 | **否** |
@@ -146,17 +146,29 @@ OSWorld 有一个名为 `multi_apps` 的域。ostg 生成的任务没有这个�
 | lean · keepthink | `q38e3-lean/v0-20260815-012706/checkpoint-450` | 3.00 | 450 | 是 |
 | 基座 4B | `sft/models/Qwen3.5-4B` | — | — | 未微调 |
 
-**Bs-gb64 与 B-gb64o 加载的不是终点,而是约 1 epoch 处**,这不是设计选择。
-serve 脚本用这一行挑 checkpoint:
+**Bs-LoRA、Bs-gb64、B-gb64o 三个臂加载的都不是终点,而是约 1 epoch 处**,
+这不是设计选择。serve 脚本(以及 LoRA 的合并作业)用这一行挑 checkpoint:
 
 ```
 ls -d $B/out/<run>/v*/checkpoint-* | sort -t- -k2 -n | tail -1
 ```
 
 `-t-` 以 `-` 切**整条绝对路径**,第 2 段是 `gb64/v0` 这类非数字串,`-n` 把它们
-全判为 0;键相同后 GNU sort 退回整行字典序,于是 `checkpoint-90` 排在
-`checkpoint-264` 之后。两次训练的所有 checkpoint 在 serve 启动时都已存在
-(gb64 的 264 步落盘于 06:19,serve 起于 08:07),所以不是"当时只有 90"。
+全判为 0;键相同后 GNU sort 退回整行字典序,于是在 `checkpoint-30/60/90/120/
+150/180/210/240/264` 这组里,`checkpoint-90` 排到最后。凡是保存了 9 个存档的
+训练,挑出来的必定是 90。
+
+不是"当时只有 90":三次训练的全部 checkpoint 在 serve/merge 启动前就已落盘
+(gb64 的 264 步落盘 06:19,serve 起于 08:07;LoRA 的 264 步落盘 07:33,
+合并作业读的仍是 90)。
+
+**受影响范围**:6 个脚本带这行 —— `merge-lora-bs`、`serve-chain-4b-{bs, gb128,
+b1ep, bhqs, bhqs2lr}`。其中 3 个已经影响了已发布的分数(上表加粗行);
+`b1ep` 因为只存了 1 个 checkpoint 而侥幸正确;`bhqs`/`bhqs2lr` 尚未跑过 eval。
+2026-08-18 全部改为按 `checkpoint-` 之后的数字排序,并在 Tillicum 上核对了
+解析结果(`bs→264`、`gb128→267`、`b1ep→708`)。所有 checkpoint 均未删除,
+三次训练各保留 9 个存档(0.34 / 0.69 / 1.02 / 1.37 / 1.71 / 2.05 / 2.39 /
+2.73 / 3.00 epoch),终点权重随时可评。
 
 上面 §5.2 的 epoch 列描述的是**训练配置**;评测实际用了哪一步以本表为准。
 
@@ -233,10 +245,10 @@ ls -d $B/out/<run>/v*/checkpoint-* | sort -t- -k2 -n | tail -1
 高于基座的 4 个臂:Bs-LoRA、Bs-gb64、B-gb128 ep2、B-gb64o。
 低于基座的 5 个臂:B-1ep、rich 三个变体、lean。
 
-**这张表不是等 epoch 的对照。** Bs-LoRA 是 3.00 epoch 的权重,Bs-gb64 是
+**排在基座之上的 4 个臂用的都不是终点权重。** Bs-LoRA 与 Bs-gb64 都是
 1.02 epoch,B-gb64o 是 1.01 epoch,B-gb128 ep2 是 2.00 epoch(见 §5.2)。
-"Bs-LoRA 比 Bs-gb64 高 2 分"里同时变了微调方式和训练量;单看这张表分不出
-是 LoRA 的功劳还是多训了两个 epoch 的功劳。
+其中 Bs-LoRA 与 Bs-gb64 恰好取在同一步,所以这两者之间的 2 分差仍是
+干净的"LoRA vs 全量"对照。三次训练的 3.00 epoch 终点权重**从未被评测过**。
 
 **得分与满分题不一致的原因**:部分题的 evaluator 给部分分(`conj:"and"` 可只满足
 一部分)。例:Bs-gb64 满分 22 题 = 44.0%,得分 45.81%。
@@ -272,7 +284,8 @@ ls -d $B/out/<run>/v*/checkpoint-* | sort -t- -k2 -n | tail -1
 | 臂 | 事实 |
 |---|---|
 | B-gb128 ep2 | global batch 128 需要 accum 8。该训练栈显存正比于梯度累积次数(实测:accum 4 稳定在 131.9 GiB;accum 16 在第 8–13 步 OOM;accum 32/64 在第 1 步前 OOM)。**gb128 六次提交全部 OOM,3 个 epoch 从未跑完**,表中该行使用崩溃前保存的第 2 个 epoch 边界存档。详见 `sft/TRAINING.md`,上游 ms-swift issue #5230 同症 |
-| **Bs-gb64** | 服务的是 `checkpoint-90`(1.02 epoch),不是终点 264。serve 脚本的 checkpoint 挑选行按字典序排 —— `checkpoint-90` > `checkpoint-264`(见 §5.2)。45.81% 是 1 epoch 权重的分数 |
+| **Bs-LoRA** | 合并的适配器是 `checkpoint-90`(1.02 epoch),不是终点 264。合并作业与 serve 脚本共用同一条按字典序排的挑选行(见 §5.2)。47.81% 是 1 epoch 权重的分数 |
+| **Bs-gb64** | 同一处缺陷:服务 `checkpoint-90`(1.02 epoch),终点是 264。45.81% 是 1 epoch 权重的分数 |
 | **B-gb64o** | 同一处缺陷:服务 `checkpoint-90`(1.01 epoch),终点是 267。41.81% 是 1 epoch 权重的分数 |
 | lean · stock 模板 | 只完成 3 题,缺 47 题。按缺题算 0 为 4.00%,未列入 §6 |
 | B-gb128(全量 3 epoch 版) | eval 50 题全缺,无结果 |

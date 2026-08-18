@@ -18,7 +18,7 @@
 umask 077
 set -x
 B=/gpfs/scrubbed/jy050706/sft
-CKPT=$(ls -d $B/out/q38Bs-lora/v*/checkpoint-* 2>/dev/null | sort -t- -k2 -n | tail -1)
+CKPT=$(ls -d $B/out/q38Bs-lora/v*/checkpoint-* 2>/dev/null | awk -F'checkpoint-' '{print $NF, $0}' | sort -n | tail -1 | cut -d' ' -f2-)
 OUT=$B/out/q38Bs-lora-merged
 [ -n "$CKPT" ] && [ -d "$CKPT" ] || { echo "FATAL: no LoRA checkpoint"; exit 1; }
 echo ">>> merging $CKPT -> $OUT"
