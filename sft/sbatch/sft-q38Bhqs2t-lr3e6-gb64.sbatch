@@ -65,8 +65,8 @@
 umask 077
 set -x
 B=/gpfs/scrubbed/jy050706/sft
-DS1=$B/data/q38-Bhqs2t-v11100
-DS2=$B/data/q38-Bhqs2t-v11500
+DS1=$B/data/q38-Bhqs2t-r5-v11100
+DS2=$B/data/q38-Bhqs2t-r5-v11500
 export PATH="$HOME/.local/bin:$PATH"
 cd $B/runcwd && source $B/venv/bin/activate
 export CUDA_HOME=$B/cuda13 PATH="$B/cuda13/bin:$PATH"
