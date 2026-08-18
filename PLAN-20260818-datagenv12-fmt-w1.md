@@ -88,7 +88,24 @@ eval-50 18%;该类并集解开率 3/9,其余类 32/41。本波:解锁判据 → 
   prebuild 容器 pip 装 python-pptx 并把触发条件扩到含 pptx 的 setup ——
   **prebuild 从"零改动"变为 +4 行**,VM 仍然永不需要该库。端到端已验:
   容器造 3 页 deck → 宿主 checker 未满足规则 0.0 / 已满足 1.0。
-- 尚未做:restyle 波次的抽签限制(gen 只抽 restyle 格),然后生成。
+- `--intents` 过滤器已落(分支 `c84145a6`)并干抽验证:8/8 全为 restyle,
+  grade 落 {pptx,image,table};波次命令追加 `--apps
+  libreoffice_impress,libreoffice_calc,gimp`(干抽发现 raster_image 会抽到
+  vlc,用现有 apps 过滤器钉死配比)。
+- **生成阻塞在 API 凭据(2026-08-18 晚)**:pilot 批全链跑通到 API 调用,
+  PPAPI 网关回 **HTTP 401 Invalid token** ×3(refill 机制工作正常)。需要用户
+  更新 `/mnt/d/research/os-simple-taskgen-v8/.env` 的 `PPAPI_API_KEY`。
+  凭据就位后的波次命令(已验证的最终形态):
+
+  ```
+  cd /mnt/d/research/ostg-datagenv12 && cp /mnt/d/research/os-simple-taskgen-v8/.env .env
+  /mnt/d/research/OSWorld/.venv/bin/python -m ostg.taskgen.gen \
+    --n 5 --batches 14 --seed 12001 --stream --model claude-opus-5 --env .env \
+    --intents restyle --apps libreoffice_impress,libreoffice_calc,gimp \
+    --out out/runs/fmt-w1/specs.jsonl \
+    --avoid-corpus /mnt/d/research/cua-gym/tasks.jsonl
+  ```
+  (70 draw ≈ 50 keep,按 v11 的闸通过率。)
 
 ## 风险
 
