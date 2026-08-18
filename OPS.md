@@ -12,7 +12,7 @@
  M desktop_env/evaluators/getters/file.py        自定义 get_local_file(见下)
  M desktop_env/evaluators/metrics/__init__.py    导入 18 个自定义 metric
  M desktop_env/evaluators/metrics/vscode.py      改了官方 check_json_settings 行为
- M mm_agents/qwen/actions.py                     空解析 fallback DONE -> WAIT(见 1.1)
+ M mm_agents/qwen/actions.py                     normalize_inline_parameters(环境变量门控,默认关)+ 日志;**空解析 fallback 已于 08-14 恢复上游 DONE**(可比性优先,旧文误记为 WAIT)
  M mm_agents/qwen/main.py                        加 preserve_thinking,透传 chat_template_kwargs
  M mm_agents/qwen/client.py                      reasoning_content 取不到时 fallback 到 reasoning
  M mm_agents/agent.py                            ANTHROPIC_BASE_URL 可配 + thinking disabled(只影响 PromptAgent/Claude,跑 Qwen 不走这里)
