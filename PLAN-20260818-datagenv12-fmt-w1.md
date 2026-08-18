@@ -80,8 +80,15 @@ eval-50 18%;该类并集解开率 3/9,其余类 32/41。本波:解锁判据 → 
 - 检查器落在 OSWorld fork `generated_tasks.py`(第 19、20 个自定义 metric,
   沿既有惯例),`metrics/__init__.py` 注册;**惰性 import**,缺库不拖垮整个
   evaluator。宿主 venv 实测已带 python-pptx 与 PIL。
-- 尚未做:prebuild 容器里冒烟 `odp → pptx` 滤镜串(生成前的第一件事);
-  restyle 波次的抽签限制(gen 只抽 restyle 格)。
+- **冒烟救了这一波(2026-08-18)**:`txt → odp:impress8` 转换成功但产出
+  **零页空 deck**,`odp → pptx` 同样为空 —— 我最初落进 prompt 的配方会让全部
+  50 道题建在没有内容可 restyle 的空壳上。当年"2 个 control 通过"的 odp 任务
+  应是 create 型,空壳无碍;restyle 不行。已改(分支 `572294a3`):deck 在
+  setup 里用 **python3 + python-pptx** 构建(真文本框、真文字、显式初始样式),
+  prebuild 容器 pip 装 python-pptx 并把触发条件扩到含 pptx 的 setup ——
+  **prebuild 从"零改动"变为 +4 行**,VM 仍然永不需要该库。端到端已验:
+  容器造 3 页 deck → 宿主 checker 未满足规则 0.0 / 已满足 1.0。
+- 尚未做:restyle 波次的抽签限制(gen 只抽 restyle 格),然后生成。
 
 ## 风险
 
