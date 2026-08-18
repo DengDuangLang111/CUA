@@ -1107,23 +1107,43 @@ $P -m ostg.sft.arb RESULT_DIR --tasks TASKS_DIR --targets out/curate_POOL_tier2.
 #    anthropic_cfg 原样透传模型名,漏传会静默返回空理由
 $P -m ostg.sft.terminalfix RESULT_DIR --tasks TASKS_DIR \
    --targets out/final_POOL_keep.jsonl --targets out/final_POOL_rescue.jsonl \
-   --endpoint http://127.0.0.1:18020/v1 --workers 8 \
-   --tail-policy auto --stall-min 2 --out out/terminal_POOL.jsonl
+   --out out/terminal_POOL.jsonl --harness /mnt/d/research/OSWorld \
+   --backend qwen --endpoint http://127.0.0.1:18020/v1 --model qwen38-27b-local \
+   --effort low --workers 8 --style-examples 3 \
+   --tail-policy auto --stall-min 2
 
 # ①b 尾巴策略改过之后(不要删档重跑):只重算 keep_to,
 #     位置没动的行保留教师原文,动了的 / 理由为空的才回炉
 cp -n out/terminal_POOL.jsonl out/terminal_POOL.v1.jsonl     # 先留快照
 $P -m ostg.sft.terminalfix RESULT_DIR --tasks TASKS_DIR \
    --targets out/final_POOL_keep.jsonl --targets out/final_POOL_rescue.jsonl \
-   --out out/terminal_POOL.jsonl --recompute-tails \
-   --backend anthropic --model claude-opus-5 --workers 6 \
+   --out out/terminal_POOL.jsonl --recompute-tails --harness /mnt/d/research/OSWorld \
+   --backend qwen --endpoint http://127.0.0.1:18020/v1 --model qwen38-27b-local \
+   --effort low --workers 6 --style-examples 3 \
    --tail-policy auto --stall-min 2
+```
 
+**教师必须是产出轨迹的那个模型**(Qwen3.8-27B)。用别的模型写末步等于换 teacher,
+而末步恰好是这个臂唯一要测的变量;行里记 `teacher` 字段可事后追溯。
+
+**必给的两个参数**:`--harness` 指向 OSWorld(分流要用它自己的动作解析器),
+`--style-examples N` 让教师照着**自己写过的 N 条真实结尾**的语气写
+(只下规则会让它 97% 的句子都以 "Done." 开头,而它自然写的只有 16%)。
+本地 serve **静默忽略 `guided_json`**,所以 qwen 后端走 system prompt 里的
+"只回一个 JSON 对象"契约(同 `trajaudit.qwen_contract`)。
+
+**出口闸**:重写产出会被**当初路由它进来的那个谓词**再查一遍
+(`looks_infeasible_response`),命中则带约束重试,再命中则整条标
+`mode: exclude` 不出包。
+
+```bash
 # ② build 接入重写(替换末步目标 + 按 keep_to 截尾)
 $P -m ostg.sft.build RESULT_DIR --tasks TASKS_DIR --out OUT \
    --include ..._rescue.jsonl --exclude ..._drop.jsonl \
-   --whole-traj-filter --think-cap 2048 --image-cache PRIOR \
+   --whole-traj-filter --think-cap 2048 \
    --terminal-rewrite out/terminal_POOL.jsonl
+#    ↑ 不要加 --image-cache:它会把上一代语料里已被污染的像素原样继承过来
+#      (2026-08-17 事故)。重新编码约多花 40 分钟,换的是像素一定正确。
 
 # ③ 出包前的终止形式硬门(只对规范化过的语料用)
 $P -m ostg.sft.verify OUT --require-terminate

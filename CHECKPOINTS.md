@@ -45,7 +45,19 @@ LoRA 的 14G vs 全量 592G = adapter 存储优势的实测量级(**42 倍**)。
 | `q38e3B-v11100` / `-v11500` | B 原始(checker 判过的全部 pass) | B 各臂、gb64o |
 | `q38e3B-tc2048-v11100` / `-v11500` | Bs = B + think-cap 2048 | Bs-gb64、Bs-LoRA |
 | `q38-Bhqs-v11100` / `-v11500` | **Bhqs = 双判官+仲裁筛选 + cap 2048** | Bhqs 臂(新) |
+| `q38-Bhqs2t-v11100` / `-v11500` | **Bhqs-2-terminal**。集群上目前是**有缺陷的旧版**(6,297 行),待换成 r5 | 239100 LoRA、239101 全量 lr 3e-6 |
 | `q38e3B-v11100`(旧)/ `v11-legacy` / `v11-500-partial` 等 | 早期实验 | 已退役 |
+
+### 3.1 Bhqs-2-terminal 语料的版本(WSL `ostg-v11.1/out/`)
+
+| 目录 | 轨迹 / 样本 | 说明 |
+|---|---|---|
+| `sft-Bhqs2tr5-v11100` / `-v11500` | **362 / 6,385** | **现役**。三路修复(48 原样 / 259 补指令 / 69 重写),末步 100% terminate,meta 带 `terminal_mode` + `rescued` |
+| `sft-Bhqs2tr4-*` | 362 / 6,385 | 同上但 meta 无溯源字段,已被 r5 取代 |
+| `sft-Bhqs2t-*` | 362 / 6,297 | **有缺陷**:截尾砍掉真动作、图片继承污染。**这一版已 ship 到集群,尚未替换** |
+
+末步修复的中间产物是 `out/terminal_v11{100,500}.jsonl`(每轨迹一行,含
+`mode` / `keep_to` / `tail_gate` / `teacher`),历史版本留在 `.v1` / `.v2` / `.v3`。
 
 ## 4 可清理(省 ~1.6 TB,做之前逐个确认无引用)
 
