@@ -416,21 +416,28 @@ def ask_anthropic(cfg, instr, digest, image_b64, retries=3):
     return {}, "retries exhausted"
 
 
+# The local serve has no tool channel and SILENTLY IGNORES guided_json
+# (measured 2026-08-17, trajaudit.qwen_contract): told to call a tool it emits
+# its chat template's <tool_call> XML, and told to follow a JSON schema it
+# answers in prose with markdown headers -- both unparseable. The judges solved
+# this with an explicit one-JSON-object contract in the system prompt; the same
+# contract is used here rather than inventing a second convention.
+QWEN_JSON_CONTRACT = (
+    "\n\nReply with ONE JSON object only, exactly this shape: "
+    '{"thinking": "<=60 words", "statement": "<=60 words"} '
+    "No other text before or after the JSON.")
+
+
 def ask_qwen(endpoint, model, key, effort, instr, digest, image_b64):
     """-> ({thinking, statement}, error). See ask_anthropic on surfaced errors."""
-    msgs = [{"role": "system", "content": SYSTEM},
+    msgs = [{"role": "system", "content": SYSTEM + QWEN_JSON_CONTRACT},
             {"role": "user", "content": [
                 {"type": "text", "text": "Task: " + instr},
                 {"type": "text", "text": "Actions so far:\n" + digest},
                 {"type": "text", "text": "Final screen:"},
                 {"type": "image_url", "image_url": {
                     "url": "data:image/png;base64," + image_b64}}]}]
-    # guided_json constrains vLLM's reply to the schema instead of fishing a
-    # blob out of free text. Without it the teacher answers in prose with
-    # markdown headers ("**thinking:** ...") and both fields land in one
-    # string -- observed on the first qwen run.
-    v = ask(endpoint, model, key, msgs, effort=effort,
-            guided=REASON_TOOL["input_schema"])
+    v = ask(endpoint, model, key, msgs, effort=effort)
     if not isinstance(v, dict):
         return {}, "unexpected reply type %s" % type(v).__name__
     if v.get("thinking") or v.get("statement"):
