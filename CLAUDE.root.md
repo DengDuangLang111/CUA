@@ -74,6 +74,7 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && set -a && . 
 | **SFT 数据流水线:每层职责、五道闸、像素审计、排错** | `CUA/sft/DATA_PIPELINE.md` |
 | 实验结果与决策依据(账本) | `CUA/EXPERIMENTS.md` |
 | **eval-50 汇报:每个臂的结果/设置/两两差异** | `CUA/sft/RESULTS.md` |
+| **为什么失败:零解题解剖、操作覆盖缺口、撞上限机制、孤儿根因** | `CUA/sft/FAILURE_ANATOMY.md` |
 | SFT:环境/配方/数据构建/训练/eval 协议 | `CUA/sft/TRAINING.md`(顶部有现状块)· `CUA/SFT_DATA.md` · `CUA/sft/CONTEXT.md` |
 | rollout 打分体系:judge 输入/刻度/schema、仲裁协议、判官对照 | `CUA/JUDGING.md` |
 | checkpoint/数据集/轨迹存哪、哪个臂对应哪份数据、能删什么 | `CUA/CHECKPOINTS.md` |
