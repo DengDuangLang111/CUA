@@ -11,15 +11,18 @@
 #SBATCH --output=/gpfs/scrubbed/jy050706/qwen-serve/eval4blos_%j.out
 #SBATCH --signal=B:USR1@600
 #
-# Bs-LoRA (merged weights) under the OFFICIAL stock chat template.
+# Bs-LoRA at its 3.00-epoch ENDPOINT, under the OFFICIAL stock chat template.
 #
-# The arm scored 47.81% under keepthink, the best of any arm. It has never been
-# run on the stock template. The only template comparison that exists is on the
-# rich weights (69-trajectory corpus): keepthink 28.00% vs stock 30.00%, i.e.
-# stock was 2 points BETTER on the arm whose training was supposed to match
-# keepthink. If the best arm does not lose on stock, the keepthink patch buys
-# nothing -- and stock is the OSWorld-Verified default, so results become
-# directly comparable with published numbers.
+# Two firsts in one run. (1) The 47.81% that made this the best arm was served
+# an adapter merged from checkpoint-90 (epoch 1.02) -- the merge job picked it
+# by sorting checkpoint paths lexicographically. No endpoint weights from any
+# of the three Bs/B runs have ever been evaluated. (2) The only template pair
+# on record is on the rich weights, where stock beat keepthink 30.00 vs 28.00
+# -- on the arm keepthink was written for.
+#
+# Because both change at once, this run does not isolate either variable by
+# itself; base/stock vs base/keepthink is the clean template control, and the
+# 1.02-epoch keepthink run is the epoch comparator.
 #
 # No --chat-template override: vLLM renders with the model dir's built-in
 # template, which strips <think> from history turns (the current turn's
@@ -30,7 +33,16 @@ set -uo pipefail
 
 PROJ=/gpfs/scrubbed/jy050706/qwen-serve
 SELF="$PROJ/serve-chain-4b-lora-stock.sbatch"
-MODEL=/gpfs/scrubbed/jy050706/sft/out/q38Bs-lora-merged
+# LoRA is served as merged full weights, so the path is a merge OUTPUT dir,
+# not a checkpoint dir. Derive which merge to use from the same policy the
+# merge job used, instead of naming a step here: if the policy changes, the
+# two stay in step, and a missing merge fails loudly rather than silently
+# serving whichever dir happens to exist.
+LORA_CKPT=$(/gpfs/scrubbed/jy050706/qwen-serve/pick_ckpt.sh \
+  "/gpfs/scrubbed/jy050706/sft/out/q38Bs-lora/v*" "${CKPT_POLICY:-endpoint}") || exit 1
+MODEL=/gpfs/scrubbed/jy050706/sft/out/q38Bs-lora-merged-${LORA_CKPT##*checkpoint-}
+[ -f "$MODEL/config.json" ] || { echo "FATAL: no merge for ${LORA_CKPT##*/} at $MODEL -- run merge-lora-bs.sbatch with the same CKPT_POLICY"; exit 1; }
+echo "[serve] LoRA adapter ${LORA_CKPT##*/} -> merged weights $MODEL" >&2
 KEYFILE="${VLLM_API_KEY_FILE:-$PROJ/.vllm_api_key}"
 CHAIN_IDX="${CHAIN_IDX:-1}"; CHAIN_MAX="${CHAIN_MAX:-2}"
 

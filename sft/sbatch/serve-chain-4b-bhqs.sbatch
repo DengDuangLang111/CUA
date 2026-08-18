@@ -32,7 +32,7 @@ set -uo pipefail
 PROJ=/gpfs/scrubbed/jy050706/qwen-serve
 SELF="$PROJ/serve-chain-4b-bhqs.sbatch"
 B=/gpfs/scrubbed/jy050706/sft
-MODEL=$(ls -d $B/out/q38Bhqs2t-gb64/v*/checkpoint-* 2>/dev/null | awk -F'checkpoint-' '{print $NF, $0}' | sort -n | tail -1 | cut -d' ' -f2-)
+MODEL=$(/gpfs/scrubbed/jy050706/qwen-serve/pick_ckpt.sh "/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-gb64/v*" "${CKPT_POLICY:-endpoint}") || exit 1
 TEMPLATE=/gpfs/scrubbed/jy050706/sft/eval/qwen35_4b_keepthink.jinja
 KEYFILE="${VLLM_API_KEY_FILE:-$PROJ/.vllm_api_key}"
 CHAIN_IDX="${CHAIN_IDX:-1}"; CHAIN_MAX="${CHAIN_MAX:-3}"

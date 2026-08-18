@@ -25,10 +25,10 @@ SELF="$PROJ/serve-chain-4b-bs-stock.sbatch"
 # accidentally served checkpoint-90 (epoch 1.02) -- serve-chain-4b-bs.sbatch
 # sorts checkpoint paths lexicographically, so checkpoint-90 outranks
 # checkpoint-264. Serving 264 here means this run is the 3.00-epoch weights,
-# equal-epoch with Bs-LoRA (also 3.00) for the first time. The template is
-# therefore NOT the only difference vs the 45.81% run; the epoch-matched
-# comparison it does buy is worth more than reproducing the mistake.
-MODEL=/gpfs/scrubbed/jy050706/sft/out/q38Bs-gb64/v0-20260817-032220/checkpoint-264
+# equal-epoch with the endpoint Bs-LoRA run (also 3.00). The template is
+# therefore NOT the only difference vs the 45.81% run; a first look at
+# endpoint weights is worth more than reproducing the mistake.
+MODEL=$(/gpfs/scrubbed/jy050706/qwen-serve/pick_ckpt.sh "/gpfs/scrubbed/jy050706/sft/out/q38Bs-gb64/v*" "${CKPT_POLICY:-endpoint}") || exit 1
 KEYFILE="${VLLM_API_KEY_FILE:-$PROJ/.vllm_api_key}"
 CHAIN_IDX="${CHAIN_IDX:-1}"; CHAIN_MAX="${CHAIN_MAX:-2}"
 

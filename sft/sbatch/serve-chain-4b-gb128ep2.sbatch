@@ -23,7 +23,7 @@ set -uo pipefail
 PROJ=/gpfs/scrubbed/jy050706/qwen-serve
 SELF="$PROJ/serve-chain-4b-gb128ep2.sbatch"
 B=/gpfs/scrubbed/jy050706/sft
-MODEL=$B/out/q38e3B-gb128/v7-20260816-224140/checkpoint-90
+MODEL=$(/gpfs/scrubbed/jy050706/qwen-serve/pick_ckpt.sh "/gpfs/scrubbed/jy050706/sft/out/q38e3B-gb128/v*" "${CKPT_POLICY:-epoch:2.0}") || exit 1
 TEMPLATE=/gpfs/scrubbed/jy050706/sft/eval/qwen35_4b_keepthink.jinja
 KEYFILE="${VLLM_API_KEY_FILE:-$PROJ/.vllm_api_key}"
 CHAIN_IDX="${CHAIN_IDX:-1}"; CHAIN_MAX="${CHAIN_MAX:-2}"
@@ -34,14 +34,7 @@ export CUDA_HOME=/gpfs/scrubbed/jy050706/cuda-13.0
 export PATH="$CUDA_HOME/bin:$PATH"
 export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}"
 export LIBRARY_PATH="$CUDA_HOME/lib64:$CUDA_HOME/lib64/stubs:${LIBRARY_PATH:-}"
-# torch.compile cache on NODE-LOCAL NVMe, not GPFS: the shared
-# .jitcache had grown to 49,284 small files across 32 model hashes,
-# and vLLM stalled 13+ min in cxiWaitEventWait (GPFS metadata) where
-# a healthy start takes 95 s (2026-08-17). A cold recompile costs
-# ~18 s, so per-job local cache is strictly cheaper than sharing.
-export XDG_CACHE_HOME=/tmp/jitcache-$SLURM_JOB_ID
-mkdir -p "$XDG_CACHE_HOME"
-trap 'rm -rf /tmp/jitcache-$SLURM_JOB_ID' EXIT
+export XDG_CACHE_HOME=/gpfs/scrubbed/jy050706/qwen-serve/.jitcache
 export NVCC_APPEND_FLAGS="-DCCCL_DISABLE_CTK_COMPATIBILITY_CHECK"
 
 [ -f "$KEYFILE" ] || { echo "FATAL: key file $KEYFILE missing (chmod 600)"; exit 1; }
