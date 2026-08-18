@@ -114,18 +114,22 @@ OSWorld-Verified 有一个字面的 `multi_apps` 域(占评测集 24%);
 
 ## 4 结果:按语料分组
 
-| 语料 | 臂 | 微调 | 形状 | lr | epoch | 模板 | **平均分** | 判分 |
+| 语料 | 臂 | 微调 | 形状 | lr | epoch | 模板 | **平均分** | **满分题 / 判分** |
 |---|---|---|---|---|---|---|---|---|
-| — | stock 4B | 无 | — | — | — | rich/rich 同配置 | **39.81%** | 50 |
-| **③ Bs** | Bs-LoRA 🔄 | LoRA r32/α64/all-linear | 16卡 ×accum4 → gb64 | 1e-4 | 3 | keepthink | **50.86%**(47/50) | 47 |
-| **③ Bs** | Bs-gb64 | 全量 | 16卡 ×accum4 → gb64 | 1e-5 | 3 | keepthink | **45.81%** | 50 |
-| **② B** | B-gb128 ep2 | 全量 | 16卡 ×accum8 → gb128 | 1e-5 | 取 ep2 | keepthink | **43.81%** | 49 |
-| **② B** | B-gb64o | 全量 | 16卡 ×accum4 → gb64 | 1e-5 | 3 | keepthink | **41.81%** | 47 |
-| **② B** | B-1ep | 全量 | 1节点 ×accum4 | 1e-5 | 1(退火到 0) | keepthink | **31.81%** | 50 |
-| **① v11100** | rich · stock | 全量 | 1节点 ×accum8 | 1e-5 | 3 | **stock** | **30.00%** | 50 |
-| **① v11100** | rich · keepthink | 全量 | 1节点 ×accum8 | 1e-5 | 3 | keepthink | **28.00%** | 50 |
-| **① v11100** | rich ep1 | 全量 | 1节点 ×accum8 | 1e-5 | **取 ep1** | keepthink | **27.81%** | 50 |
-| **① v11100** | lean | 全量 | 1节点 ×accum8 | 1e-5 | 3 | keepthink | **23.81%** | 50 |
+| **③ Bs** | Bs-LoRA 🔄 | LoRA r32/α64/all-linear | 16卡 ×accum4 → gb64 | 1e-4 | 3 | keepthink | **50.86%** | 23 / 47 |
+| **③ Bs** | Bs-gb64 | 全量 | 16卡 ×accum4 → gb64 | 1e-5 | 3 | keepthink | **45.81%** | 22 / 50 |
+| **② B** | B-gb128 ep2 | 全量 | 16卡 ×accum8 → gb128 | 1e-5 | 取 ep2 | keepthink | **43.81%** | 21 / 49 |
+| **② B** | B-gb64o | 全量 | 16卡 ×accum4 → gb64 | 1e-5 | 3 | keepthink | **41.81%** | 20 / 47 |
+| — | **stock 4B(基座)** | 无 | — | — | — | rich/rich 同配置 | **39.81%** | 19 / 50 |
+| **② B** | B-1ep | 全量 | 1节点 ×accum4 | 1e-5 | 1(退火到 0) | keepthink | **31.81%** | 15 / 50 |
+| **① v11100** | rich · stock | 全量 | 1节点 ×accum8 | 1e-5 | 3 | **stock** | **30.00%** | 15 / 50 |
+| **① v11100** | rich · keepthink | 全量 | 1节点 ×accum8 | 1e-5 | 3 | keepthink | **28.00%** | 14 / 50 |
+| **① v11100** | rich ep1 | 全量 | 1节点 ×accum8 | 1e-5 | **取 ep1** | keepthink | **27.81%** | 13 / 50 |
+| **① v11100** | lean | 全量 | 1节点 ×accum8 | 1e-5 | 3 | keepthink | **23.81%** | 11 / 50 |
+
+**"平均分"与"满分题"为什么不一致**:部分题的 evaluator 给部分分(`conj:"and"` 可以
+只满足一部分),所以平均分不等于满分题数除以判分题数。例如 `Bs-gb64` 满分 22 题
+(44.0%)但平均分 45.81%,差额来自拿到部分分的题。**表中排序按平均分。**
 
 `Bs-gb64` / `B-gb64o` / `Bs-LoRA` 的 wd 0.0、beta2 0.999(对齐 OpenWebRL);
 `B-gb128` 用框架默认值。`rich` 与 `lean` 除 `preserve_thinking` 外完全相同。
