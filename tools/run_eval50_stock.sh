@@ -39,6 +39,7 @@ ARM="${1:?usage: run_eval50_stock.sh <arm>}"
 case "$ARM" in
   basestock) SB=base-stock; JOB=eval4bbo;  RP=8023; MN=q35-4b-stock;     GRP=qwen35-4b-base; PREV=leanstock; PJOB=eval4bls  ;;
   lorastock) SB=lora-stock; JOB=eval4blos; RP=8024; MN=q38Bs-lora-stock; GRP=qwen35-4b-sft;  PREV=leanstock; PJOB=eval4bls  ;;
+  r5lora)    SB=r5-lora-stock; JOB=eval4br5l; RP=8027; MN=q38Bhqs2t-lora-stock; GRP=qwen35-4b-sft; PREV=lorastock; PJOB=eval4blos ;;
   bsstock)   SB=bs-stock;   JOB=eval4bbss; RP=8025; MN=q38Bs-gb64-stock; GRP=qwen35-4b-sft;  PREV=lorastock; PJOB=eval4blos ;;
   *) echo "unknown arm: $ARM" >&2; exit 2 ;;
 esac
