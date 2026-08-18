@@ -47,8 +47,8 @@ OSWorld 有一个名为 `multi_apps` 的域。ostg 生成的任务没有这个�
 | LoRA | 只训练插入各线性层的低秩矩阵(秩 32),基座权重不变,训练后合并 |
 | rich | 训练时保留历史推理(`--preserve_thinking true`) |
 | lean | 训练时不保留历史推理(`--preserve_thinking false`) |
-| keepthink | 评测模板:渲染历史时保留 `<think>` 块 |
-| stock | 评测模板:OSWorld 官方默认,渲染历史时移除 `<think>` 块 |
+| keepthink | 一个自建评测模板。**它与 stock 渲染结果完全相同**,原因见 §5.7;臂名里保留这个词只是为了指认那一批跑用了哪个模板文件 |
+| stock | OSWorld 官方默认评测模板(模型目录自带) |
 | gb64 / gb128 | global batch 64 / 128 |
 | ep1 / ep2 | 第 1 / 第 2 个 epoch 结束时的存档 |
 | o(如 gb64o) | sbatch 显式指定 `weight_decay 0.0` 与 `adam_beta2 0.999` |
@@ -126,7 +126,10 @@ OSWorld 有一个名为 `multi_apps` 的域。ostg 生成的任务没有这个�
 | **Bs-gb64 / Bs-LoRA** | true | **2048** |
 | **Bhqs2t 四臂(r5)** | true(lean 变体为 false) | **2048** |
 
-`--preserve_thinking` 决定**渲染历史轮时是否保留 `<think>`**,不影响当前轮目标。
+这一列是**训练侧**的 `--preserve_thinking`(传给 ms-swift),它是真的:swift 在自己
+的编码器里删历史 think(`template/base.py:1254-1266`),不经过 jinja。**评测侧**有
+一个同名的 runner 参数,那个是空转的 —— 见 §5.7。两者名字相同、作用域不同,是这个
+项目里反复踩的坑。
 
 #### 评测时实际加载的是哪个 checkpoint
 
@@ -225,50 +228,104 @@ b1ep, bhqs, bhqs2lr}`。其中 3 个已经影响了已发布的分数(上表加�
 
 ---
 
-## 5.7 两个模板其实是同一个模板(2026-08-18 查实)
+## 5.7 两个模板渲染出的 prompt 逐字节相同(2026-08-18 查实)
 
-`qwen35_4b_keepthink.jinja` 相对官方模板多的那段是:
+**结论**:在当前 harness 的实际消息形状下,keepthink 与 stock 不是"差不多",是
+**渲染出的 prompt 逐字节相同**。所有标着 `· keepthink` 的臂和所有标着 `· stock`
+的臂,吃到的是同一个东西。
 
-```jinja
-{%- if reasoning_content %}
-    {{- '<|im_start|>' + message.role + '\n<think>\n' + reasoning_content + '\n</think>\n\n' + content }}
-```
+### 机制(注意:不是"字段没填"那么简单)
 
-**这个 `reasoning_content` 变量从来没有被填过**,所以这个分支永不触发,两个模板
-对本 harness 的任何输入都**逐字节渲染相同**(两个独立 agent 各自重新取模板、
-各自写渲染脚本验证)。
+模板确实用 `reasoning_content` 这个变量,但**这个变量是模板自己填的**:
 
-历史里的思考是**内联**传的,不是靠字段传的:
+| 模板行 | 做的事 |
+|---|---|
+| `:91` `{%- if message.reasoning_content is string %}` | 为假 —— harness 不发这个字段 |
+| `:94-96` | 于是走另一支:**把 content 里内联的 `<think>…</think>` 抠出来赋给 `reasoning_content` 变量**,并把 content 改写成 `</think>` 之后的部分 |
+| `:67-77` | 反向扫描确定 `ns.last_query_index`;`:72` 明确**跳过**被 `<tool_response>` 包裹的 user 轮 |
+| `:100` `{%- if loop.index0 > ns.last_query_index %}` | 因为只有首轮 user 是裸的,`last_query_index` **恒为 1**,所以这个条件对每个 assistant(index ≥ 2)**恒为真** |
+| `:101` | 全部走保留 think 的分支 |
+
+**stock 本来就保留历史思考。** keepthink 的 patch 改的是 stock `:103`,即
+`{%- else %}` 那一支 —— 本 harness 下**永不执行**。`diff` 只有一个 hunk,落在
+一条到不了的岔路上,是死代码。
+
+客户端这边对应的三处(都在**上游**,`history.py` 与纯净 091f5ef1 逐字节相同):
 
 | 位置 | 做的事 |
 |---|---|
-| `mm_agents/qwen/client.py:46-51` | `merge_reasoning_content()` 把 reasoning 拼成 `<think>…</think>` + 正文,**合成一个字符串** |
-| `mm_agents/qwen/history.py:74-85` | 历史 assistant 轮只有 `role` 和 `content` 两个键,没有 `reasoning_content` |
-| `mm_agents/qwen/history.py:90-94` | `ensure_empty_think_prefix()` 是**保留**函数:已有 think 原样返回,没有 think 的补一个空的 `<think></think>` |
+| `client.py:46-51` | `merge_reasoning_content()` 把服务端拆出的 reasoning **内联拼回 content** |
+| `history.py:90-94` | `ensure_empty_think_prefix()` 保证每个历史 assistant 轮都以 think 块开头 |
+| `history.py:27-32`、`55-72` | `wrap_tool_response()`:**除首轮外所有 user 轮都包成 `<tool_response>…</tool_response>`** —— 正是这一条把 `last_query_index` 钉在 1 |
 
-这三处都在**上游** OSWorld-Verified 里(纯净 worktree 091f5ef1 与魔改版这四个
-文件逐字节相同),不是我们改出来的。上游根本没有 `--preserve_thinking` 这个
-参数(`grep` 命中 0),它是本地加的,而且:
+### 验证方式(不止读代码)
 
-- **评测侧 `--preserve_thinking` 是空转的** —— 两个模板都不引用这个变量;
-- **`--enable_thinking` 也是空转的** —— `enable_thinking=True` 的渲染与不传相同,
-  而代码路径永远送不出 `False`。
+- **100 个真实 payload**(`draft/message_cache/qwen_messages_step_*.json`)用两份
+  模板离线双渲染:**100/100 逐字节相同**。step_49(100 条消息)两边都是 133,865
+  字符、50 个 `<think>`。
+- **灵敏度对照**:把一个 follow-up user 轮的 `<tool_response>` 包裹去掉,立刻变得
+  不同 —— stock 丢光 reasoning,keepthink 保留。证明渲染器不是对什么都输出相同。
+- **活体验证**:对正在跑的 stock 服务(:18022,启动命令**没有** `--chat-template`)
+  POST `/v1/chat/completions/render`,回来的 prompt 里带着完整的历史 reasoning。
+- **排除"checkpoint 自带别的模板"**:各 checkpoint 的 `tokenizer_config.json` 没有
+  任何 chat 相关键,`chat_template.jinja` 是唯一候选,且 md5 与基座一致。
+
+### 两个 runner 参数是空转的
+
+- `--preserve_thinking`:两份模板 grep 命中都是 0,只往 `extra_body` 塞
+  `chat_template_kwargs`(`main.py:277-283`)。上游根本没有这个参数(grep 命中 0)。
+- `--enable_thinking`:只影响当前轮的生成前缀(`:149`),与历史无关;而且
+  `enable_thinking=True` 的渲染与不传相同,代码路径永远送不出 `False`。
+
+### 等价性的成立条件(会失效的三种情况)
+
+分歧要发生,历史里必须出现**至少两个真正的、没有被 `<tool_response>` 包裹的
+user 轮**。因此以下任一变化会立刻让两个模板不再等价,都可以 grep 确认:
+
+1. 换 agent(例如走 `mm_agents/qwen25vl_agent.py` 路径);
+2. 改 `history.py:27-32` / `55-72` 的包裹策略;
+3. 把观测改成普通 user 消息而非 tool_response。
 
 ### 由此重读已有结果
 
-`rich · keepthink 28.00%` 与 `rich · stock 30.00%` **是同一份权重、同一套有效
-配置跑了两遍**。那 2 分(1 道题)不是模板效应,是**同配置的重复噪声**。这是本
-评测集上第一个噪声估计,而它意味着表里 2 分以内的差都不能当作差:
+`rich · keepthink 28.00%` 与 `rich · stock 30.00%` 是**同一份权重、同一套有效
+配置、同样的采样参数跑了两遍**(两个 serve 日志都指向
+`q38e3-rich/v0-20260815-012706/checkpoint-450`,两边 args.json 的 temperature 1.0 /
+top_p 0.95 / max_tokens 81920 / history_n 100 / image_max 20 / max_steps 50 与
+`override_generation_config` 全同)。那 2 分不是模板效应。
 
-| 一直被当成"差异"的对照 | 差值 | 与噪声比 |
+正确的读法是**把两跑合并**:`29/100 = 29.0%`,95% 置信区间约 **20%–38%**。
+
+两种噪声要分开说,不能混:
+
+| 问的问题 | 尺度 | 来源 |
 |---|---|---|
-| Bs-LoRA vs Bs-gb64 | 2.00 分 | **等于噪声** |
-| B-gb64o vs 基座 | 2.00 分 | **等于噪声** |
-| rich·stock vs rich·keepthink | 2.00 分 | **就是噪声本身** |
+| "这个臂在整个任务分布上大概多少分" | 单跑标准误 **≈ 6.4 个百分点**(p≈0.3,n=50 的二项标准误) | 统计量,不是实测 |
+| "同一个臂在**这 50 题**上重跑一次会差多少" | 目前只有**一次观测:2.0 分** | 上面这对同配置重复 |
 
-`lean · keepthink` 与 `lean · stock` 是第二个同配置重复,可以给出第二个噪声点。
+第二个才是臂间比较该用的尺度(配对比较,方差远小于 6.4pp),但它现在只有**一个
+观测值**,不是一个估好的标准差。`lean · keepthink` 与 `lean · stock` 会给出第二个
+观测值。在拿到更多点之前,保守的说法是:**表里 2 分级别的差不能当作差**,而
+4 分级别的差(rich vs lean 的 +4.2、B → Bs 的 +4.0)方向可信、幅度未定。
 
 **基座 · stock 因此不必跑** —— 它会是 `基座 · keepthink 39.81%` 的同配置重复。
+
+### 这条事实此前已经被写下来过
+
+`RUNBOOK.md` 在 2026-08-14 就记过同一个机制:"模板从**独立的
+`message.reasoning_content` 字段**读推理…我们从不设这个字段 —— 我们的推理由
+`client.py:51` 合并进 `content`","**服务端的开关够不到我们的思考**,任何隐藏思考
+的实验都必须在客户端做"。`sft/TRAINING.md` 也写着 runner 那个参数"对我们的消息
+形状是 no-op"。
+
+那两处讲的是**教师** Qwen3.8 的服务路径。次日(08-15)为**学生** Qwen3.5-4B 新建
+`qwen35_4b_keepthink.jinja` 时做了 T1–T4 验证并全绿,记录是"history think kept,
+think-free renders byte-identical to stock"。这个验证本身没错:模板确实会在
+`reasoning_content` 存在时保留它。**错在它测的是模板对合成输入的行为,而不是模板
+对 harness 真实产出的消息形状的行为** —— 后者永远没有那个字段。
+
+教训与 checkpoint 那次同形(见 `OPS.md`):**验证一个组件时,输入必须取自真实上游,
+不能自己造。** 造出来的输入会让被测组件走上生产中永不发生的分支。
 
 ### 训练侧的同名参数不是空转的
 
@@ -329,21 +386,28 @@ Bs-LoRA 与 Bs-gb64 恰好停在同一步,所以这两者之间的 2 分差仍�
 
 ### 7.1 同一份语料内
 
-| 控制 | 语料 | 名义变量 | 对照 | 差值 | 同时存在的其他差异 |
-|---|---|---|---|---|---|
-| 🔴 | ② B | 1 epoch → 3 epoch | 31.81% → 41.81% | +10.0 | global batch **8 → 64**;卡数 2 → 16;warmup 0.05 → 0.1;wd/β₂ 未指定 → 0.0/0.999 |
-| 🟢 | ① v11100 | 训练不保留历史推理 → 保留 | 23.81% → 28.00% | +4.2 | 无(rich 与 lean 除该 flag 外逐项相同) |
-| 🟡 | ③ Bs | 全量微调 → LoRA | 45.81% → 47.81% | +2.0 | 学习率 1e-5 → 1e-4 |
-| 🔴 | ② B | global batch 64 → 128 | 41.81% → 43.81% | +2.0 | wd/β₂ 0.0/0.999 → 未指定;gb128 用第 2 个 epoch 存档,gb64o 用训完的权重 |
-| 🟢 | ① v11100 | 评测模板 keepthink → stock | 28.00% → 30.00% | +2.0 | 无(同一份权重) |
-| 🟢 | ① v11100 | 第 1 个 epoch 存档 → 训满 3 个 | 27.81% → 28.00% | +0.2 | 无(同一次训练的两个存档) |
+**已知的重复噪声是 2.0 分(1 道题)**,由 §5.7 那对同配置重复给出。下表最后一列
+标出每一行相对这个尺度的位置;差值 ≤2.0 分的行,现有数据不能区分它与"什么都没变"。
+
+| 控制 | 语料 | 名义变量 | 对照 | 差值 | 同时存在的其他差异 | vs 噪声 |
+|---|---|---|---|---|---|---|
+| 🟢 | ① v11100 | 训练不保留历史推理 → 保留 | 23.81% → 28.00% | +4.2 | 无(rich 与 lean 除该 flag 外逐项相同) | 2.1× |
+| 🟢 | ③ Bs | 全量微调 → LoRA | 45.81% → 47.81% | +2.0 | 无(两者都停在 e1.02;学习率 1e-5 → 1e-4 是 LoRA 的必然配套) | **=噪声** |
+| 🔴 | ② B | global batch 64 → 128 | 41.81% → 43.81% | +2.0 | **epoch 也变了**(e1.01 → e2.00);wd/β₂ 0.0/0.999 → 未指定 | **=噪声** |
+| ⚪ | ① v11100 | (原以为是模板 keepthink → stock) | 28.00% → 30.00% | +2.0 | **无 —— 同一配置跑了两遍**,这一行就是噪声本身(§5.7) | 定义噪声 |
+| 🟢 | ① v11100 | 第 1 个 epoch 存档 → 训满 3 个 | 27.81% → 28.00% | +0.2 | 无(同一次训练的两个存档) | 0.1× |
+
+**删掉的一行**:曾有 "② B,1 epoch → 3 epoch,31.81% → 41.81%,+10.0"。它不成立 ——
+B-gb64o 服务的是 e1.01 的存档而非训完的权重(§5.2),两边都是 1 epoch 附近,这不是
+epoch 对照。那 10 分对应的实际差异是 global batch 8 → 64、卡数 2 → 16、warmup
+0.05 → 0.1、wd/β₂ 未指定 → 0.0/0.999,以及 B-1ep 退火到 0 而 gb64o 没有。
 
 ### 7.2 跨语料
 
 | 控制 | 名义变量 | 对照 | 差值 | 同时存在的其他差异 |
 |---|---|---|---|---|
-| 🟢 | 屏蔽 73 个超长 think 目标(B → Bs) | 41.81% → 45.81% | +4.0 | 无(卡数、accum、lr、warmup、wd/β₂、epoch 全同) |
-| 🔴 | 语料 69 → 312 轨迹 | 28.00% → 45.81% | +17.8 | 卡数 1 → 16;global batch 8 → 64;warmup 0.05 → 0.1;wd/β₂ 未指定 → 0.0/0.999 |
+| 🟢 | 屏蔽 73 个超长 think 目标(B → Bs) | 41.81% → 45.81% | +4.0 | 无(卡数、accum、lr、warmup、wd/β₂ 全同;服务的存档 e1.01 vs e1.02,差 0.01 epoch) |
+| 🔴 | 语料 69 → 312 轨迹 | 28.00% → 45.81% | +17.8 | 卡数 1 → 16;global batch 8 → 64;warmup 0.05 → 0.1;wd/β₂ 未指定 → 0.0/0.999;**服务的存档 e3.00 vs e1.02** |
 
 ---
 
@@ -355,7 +419,7 @@ Bs-LoRA 与 Bs-gb64 恰好停在同一步,所以这两者之间的 2 分差仍�
 | **Bs-LoRA** | 合并的适配器是 `checkpoint-90`(1.02 epoch),不是终点 264。合并作业与 serve 脚本共用同一条按字典序排的挑选行(见 §5.2)。47.81% 是 1 epoch 权重的分数 |
 | **Bs-gb64** | 同一处缺陷:服务 `checkpoint-90`(1.02 epoch),终点是 264。45.81% 是 1 epoch 权重的分数 |
 | **B-gb64o** | 同一处缺陷:服务 `checkpoint-90`(1.01 epoch),终点是 267。41.81% 是 1 epoch 权重的分数 |
-| lean · stock 模板 | 只完成 3 题,缺 47 题。按缺题算 0 为 4.00%,未列入 §6 |
+| lean · stock 模板 | 与 `lean · keepthink` 是**同配置重复**(§5.7),不是模板对照。首次运行被已删除的看门狗杀在 0/50,当前这轮是手工重启的,完成后给出第二个噪声点 |
 | B-gb128(全量 3 epoch 版) | eval 50 题全缺,无结果 |
 
 ---

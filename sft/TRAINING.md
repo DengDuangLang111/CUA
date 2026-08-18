@@ -18,10 +18,19 @@
   lean 垫底 —— OpenWebRL 式"瘦文本史训练"在跨代跨分布设置下没有救赎力,
   渲染这条线关闭(除非后续被翻案)。50 题单 seed 幅度噪声 ±2-3 题,
   臂间 2-6 题差距只作方向证据。
-- **rich/stock 在跑**(2026-08-16 20:40 自动接力):同 rich-450 权重 + 官方
-  模板(历史 think 渲染剥除)= OSWorld-Verified 默认口径,serve 235405
-  (:8015),与 rich/rich 成对隔离"eval 期历史 think 可见性";2×2 的
-  base/stock 角待 richstock 出分后裁决要不要补。
+- **~~rich/stock 隔离"eval 期历史 think 可见性"~~ —— 这个 2×2 是退化的
+  (2026-08-18 查实)**。前提"官方模板把历史 think 渲染剥除"不成立 ——
+  **stock 本来就保留历史思考**:模板自己把 content 里内联的 `<think>` 抠进
+  `reasoning_content` 变量(`:94-96`),而 `history.py` 把除首轮外所有 user 轮
+  包成 `<tool_response>`,使模板的 `ns.last_query_index` 恒为 1,于是保留分支
+  (`:101`)对每个历史 assistant 轮恒为真。keepthink 改的是 `{%- else %}` 那
+  一支,**本 harness 下永不执行**。100 个真实 payload 双模板渲染 100/100 逐字节
+  相同;runner 侧的 `--preserve_thinking`/`--enable_thinking` 同样空转。于是
+  `rich/keepthink 28.00%` 与 `rich/stock 30.00%` 是**同配置跑了两遍**,那
+  2 分是重复噪声而非模板效应 —— 这是本评测集上第一个噪声估计。base/stock
+  角随之取消(它会是 base/keepthink 的第二遍)。完整机制、代码位置与由此
+  重读的对照表见 `sft/RESULTS.md` §5.7。**训练侧**的同名 swift 参数不受
+  影响,它是真的(`swift/template/base.py:1254-1266`)。
 - **B 语料:2 训练在跑 + gb128 六连崩后夜间停火**。235322(3ep)/ 235323
   (1ep)健康;**gb128 六次尝试全灭,死因链最终定谳:本训练栈显存 ∝ 梯度
   累积次数**(实测定律:accum 4 → 131.9 稳;16 → 步 8-13 死 ~137;32/64 →
@@ -2444,16 +2453,36 @@ Jobs **232347 `sft-q38rich`** (`preserve_thinking true`) and **232348
 `sft-q38lean`** (`false`), submitted together, identical otherwise: the
 q38-v11100 dataset (69 trajs / 1,196 samples, verified), e3 recipe, 3 epochs,
 epoch-boundary checkpoints, 9 h walls (~$8.10 each). Sbatch copies under
-`sft/sbatch/`; the verified keepthink template (stock 4B jinja + one branch,
-T1–T4 all green: history think kept, think-free renders byte-identical to
-stock) is `eval/qwen35_4b_keepthink.jinja`, deployed at serve time via
+`sft/sbatch/`; the keepthink template (stock 4B jinja + one branch) is
+`eval/qwen35_4b_keepthink.jinja`, deployed at serve time via
 `--chat-template`, the base model directory untouched.
+
+> **Superseded 2026-08-18.** T1–T4 asked "does this template keep history
+> think?" and got yes. The question that was never asked is "does the STOCK
+> template already keep it?" — and it does, on every message the harness
+> actually produces. The stock template lifts inline `<think>` out of `content`
+> itself (`:94-96`), and because `history.py` wraps every non-first user turn in
+> `<tool_response>`, the template's `ns.last_query_index` is pinned at 1, so the
+> keep branch (`:101`) fires for every historical assistant turn. The keepthink
+> patch edits the `{%- else %}` arm, which this harness never reaches. Verified
+> on 100 real cached payloads: 100/100 renders byte-identical, with a
+> sensitivity control (unwrap one user turn → renders diverge immediately) and a
+> live `/v1/chat/completions/render` call against the running stock server. See
+> `sft/RESULTS.md` §5.7. Every arm labelled `· keepthink` was therefore served
+> the same effective prompt as every arm labelled `· stock`.
 
 **Eval matrix on verified-eval-50, user-ordered:**
 1. base-4B · stock template
 2. q38e3-**rich** · keepthink (rich/rich)
 3. q38e3-**lean** · keepthink (OpenWebRL-style: lean-trained, rich-evaled)
 4. q38e3-**lean** · stock (lean/lean)
+
+> **Superseded 2026-08-18.** Rows 2 and 3 differ in training, which is real.
+> The keepthink/stock axis does not exist (above), so "rich-evaled" vs
+> "lean-evaled" was never a distinction: every arm here was evaluated with
+> history thinking present. A lean-TRAINED model can only be evaluated with
+> history think present, because the harness always inlines it and no template
+> can remove it — so the lean cell carries a permanent train/eval mismatch.
 
 Estimated ~5–6.5 h per run, 3 shared VMs, starts when v11-500 lands
 (~Aug 16 morning). The lean arm evaluated both ways makes the serving-template
