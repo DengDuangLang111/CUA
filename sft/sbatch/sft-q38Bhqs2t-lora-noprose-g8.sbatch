@@ -3,14 +3,28 @@
 #SBATCH --account=video
 #SBATCH --partition=gpu-h200
 #SBATCH --qos=normal
-#SBATCH --nodes=1
+#SBATCH --nodes=2
 #SBATCH --gpus-per-node=8
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=64
 #SBATCH --mem=400G
-#SBATCH --time=07:00:00
+#SBATCH --time=04:00:00   # 16 ranks halve the 8-rank ~6h40m to ~3h20m, and
+                          # August18_Maintenance takes every GPU node at
+                          # 09:00 -- Slurm will not start a job that would
+                          # run into a reservation, so 7h would sit unstartable
+                          # until 2026-08-19. 4h fits with ~40m of margin.
 #SBATCH --output=/gpfs/scrubbed/jy050706/sft/sft_q38Bhqs2t_loranp_%j.out
-# Bhqs-2-terminal under LoRA, NO VISIBLE PROSE, one node.
+# Bhqs-2-terminal under LoRA, NO VISIBLE PROSE, two nodes.
+#
+# SHAPE NOTE: 16 ranks x accum 4 = global batch 64, the SAME effective batch as
+# the 8 ranks x accum 8 of the arm this is compared against (240310) -- that
+# arm's own header records the two shapes as equivalent, and the original
+# Bs-LoRA arm used 16x4. They are not bit-identical: data sharding and
+# accumulation grouping differ, so sample ordering differs. Measured run-to-run
+# noise on this eval set is +-1 task net with 7-9 tasks flipping, and this
+# ordering difference sits inside that. Taken deliberately: 8 ranks needs
+# ~6h40m, which does not fit before the 09:00 maintenance, and waiting for the
+# window to reopen costs 30 hours.
 #
 # Single variable vs 240310 (the same arm on the r5 corpus): the visible text
 # each target writes between </think> and <tool_call> is deleted -- from the
@@ -94,9 +108,9 @@ if [ -f "$B/wandb.env" ]; then set +x; source "$B/wandb.env"; set -x
 export WANDB_NOTES="Bhqs-2-terminal under LoRA, 1 node. LoRA hyper-parameters copied verbatim from Bs-lora (235948); corpus is the only variable. 8 ranks x accum 8 = global batch 64."
 export B DS1 DS2 REPORT RUN_NAME
 export MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n1)
-export MASTER_PORT=29500 NNODES=1 NPROC_PER_NODE=8
-echo ">>> single node: $SLURM_JOB_NODELIST (8 GPUs x accum 8 = global 64)"
-srun --ntasks=1 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
+export MASTER_PORT=29500 NNODES=2 NPROC_PER_NODE=8
+echo ">>> two nodes: $SLURM_JOB_NODELIST (16 GPUs x accum 4 = global 64)"
+srun --ntasks=2 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
   export NODE_RANK=$SLURM_NODEID
   echo ">>> node $SLURM_NODEID ($(hostname)) launching NPROC=8"
   swift sft \
@@ -106,7 +120,7 @@ srun --ntasks=1 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
     --tuner_type lora --lora_rank 32 --lora_alpha 64 --lora_dropout 0.05 \
     --target_modules all-linear \
     --preserve_thinking true \
-    --loss_scale last_round --gradient_accumulation_steps 8 \
+    --loss_scale last_round --gradient_accumulation_steps 4 \
     --attn_impl sdpa --deepspeed zero2_offload \
     --torch_dtype bfloat16 \
     --num_train_epochs 3 --per_device_train_batch_size 1 \
