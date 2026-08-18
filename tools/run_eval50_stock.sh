@@ -62,6 +62,30 @@ TAG=$(basename "$R")
 echo "[$(date '+%F %T')] === $ARM -> $R"
 
 up(){ [ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $OPENAI_API_KEY" http://127.0.0.1:$PORT/v1/models)" = "200" ]; }
+
+# Wait for the endpoint, re-submitting the serve if its Slurm job has gone.
+#
+# A fixed 1-2h wait was enough for a serve that only ever died by crashing.
+# It is not enough for a cluster maintenance reservation: August18_Maintenance
+# holds all 24 GPU nodes for a full 24 hours, so a serve that expires at 08:33
+# cannot be replaced until 09:00 the NEXT day. With the old wait the driver
+# would FATAL a couple of hours in and the whole chain would silently stop.
+# Per-task results are already on disk, so surviving the gap means the run
+# resumes by itself instead of needing a human at 09:00 on a Tuesday.
+wait_up(){                       # $1 = how many minutes to keep trying
+  local mins=${1:-90} i
+  for i in $(seq 1 $((mins * 2))); do
+    up && return 0
+    if [ $((i % 20)) -eq 0 ]; then   # every 10 min, make sure a serve exists
+      if [ -z "$($SSHT "squeue -u jy050706 -h -n $JOB -o %i" 2>/dev/null | tr -dc 0-9)" ]; then
+        echo "[$(date '+%F %T')] no $JOB in the queue -- resubmitting"
+        $SSHT "sbatch --parsable /gpfs/scrubbed/jy050706/qwen-serve/serve-chain-4b-$SB.sbatch" >/dev/null 2>&1
+      fi
+    fi
+    sleep 30
+  done
+  up
+}
 scored(){ find "$1" -name result.txt 2>/dev/null | wc -l; }
 
 stop_eval(){
@@ -93,8 +117,7 @@ else
   echo "[$(date '+%F %T')] reusing live serve $HAVE ($JOB)"
 fi
 JOB=$JOB LPORT=$PORT RPORT=$RP setsid nohup $CTL/tunnel_qwen36_auto.sh > $HOME/tunnel_$JOB.log 2>&1 < /dev/null &
-for i in $(seq 1 180); do up && break; sleep 20; done
-up || { echo "[$(date '+%F %T')] FATAL: endpoint $PORT never came up"; exit 1; }
+wait_up 90 || { echo "[$(date '+%F %T')] FATAL: endpoint $PORT never came up"; exit 1; }
 
 # Record what the server ACTUALLY loaded, not what any script intended to load.
 # vLLM's /v1/models reports `root` = the real weight path. A week of results
@@ -121,11 +144,12 @@ PY
 
 # ---- run ----
 T=$(python3 -c "import json;print(sum(len(v) for v in json.load(open('$META')).values()))")
-for TRY in 1 2 3; do
+for TRY in 1 2 3 4 5; do
   N=$(scored "$R")
   [ "$N" -ge "$T" ] && { echo "[$(date '+%F %T')] complete $N/$T"; break; }
-  up || { echo "[$(date '+%F %T')] endpoint down at $N/$T, waiting"; for i in $(seq 1 240); do up && break; sleep 30; done; }
-  up || { echo "[$(date '+%F %T')] FATAL: endpoint never came back"; exit 1; }
+  # 30h, so a 24h maintenance window is survivable with margin.
+  up || { echo "[$(date '+%F %T')] endpoint down at $N/$T, waiting up to 30h"; wait_up 1800; }
+  up || { echo "[$(date '+%F %T')] FATAL: endpoint never came back in 30h"; exit 1; }
   echo "[$(date '+%F %T')] pass $TRY at $N/$T"
   OSWORLD_OPENAI_TIMEOUT=600 \
   .venv/bin/python scripts/python/run_multienv_qwen.py \
