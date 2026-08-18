@@ -137,7 +137,15 @@ for TRY in 1 2 3 4 5; do
           for i in $(seq 1 120); do up && break; sleep 20; done; }
   up || { echo "[$(date '+%F %T')] FATAL: endpoint gone"; exit 1; }
   echo "[$(date '+%F %T')] pass $TRY at $N/$T"
-  OSWORLD_OPENAI_TIMEOUT=600 OSTG_NO_RECORD=1 OPENAI_API_KEY="$KEY" \
+  # 1800s, not the 600s used on tillicum. --max_tokens is 81920 and must stay
+  # there for comparability with the eleven arms already scored. On an L40S at
+  # ~50 tok/s per stream (150 tok/s across 3 envs) a 600s deadline can only
+  # deliver ~30k tokens, so any longer generation times out, the openai client
+  # retries from scratch, and the step never completes -- observed here as four
+  # tasks frozen 51-134 minutes with the server healthy and retries exactly 10
+  # minutes apart. 1800s covers a full 81920-token generation at this rate.
+  # The H200 arms never hit this because they generate ~3x faster.
+  OSWORLD_OPENAI_TIMEOUT=1800 OSTG_NO_RECORD=1 OPENAI_API_KEY="$KEY" \
   .venv/bin/python scripts/python/run_multienv_qwen.py \
     --provider_name docker --path_to_vm /mnt/d/research/OSWorld/docker_vm_data/Ubuntu.qcow2 \
     --headless --observation_type screenshot --action_space pyautogui \
