@@ -1,38 +1,39 @@
 # Synthetic task generation for OSWorld — design, experiments, results
 
-## 现状(2026-08-17,过时即改;历史快照看 git log)
+## 现状(2026-08-18,过时即改;历史快照看 git log)
 
-- **eval-50 矩阵(完整结果表 → `sft/RESULTS.md`)**。**口径:缺题按 0 计,分母恒 50。**
-  **Bs-LoRA 47.8%(49/50,仍在补最后 1 题)> Bs 45.8% > gb128-ep2 43.8% >
-  gb64o 41.8% > base 39.8%** > B-1ep 31.8% > rich·stock 30% > rich 28% >
-  rich-ep1 27.8% > lean 23.8%。**base 39.8% 是分水岭:4 臂在上、5 臂在下。**
-  最干净的一对是 **B → Bs**(只差 73 个超长 think 目标被屏蔽)= **+4.0 点**;
-  最大的单变量是 **1 epoch → 3 epoch = +10.0 点**。
-  **LoRA vs 全量(同语料同 batch)= +2.0 点**,注意 LoRA 学习率是 1e-4(比全量高
-  10 倍),所以差异来自**更新被限制在秩 32 子空间**,不是步子更小。
-  训练曲线佐证:全量在 epoch 边界(step 87/175)有明显跳变 = 背题签名,
-  LoRA 无此台阶、终点 loss 停在 ~0.33 而非 ~0.1。
-  **注意**:早前口径混用过 `mean_scored`(只算跑过的题),已统一为缺题按 0。
-- **Bhqs-2-terminal r5 已 ship,三个臂在队(2026-08-17 晚)**。语料 362 轨迹 /
-  6,385 样本,集群路径 `sft/data/q38-Bhqs2t-r5-v11{100,500}`(**新名字,不覆盖旧的**),
-  核对:6,385 行 / 62,159 图引用 / 未解析 0 / 362 条 terminate 结尾。
-
-  | 作业 | 臂 | 变量 | 状态 |
-  |---|---|---|---|
-  | 240274 | 全量 **lr 3e-6** | 限制**步长** | **RUNNING** g015+g017 |
-  | 240310 | LoRA(`preserve_thinking true`) | 限制**子空间** | PENDING |
-  | 240311 | LoRA(`preserve_thinking false`) | 子空间 + **训练时不给历史推理** | PENDING |
-
-  三臂同语料、同 global batch 64、同 3 epoch,与已完成的 `Bs-gb64`(全量 1e-5)
-  构成"约束更新的两种方式"对照。
-
-  > **2026-08-18 更正**:原文写"240311 评测时须用 stock 模板,与其训练方式匹配
-  > —— 否则重蹈 lean 在 keepthink 下被低估"。**这个匹配做不到。** 两份模板渲染
-  > 逐字节相同(`sft/RESULTS.md` §5.7),`stock` 并不剥离历史思考;harness 永远
-  > 把推理内联进 `content`,没有任何模板能去掉它。所以 `preserve_thinking false`
-  > 训出来的臂**只能**在"历史有思考"的分布上被评测,这个训练/评测错配是结构性
-  > 的,换模板解决不了。要真正匹配,只能改客户端
-  > `QwenAgent._response_transform`(`main.py:265`)。
+- **两大口径更正(08-18,详 `sft/RESULTS.md` §5.2 / §5.7)**:
+  ① **keepthink 与 stock 两个评测模板逐字节等价** —— harness 把推理内联进
+  `content`,keepthink 的分支永不触发;所有 `·keepthink` / `·stock` 臂吃到的是
+  同一个 prompt。rich 28.0 vs 30.0 与 lean 23.8 vs 25.8 因此是**同配置重复**,
+  给出配对噪声 sd≈2.8 题(5–6pp),**MDE80≈15–18pp:eval-50 看不见小于
+  ~15pp 的差异**。keepthink 全线退役,以后一律 stock。
+  ② **serve 的 checkpoint 挑选器按字典序取到 checkpoint-90**:Bs-LoRA 47.8%、
+  Bs-gb64 45.8%、B-gb64o 41.8% 实为 **~1 epoch 权重**的分数;旧结论
+  "1ep→3ep=+10 点"作废(两端都是 ~1ep)。已修:`pick_ckpt.sh`
+  (endpoint / epoch:N / step:N,选择连判据一起打进日志)。
+- **eval-50 最新(缺题按 0,全 50 题;完整表 → RESULTS.md §6)**:
+  Bs-LoRA@e1.02 47.8% > Bs-gb64@e1.02 = Bs-LoRA@e3.00 45.8% >
+  gb128ep2@e2.00 43.8% > gb64o@e1.01 = **r5-LoRA@e3.00 41.8%** > base 39.8%。
+  旧数据里 epoch 与语料共线;新增的 Bs-LoRA e1.02 vs e3.00 配对差 −2.0 点
+  (噪声内),**"训过头"在 LoRA 上未获支持**。
+- **r5 四臂训毕;末步修复奏效,分数未动**:显式 terminate 6% → **60%(LoRA)/
+  74%(全量 kD,跑动中)**,假 done 0/7;代价:失败没有出口,失败题全部磨到
+  50 步上限(terminate 被绑定"成功",语料 0 条失败结尾)。机制与硬约束
+  (FAIL 在普通题强制 0 分、词表兜底陷阱)→ RESULTS.md §5.8 / §5.9。
+- **think 变双峰,cap 反效果(§5.10)**:微调后 p50 向教师收敛(419→~120)
+  但 max 从 969 炸到 84k/100k;**cap2048 臂失控步 11.0% vs 无 cap 2.8%**
+  (配对 t=+3.37,epoch 对齐 1.01/1.02)。重尾承自教师 3.8
+  (p99/p50=42.8× vs 基座 1.8×;**3.6 仅 6.0×,其同任务轨迹在盘上从未使用**)。
+- **Tillicum 维护 08-18 09:00 → 08-19 09:00;eval 已迁 Klone L40S**
+  (`gpu-l40s`/krishna 账户,30h serve,apptainer vLLM v0.25.1 与 Tillicum 同版,
+  实测约 H200 一半速;三次 GPFS 小文件卡死教训 → 一律节点本地盘;客户端超时
+  600→1800s,否则长生成死锁)。队列 kD(38/50)→kC→kE→kD1→kG,kF 撤销;
+  六份权重 + 散文臂合并结果已全部转移。
+- **datagenv12 首波启动:补格式类任务 50 道(fmt-w1)**。依据:语料 544 道里
+  格式类 **1 道(0.2%)** vs 基准全量 15.2% / eval-50 18%;该类并集解开 3/9,
+  其余 32/41。计划、五条硬约束与闸 → `PLAN-20260818-datagenv12-fmt-w1.md`;
+  代码分支 `datagenv12`(worktree `/mnt/d/research/ostg-datagenv12`)。
 
 - **r5 相对旧版(6,297 样本)的四处差异**:① 截尾从 33 条降到 9 条,旧版其中
   13 条砍掉了 109 个真实动作(在教"活没干完就停手");② 图片不再经
