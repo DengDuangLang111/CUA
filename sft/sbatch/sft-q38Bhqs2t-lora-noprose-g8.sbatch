@@ -13,6 +13,13 @@
                           # 09:00 -- Slurm will not start a job that would
                           # run into a reservation, so 7h would sit unstartable
                           # until 2026-08-19. 4h fits with ~40m of margin.
+#SBATCH --exclude=g018    # g018 is sick and NOT marked drained: two
+                          # unrelated jobs died there the same way on
+                          # 2026-08-18 -- vLLM serve 241546 (54s) and
+                          # this job's first attempt 243286 (60s), both
+                          # with 'CUDA unknown error ... Setting the
+                          # available devices to be zero'. Slurm keeps
+                          # handing it out. Remove once it is confirmed good.
 #SBATCH --output=/gpfs/scrubbed/jy050706/sft/sft_q38Bhqs2t_loranp_%j.out
 # Bhqs-2-terminal under LoRA, NO VISIBLE PROSE, two nodes.
 #
