@@ -1,18 +1,18 @@
 #!/bin/bash
-# run_eval50_lora.sh -- Bs-LoRA arm from MERGED weights, keepthink, 3 VMs.
-# SECOND in the chain, moved ahead of Bhqs-2-terminal (2026-08-17): its
-# merged weights already exist, while the terminal arm is stuck behind a
-# full cluster and a 24h maintenance window starting Aug 18 09:00. Three
-# idle VMs waiting on a training job that cannot schedule is pure waste.. Single variable vs Bs: full-FT vs LoRA.
+# run_eval50_bs_resume.sh -- resume the Bs eval after the ControlMaster
+# outage (2026-08-17 ~10:00). Serve 236033 never died -- only our tunnel did,
+# so the endpoint is already back at :18019 and this script must NOT bring up
+# another one: the standard driver did, and duplicated a GPU (236124, killed).
+# It resumes the result_dir in place; the 32 tasks already scored are kept.
 set -u
 CTL=/mnt/d/research/osworld-verified-control
-LOG=$CTL/logs/eval50_lora.log
+LOG=$CTL/logs/eval50_bs.log
 exec >>$LOG 2>&1
 cd /mnt/d/research/OSWorld; set -a; . ./.env; set +a
 SSHT="ssh -n -S $HOME/.ssh/cm/qwen36-tillicum-login -o ControlMaster=no -o BatchMode=yes jy050706@tillicum-login02.hyak.uw.edu"
-MODEL=q38Bs-lora
-PORT=18021
-TAG=eval50-lorakeep-20260817
+MODEL=q38Bs-gb64
+PORT=18019
+TAG=eval50-bskeep-20260817
 C=/mnt/d/research/OSWorld/evaluation_examples
 META=$C/verified_eval50_nonproxy.json
 R=/mnt/d/research/OSWorld/results_generated/qwen35-4b-sft/$TAG
@@ -25,26 +25,9 @@ stop_eval(){
   echo "[$(date '+%F %T')] eval runner stopped"
 }
 
-# Gate: previous arm in the chain must be finished.
-for i in $(seq 1 2880); do
-  grep -q "EVAL50_BS_DONE" $CTL/logs/eval50_bs.log 2>/dev/null && break
-  sleep 30
-done
-grep -q "EVAL50_BS_DONE" $CTL/logs/eval50_bs.log 2>/dev/null || { echo "[$(date '+%F %T')] FATAL: gate EVAL50_BS_DONE never fired"; exit 1; }
-# Gate: the checkpoint this arm needs.
-for i in $(seq 1 480); do
-  $SSHT 'test -f /gpfs/scrubbed/jy050706/sft/out/q38Bs-lora-merged/config.json' && break
-  sleep 60
-done
-$SSHT 'test -f /gpfs/scrubbed/jy050706/sft/out/q38Bs-lora-merged/config.json' || { echo "[$(date '+%F %T')] FATAL: checkpoint missing"; exit 1; }
-# Retire the previous serve, bring up ours.
-$SSHT "scancel -n eval4bbs -u jy050706" 2>/dev/null
-JID=$($SSHT "sbatch --parsable /gpfs/scrubbed/jy050706/qwen-serve/serve-chain-4b-lora.sbatch" 2>/dev/null | tr -dc 0-9)
-echo "[$(date '+%F %T')] serve job $JID (serve-chain-4b-lora.sbatch)"
-JOB=eval4blo LPORT=$PORT RPORT=$((PORT-10000)) setsid nohup $CTL/tunnel_qwen36_auto.sh > $HOME/tunnel_eval4blo.log 2>&1 < /dev/null &
-for i in $(seq 1 720); do up && break; sleep 20; done
-up || { echo "[$(date '+%F %T')] FATAL: endpoint never came up"; exit 1; }
-echo "[$(date '+%F %T')] endpoint UP"
+echo "[$(date '+%F %T')] phase B: ep2 serve retired, 3 envs on existing endpoint"
+up || { echo "[$(date '+%F %T')] endpoint down, waiting"; for i in $(seq 1 240); do up && break; sleep 20; done; }
+up || { echo "[$(date '+%F %T')] FATAL: gb64o endpoint not up"; exit 1; }
 
 for TRY in 1 2 3; do
   N=$(find $R -name result.txt 2>/dev/null | wc -l)
@@ -64,5 +47,5 @@ for TRY in 1 2 3; do
     --test_config_base_dir $C --test_all_meta_path $META --result_dir $R
   stop_eval
 done
-echo "[$(date '+%F %T')] === eval50 eval50-lorakeep-20260817 RESULT: $(find $R -name result.txt -exec cat {} \; 2>/dev/null | sort | uniq -c | tr '\n' ' ')"
-echo "EVAL50_LORA_DONE"
+echo "[$(date '+%F %T')] === eval50 bskeep RESULT: $(find $R -name result.txt -exec cat {} \; 2>/dev/null | sort | uniq -c | tr '\n' ' ')"
+echo "EVAL50_BS_DONE"

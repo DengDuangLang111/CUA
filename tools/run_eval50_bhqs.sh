@@ -1,6 +1,7 @@
 #!/bin/bash
 # run_eval50_bhqs.sh -- Bhqs-2 (rev2 curation) arm, keepthink, 3 VMs.
-# SECOND in the chain. Single variable vs Bs: the corpus. Retargeted
+# LAST in the chain (moved 2026-08-17: its training cannot schedule before
+# the Aug-18 maintenance window, so arms with existing weights go first). Single variable vs Bs: the corpus. Retargeted
 # from Bhqs-1 (user call 2026-08-17: keep its training, drop its eval)
 # because rev2 fixed the gate that had removed ~36 clean trajectories.
 # Log file and DONE marker keep their names so the LoRA link holds.
@@ -27,10 +28,10 @@ stop_eval(){
 
 # Gate: previous arm in the chain must be finished.
 for i in $(seq 1 2880); do
-  grep -q "EVAL50_BS_DONE" $CTL/logs/eval50_bs.log 2>/dev/null && break
+  grep -q "EVAL50_LEANSTOCK_DONE" $CTL/logs/eval50_lean_stock.log 2>/dev/null && break
   sleep 30
 done
-grep -q "EVAL50_BS_DONE" $CTL/logs/eval50_bs.log 2>/dev/null || { echo "[$(date '+%F %T')] FATAL: gate EVAL50_BS_DONE never fired"; exit 1; }
+grep -q "EVAL50_LEANSTOCK_DONE" $CTL/logs/eval50_lean_stock.log 2>/dev/null || { echo "[$(date '+%F %T')] FATAL: gate EVAL50_LEANSTOCK_DONE never fired"; exit 1; }
 # Gate: the checkpoint this arm needs.
 for i in $(seq 1 480); do
   $SSHT 'ls -d /gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-gb64/v*/checkpoint-* >/dev/null 2>&1' && break
@@ -38,7 +39,7 @@ for i in $(seq 1 480); do
 done
 $SSHT 'ls -d /gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-gb64/v*/checkpoint-* >/dev/null 2>&1' || { echo "[$(date '+%F %T')] FATAL: checkpoint missing"; exit 1; }
 # Retire the previous serve, bring up ours.
-$SSHT "scancel -n eval4bbs -u jy050706" 2>/dev/null
+$SSHT "scancel -n eval4bls -u jy050706" 2>/dev/null
 JID=$($SSHT "sbatch --parsable /gpfs/scrubbed/jy050706/qwen-serve/serve-chain-4b-bhqs.sbatch" 2>/dev/null | tr -dc 0-9)
 echo "[$(date '+%F %T')] serve job $JID (serve-chain-4b-bhqs.sbatch)"
 JOB=eval4bhq LPORT=$PORT RPORT=$((PORT-10000)) setsid nohup $CTL/tunnel_qwen36_auto.sh > $HOME/tunnel_eval4bhq.log 2>&1 < /dev/null &
