@@ -2,10 +2,19 @@
 # run_eval50_stock.sh <arm> -- run one eval-50 arm on the OSWorld-Verified
 # DEFAULT (stock) chat template.
 #
-# 2026-08-18: all evaluation moved to the stock template. The keepthink patch
-# is retired, so every arm from here on differs from every other arm only in
-# its weights. One script instead of one-per-arm, because the arms differ in
-# exactly five values (below) and nothing else.
+# 2026-08-18: all evaluation moved to the stock template. Not because stock
+# won a comparison -- because there was never a comparison to win. This
+# agent never sends a reasoning_content field; client.py:46-51 merges the
+# reasoning INLINE into the assistant content string, and history.py:90-94
+# prepends an empty <think></think> when there is none. The keepthink patch
+# gates on `{% if reasoning_content %}`, which is therefore never true, so
+# the two templates render byte-identically. --preserve_thinking is inert for
+# the same reason (neither template references it). Every arm from here on
+# differs from every other arm only in its weights.
+#
+# basestock is kept in the table but is NOT chained: base/keepthink already
+# ran (39.81%) and, the axis being degenerate, base/stock would be the same
+# configuration a second time. Run it only as a deliberate noise estimate.
 #
 # The arm waits for its predecessor to release the 3 VMs, brings up its own
 # serve, then runs. It does NOT gate on a DONE marker in a log: markers have
@@ -28,9 +37,9 @@ ARM="${1:?usage: run_eval50_stock.sh <arm>}"
 
 #         serve sbatch          slurm job   port  served-model-name    result group     waits for
 case "$ARM" in
-  basestock) SB=base-stock; JOB=eval4bbo;  RP=8023; MN=q35-4b-stock;     GRP=qwen35-4b-base; PREV=leanstock ;;
-  lorastock) SB=lora-stock; JOB=eval4blos; RP=8024; MN=q38Bs-lora-stock; GRP=qwen35-4b-sft;  PREV=basestock ;;
-  bsstock)   SB=bs-stock;   JOB=eval4bbss; RP=8025; MN=q38Bs-gb64-stock; GRP=qwen35-4b-sft;  PREV=lorastock ;;
+  basestock) SB=base-stock; JOB=eval4bbo;  RP=8023; MN=q35-4b-stock;     GRP=qwen35-4b-base; PREV=leanstock; PJOB=eval4bls  ;;
+  lorastock) SB=lora-stock; JOB=eval4blos; RP=8024; MN=q38Bs-lora-stock; GRP=qwen35-4b-sft;  PREV=leanstock; PJOB=eval4bls  ;;
+  bsstock)   SB=bs-stock;   JOB=eval4bbss; RP=8025; MN=q38Bs-gb64-stock; GRP=qwen35-4b-sft;  PREV=lorastock; PJOB=eval4blos ;;
   *) echo "unknown arm: $ARM" >&2; exit 2 ;;
 esac
 
@@ -71,6 +80,11 @@ echo "[$(date '+%F %T')] $PREV released the VMs at $(scored "${PR:-/nonexistent}
 sleep 20
 
 # ---- serve ----
+# Release the predecessor's serve first. The interactive QOS allows 2 jobs;
+# leaving a finished arm's serve up means this arm's serve pends behind it,
+# and an idle vLLM burns an H200 doing nothing.
+$SSHT "scancel -n $PJOB -u jy050706" 2>/dev/null
+sleep 5
 HAVE=$($SSHT "squeue -u jy050706 -h -n $JOB -o %i" 2>/dev/null | tr -dc 0-9)
 if [ -z "$HAVE" ]; then
   JID=$($SSHT "sbatch --parsable /gpfs/scrubbed/jy050706/qwen-serve/serve-chain-4b-$SB.sbatch" 2>/dev/null | tr -dc 0-9)

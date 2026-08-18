@@ -225,6 +225,65 @@ b1ep, bhqs, bhqs2lr}`。其中 3 个已经影响了已发布的分数(上表加�
 
 ---
 
+## 5.7 两个模板其实是同一个模板(2026-08-18 查实)
+
+`qwen35_4b_keepthink.jinja` 相对官方模板多的那段是:
+
+```jinja
+{%- if reasoning_content %}
+    {{- '<|im_start|>' + message.role + '\n<think>\n' + reasoning_content + '\n</think>\n\n' + content }}
+```
+
+**这个 `reasoning_content` 变量从来没有被填过**,所以这个分支永不触发,两个模板
+对本 harness 的任何输入都**逐字节渲染相同**(两个独立 agent 各自重新取模板、
+各自写渲染脚本验证)。
+
+历史里的思考是**内联**传的,不是靠字段传的:
+
+| 位置 | 做的事 |
+|---|---|
+| `mm_agents/qwen/client.py:46-51` | `merge_reasoning_content()` 把 reasoning 拼成 `<think>…</think>` + 正文,**合成一个字符串** |
+| `mm_agents/qwen/history.py:74-85` | 历史 assistant 轮只有 `role` 和 `content` 两个键,没有 `reasoning_content` |
+| `mm_agents/qwen/history.py:90-94` | `ensure_empty_think_prefix()` 是**保留**函数:已有 think 原样返回,没有 think 的补一个空的 `<think></think>` |
+
+这三处都在**上游** OSWorld-Verified 里(纯净 worktree 091f5ef1 与魔改版这四个
+文件逐字节相同),不是我们改出来的。上游根本没有 `--preserve_thinking` 这个
+参数(`grep` 命中 0),它是本地加的,而且:
+
+- **评测侧 `--preserve_thinking` 是空转的** —— 两个模板都不引用这个变量;
+- **`--enable_thinking` 也是空转的** —— `enable_thinking=True` 的渲染与不传相同,
+  而代码路径永远送不出 `False`。
+
+### 由此重读已有结果
+
+`rich · keepthink 28.00%` 与 `rich · stock 30.00%` **是同一份权重、同一套有效
+配置跑了两遍**。那 2 分(1 道题)不是模板效应,是**同配置的重复噪声**。这是本
+评测集上第一个噪声估计,而它意味着表里 2 分以内的差都不能当作差:
+
+| 一直被当成"差异"的对照 | 差值 | 与噪声比 |
+|---|---|---|
+| Bs-LoRA vs Bs-gb64 | 2.00 分 | **等于噪声** |
+| B-gb64o vs 基座 | 2.00 分 | **等于噪声** |
+| rich·stock vs rich·keepthink | 2.00 分 | **就是噪声本身** |
+
+`lean · keepthink` 与 `lean · stock` 是第二个同配置重复,可以给出第二个噪声点。
+
+**基座 · stock 因此不必跑** —— 它会是 `基座 · keepthink 39.81%` 的同配置重复。
+
+### 训练侧的同名参数不是空转的
+
+`--preserve_thinking false` 传给 ms-swift 时走的是 swift 自己的编码器,不是
+jinja:`swift/template/base.py:1254-1266` 的 `_remove_history_thinking()` 把
+**最后一轮用户消息之前**所有 assistant 轮的 think 删掉,`_swift_encode()` 在
+该参数为 false 时调用它。所以 lean 臂(以及 r5 的 240311)确实与 rich 不同。
+
+但由此产生一个结构性错配:**lean 臂在"历史没有 think"的分布上训练,却只能在
+"历史有 think"的分布上被评测** —— harness 永远内联 think,没有任何模板能把它
+去掉。lean 是全表最低分(23.81%),这个错配是候选解释之一,现有数据不能证实
+也不能排除。
+
+---
+
 ## 6 结果
 
 得分 = 缺题按 0 计入,分母恒为 50。
