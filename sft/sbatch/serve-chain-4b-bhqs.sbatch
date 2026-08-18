@@ -33,7 +33,10 @@ PROJ=/gpfs/scrubbed/jy050706/qwen-serve
 SELF="$PROJ/serve-chain-4b-bhqs.sbatch"
 B=/gpfs/scrubbed/jy050706/sft
 MODEL=$(/gpfs/scrubbed/jy050706/qwen-serve/pick_ckpt.sh "/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-gb64/v*" "${CKPT_POLICY:-endpoint}") || exit 1
-TEMPLATE=/gpfs/scrubbed/jy050706/sft/eval/qwen35_4b_keepthink.jinja
+# No --chat-template override: vLLM renders with the model dir's built-in
+# (stock) template. 2026-08-18 -- all evaluation moved to the
+# OSWorld-Verified default so numbers are comparable with published ones
+# and with each other; the keepthink patch is retired.
 KEYFILE="${VLLM_API_KEY_FILE:-$PROJ/.vllm_api_key}"
 CHAIN_IDX="${CHAIN_IDX:-1}"; CHAIN_MAX="${CHAIN_MAX:-3}"
 
@@ -58,7 +61,6 @@ perm=$(stat -c '%a' "$KEYFILE")
 case "$perm" in 600|400) : ;; *) echo "FATAL: $KEYFILE perms=$perm (want 600/400)"; exit 1;; esac
 export VLLM_API_KEY="$(cat "$KEYFILE")"
 [ -n "$VLLM_API_KEY" ] || { echo "FATAL: $KEYFILE is empty"; exit 1; }
-[ -f "$TEMPLATE" ] || { echo "FATAL: chat template $TEMPLATE missing"; exit 1; }
 [ -n "$MODEL" ] && [ -d "$MODEL" ] || { echo "FATAL: no q38Bhqs2t-gb64 checkpoint found"; exit 1; }
 echo ">>> serving checkpoint: $MODEL"
 
@@ -79,7 +81,6 @@ python -c "import vllm; print('>>> vllm', vllm.__version__)" 2>/dev/null || true
 
 vllm serve "$MODEL" \
   --served-model-name q38Bhqs2t-gb64 \
-  --chat-template "$TEMPLATE" \
   --tensor-parallel-size 1 \
   --max-model-len 262144 \
   --kv-cache-dtype fp8 \
