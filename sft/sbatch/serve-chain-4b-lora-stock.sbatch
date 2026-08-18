@@ -7,11 +7,18 @@
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=100G
-#SBATCH --time=08:00:00   # interactive QOS MaxWall; 4h left the serve
-                          # expiring mid-eval and re-queueing behind the
-                          # 48-GPU user cap. One eval is ~5-6h, so 8h
-                          # covers it outright and CHAIN_MAX=2 covers two.
+#SBATCH --time=06:00:00   # NOT the 8h interactive max: August18_Maintenance
+                          # reserves every GPU node 09:00-09:00, and Slurm will
+                          # not start a job that would run into a reservation.
+                          # 8h from ~02:35 lands at 10:35 and the job sits
+                          # unstartable until tomorrow. 6h fits, and one eval
+                          # is ~5-6h. Raise back to 08:00:00 after 2026-08-19.
 #SBATCH --output=/gpfs/scrubbed/jy050706/qwen-serve/eval4blos_%j.out
+#SBATCH --exclude=g018    # 241546 died there in 54s with 'CUDA unknown
+                          # error ... available devices to be zero'. The node
+                          # is not marked drained, so Slurm will keep handing
+                          # it out. One shot before the 09:00 maintenance --
+                          # REMOVE this line once g018 is known good.
 #SBATCH --signal=B:USR1@600
 #
 # Bs-LoRA at its 3.00-epoch ENDPOINT, under the OFFICIAL stock chat template.
