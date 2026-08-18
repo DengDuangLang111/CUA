@@ -166,4 +166,13 @@ for TRY in 1 2 3 4 5; do
     --test_config_base_dir $C --test_all_meta_path $META --result_dir "$R"
   stop_eval
 done
-echo "[$(date '+%F %T')] === $ARM RESULT $(scored "$R")/$T: $(find "$R" -name result.txt -exec cat {} \; 2>/dev/null | sort | uniq -c | tr '\n' ' ')"
+N=$(scored "$R")
+# The histogram below sums to however many tasks finished, so a 47/50 run prints
+# something that looks perfectly normal -- that is how gb64keep's 3 missing tasks
+# (2.67 points under the 0-filled convention) went unnoticed until someone
+# counted result.txt by hand. Name the gap instead.
+if [ "$N" -lt "$T" ]; then
+  MISS=$(find "$R" -mindepth 2 -maxdepth 2 -type d '!' -exec test -e '{}/result.txt' ';' -print 2>/dev/null | sed "s|$R/||" | tr '\n' ' ')
+  echo "[$(date '+%F %T')] INCOMPLETE $N/$T -- crashed: ${MISS:-none} (any remainder never started)"
+fi
+echo "[$(date '+%F %T')] === $ARM RESULT $N/$T: $(find "$R" -name result.txt -exec cat {} \; 2>/dev/null | sort | uniq -c | tr '\n' ' ')"
