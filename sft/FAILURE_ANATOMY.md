@@ -368,3 +368,29 @@ execute+screenshot HTTP → 客机 Flask 不堪连打 → connection reset →
   在拆行语义下跑,口径注记必须带。由"Tillicum 维护详情"会话实施中。
 - **情况一(多 tool_call 批)**:行为层,总浪费更小、无崩溃关联;由 1:1 新采集
   (fmt-w1 起)与可选的语料拆分实验处理,优先级靠后。
+
+### 修法 B 验收(2026-08-18,落地前;`tools/typefix_gate.py`)
+
+方案(最小 robust,无 hardcode):`parse_internal_response` 的 `type` 分支在
+`OSTG_TYPE_NO_SPLIT=1` 时不再逐行拆分,整段文本走**一条**
+`pyautogui.typewrite()`;默认(变量不设)保持上游拆行,行为逐字节不变,仅
+多一行 warning 留痕。启用与否由驱动脚本每次运行显式决定。
+
+正确性前提全部实证,非推断:
+
+| 前提 | 证据 |
+|---|---|
+| `\n` 在客机上就是回车键 | 客机 `desktop_env/server/requirements.txt` 钉死 PyAutoGUI==0.9.54;该版本 `_pyautogui_x11.py:282` 映射 `'\n': Return` |
+| 单条 typewrite 与拆行键序相同 | 同文件基座分支 `parse_base_response` 从来就是一条 typewrite 不拆行,同一客机跑了所有基座 eval |
+| 回放参数 = 生产参数 | 调用点 `main.py:298`;`--coord` 默认 `relative`,kD 命令行未覆盖 |
+| 补丁不改闸关行为 | 闸 A:全库 2,278 个 traj.jsonl、101,159 步、58,211 个去重真实响应回放,新旧 parser 输出逐字节一致,0 差异 |
+| 闸开后键序等价 | 闸 B:双方命令表展开成键事件流严格相等,0 差异;多行分支真实命中 558 个响应(非空转),共省 13,982 条客机命令,最狠一步 230 条 |
+| 闸本身能抓错 | 灵敏度对照:故意把合并写错(换行→空格)后闸 B 报 214 处 FAIL 而闸 A 仍过——证明闸不瞎,且只有闸 A 不足以放行 |
+
+时序语义差异(非 bug,如实注记):拆行版每条命令间隔 ≥3s(`--sleep_after_execution 3`
++ HTTP 往返 + 截图),合并版全文一次打完。一步 100 行 heredoc 从 ~10 分钟降到秒级
+——撞上限磨步数的时间账里这部分直接消失。
+
+状态:**代码未落地**。`actions.py` 由"Tillicum 维护详情"会话持有,落地按此方案
+串行协调;落地后补 OPS.md 披露 + 驱动布线(哪些运行开闸由用户定)。对正在跑的
+eval 无影响:活进程模块已在内存,新进程闸默认关。
