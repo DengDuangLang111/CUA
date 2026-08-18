@@ -556,3 +556,64 @@ to_swift → ship(两半都 SHIP OK)→ 在集群上独立核对行数/图引用
 ```
 
 **通用形式:稀缺资源永远先获取再释放;有副作用的提交永远在前置条件核实之后。**
+
+---
+
+## 选权重/选文件的代码必须打印它选了什么(2026-08-18,一周的错分换来的)
+
+### 犯了什么
+
+serve 与 LoRA 合并作业都用这一行从一次训练里挑 checkpoint:
+
+```bash
+MODEL=$(ls -d $B/out/<run>/v*/checkpoint-* | sort -t- -k2 -n | tail -1)
+```
+
+`-t-` 以 `-` 切**整条绝对路径**,第 2 段是 `gb64/v0` 这种非数字串;`-n` 把它们
+全判成 0,键全相等后 GNU sort 退回整行字典序 —— 于是在
+`checkpoint-{30,60,90,120,150,180,210,240,264}` 这组里选中 **90**。凡是存了
+9 个存档的训练,选出来的必定是 90。
+
+后果:**Bs-LoRA(47.81%)、Bs-gb64(45.81%)、B-gb64o(41.81%)三个已发布
+的分数,跑的都是约 1 epoch 的权重,不是终点**。三个臂的 label、dashboard、
+RESULTS.md 全部写着 3 epoch。错了一周。
+
+### 为什么一周都没人发现
+
+不是因为它藏得深,而是因为**流水线里没有任何一环把"我选了哪一步"说出来**。
+`ls | sort | tail` 静默返回一个路径,vLLM 静默加载它,eval 静默出分。每一环都
+"成功"了。发现它靠的是一次无关的巡查偶然 `grep` 了 serve 日志。
+
+同一形状的错误在这个项目里已经出现过四次(检查器的 task_id 查轨迹、图片路径
+相对 cwd、目录归属、图↔观察的折叠窗口)。四次的共同点都是:**一个做选择的
+步骤没有把选择结果写下来**,于是错误只能靠结果离谱到被人注意才暴露。
+
+### 定下的规矩
+
+1. **做选择的代码必须把选择结果打进日志**,而且要连同判据一起打。
+   `pick_ckpt.sh` 每次都往 stderr 写
+   `[pick_ckpt] <run> policy=endpoint -> checkpoint-264 epoch=3.00 (9 available)`,
+   在 Slurm 里就落进作业的 `.out`。
+2. **判据从被选对象自己的文件里读,不写死。** 同样是"3 epoch",五次训练的终点
+   分别是 264 / 267 / 90 / 708 / 450;epoch 只能从每个 checkpoint 自己的
+   `trainer_state.json` 拿。任何写死的步数迟早会对上错误的 run。
+3. **排序键要显式取出来再排,不要指望分隔符。**
+   `awk -F'checkpoint-' '{print $NF, $0}' | sort -n`,不要 `sort -t- -k2 -n`。
+4. **服务端要能被问"你到底加载了什么"**。vLLM 的 `/v1/models` 返回 `root` =
+   真实权重路径;driver 起跑前 curl 一次写进结果目录的 `MODEL_BOUNDARY.json`,
+   这一条当初就能立刻抓到本次错误。
+5. **失败要响。** `pick_ckpt.sh` 在 glob 落空、policy 无匹配时 exit 1 并打
+   FATAL,调用方一律 `|| exit 1`;宁可作业起不来,不要静默服务错权重。
+
+### 现在的样子
+
+`sft/sbatch/pick_ckpt.sh`,三种策略:
+
+| policy | 含义 |
+|---|---|
+| `endpoint`(默认) | 步数最大的 checkpoint |
+| `epoch:N` | 各 checkpoint 的 `trainer_state.json` 里 epoch 最接近 N 的那个 |
+| `step:N` | 精确的 checkpoint-N,不存在就 FATAL |
+
+13 个 serve/merge 脚本全部走它,`CKPT_POLICY` 环境变量可覆盖。要跑 ep1/ep2
+对照时只改这一个变量,不改脚本。
