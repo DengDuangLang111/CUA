@@ -70,8 +70,28 @@ echo "[$(date '+%F %T')] VMs free"; sleep 20
 
 # ---- serve on klone, then point the tunnel at whatever node it landed on ----
 serve_up(){
-  local jid node
+  local jid node serving
   jid=$($KSSH "squeue -u jy050706 -h -n serve-l40s -o %i" | tr -dc 0-9 | head -c 12)
+  # A live serve is only reusable if it is serving THIS arm's weights. Reusing
+  # it by job name alone would score one arm against another's model and never
+  # say so -- the same silent-wrong-weights failure that cost this project a
+  # week when a checkpoint picker returned the wrong step. Ask the endpoint what
+  # it loaded; if it is not ours, cancel and resubmit.
+  if [ -n "$jid" ]; then
+    serving=$(curl -s -m 5 -H "Authorization: Bearer $KEY" http://127.0.0.1:$PORT/v1/models \
+              | python3 -c "import json,sys
+try: print(json.load(sys.stdin)['data'][0].get('root',''))
+except Exception: print('')" 2>/dev/null)
+    if [ -n "$serving" ] && [ "$serving" != "$BASE/sft/models/$W" ]; then
+      echo "[$(date '+%F %T')] live serve $jid holds $serving, not $W -- cancelling"
+      $KSSH "scancel $jid"; sleep 10; jid=""
+    elif [ -z "$serving" ]; then
+      # endpoint not answering yet: cannot tell what it holds. Only reuse if the
+      # job was submitted for this arm, which we cannot know -- so resubmit.
+      echo "[$(date '+%F %T')] live serve $jid not answering; cancelling to be sure of the weights"
+      $KSSH "scancel $jid"; sleep 10; jid=""
+    fi
+  fi
   if [ -z "$jid" ]; then
     jid=$($KSSH "cd $BASE && sbatch --parsable --export=ALL,MODEL=$BASE/sft/models/$W,NAME=$MN,PORT=8000 serve_l40s.sbatch" | tr -dc 0-9)
     echo "[$(date '+%F %T')] submitted klone serve $jid for $W"
