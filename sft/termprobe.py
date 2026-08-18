@@ -89,7 +89,11 @@ def sample_once(endpoint, model, key, msgs, temp, top_p, top_k, kwargs,
         headers={"Content-Type": "application/json",
                  "Authorization": "Bearer " + key})
     with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.load(r)["choices"][0]["message"]["content"]
+        msg = json.load(r)["choices"][0]["message"]
+    # With thinking enabled vLLM can return content=null and put everything in
+    # reasoning_content. Treating that as an empty string silently scores the
+    # sample as "prose", and len(None) crashes the summary.
+    return msg.get("content") or msg.get("reasoning_content") or ""
 
 
 def classify(response, parse):
