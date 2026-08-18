@@ -368,6 +368,40 @@ def observation_at(td, steps, k):
     return (td / shot) if shot else None
 
 
+def collect_style_examples(result_dir, keys, parse, infeasible, want=3):
+    """A few of the teacher's OWN complete prose endings, to show it back.
+
+    Told merely to "say the task is done", the teacher opened 97% of its
+    written statements with "Done." -- against 16% in the endings it produced
+    naturally during the rollout. Adding more rules invites a different tic;
+    showing it its own voice does not. Examples are taken in the given order,
+    so the same run always picks the same ones.
+    """
+    out = []
+    for domain, task_id in keys:
+        if len(out) >= want:
+            break
+        steps = traj.load_steps(Path(result_dir) / domain / task_id)
+        if not steps:
+            continue
+        mode, _ = classify_ending(steps[-1].response, False, parse, infeasible)
+        if mode != APPEND:
+            continue
+        text = visible_text(steps[-1].response)
+        if 25 <= len(text.split()) <= 70:
+            out.append(text)
+    return out
+
+
+def style_block(examples):
+    if not examples:
+        return ""
+    body = "\n\n".join("- " + e for e in examples)
+    return ("\n\nWrite the `statement` in the voice these real endings use -- "
+            "match their register and their openings, not their content:\n"
+            + body)
+
+
 def render_prompt(tasks_dir, domain, task_id, steps, keep_to, image_path):
     """The teacher sees the task, what was done, and the screen it stops on."""
     instr = load_instruction(tasks_dir, domain, task_id)
@@ -376,7 +410,7 @@ def render_prompt(tasks_dir, domain, task_id, steps, keep_to, image_path):
     return instr, digest, b64(image_path)
 
 
-def ask_anthropic(cfg, instr, digest, image_b64, retries=3):
+def ask_anthropic(cfg, instr, digest, image_b64, style="", retries=3):
     """-> ({thinking, statement}, error).
 
     The error is returned rather than swallowed. A failed call used to come
@@ -394,7 +428,7 @@ def ask_anthropic(cfg, instr, digest, image_b64, retries=3):
     for attempt in range(retries):
         try:
             r = llm.call([{"role": "user", "content": blocks}],
-                         [{"type": "text", "text": SYSTEM}], cfg,
+                         [{"type": "text", "text": SYSTEM + style}], cfg,
                          tool=REASON_TOOL)
             text = ""
             for blk in r.get("content", []):
@@ -428,9 +462,9 @@ QWEN_JSON_CONTRACT = (
     "No other text before or after the JSON.")
 
 
-def ask_qwen(endpoint, model, key, effort, instr, digest, image_b64):
+def ask_qwen(endpoint, model, key, effort, instr, digest, image_b64, style=""):
     """-> ({thinking, statement}, error). See ask_anthropic on surfaced errors."""
-    msgs = [{"role": "system", "content": SYSTEM + QWEN_JSON_CONTRACT},
+    msgs = [{"role": "system", "content": SYSTEM + style + QWEN_JSON_CONTRACT},
             {"role": "user", "content": [
                 {"type": "text", "text": "Task: " + instr},
                 {"type": "text", "text": "Actions so far:\n" + digest},
@@ -445,7 +479,7 @@ def ask_qwen(endpoint, model, key, effort, instr, digest, image_b64):
     return {}, str(v.get("error") or "empty reply")[:160]
 
 
-def canonicalise(key, args, cfg, api_key, parse, infeasible):
+def canonicalise(key, args, cfg, api_key, parse, infeasible, style=""):
     """One trajectory -> the row describing how its ending is repaired.
 
     Every trajectory gets a row, including the ones needing no change: the
@@ -481,10 +515,10 @@ def canonicalise(key, args, cfg, api_key, parse, infeasible):
     instr, digest, img = render_prompt(args.tasks, domain, task_id, steps,
                                        keep_to, screen)
     if args.backend == "anthropic":
-        parts, err = ask_anthropic(cfg, instr, digest, img)
+        parts, err = ask_anthropic(cfg, instr, digest, img, style)
     else:
         parts, err = ask_qwen(args.endpoint, args.model, api_key, args.effort,
-                              instr, digest, img)
+                              instr, digest, img, style)
     thinking = " ".join(str(parts.get("thinking") or "").split())[:600]
     statement = " ".join(str(parts.get("statement") or "").split())[:600]
     row["thinking"], row["statement"] = thinking, statement
@@ -519,6 +553,9 @@ def main(argv=None):
     ap.add_argument("--stall-min", type=int, default=2,
                     help="auto policy: truncate only when this many trailing "
                          "steps did no work")
+    ap.add_argument("--style-examples", type=int, default=3,
+                    help="show the teacher this many of its own natural "
+                         "endings so the written ones share their voice")
     ap.add_argument("--harness", default=None,
                     help="OSWorld root, for the action parser used to decide "
                          "how each ending is repaired")
@@ -557,11 +594,13 @@ def main(argv=None):
     print("%d trajectories to canonicalise" % len(todo))
 
     parse, infeasible = load_parser(a.harness)
+    style = style_block(collect_style_examples(a.result_dir, todo, parse,
+                                               infeasible, a.style_examples))
     lock = threading.Lock()
     written, failed, modes = [0], [0], Counter()
 
     def run(key):
-        row = canonicalise(key, a, cfg, api_key, parse, infeasible)
+        row = canonicalise(key, a, cfg, api_key, parse, infeasible, style)
         if row is None:
             return
         with lock:
