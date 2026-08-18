@@ -182,7 +182,7 @@ Context handling (2026-08-16 核实,repo sft/README + generate_browser.py):
 `turn_history_reasoning_mode="full"`(**历史 thinking 保留**,另有
 hide_thinking/action_only 档,`browser_history_reasoning_max_turns` 限制
 更老回合)。即:他们的"lean"是图片维度的(1 张图),文本+思考维度反而 rich;
-我们的 20 图窗口 + keepthink 在两个维度上都 rich。两家 per-turn 展开的动机
+我们的 20 图窗口 + 历史思考保留在两个维度上都 rich(历史思考的保留来自 stock 模板本身,不是 keepthink 带来的 —— 见 `sft/RESULTS.md` §5.7)。两家 per-turn 展开的动机
 相同:历史渲染都不是 append-only(他们剥旧图,我们折叠旧图),打包不等价。
 
 Teacher provenance note (2026-08-15): OpenWebRL's demonstrations came from

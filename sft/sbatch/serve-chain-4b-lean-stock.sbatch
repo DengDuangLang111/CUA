@@ -12,10 +12,18 @@
 #SBATCH --signal=B:USR1@600
 #
 # lean/stock cell: arm-A lean weights under the OSWorld-Verified DEFAULT
-# template (no --chat-template override, so history <think> is stripped
+# template (no --chat-template override
 # at render). Completes the 2x2 {rich,lean} x {keep,stock}: rich has
 # both (28 keep / 30 stock), lean had only keep (22). Port 8022.
 # CHAIN_MAX=2.
+# CORRECTED 2026-08-18: the stock template does NOT strip history
+# <think>. It lifts inline <think> out of content itself (:94-96), and
+# history.py wraps every non-first user turn in <tool_response>, pinning
+# the template's ns.last_query_index at 1 -- so the keep branch (:101)
+# fires for every historical assistant turn. stock and keepthink render
+# byte-identically on all 100 cached real payloads. The reason to use
+# stock is that it is the model's own template and the OSWorld-Verified
+# default, not that it hides anything. See CUA/sft/RESULTS.md 5.7.
 set -uo pipefail
 
 PROJ=/gpfs/scrubbed/jy050706/qwen-serve

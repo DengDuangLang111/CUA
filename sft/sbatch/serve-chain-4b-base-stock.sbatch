@@ -13,7 +13,7 @@
 #
 # Stock Qwen3.5-4B (NO fine-tuning) under the OFFICIAL chat template -- the
 # base/stock cell. No --chat-template override, so vLLM renders with the model
-# dir's built-in template, which STRIPS <think> from history turns.
+# dir's built-in template.
 #
 # Why this arm: base/keepthink already scored 39.81%. The lean weights moved
 # from 23.81% (keepthink) to a much higher early rate under stock, which is
@@ -27,13 +27,21 @@
 # Qwen3.5-4B SFT arm "rich" checkpoint-450 served under the OFFICIAL chat
 # template -- the rich/stock cell: rich-trained weights, OSWorld-Verified
 # DEFAULT serving. No --chat-template override, so vLLM renders with the
-# model dir's built-in template, which STRIPS <think> from history turns
+# model dir's built-in template
 # (current-step thinking unaffected). Client behaviour stays upstream-
 # identical (sends history think; template discards at render). Paired with
 # rich/rich (keepthink) this isolates the eval-time effect of history-think
 # visibility on the same weights. Port 8023 per the port-per-role convention.
 # Sampling override = official general-thinking profile incl top_k 20, same
 # as every other serve. CHAIN_MAX=2 as usual.
+# CORRECTED 2026-08-18: the stock template does NOT strip history
+# <think>. It lifts inline <think> out of content itself (:94-96), and
+# history.py wraps every non-first user turn in <tool_response>, pinning
+# the template's ns.last_query_index at 1 -- so the keep branch (:101)
+# fires for every historical assistant turn. stock and keepthink render
+# byte-identically on all 100 cached real payloads. The reason to use
+# stock is that it is the model's own template and the OSWorld-Verified
+# default, not that it hides anything. See CUA/sft/RESULTS.md 5.7.
 set -uo pipefail
 
 PROJ=/gpfs/scrubbed/jy050706/qwen-serve

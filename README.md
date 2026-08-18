@@ -17,7 +17,7 @@ top-level CLAUDE.md imports into every agent session).
 | `sft/` | trajectory → training samples + verification | `SFT_DATA.md` · `sft/TRAINING.md` · `sft/CONTEXT.md` |
 | `llm.py` | LLM client, Anthropic/OpenAI protocol adapter (claude* / qwen* auto-route) | — |
 | `dashboard/` + `traj_html.py` | live rollout monitor (Vercel; pushed by WSL daemon) | `DASHBOARD.md` |
-| `eval/` | frozen eval-50 task lists + keepthink chat template | `sft/TRAINING.md` |
+| `eval/` | frozen eval-50 task lists + the keepthink chat template (retired 2026-08-18 — it renders byte-identically to stock, see `sft/RESULTS.md` §5.7) | `sft/TRAINING.md` |
 | `reference/` | frozen deep references (OSWorld-Verified / V2 runtime requirements, author-run forensics) | each file's header |
 | `outdated/` | superseded historical docs | `outdated/README.md` |
 | ledgers | `EXPERIMENTS.md` (what happened, status block on top) · `V11.md` · `taskgen/GIT_HISTORY.md` | — |

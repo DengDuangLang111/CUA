@@ -16,12 +16,23 @@
  M mm_agents/qwen/main.py                        加 preserve_thinking,透传 chat_template_kwargs
  M mm_agents/qwen/client.py                      reasoning_content 取不到时 fallback 到 reasoning
  M mm_agents/agent.py                            ANTHROPIC_BASE_URL 可配 + thinking disabled(只影响 PromptAgent/Claude,跑 Qwen 不走这里)
- M scripts/python/run_multienv_qwen.py           加 --preserve_thinking flag
-?? desktop_env/evaluators/metrics/generated_tasks.py
-?? synthetic_tasks/
+ M scripts/python/run_multienv_qwen.py           加 --preserve_thinking flag(评测侧空转,见下)
+ M lib_run_single.py                             存 initial_state.png(第 1 步观测原本不落盘);OSTG_WAIT_BREAK / OSTG_LOOP_LOG 两个环境变量(不设则完全惰性)
+?? desktop_env/evaluators/metrics/generated_tasks.py    整个自定义 evaluator 模块
+?? synthetic_tasks/ · taskgen_tasks*/ · taskgen_out/ · eval_valpanel_tasks/
+?? evaluation_examples/verified_eval50_nonproxy.json · ..._eval100_...
 ```
 
-共 8 个文件 +96/−40(2026-08-13 `git status` 实测,HEAD 仍是 `091f5ef1`)。
+**共 9 个已跟踪文件 +179/−39**(2026-08-18 `git status --porcelain` + `git diff
+--shortstat` 实测,HEAD 仍是 `091f5ef1`),另有上列未跟踪新增。
+
+> 2026-08-13 记的是"8 个文件 +96/−40",漏了 `lib_run_single.py`,行数也已过时。
+> **`git diff` 不是完整清单** —— 未跟踪的新增(包括一整个 evaluator 模块
+> `generated_tasks.py`)它一行都不显示,披露魔改时必须同时看 `git status`。
+
+> `mm_agents/qwen/main.py` 加的 `--preserve_thinking` 透传**在评测侧是空转的**:
+> 两份 chat template 都不引用这个变量,而 stock 模板本来就保留历史思考。
+> 详见 `sft/RESULTS.md` §5.7。同名的 **swift 训练参数不是空转的**。
 **"我跑的是纯净官方 OSWorld"这个说法不成立**,报告官方分数时这 8 处都要披露。
 
 **对官方 361 题结果的影响已逐一验证(2026-08-13 下午)**:

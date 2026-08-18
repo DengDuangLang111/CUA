@@ -35,7 +35,7 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && <命令>"'
 
 | 仓库 | 位置 | 角色 |
 |---|---|---|
-| OSWorld(魔改) | WSL `/mnt/d/research/OSWorld`,091f5ef1+8 文件魔改 | **实验真正跑的 harness**;报官方分数需披露魔改(明细 `CUA/OPS.md` §1) |
+| OSWorld(魔改) | WSL `/mnt/d/research/OSWorld`,091f5ef1+9 文件魔改+未跟踪新增 | **实验真正跑的 harness**;报官方分数需披露魔改。**`git diff` 不是完整清单**,未跟踪新增(含一整个 evaluator 模块)要靠 `git status` 才看得到(明细 `CUA/OPS.md` §1) |
 | OSWorld-upstream | WSL + Mac 各一份纯净 worktree(091f5ef1) | 查官方行为/做任务集分析用这份 |
 | OSWorld(Mac 旧副本) | `OSWorld/`,落后 5 提交 | **别用它做分析** |
 | **ostg**(taskgen) | WSL `/mnt/d/research/ostg-v11.1/ostg`(.git 在 ostg/ 子目录) | 生成流水线代码;**工作分支 v11.1,每次流程级提交后 `git fetch . v11.1:main`** |

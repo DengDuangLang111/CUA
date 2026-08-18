@@ -25,10 +25,18 @@
 # 1.02-epoch keepthink run is the epoch comparator.
 #
 # No --chat-template override: vLLM renders with the model dir's built-in
-# template, which strips <think> from history turns (the current turn's
+# template (the current turn's
 # thinking is unaffected). Visible prose and tool calls stay in history under
 # both templates.
 #
+# CORRECTED 2026-08-18: the stock template does NOT strip history
+# <think>. It lifts inline <think> out of content itself (:94-96), and
+# history.py wraps every non-first user turn in <tool_response>, pinning
+# the template's ns.last_query_index at 1 -- so the keep branch (:101)
+# fires for every historical assistant turn. stock and keepthink render
+# byte-identically on all 100 cached real payloads. The reason to use
+# stock is that it is the model's own template and the OSWorld-Verified
+# default, not that it hides anything. See CUA/sft/RESULTS.md 5.7.
 set -uo pipefail
 
 PROJ=/gpfs/scrubbed/jy050706/qwen-serve

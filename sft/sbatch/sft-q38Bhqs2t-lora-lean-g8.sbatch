@@ -18,7 +18,7 @@
 #
 # Why: on the q38-v11100 corpus the lean/rich pair measured 23.81% vs 28.00%
 # under the keepthink eval template, i.e. lean looked worse. But lean weights
-# under the STOCK template (which strips history think at render, matching how
+# under the STOCK template (matching how
 # lean was trained) scored 8/12 on its first 12 eval tasks against 5/12 for the
 # same weights under keepthink. That is consistent with the eval template
 # needing to match the training template rather than with lean being a worse
@@ -54,6 +54,14 @@
 # looks_infeasible). Every sample carries terminal_mode and rescued in its
 # meta, so a post-hoc question about which repair path helped can be answered.
 umask 077
+# CORRECTED 2026-08-18: the stock template does NOT strip history
+# <think>. It lifts inline <think> out of content itself (:94-96), and
+# history.py wraps every non-first user turn in <tool_response>, pinning
+# the template's ns.last_query_index at 1 -- so the keep branch (:101)
+# fires for every historical assistant turn. stock and keepthink render
+# byte-identically on all 100 cached real payloads. The reason to use
+# stock is that it is the model's own template and the OSWorld-Verified
+# default, not that it hides anything. See CUA/sft/RESULTS.md 5.7.
 set -x
 B=/gpfs/scrubbed/jy050706/sft
 DS1=$B/data/q38-Bhqs2t-r5-v11100
