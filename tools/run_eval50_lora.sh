@@ -25,14 +25,12 @@ stop_eval(){
   echo "[$(date '+%F %T')] eval runner stopped"
 }
 
-# Gate: previous arm in the chain must be finished. Re-queued 2026-08-17
-# BEHIND lean-stock: the first attempt died 0/50 when the eval watchdog
-# mistook VM startup for a hang and killed the runner in a loop.
+# Gate: previous arm in the chain must be finished.
 for i in $(seq 1 2880); do
-  grep -q "EVAL50_LEANSTOCK_DONE" $CTL/logs/eval50_lean_stock.log 2>/dev/null && break
+  grep -q "EVAL50_BS_DONE" $CTL/logs/eval50_bs.log 2>/dev/null && break
   sleep 30
 done
-grep -q "EVAL50_LEANSTOCK_DONE" $CTL/logs/eval50_lean_stock.log 2>/dev/null || { echo "[$(date '+%F %T')] FATAL: gate EVAL50_LEANSTOCK_DONE never fired"; exit 1; }
+grep -q "EVAL50_BS_DONE" $CTL/logs/eval50_bs.log 2>/dev/null || { echo "[$(date '+%F %T')] FATAL: gate EVAL50_BS_DONE never fired"; exit 1; }
 # Gate: the checkpoint this arm needs.
 for i in $(seq 1 480); do
   $SSHT 'test -f /gpfs/scrubbed/jy050706/sft/out/q38Bs-lora-merged/config.json' && break
@@ -40,7 +38,7 @@ for i in $(seq 1 480); do
 done
 $SSHT 'test -f /gpfs/scrubbed/jy050706/sft/out/q38Bs-lora-merged/config.json' || { echo "[$(date '+%F %T')] FATAL: checkpoint missing"; exit 1; }
 # Retire the previous serve, bring up ours.
-$SSHT "scancel -n eval4bls -u jy050706" 2>/dev/null
+$SSHT "scancel -n eval4bbs -u jy050706" 2>/dev/null
 JID=$($SSHT "sbatch --parsable /gpfs/scrubbed/jy050706/qwen-serve/serve-chain-4b-lora.sbatch" 2>/dev/null | tr -dc 0-9)
 echo "[$(date '+%F %T')] serve job $JID (serve-chain-4b-lora.sbatch)"
 JOB=eval4blo LPORT=$PORT RPORT=$((PORT-10000)) setsid nohup $CTL/tunnel_qwen36_auto.sh > $HOME/tunnel_eval4blo.log 2>&1 < /dev/null &
