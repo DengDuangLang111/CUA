@@ -160,18 +160,25 @@ def main(argv=None):
     # rewrites the final target only; the teacher supplies task-specific
     # reasoning so the corpus does not fill up with one recited sentence.
     rewrite = {}
+    drop_terminal = set()
     if args.terminal_rewrite:
         for line in args.terminal_rewrite.read_text().splitlines():
             if line.strip():
                 r = json.loads(line)
-                # A null response means terminalfix decided this trajectory
-                # already ends in an explicit terminate(success) and must not
-                # be touched. The row exists so the file is a complete record
-                # of what was decided for every trajectory.
-                if r.get("response"):
+                # A null response means terminalfix wrote no replacement.
+                # That is two different decisions, and they must not be
+                # conflated: mode "already-terminate" means leave the ending
+                # exactly as it is, while mode "exclude" means no usable
+                # ending could be produced and the trajectory must not ship.
+                # The rows exist either way so the file stays a complete
+                # record of what was decided for every trajectory.
+                if r.get("mode") == "exclude":
+                    drop_terminal.add((r["domain"], r["task_id"]))
+                elif r.get("response"):
                     rewrite[(r["domain"], r["task_id"])] = r
     rep["terminal_rewritten"] = 0
     rep["terminal_tail_truncated"] = 0
+    rep["terminal_excluded"] = len(drop_terminal)
 
     def slugs(path):
         return {(json.loads(l)["domain"], json.loads(l)["task_id"])
@@ -186,7 +193,7 @@ def main(argv=None):
 
     def admitted(td):
         k = (td.parent.name, td.name)
-        if k in exc:
+        if k in exc or k in drop_terminal:
             return False
         return traj.score(td) == 1.0 or k in inc
     rep["admitted_via_include"] = 0
@@ -389,6 +396,15 @@ def main(argv=None):
                          # ending. orig_steps keeps the provenance.
                          "task_id": task_id, "step": k, "n_steps": keep,
                          "orig_steps": len(steps),
+                         # How this trajectory's ending was repaired, and
+                         # whether the checker had failed it. Both were
+                         # previously knowable only by joining terminal_*.jsonl
+                         # and the curate lists back onto the corpus -- neither
+                         # of which ships with it. Without them a post-hoc
+                         # question like "did the rewritten endings hurt more
+                         # than the appended ones" cannot be asked at all.
+                         "terminal_mode": (rw or {}).get("mode", "untouched"),
+                         "rescued": (domain, task_id) in inc,
                          "difficulty": ost.get("difficulty"),
                          "ambiguity": ost.get("ambiguity"),
                          "coord": "relative-0-999",

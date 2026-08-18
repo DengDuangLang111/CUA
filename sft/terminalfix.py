@@ -33,7 +33,18 @@ Three paths, least intervention first (`mode` in each row):
   rewrite            The ending cannot be reused -- it calls the user, ends on
                      a real action, trips looks_infeasible_response, or the
                      tail was truncated so this step was never an ending. Only
-                     here does the teacher write a new turn.
+                     here does the teacher write a new turn. 69 of 376.
+  exclude            Two rewrite attempts still tripped looks_infeasible; the
+                     trajectory ships nothing. `response: null` like
+                     already-terminate, but build drops the trajectory instead
+                     of leaving its ending alone -- the two must not be
+                     conflated.
+
+The rewrite path re-checks its OWN output against the predicate that routed
+the trajectory into it. Without that, a task whose success literally reads
+"Folder is Empty" gets rewritten into a target containing the phrase that the
+harness treats as a failure signal (os/e35e4ef1, found by review rather than by
+any gate). A predicate good enough to route on is good enough to verify against.
 
 The written turn keeps the natural shape: `<think>` reasoning, then a visible
 statement, then the tool call, appended DETERMINISTICALLY. Every one of the 68
@@ -231,6 +242,7 @@ def decide_keep_to(td, steps, tail_policy, stall_min):
 KEEP = "already-terminate"   # nothing to do; no row is written for these
 APPEND = "append"            # teacher's own words kept, terminate call added
 REWRITE = "rewrite"          # the ending cannot be reused; teacher writes one
+EXCLUDE = "exclude"          # no usable ending could be produced; drop the traj
 
 _VISIBLE_STRIP = (re.compile(r"<think>.*?</think>", re.S),
                   re.compile(r"<tool_call>.*?</tool_call>", re.S))
@@ -479,6 +491,22 @@ def ask_qwen(endpoint, model, key, effort, instr, digest, image_b64, style=""):
     return {}, str(v.get("error") or "empty reply")[:160]
 
 
+AVOID_INFEASIBLE = (
+    "\n\nIMPORTANT: your previous answer contained a phrase the harness reads "
+    "as a failure signal (words like impossible, not possible, cannot be "
+    "completed, unable to, or is empty). Describe the same evidence WITHOUT "
+    "any of those phrasings -- e.g. say what the folder now contains "
+    "(\"contains no files\") rather than quoting a UI label verbatim.")
+
+
+def _reask(args, cfg, api_key, instr, digest, img, style, extra):
+    """One more attempt at the same turn, with an added constraint."""
+    if args.backend == "anthropic":
+        return ask_anthropic(cfg, instr, digest, img, style + extra)
+    return ask_qwen(args.endpoint, args.model, api_key, args.effort,
+                    instr, digest, img, style + extra)
+
+
 def canonicalise(key, args, cfg, api_key, parse, infeasible, style=""):
     """One trajectory -> the row describing how its ending is repaired.
 
@@ -521,6 +549,35 @@ def canonicalise(key, args, cfg, api_key, parse, infeasible, style=""):
                               instr, digest, img, style)
     thinking = " ".join(str(parts.get("thinking") or "").split())[:600]
     statement = " ".join(str(parts.get("statement") or "").split())[:600]
+
+    # EXIT GATE. `looks_infeasible_response` is one of the predicates that
+    # ROUTES a trajectory into this path, but nothing re-checked the text on
+    # the way out -- and it recurred: os/e35e4ef1 was rewritten into "the file
+    # manager shows 'Folder is Empty'", which trips the same substring table
+    # that sent it here. It does not misfire today (the harness only consults
+    # the predicate when a turn has NO tool call, and ours has terminate), but
+    # it is a phrase the student is being trained to produce at exactly the
+    # moment we want it to stop cleanly. A predicate good enough to route on
+    # is good enough to verify against.
+    for attempt in range(2):
+        if not infeasible(compose_response(thinking, statement)):
+            break
+        row.setdefault("infeasible_retries", 0)
+        row["infeasible_retries"] += 1
+        parts, err = _reask(args, cfg, api_key, instr, digest, img, style,
+                            AVOID_INFEASIBLE)
+        thinking = " ".join(str(parts.get("thinking") or "").split())[:600]
+        statement = " ".join(str(parts.get("statement") or "").split())[:600]
+    if infeasible(compose_response(thinking, statement)):
+        # Two attempts and the phrase is still there -- usually because the
+        # screen evidence itself contains it (a task whose success IS an empty
+        # folder). Drop the trajectory rather than ship a target we know trips
+        # a failure predicate.
+        row["mode"], row["why"] = EXCLUDE, "rewrite kept tripping looks_infeasible"
+        row["response"] = None
+        row["statement"] = statement
+        return row
+
     row["thinking"], row["statement"] = thinking, statement
     # Which model wrote this ending. The trajectories are Qwen3.8's; an ending
     # written by a different model changes what the arm distils, and the only
