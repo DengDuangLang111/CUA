@@ -7,7 +7,10 @@
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=100G
-#SBATCH --time=04:00:00
+#SBATCH --time=08:00:00   # interactive QOS MaxWall; 4h left the serve
+                          # expiring mid-eval and re-queueing behind the
+                          # 48-GPU user cap. One eval is ~5-6h, so 8h
+                          # covers it outright and CHAIN_MAX=2 covers two.
 #SBATCH --output=/gpfs/scrubbed/jy050706/qwen-serve/eval4bbss_%j.out
 #SBATCH --signal=B:USR1@600
 #
