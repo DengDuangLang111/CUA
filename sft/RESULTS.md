@@ -235,7 +235,7 @@ OSWorld 有一个名为 `multi_apps` 的域。ostg 生成的任务没有这个�
 | 臂 | 事实 |
 |---|---|
 | B-gb128 ep2 | global batch 128 需要 accum 8。该训练栈显存正比于梯度累积次数(实测:accum 4 稳定在 131.9 GiB;accum 16 在第 8–13 步 OOM;accum 32/64 在第 1 步前 OOM)。**gb128 六次提交全部 OOM,3 个 epoch 从未跑完**,表中该行使用崩溃前保存的第 2 个 epoch 边界存档。详见 `sft/TRAINING.md`,上游 ms-swift issue #5230 同症 |
-| lean · stock 模板 | 只完成 3 题,缺 47 题。按缺题算 0 为 4.00%,未列入 §5 |
+| lean · stock 模板 | 只完成 3 题,缺 47 题。按缺题算 0 为 4.00%,未列入 §6 |
 | B-gb128(全量 3 epoch 版) | eval 50 题全缺,无结果 |
 
 ---
