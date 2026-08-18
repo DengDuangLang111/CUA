@@ -38,6 +38,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -263,8 +264,19 @@ def audit(corpus_dirs, results_root, baseline_dirs, harness_root, noop_names,
             src = [base / "initial_state.png"] + [base / s.screenshot
                                                   for s in st[:-1]]
             for s in steps.values():
-                for i, rel in enumerate(images_of(s)):
-                    if i >= len(src) or not src[i].is_file():
+                for rel in images_of(s):
+                    # The observation index is IN THE FILENAME (build writes
+                    # images/<key>/obs_%03d.png with i+1). Enumerating the
+                    # sample's images instead assumes image #i is observation
+                    # #i, which is false for every sample past the folding
+                    # window (max 20 images): those carry only the most recent
+                    # observations. That assumption reported 15,575 of 62,159
+                    # images as wrong; the real number after this fix is below.
+                    m = re.search(r"obs_(\d+)\.png$", rel)
+                    if not m:
+                        continue
+                    i = int(m.group(1)) - 1
+                    if i < 0 or i >= len(src) or not src[i].is_file():
                         continue
                     want = process_image(src[i].read_bytes())
                     if isinstance(want, str):
