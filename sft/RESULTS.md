@@ -128,6 +128,38 @@ OSWorld 有一个名为 `multi_apps` 的域。ostg 生成的任务没有这个�
 
 `--preserve_thinking` 决定**渲染历史轮时是否保留 `<think>`**,不影响当前轮目标。
 
+#### 评测时实际加载的是哪个 checkpoint
+
+分数是权重的属性,不是训练配置的属性。下表是从 serve 作业日志里读出的**实际
+加载路径**,以及该 checkpoint 的 `trainer_state.json` 里记录的 epoch 位置 ——
+不是 sbatch 想加载什么,是 vLLM 真加载了什么。
+
+| 臂 | 实际服务的 checkpoint | 该 ckpt 的 epoch | 该次训练的终点 | 是否终点 |
+|---|---|---|---|---|
+| Bs-LoRA | `q38Bs-lora/v0-20260817-043913/checkpoint-264`(merged) | **3.00** | 264 | 是 |
+| Bs-gb64 | `q38Bs-gb64/v0-20260817-032220/checkpoint-90` | **1.02** | 264 | **否** |
+| B-gb128 ep2 | `q38e3B-gb128/v7-20260816-224140/checkpoint-90` | **2.00** | 135 | 否(名称即 ep2) |
+| B-gb64o | `q38e3B-gb64o/v0-20260817-013858/checkpoint-90` | **1.01** | 267 | **否** |
+| B-1ep | `q38e1B/v0-20260816-183257/checkpoint-708` | 1.00 | 708 | 是 |
+| rich · keepthink / · stock | `q38e3-rich/v0-20260815-012706/checkpoint-450` | 3.00 | 450 | 是 |
+| rich ep1 | `q38e3-rich/v0-20260815-012706/checkpoint-150` | 1.00 | 450 | 否(有意取 ep1) |
+| lean · keepthink | `q38e3-lean/v0-20260815-012706/checkpoint-450` | 3.00 | 450 | 是 |
+| 基座 4B | `sft/models/Qwen3.5-4B` | — | — | 未微调 |
+
+**Bs-gb64 与 B-gb64o 加载的不是终点,而是约 1 epoch 处**,这不是设计选择。
+serve 脚本用这一行挑 checkpoint:
+
+```
+ls -d $B/out/<run>/v*/checkpoint-* | sort -t- -k2 -n | tail -1
+```
+
+`-t-` 以 `-` 切**整条绝对路径**,第 2 段是 `gb64/v0` 这类非数字串,`-n` 把它们
+全判为 0;键相同后 GNU sort 退回整行字典序,于是 `checkpoint-90` 排在
+`checkpoint-264` 之后。两次训练的所有 checkpoint 在 serve 启动时都已存在
+(gb64 的 264 步落盘于 06:19,serve 起于 08:07),所以不是"当时只有 90"。
+
+上面 §5.2 的 epoch 列描述的是**训练配置**;评测实际用了哪一步以本表为准。
+
 ### 5.3 `--think-cap 2048` 究竟做了什么
 
 它是 **build 阶段**的过滤,不是训练参数(`build.py:339-350`):
@@ -201,6 +233,11 @@ OSWorld 有一个名为 `multi_apps` 的域。ostg 生成的任务没有这个�
 高于基座的 4 个臂:Bs-LoRA、Bs-gb64、B-gb128 ep2、B-gb64o。
 低于基座的 5 个臂:B-1ep、rich 三个变体、lean。
 
+**这张表不是等 epoch 的对照。** Bs-LoRA 是 3.00 epoch 的权重,Bs-gb64 是
+1.02 epoch,B-gb64o 是 1.01 epoch,B-gb128 ep2 是 2.00 epoch(见 §5.2)。
+"Bs-LoRA 比 Bs-gb64 高 2 分"里同时变了微调方式和训练量;单看这张表分不出
+是 LoRA 的功劳还是多训了两个 epoch 的功劳。
+
 **得分与满分题不一致的原因**:部分题的 evaluator 给部分分(`conj:"and"` 可只满足
 一部分)。例:Bs-gb64 满分 22 题 = 44.0%,得分 45.81%。
 
@@ -235,6 +272,8 @@ OSWorld 有一个名为 `multi_apps` 的域。ostg 生成的任务没有这个�
 | 臂 | 事实 |
 |---|---|
 | B-gb128 ep2 | global batch 128 需要 accum 8。该训练栈显存正比于梯度累积次数(实测:accum 4 稳定在 131.9 GiB;accum 16 在第 8–13 步 OOM;accum 32/64 在第 1 步前 OOM)。**gb128 六次提交全部 OOM,3 个 epoch 从未跑完**,表中该行使用崩溃前保存的第 2 个 epoch 边界存档。详见 `sft/TRAINING.md`,上游 ms-swift issue #5230 同症 |
+| **Bs-gb64** | 服务的是 `checkpoint-90`(1.02 epoch),不是终点 264。serve 脚本的 checkpoint 挑选行按字典序排 —— `checkpoint-90` > `checkpoint-264`(见 §5.2)。45.81% 是 1 epoch 权重的分数 |
+| **B-gb64o** | 同一处缺陷:服务 `checkpoint-90`(1.01 epoch),终点是 267。41.81% 是 1 epoch 权重的分数 |
 | lean · stock 模板 | 只完成 3 题,缺 47 题。按缺题算 0 为 4.00%,未列入 §6 |
 | B-gb128(全量 3 epoch 版) | eval 50 题全缺,无结果 |
 
