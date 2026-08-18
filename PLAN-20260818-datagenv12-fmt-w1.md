@@ -55,8 +55,8 @@ eval-50 18%;该类并集解开率 3/9,其余类 32/41。本波:解锁判据 → 
 | # | 事 | 闸 | 状态 |
 |---|---|---|---|
 | 0 | 分支 + worktree | — | ✅ |
-| 1 | `single_json.txt` diff | **用户批准** | 起草中 |
-| 2 | ship 层 pptx 规则检查器 | 单测 + 已知反例 | |
+| 1 | prompt + taxonomy + gen/accept | 用户已批 | ✅ 落地,分支提交 `c05113a2` |
+| 2 | 宿主检查器 `check_pptx_props` / `check_image_props` | 单测 + 已知反例 | ✅ 真 pptx/PNG 单测 6/6 过(正例 1.0;错值 / 越界 shape / 丢文件全部守错 0.0) |
 | 3 | 生成 50 道 | 查重闸 + 人审 5 道抽样 | |
 | 4 | 教师 rollout | 需 Tillicum 恢复(08-19 09:00)+ VM(与 kC/kE/kD1/kG 争,用户定序) | |
 | 5 | checker 审计 | 硬约束 4 | |
@@ -71,6 +71,17 @@ eval-50 18%;该类并集解开率 3/9,其余类 32/41。本波:解锁判据 → 
 - 训后行为面板:eval-50 那 9 道格式题上的行为(是否出现"改属性→确认→保存"链)、
   显式 terminate 率不回退、think 尾部不恶化;
 - eval-50 总分:**只记录**。
+
+## 落地纪要(2026-08-18)
+
+- 改动比预案又小了一圈:**闸零改动** —— 现有"禁裸 `--convert-to odp/pptx`"正则
+  (`gen.py:615`)本来就放行带冒号的限定滤镜,`pptx:"Impress MS PowerPoint 2007
+  XML"` 直接通过;prebuild / accept / control / rollout 四层零改动维持。
+- 检查器落在 OSWorld fork `generated_tasks.py`(第 19、20 个自定义 metric,
+  沿既有惯例),`metrics/__init__.py` 注册;**惰性 import**,缺库不拖垮整个
+  evaluator。宿主 venv 实测已带 python-pptx 与 PIL。
+- 尚未做:prebuild 容器里冒烟 `odp → pptx` 滤镜串(生成前的第一件事);
+  restyle 波次的抽签限制(gen 只抽 restyle 格)。
 
 ## 风险
 

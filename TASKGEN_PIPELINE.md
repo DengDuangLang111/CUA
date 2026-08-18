@@ -1,5 +1,9 @@
 # The taskgen pipeline
 
+> **datagenv12(分支,未合 main)**:fmt-w1 加 `intent=restyle` 与规则式
+> `grade=pptx` / `grade=image`(宿主 python-pptx / PIL 判呈现属性)。动机与闸 →
+> `PLAN-20260818-datagenv12-fmt-w1.md`。本文其余部分描述 v11.1 行为。
+
 How a task goes from a coordinate to a scored trajectory, what each stage
 catches, and what it costs. Every check listed here exists because its
 absence once shipped a defect — the "caught in practice" column is the

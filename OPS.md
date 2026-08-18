@@ -18,7 +18,7 @@
  M mm_agents/agent.py                            ANTHROPIC_BASE_URL 可配 + thinking disabled(只影响 PromptAgent/Claude,跑 Qwen 不走这里)
  M scripts/python/run_multienv_qwen.py           加 --preserve_thinking flag(评测侧空转,见下)
  M lib_run_single.py                             存 initial_state.png(第 1 步观测原本不落盘);OSTG_WAIT_BREAK / OSTG_LOOP_LOG 两个环境变量(不设则完全惰性)
-?? desktop_env/evaluators/metrics/generated_tasks.py    整个自定义 evaluator 模块
+?? desktop_env/evaluators/metrics/generated_tasks.py    整个自定义 evaluator 模块(08-18 起含 check_pptx_props / check_image_props,fmt-w1 的规则式格式判据)
 ?? synthetic_tasks/ · taskgen_tasks*/ · taskgen_out/ · eval_valpanel_tasks/
 ?? evaluation_examples/verified_eval50_nonproxy.json · ..._eval100_...
 ```
