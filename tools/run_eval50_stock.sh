@@ -151,7 +151,11 @@ for TRY in 1 2 3 4 5; do
   up || { echo "[$(date '+%F %T')] endpoint down at $N/$T, waiting up to 30h"; wait_up 1800; }
   up || { echo "[$(date '+%F %T')] FATAL: endpoint never came back in 30h"; exit 1; }
   echo "[$(date '+%F %T')] pass $TRY at $N/$T"
-  OSWORLD_OPENAI_TIMEOUT=600 \
+  # OSTG_NO_RECORD=1: the guest-side mp4s cap near 280-320s regardless of
+  # task length and nothing reads them (build.py's mp4 fallback has fired
+  # 0 times across 16 builds); on a sick guest end_recording adds 15s of
+  # retries to a task that is already failing. Screenshots are unaffected.
+  OSWORLD_OPENAI_TIMEOUT=600 OSTG_NO_RECORD=1 \
   .venv/bin/python scripts/python/run_multienv_qwen.py \
     --provider_name docker --path_to_vm /mnt/d/research/OSWorld/docker_vm_data/Ubuntu.qcow2 \
     --headless --observation_type screenshot --action_space pyautogui \
