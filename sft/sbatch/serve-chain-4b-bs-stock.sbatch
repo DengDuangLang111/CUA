@@ -17,22 +17,18 @@
 # under keepthink. Paired with Bs-LoRA/stock it says whether the keepthink
 # patch helps, hurts, or does nothing on arms that actually beat the base.
 #
-# Original rich/stock header follows.
-# Qwen3.5-4B SFT arm "rich" checkpoint-450 served under the OFFICIAL chat
-# template -- the rich/stock cell: rich-trained weights, OSWorld-Verified
-# DEFAULT serving. No --chat-template override, so vLLM renders with the
-# model dir's built-in template, which STRIPS <think> from history turns
-# (current-step thinking unaffected). Client behaviour stays upstream-
-# identical (sends history think; template discards at render). Paired with
-# rich/rich (keepthink) this isolates the eval-time effect of history-think
-# visibility on the same weights. Port 8025 per the port-per-role convention.
-# Sampling override = official general-thinking profile incl top_k 20, same
-# as every other serve. CHAIN_MAX=2 as usual.
 set -uo pipefail
 
 PROJ=/gpfs/scrubbed/jy050706/qwen-serve
 SELF="$PROJ/serve-chain-4b-bs-stock.sbatch"
-MODEL=$(ls -d $B/out/q38Bs-gb64/v*/checkpoint-* 2>/dev/null | sort -t- -k2 -n | tail -1)
+# Pinned to the ENDPOINT, not globbed. The keepthink run at 45.81% was
+# accidentally served checkpoint-90 (epoch 1.02) -- serve-chain-4b-bs.sbatch
+# sorts checkpoint paths lexicographically, so checkpoint-90 outranks
+# checkpoint-264. Serving 264 here means this run is the 3.00-epoch weights,
+# equal-epoch with Bs-LoRA (also 3.00) for the first time. The template is
+# therefore NOT the only difference vs the 45.81% run; the epoch-matched
+# comparison it does buy is worth more than reproducing the mistake.
+MODEL=/gpfs/scrubbed/jy050706/sft/out/q38Bs-gb64/v0-20260817-032220/checkpoint-264
 KEYFILE="${VLLM_API_KEY_FILE:-$PROJ/.vllm_api_key}"
 CHAIN_IDX="${CHAIN_IDX:-1}"; CHAIN_MAX="${CHAIN_MAX:-2}"
 

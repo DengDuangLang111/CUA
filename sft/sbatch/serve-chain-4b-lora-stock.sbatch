@@ -26,17 +26,6 @@
 # thinking is unaffected). Visible prose and tool calls stay in history under
 # both templates.
 #
-# Original rich/stock header follows.
-# Qwen3.5-4B SFT arm "rich" checkpoint-450 served under the OFFICIAL chat
-# template -- the rich/stock cell: rich-trained weights, OSWorld-Verified
-# DEFAULT serving. No --chat-template override, so vLLM renders with the
-# model dir's built-in template, which STRIPS <think> from history turns
-# (current-step thinking unaffected). Client behaviour stays upstream-
-# identical (sends history think; template discards at render). Paired with
-# rich/rich (keepthink) this isolates the eval-time effect of history-think
-# visibility on the same weights. Port 8024 per the port-per-role convention.
-# Sampling override = official general-thinking profile incl top_k 20, same
-# as every other serve. CHAIN_MAX=2 as usual.
 set -uo pipefail
 
 PROJ=/gpfs/scrubbed/jy050706/qwen-serve
