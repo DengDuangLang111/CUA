@@ -16,7 +16,7 @@
  M mm_agents/qwen/main.py                        加 preserve_thinking,透传 chat_template_kwargs
  M mm_agents/qwen/client.py                      reasoning_content 取不到时 fallback 到 reasoning
  M mm_agents/agent.py                            ANTHROPIC_BASE_URL 可配 + thinking disabled(只影响 PromptAgent/Claude,跑 Qwen 不走这里)
- M scripts/python/run_multienv_qwen.py           加 --preserve_thinking flag(评测侧空转,见下)
+ M scripts/python/run_multienv_qwen.py           加 --preserve_thinking flag(评测侧空转,见下);08-18 起崩溃题落 result.txt=0.0 + harness_error.json(孤儿题修复,**代价:崩溃题不再被补跑趟自愈**,恢复靠按 harness_error.json 显式删目录重跑)
  M lib_run_single.py                             存 initial_state.png(第 1 步观测原本不落盘);OSTG_WAIT_BREAK / OSTG_LOOP_LOG 两个环境变量(不设则完全惰性)
 ?? desktop_env/evaluators/metrics/generated_tasks.py    整个自定义 evaluator 模块(08-18 起含 check_pptx_props / check_image_props,fmt-w1 的规则式格式判据)
 ?? synthetic_tasks/ · taskgen_tasks*/ · taskgen_out/ · eval_valpanel_tasks/
@@ -246,7 +246,7 @@ ssh osworld-windows 'wsl -e bash -lc "pgrep -af run_multienv_qwen | head -3"'
 | 项 | 值 |
 |---|---|
 | 学生 | `Qwen/Qwen3.6-27B` BF16,别名 `qwen36-27b-bf16-local`,WSL `127.0.0.1:18001` |
-| 教师 | Qwen3.8-27B(FP8 since 08-14),别名 `qwen38-27b-local`,WSL `127.0.0.1:18020` |
+| 教师 | Qwen3.8-27B **BF16**,别名 `qwen38-27b-local`,WSL `127.0.0.1:18020`。<br>⚠ 2026-08-18 更正:此处原写 "FP8 since 08-14",**错的**。`results_generated/qwen38-27b-local/*/MODEL_BOUNDARY.json` 自记 `"precision":"BF16"`;serve sbatch 里的 `fp8` 只作用于 `--kv-cache-dtype`,不是权重。照旧文起服务会毁掉与历史轨迹的可比性 |
 | 权重 | `/gpfs/scrubbed/jy050706/models/`,`max_model_len=262144` |
 | 凭据 | `/mnt/d/research/OSWorld/.env` 里的 `OPENAI_BASE_URL` + `OPENAI_API_KEY`(64 位)。**该变量名承载的是 Tillicum vLLM bearer token,不是 OpenAI 平台密钥** |
 
