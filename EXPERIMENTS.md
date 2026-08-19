@@ -38,12 +38,13 @@
   已出分:**kC=Bs-gb64 真 3ep = 43.81%**(比同跑 e1.02 的 45.8% 低 2pp,噪声内,
   "多训无益"在全量上重现)、**kE=r5 lr3e-6 3ep = 57.81% 全项目新高**(超 base
   18pp,首个越过噪声底线的读数;对 kD 的 +8pp 混着 lr/语义/硬件三变量,归因待
-  kD15);跑动中 kD15(gb64-e150,epoch 1.501;原定 ~1ep 因 save_steps 30∤100
-  无 1.0 边界存档,用户改选中点)→ **t38(教师 Qwen3.8-27B 天花板,同冻结 50 题、同采样协议、同 no-split
-  口径;用户令其紧跟 kD15)** → vlbase(基座 Qwen3-VL-4B-Thinking,VL 系参照,
-  插队令 08-19)→ nocap(kE 去 cap,带完训闸)→ kG(无散文 LoRA)
-  → kF(lean LoRA;r5lora·kG·kF = 同语料散文三点)。**img3 与 VL-SFT 只登记
-  不排跑**(`CHECKPOINTS.md` §2.1)。
+  kD15)。已收官:**kD15=39.81%**(3ep 比 1.5ep 高 10pp,r5 上多训有益)、
+  **t38 教师=69.81%**(SFT 关掉 base→teacher 30pp 差距的 60%,剩 12pp 蒸馏
+  空间;教师与 kE 双败 12 题=当前范式天花板)。当前链(2026-08-19 深夜定稿):
+  vlbase(跑动中)→ nocap(回锅,用户令)→ kG(无散文 LoRA)→ vlsft
+  (VL×r5vl,完训闸)→ img3(kE 同配方、训练窗 20→3,**标准 20 图协议评**)
+  → img3h3 / kEh3(历史窗 2×2 另两格,`--image_max 3 --fold_size 1`)
+  → kF(lean LoRA)。臂表与状态明细 → `CHECKPOINTS.md` §2.1。
 - **eval100 决赛(用户定,2026-08-19;当前链跑完后执行)**:等全部臂在 eval-50
   出分 → 取 SFT 最高分者(冠军)→ **冠军 + base + teacher 三方跑 eval100**
   (`verified_eval100_nonproxy.json`)。要点:eval50 ⊂ eval100 已验证,**另 50 题
