@@ -41,7 +41,7 @@ LoRA 的 14G vs 全量 592G = adapter 存储优势的实测量级(**42 倍**)。
 ## 2.1 在训/待训模型登记(2026-08-19 深夜更新;eval 顺序=用户令)
 
 当前链(`tools/tillicum_chain.sh`,全 no-split,08-19 05:28 版):**img3(跑动中)
-→ vlsft → img3h3 → kEh3 → gb128 → nocap → kG → vl20 → vl3b → vl20g(尾)**,
+→ vlsft → img3h3 → kEh3 → nocap → gb128 → kG → vl20 → vl3b → vl20g(尾)**,
 之后 eval100 决赛。kF 不排。VL 三尾臂均带完训闸;vl20g 即第五臂(用户排上=保留)。
 插曲三:248869/248870 首交 8 秒死于 MASTER_PORT=29500 写死(1 卡/节点作业与
 248868 共享节点抢端口),改为 `20000+JOBID%9000` 后重交为 248882/248883;
