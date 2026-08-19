@@ -34,10 +34,14 @@
   `OSTG_TYPE_NO_SPLIT=1` 下一条 typewrite 直发(默认 0=上游拆行;验收
   58,211 真实响应双闸 0 差异 + 灵敏度对照,→ `sft/FAILURE_ANATOMY.md`)。
   **口径边界:kD 及之前=拆行语义,kC 起=合并语义**,每次运行的
-  `MODEL_BOUNDARY.json` 记录该 flag。当前链(Tillicum,`tillicum_chain.sh`):
-  kC=bsstock(跑动中,checkpoint-264 已由 vLLM root 复核)→ kE(lr3e6-e300)
-  → kD15(gb64-e150,**epoch 1.501 训练一半**;原定 ~1ep 因 save_steps 30∤100
-  无 1.0 边界存档,用户改选中点)→ kG(loranp-merged-300,无散文臂)→ kF(loralean-merged-300,lean LoRA,用户 08-18 恢复;与 r5lora·kG 构成同语料散文三点对照);
+  `MODEL_BOUNDARY.json` 记录该 flag。当前链(Tillicum,`tillicum_chain.sh`),
+  已出分:**kC=Bs-gb64 真 3ep = 43.81%**(比同跑 e1.02 的 45.8% 低 2pp,噪声内,
+  "多训无益"在全量上重现)、**kE=r5 lr3e-6 3ep = 57.81% 全项目新高**(超 base
+  18pp,首个越过噪声底线的读数;对 kD 的 +8pp 混着 lr/语义/硬件三变量,归因待
+  kD15);跑动中 kD15(gb64-e150,epoch 1.501;原定 ~1ep 因 save_steps 30∤100
+  无 1.0 边界存档,用户改选中点)→ kG(loranp-merged-300,无散文臂)
+  → kF(loralean-merged-300,lean LoRA,用户 08-18 恢复;与 r5lora·kG 构成
+  同语料散文三点对照)。修法 B 附带红利:单臂 2h(原 4-6h),风暴磨步时间消失;
   serve 端口 8028/8029/8031(8030 让给旧 Klone 隧道位,防串线)。
 - **datagenv12 首波启动:补格式类任务 50 道(fmt-w1)**。依据:语料 544 道里
   格式类 **1 道(0.2%)** vs 基准全量 15.2% / eval-50 18%;该类并集解开 3/9,
