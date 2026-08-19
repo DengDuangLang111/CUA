@@ -53,7 +53,11 @@ case "$ARM" in
   # gb128: VL x vl3pic at global-batch 128 (3-image trained -> 3-image eval)
   gb128) SB=vl3gb128-stock; JOB=eval4bg28; RP=8037; MN=vl3pic-gb128-stock; GRP=qwen3vl-4b-sft; PREV=vlsft; PJOB=eval4bvls; XARGS="--image_max 3 --fold_size 1" ;;
   nocap) SB=4b-nocap-stock; JOB=eval4bnc; RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft; PREV=kEh3; PJOB=eval4blr3 ;;
-  kG)   SB=4b-loranp-stock; JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=nocap;  PJOB=eval4bnc ;;  # tail arm: nothing recycles eval4bnp, scancel it after
+  kG)   SB=4b-loranp-stock; JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=nocap;  PJOB=eval4bnc ;;
+  # VL tail (user 08-19): vl20 -> vl3b -> vl20g, all gated on their trainings
+  vl20)  SB=vl20-stock;  JOB=eval4bv20; RP=8038; MN=vl20pic-lr1e5-stock; GRP=qwen3vl-4b-sft; PREV=kG;    PJOB=eval4bnp ;;
+  vl3b)  SB=vl3b-stock;  JOB=eval4bv3b; RP=8039; MN=vl3pic-base-stock;   GRP=qwen3vl-4b-sft; PREV=vl20;  PJOB=eval4bv20; XARGS="--image_max 3 --fold_size 1" ;;
+  vl20g) SB=vl20g-stock; JOB=eval4bv2g; RP=8040; MN=vl20pic-gb128-stock; GRP=qwen3vl-4b-sft; PREV=vl3b;  PJOB=eval4bv3b ;;  # tail: scancel eval4bv2g after
   # vlsft: Qwen3-VL-4B-Thinking x r5vl corpus, lr3e-6 3ep (chain gates on training done)
   vlsft) SB=vl-r5vl-stock; JOB=eval4bvls; RP=8035; MN=q3vl-r5vl-lr3e6-stock; GRP=qwen3vl-4b-sft; PREV=img3; PJOB=eval4bim3 ;;
   # img3: kE's exact recipe with the training screenshot window 20->3; STANDARD 20-image

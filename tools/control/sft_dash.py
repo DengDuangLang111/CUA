@@ -190,6 +190,16 @@ EVAL50_ARMS = {
                   "VL backbone x 3-image corpus at global batch 128 (8 nodes x"
                   " 1 GPU x bs1 x accum16 after the bs2 OOM); evaluated at its"
                   " matched 3-image window"),
+    "vl20":      ("VL 20-img lr1e-5 · stock (no-split)", "sft",
+                  "VL backbone x r5vl full-window corpus at lr 1e-5 (kD-recipe"
+                  " twin on VL); standard 20-image eval"),
+    "vl3b":      ("VL img3-recipe lr3e-6 · 3-img eval (no-split)", "sft",
+                  "VL backbone x 3-image corpus at lr 3e-6 -- the img3/kE recipe"
+                  " twin on the VL backbone; evaluated at its matched 3-image"
+                  " window"),
+    "vl20g":     ("VL 20-img gb128 · stock (no-split)", "sft",
+                  "same as vl20 but global batch 128 -- the batch-size lever on"
+                  " the VL backbone"),
     "kF":        ("r5-LoRA lean e3.00 · stock (no-split)", "sft",
                   "lean variant of the r5 LoRA, endpoint merge. Dropped from the"
                   " Klone maintenance plan, restored 2026-08-18; with r5lora"

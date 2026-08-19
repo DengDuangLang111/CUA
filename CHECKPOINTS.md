@@ -40,9 +40,12 @@ LoRA 的 14G vs 全量 592G = adapter 存储优势的实测量级(**42 倍**)。
 
 ## 2.1 在训/待训模型登记(2026-08-19 深夜更新;eval 顺序=用户令)
 
-当前链(`tools/tillicum_chain.sh`,全 no-split,08-19 05:20 版):**img3(跑动中)
-→ vlsft → gb128(vl3pic-gb128,3 图协议评,完训闸)→ img3h3 → kEh3 →
-nocap → kG(尾)**,之后进入 eval100 决赛(EXPERIMENTS.md)。kF 不排。
+当前链(`tools/tillicum_chain.sh`,全 no-split,08-19 05:28 版):**img3(跑动中)
+→ vlsft → gb128 → img3h3 → kEh3 → nocap → kG → vl20 → vl3b → vl20g(尾)**,
+之后 eval100 决赛。kF 不排。VL 三尾臂均带完训闸;vl20g 即第五臂(用户排上=保留)。
+插曲三:248869/248870 首交 8 秒死于 MASTER_PORT=29500 写死(1 卡/节点作业与
+248868 共享节点抢端口),改为 `20000+JOBID%9000` 后重交为 248882/248883;
+四个 VL 训练脚本的端口全部改成 job 派生,此坑永闭。
 
 | 臂 | 模型/权重 | 状态 | 说明 |
 |---|---|---|---|
