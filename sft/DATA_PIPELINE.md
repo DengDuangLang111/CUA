@@ -166,6 +166,7 @@ terminate),但它进了训练目标。
 | `--tasks` 传了 `examples/` 就崩 | `load_instruction` 自己拼 `examples/`,要传 **run 目录** |
 | 审计报"所有图片都缺失" | 图片路径**相对各自 build 目录**(ship 时才转绝对),别按进程 cwd 解析 |
 | 审计报出大量不存在的目录冲突 | 目录归属键必须用**绝对路径**;两个 pool 各自 build 目录下同名相对路径是合法的 |
+| **训练实际样本数比语料少,且无从追认** | `truncation_strategy` 默认 **`delete`**,而 delete 是**完全静默**的:args 层翻译成 raise → `template/base.py:1497` 抛 `MaxLengthError` → `dataset/preprocessor/core.py:200-206` `pass` + `row = []`。日志零记录,`[INFO:swift] train_dataset num_rows` 打印的是**丢弃前**的数(实测 247800 报 6474、240274 报 6385,都等于原始行数)。**row counts lie** —— 只能用 `ostg.sft.vlcheck maxlen` 事前数 |
 | 按 task_id 找轨迹得出离谱结论 | 同一 task_id 在**多个 model/run** 下都有且轨迹完全不同。必须按 `meta['run']` 定位 + `orig_steps` 校验 |
 
 ---
