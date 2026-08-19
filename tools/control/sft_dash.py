@@ -182,6 +182,11 @@ EVAL50_ARMS = {
     "img3h3":    ("img3 @ 3-img eval · stock (no-split)", "sft",
                   "same img3 weights evaluated with --image_max 3 --fold_size 1"
                   " -- the matched cell (3-train/3-eval) of the 2x2"),
+    "kEh1":      ("kE @ 1-img eval · stock (no-split)", "sft",
+                  "kE's weights with only the CURRENT screenshot in context"
+                  " (--image_max 1 --fold_size 1): the extreme point of the"
+                  " eval-window curve 20/3/1 -- how much history does the"
+                  " champion recipe actually need at serve time?"),
     "kEh3":      ("kE @ 3-img eval · stock (no-split)", "sft",
                   "kE's 20-image-trained weights evaluated with --image_max 3"
                   " --fold_size 1 -- the 20-train/3-eval cell: how much does the"
