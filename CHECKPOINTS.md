@@ -50,7 +50,7 @@ kG → vlsft → img3 → img3h3 → kEh3 → kF**,之后进入 eval100 决赛(E
 | img3 | `out/q38Bhqs2t-img3`(**kE 字节级同配方**,仅训练截图窗 20→3) | 在训 | 排 vlsft 后,完训闸;**按用户令用标准 20 图协议评**(2×2 的故意 skew 格) |
 | img3h3 | 同 img3 权重 | — | eval 侧 `--image_max 3 --fold_size 1`(3训/3评格),复用 img3 serve |
 | kEh3 | 同 kE 权重 | 在盘 | eval 侧 `--image_max 3 --fold_size 1`(20训/3评格) |
-| kF | loralean-merged-300 | 在盘 | 链尾(此前用户令未撤) |
+| kF | loralean-merged-300 | 在盘 | **不排**(用户令 08-19 撤销);权重与 serve 脚本齐备,要跑随时可挂 |
 
 历史窗 2×2 全景:kE@20 = 57.81%(已有)| img3@20 | kE@3 | img3@3 —— 四格齐后
 "训练窗×评测窗"的交互一图定案(img3 训练把视觉 token 砍到 29%,若 img3@3
