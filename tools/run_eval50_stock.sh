@@ -52,16 +52,16 @@ case "$ARM" in
   vlbase) SB=vl-base-stock; JOB=eval4bvlb; RP=8034; MN=q3vl-4b-base-stock; GRP=qwen3vl-4b-base; PREV=t38;  PJOB=eval38 ;;
   # nocap: kE minus the think-cap (user rank #1 of the trained arms). The
   # chain launcher gates on training completion before this driver starts.
-  nocap) SB=4b-nocap-stock; JOB=eval4bnc; RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft; PREV=vlbase; PJOB=eval4bvlb ;;
+  nocap) SB=4b-nocap-stock; JOB=eval4bnc; RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft; PREV=vlsft; PJOB=eval4bvls ;;
   kG)   SB=4b-loranp-stock; JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=nocap;  PJOB=eval4bnc ;;
   # vlsft: Qwen3-VL-4B-Thinking x r5vl corpus, lr3e-6 3ep (chain gates on training done)
-  vlsft) SB=vl-r5vl-stock; JOB=eval4bvls; RP=8035; MN=q3vl-r5vl-lr3e6-stock; GRP=qwen3vl-4b-sft; PREV=kG; PJOB=eval4bnp ;;
+  vlsft) SB=vl-r5vl-stock; JOB=eval4bvls; RP=8035; MN=q3vl-r5vl-lr3e6-stock; GRP=qwen3vl-4b-sft; PREV=img3; PJOB=eval4bim3 ;;
   # img3: kE's exact recipe with the training screenshot window 20->3; STANDARD 20-image
   # eval protocol by user order (the deliberate train/eval-skew cell of the 2x2)
-  img3)  SB=4b-img3-stock; JOB=eval4bim3; RP=8036; MN=q38Bhqs2t-img3-stock; GRP=qwen35-4b-sft; PREV=vlsft; PJOB=eval4bvls ;;
+  img3)  SB=4b-img3-stock; JOB=eval4bim3; RP=8036; MN=q38Bhqs2t-img3-stock; GRP=qwen35-4b-sft; PREV=vlbase; PJOB=eval4bvlb ;;
   # the other two cells of the history-window 2x2 (user 2026-08-19): same weights,
   # eval-side window 3. img3h3 reuses img3's live serve (same JOB); kEh3 resubmits kE's.
-  img3h3) SB=4b-img3-stock; JOB=eval4bim3; RP=8036; MN=q38Bhqs2t-img3-stock; GRP=qwen35-4b-sft; PREV=img3; PJOB=none; XARGS="--image_max 3 --fold_size 1" ;;
+  img3h3) SB=4b-img3-stock; JOB=eval4bim3; RP=8036; MN=q38Bhqs2t-img3-stock; GRP=qwen35-4b-sft; PREV=nocap; PJOB=eval4bnc; XARGS="--image_max 3 --fold_size 1" ;;
   kEh3)  SB=4b-lr3e6-stock; JOB=eval4blr3; RP=8028; MN=q38Bhqs2t-lr3e6-stock; GRP=qwen35-4b-sft; PREV=img3h3; PJOB=eval4bim3; XARGS="--image_max 3 --fold_size 1" ;;
   kF)   SB=4b-loralean-stock; JOB=eval4bll; RP=8032; MN=q38Bhqs2t-loralean-stock; GRP=qwen35-4b-sft; PREV=kEh3; PJOB=eval4blr3 ;;
   # teacher ceiling: Qwen3.8-27B on the SAME frozen 50, same sampling protocol

@@ -40,12 +40,14 @@ LoRA 的 14G vs 全量 592G = adapter 存储优势的实测量级(**42 倍**)。
 
 ## 2.1 在训/待训模型登记(2026-08-19 深夜更新;eval 顺序=用户令)
 
-当前链(`tools/tillicum_chain.sh`,全 no-split):**vlbase(跑动中)→ nocap →
-kG → vlsft → img3 → img3h3 → kEh3 → kF**,之后进入 eval100 决赛(EXPERIMENTS.md)。
+当前链(`tools/tillicum_chain.sh`,全 no-split,08-19 晨定稿):**vlbase(跑动中)
+→ img3 → vlsft → nocap → img3h3 → kEh3**,之后进入 eval100 决赛(EXPERIMENTS.md)。
+**kG(无散文 LoRA)与 kF(lean LoRA)均被用户撤下不排**——权重与 serve 脚本齐备,
+散文三点对照(r5lora/kG/kF)暂缓,要跑随时可挂。
 
 | 臂 | 模型/权重 | 状态 | 说明 |
 |---|---|---|---|
-| nocap | `out/q38Bhqs2t-lr3e6-nocap`(kE 配置去 think-cap) | **已训完** | 一度被撤,用户改令回锅,排 vlbase 后;链有完训闸 |
+| nocap | `out/q38Bhqs2t-lr3e6-nocap`(kE 配置去 think-cap) | **已训完** | 回锅后再调序:排 vlsft 后;链有完训闸 |
 | vlsft | `out/q3vl-r5vl-lr3e6`(Qwen3-VL-4B-Thinking × r5vl,lr3e-6 3ep) | 在训 | 排 kG 后,完训闸;对照 = vlbase |
 | img3 | `out/q38Bhqs2t-img3`(**kE 字节级同配方**,仅训练截图窗 20→3) | 在训 | 排 vlsft 后,完训闸;**按用户令用标准 20 图协议评**(2×2 的故意 skew 格) |
 | img3h3 | 同 img3 权重 | — | eval 侧 `--image_max 3 --fold_size 1`(3训/3评格),复用 img3 serve |

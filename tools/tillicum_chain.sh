@@ -45,7 +45,7 @@ train_gate(){  # $1 arm, $2 job, $3 dir glob; up to 12h; returns 1 on timeout (c
 
 log "chain start (resume-safe)"
 PREV=bsstock
-for arm in kE kD15 t38 vlbase nocap kG vlsft img3 img3h3 kEh3; do
+for arm in kE kD15 t38 vlbase img3 vlsft nocap img3h3 kEh3; do
   if alive "$arm"; then
     log "adopt $arm: already in flight"
   elif complete "$arm"; then
@@ -72,4 +72,4 @@ for arm in kE kD15 t38 vlbase nocap kG vlsft img3 img3h3 kEh3; do
   fi
   PREV=$arm
 done
-log "chain done (last arm kEh3; kF dropped by user -- NOTE its serve eval4blr3 is not recycled by anyone, scancel when kEh3 completes)"
+log "chain done (order vlbase -> img3 -> vlsft -> nocap -> img3h3 -> kEh3; kG and kF dropped by user; NOTE kEh3 serve eval4blr3 has no recycler, scancel after)"
