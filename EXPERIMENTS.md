@@ -27,8 +27,8 @@
   (p99/p50=42.8× vs 基座 1.8×;**3.6 仅 6.0×,其同任务轨迹在盘上从未使用**)。
 - **Tillicum 08-18 傍晚提前恢复,eval 链迁回**(Klone 迁移的教训留档:L40S 约
   H200 一半速、GPFS 小文件三次卡死 → 一律节点本地盘、客户端超时 600→1800s)。
-  **kD 在 Klone 收官:48/50 计分、0 补齐 49.81% —— 目前最高臂**(超 basestock
-  45.81%);缺的 2 题:`5d901039`(impress,卡死)与 `5bc63fb9`(multi_apps,
+  **kD 在 Klone 收官:48/50 计分、0 补齐 49.81% —— 目前最高臂**(超 lorastock
+  即 Bs-LoRA e3.00 stock 的 45.81%;basestock 因模板等价结论撤销,从未跑过);缺的 2 题:`5d901039`(impress,卡死)与 `5bc63fb9`(multi_apps,
   即 217 条命令风暴题,旧语义下磨上限,用户裁定放弃)。Klone serve 已撤,账户清空。
 - **修法 B 已落地并从 kC 起生效**:`actions.py` 多行 type 在
   `OSTG_TYPE_NO_SPLIT=1` 下一条 typewrite 直发(默认 0=上游拆行;验收

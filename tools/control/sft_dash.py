@@ -124,6 +124,35 @@ EVAL50_ARMS = {
                   " were produced is the only variable"),
     "leanstock": ("lean · stock (lean/lean)", "sft",
                   "lean weights on the stock template -- trained blind, evaluated blind"),
+    "lorastock": ("Bs-LoRA e3.00 · stock (endpoint)", "sft",
+                  "Bs-LoRA served at its true 3.00-epoch endpoint under the stock"
+                  " template (45.81%); after the template-equivalence finding the"
+                  " keepthink twin is a same-config repeat, not a contrast"),
+    "bsstock":   ("Bs-gb64 e3.00 · stock (kC, no-split)", "sft",
+                  "full-FT Bs corpus at checkpoint-264 (pick_ckpt endpoint) --"
+                  " FIRST arm under OSTG_TYPE_NO_SPLIT=1 (multi-line type sent as"
+                  " one typewrite; every arm through kD ran under the upstream"
+                  " per-line split)"),
+    "r5lora":    ("r5-LoRA e3.00 · stock", "sft",
+                  "r5 corpus (terminal fix) LoRA at its endpoint: explicit"
+                  " terminate 6%->60%, false done 0/7, 41.81% -- failures still"
+                  " grind the 50-step cap because the corpus has no failure"
+                  " endings"),
+    "kD":        ("r5 full-FT e3.00 · stock (Klone)", "sft",
+                  "q38Bhqs2t-gb64 endpoint served on Klone L40S through the"
+                  " Tillicum maintenance; 48/50 scored, 49.81% 0-filled -- best"
+                  " arm to date. 2 tasks abandoned by user call: one stalled"
+                  " impress task, one 217-command storm grinder"),
+    "kE":        ("r5 lr3e-6 e3.00 · stock (no-split)", "sft",
+                  "same r5 corpus at lr 3e-6 (displacement probe), checkpoint-300"
+                  " endpoint"),
+    "kD1":       ("r5 full-FT ~1ep · stock (no-split)", "sft",
+                  "kD's weights at checkpoint-90 (~epoch 1) -- the 1-epoch"
+                  " comparator for the 49.81% endpoint"),
+    "kG":        ("r5-LoRA no-prose e3.00 · stock (no-split)", "sft",
+                  "loranp corpus = r5 with ALL inter-think prose stripped (two"
+                  " build gates: zero-prose + strip-both-identical); differs from"
+                  " r5lora only by prose removal"),
 }
 
 # What each arm isolates. Anything not listed still appears -- an unlabelled
@@ -261,7 +290,7 @@ def eval50():
     for d in sorted(glob.glob(BASE + "/*/eval50-*")):
         run = os.path.basename(d)
         modeldir = os.path.basename(os.path.dirname(d))
-        m = re.match(r"^eval50-([a-z0-9]+)-\d+$", run)
+        m = re.match(r"^eval50-([A-Za-z0-9]+)-\d+$", run)
         key = m.group(1) if m else run
         label, group, note = EVAL50_ARMS.get(key, (key, "?", ""))
         got = {tid: r for tid, r in read_arm(d).items() if tid in tasks}
