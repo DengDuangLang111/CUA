@@ -24,7 +24,7 @@ set -uo pipefail
 
 PROJ=/gpfs/scrubbed/jy050706/qwen-serve
 SELF="$PROJ/serve-chain-4b-img3-stock.sbatch"
-MODEL=$(/gpfs/scrubbed/jy050706/qwen-serve/pick_ckpt.sh "/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-img3/v*" "${CKPT_POLICY:-endpoint}") || exit 1
+MODEL=$(/gpfs/scrubbed/jy050706/qwen-serve/pick_ckpt.sh "/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-img3-lr3e6/v*" "${CKPT_POLICY:-endpoint}") || exit 1
 KEYFILE="${VLLM_API_KEY_FILE:-$PROJ/.vllm_api_key}"
 CHAIN_IDX="${CHAIN_IDX:-1}"; CHAIN_MAX="${CHAIN_MAX:-2}"
 

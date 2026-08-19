@@ -57,7 +57,7 @@ for arm in kE kD15 t38 vlbase img3 vlsft nocap kG img3h3 kEh3; do
     case "$arm" in
       nocap) GJOB=sft-q38Bhqs2t-lr3e6-nocap; GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-lr3e6-nocap/v*" ;;
       vlsft) GJOB=sft-q3vl-r5vl-lr3e6;  GDIR="/gpfs/scrubbed/jy050706/sft/out/q3vl-r5vl-lr3e6/v*" ;;
-      img3)  GJOB=sft-q38Bhqs2t-img3;   GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-img3/v*" ;;
+      img3)  GJOB=sft-q38Bhqs2t-img3;   GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-img3-lr3e6/v*" ;;
     esac
     if [ -n "$GJOB" ]; then
       if ! train_gate "$arm" "$GJOB" "$GDIR"; then
