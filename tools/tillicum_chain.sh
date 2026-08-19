@@ -31,7 +31,7 @@ wait_for(){
 
 log "chain start (resume-safe)"
 PREV=bsstock
-for arm in kE kD15 kG kF t38; do
+for arm in kE kD15 t38 kG kF; do
   if alive "$arm"; then
     log "adopt $arm: already in flight"
   elif complete "$arm"; then
@@ -45,4 +45,4 @@ for arm in kE kD15 kG kF t38; do
   fi
   PREV=$arm
 done
-log "chain done (t38 the teacher ceiling was the last)"
+log "chain done (kF was the last; t38 ran right after kD15 by user order)"
