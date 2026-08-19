@@ -171,6 +171,30 @@ terminate),但它进了训练目标。
 
 ---
 
+### 扫 swift 多轮语料的两个必踩坑(2026-08-19,两个会话同时栽进去)
+
+swift 的**一行 = 截到第 k 步的整段多轮对话**,不是单轮。20 图的样本里有 30 个
+assistant 段。由此:
+
+1. **目标是最后一个 assistant 轮,不是第一个。** 用 `next(...)` 取第一个会永远
+   拿到第 1 步的开场白 —— 症状是"所有样本的 target 长度一模一样"
+   (38 个样本全是 5207 字符),看着像语料坏了,其实是扫描器坏了。
+2. **动作在 `arguments.action`,不在 `name`。** Hermes JSON 的形状是
+   `{"name":"computer_use","arguments":{"action":"terminate","status":"success"}}`,
+   抓 `name` 会把每个终止步都报成 `computer_use`。
+3. **别用 `"terminate"` 子串匹配**:think 文字里提到该词会误报(抽查 17 个 task 中招)。
+
+**正确判据**:读每行最后一个 assistant 轮 → 取最后一个 `<tool_call>` 块 →
+解析 `arguments.action`。
+
+这两个坑叠加,曾让我们一度以为 4 条轨迹没有收尾监督、`corpusaudit` 报的
+"0 endings not terminate" 是假的。修正后:**362/362 任务都有唯一终止行**,
+语料与 corpusaudit 双双无罪。但这次误诊意外揪出了真问题 —— 其中 **3 条的终止行
+带 18 张图、超过 65536**,`truncation_strategy=delete` 会精确删掉这三条轨迹的
+收尾示范(决策与实测见 `sft/TRAINING.md` 现状块的 max_length 条目)。
+
+---
+
 ## 6 诊断工具(不在主链路上)
 
 | 模块 | 回答什么问题 |

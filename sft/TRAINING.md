@@ -12,6 +12,47 @@
   150 步要 12h 墙钟;3 图样本 56 秒/步,6h 足够。**跨阶段约束要落在下游会读的
   地方**:eval 侧的方言/窗口要求写进驱动的 DIALECT/XARGS 列与 MODEL_BOUNDARY,
   写在训练 sbatch 的 WANDB_NOTES 里等于自言自语(vlsft 烧毁 50 题的教训)。
+- **global batch 相同时,bs 与 accum 怎么拆不改变梯度(2026-08-19 读源码+实测)**:
+  swift 的 loss 是 `outputs.loss.sum() / num_items_in_batch`
+  (`trainers/seq2seq_trainer.py:202`),而 `num_items_in_batch =
+  (labels != -100).sum()` 再跨全部 rank `all_reduce`(`:196`/`:201`),
+  且我们的 `average_tokens_across_devices=True`(从在跑作业的 args.json 实测)。
+  **分母是整个 global batch、跨所有卡的有效 token 总数**,所以
+  `16卡×bs1×accum4` 与 `8卡×bs2×accum4`(gb 都是 64)是同一个梯度;
+  差异只有 bf16 累加顺序和 dropout RNG,等价于换 seed,远在 5-6pp 噪声底之下。
+  那个著名的 HF gradient-accumulation 归一化 bug 在这里不存在:
+  transformers 5.15.0,且 swift `:31` 显式
+  `self.model_accepts_loss_kwargs = True  # fix transformers>=4.46.2`。
+  **推论:"per-device batch 钉死在 1"不是定律,是 20 图 regime 的显存约束** ——
+  3 图 regime 下 bs2 跑得动(实测 76%),VL 20 图不行(见上条)。
+- **显存峰值只由 per-device batch 决定,与 accum 无关(2026-08-19 实测)**:
+  同为 8 卡 bs2、accum 4 与 accum 8 的两臂,单卡显存 108,617 / 109,763 MiB,
+  **都是 76%**。accum 只通过 ms-swift 外部 logits-loss 路径的 ~250MB/微批 累加,
+  相对激活值是小项。**要降显存只能降 bs 或降序列长度,调 accum 基本无用**
+  (accum 8→4 估算仅省 1G)。
+- **bs=1 下存在跨卡木桶效应(2026-08-19 实测)**:每 micro-step 结束要 all-reduce,
+  step 时间 ≈ 本步最长样本的时间。实测步时变异系数:**img3(3 图)14.3%**
+  (14.3~24.9s),VL 20 图仅 3.8% —— 图少时文本长度差异占比大,抖动才明显。
+  `group_by_length` 因此在 bs=1 下**依然有用**(让同 step 各卡拿到长度相近的样本),
+  但它破坏 i.i.d. 采样、对分数的影响没有实证,**至今没开过**,要开须单独设对照。
+  `padding_free` 用不了:swift `_check_padding_free` 硬性要求 flash_attn 系列,
+  我们全线 `--attn_impl sdpa`。
+- **`enable_channel_loss` 不进梯度**(2026-08-19 读源码):它只往
+  `metrics[f'loss_{channel}']` 写日志(`seq2seq_trainer.py:175-181`),
+  真正的 loss 仍是上面那个分母。`loss_scale=last_round` 作用在
+  `outputs.loss` 的 token 权重上,归一化走同一个分母。
+- **`max_length` 与超长丢弃(2026-08-19 实测,vl20nocap 据此定 81920)**:
+  `truncation_strategy` 默认 `delete` 且完全静默。r5vl(cap) 与 r5vlnocap 各有
+  **11 条 >65536**(0.17%,max=72594),**两者条数完全一样** —— 说明超长的成因是
+  **图像不是 think**(那 11 条是 16~20 图 × 2040 = 3.2~4.1 万图像 token +
+  2.5~3.6 万文本)。**其中 3 条是终止目标行**,65536+delete 会精确删掉
+  torque-spec-19a5b6dd / referral-128c9ca6 / bursary-acd3db2e 三条轨迹的收尾示范。
+  smoke 实测(11 条超长复制 6 份、8节点×1卡×accum8、`max_length 81920`):
+  2/2 步跑完无 OOM,**峰值 142,279/143,771 MiB = 99.0%**;16卡×accum4 估算约 97.9%。
+  `truncation_strategy=left` **不是备选**:实现取 `non_protected[-(N):]`
+  (`template/base.py:1436`),保留末尾与全部图像 token,但砍掉的开头正是 system prompt。
+  **图窗小的臂无此问题**:实测 img1 max=39,583、img3 max=43,663,
+  离 65536 还有 2.2~2.6 万余量,一条不丢。
 - **checkpoint 密度标准(用户 2026-08-17 立规,2026-08-18 升级为硬整除)**:
   此后所有训练 sbatch 用 `--save_strategy steps`,且 **`save_steps` 必须整除
   每 epoch 步数**(steps/epoch = ceil(样本数 / 全局批);取整除数中最接近
