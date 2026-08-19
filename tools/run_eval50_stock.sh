@@ -54,7 +54,7 @@ case "$ARM" in
   # No training dependency -- runs the moment t38 releases the VMs.
   vlbase) SB=vl-base-stock; JOB=eval4bvlb; RP=8034; MN=q3vl-4b-base-stock; GRP=qwen3vl-4b-base; PREV=t38;  PJOB=eval38 ;;
   # gb128: VL x vl3pic at global-batch 128 (3-image trained -> 3-image eval)
-  gb128) SB=vl3gb128-stock; JOB=eval4bg28; RP=8037; MN=vl3pic-gb128-stock; GRP=qwen3vl-4b-sft; PREV=nocap; PJOB=eval4bnc; XARGS="--image_max 3 --fold_size 1"; DIALECT=json ;;
+  gb128) SB=vl3gb128-stock; JOB=eval4bg28; RP=8037; MN=vl3pic-gb128-stock; GRP=qwen3vl-4b-sft; PREV=vlsft; PJOB=eval4bvls; XARGS="--image_max 3 --fold_size 1"; DIALECT=json ;;
   nocap) SB=4b-nocap-stock; JOB=eval4bnc; RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft; PREV=kEh3; PJOB=eval4blr3 ;;
   kG)   SB=4b-loranp-stock; JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=gb128;  PJOB=eval4bg28 ;;
   # VL tail (user 08-19): vl20 -> vl3b -> vl20g, all gated on their trainings
@@ -62,7 +62,7 @@ case "$ARM" in
   vl3b)  SB=vl3b-stock;  JOB=eval4bv3b; RP=8039; MN=vl3pic-base-stock;   GRP=qwen3vl-4b-sft; PREV=vl20;  PJOB=eval4bv20; XARGS="--image_max 3 --fold_size 1"; DIALECT=json ;;
   vl20g) SB=vl20g-stock; JOB=eval4bv2g; RP=8040; MN=vl20pic-gb128-stock; GRP=qwen3vl-4b-sft; PREV=vl3b;  PJOB=eval4bv3b; DIALECT=json ;;
   # vlsft: Qwen3-VL-4B-Thinking x r5vl corpus, lr3e-6 3ep (chain gates on training done)
-  vlsft) SB=vl-r5vl-stock; JOB=eval4bvls; RP=8035; MN=q3vl-r5vl-lr3e6-stock; GRP=qwen3vl-4b-sft; PREV=vl20g; PJOB=eval4bv2g; DIALECT=json ;;  # rerun at tail: first attempt burned on the XML/json dialect mismatch
+  vlsft) SB=vl-r5vl-stock; JOB=eval4bvls; RP=8035; MN=q3vl-r5vl-lr3e6-stock; GRP=qwen3vl-4b-sft; PREV=nocap; PJOB=eval4bnc; DIALECT=json ;;  # rerun right after nocap; first attempt burned on the XML/json dialect mismatch
   # img3: kE's exact recipe with the training screenshot window 20->3; STANDARD 20-image
   # eval protocol by user order (the deliberate train/eval-skew cell of the 2x2)
   img3)  SB=4b-img3-stock; JOB=eval4bim3; RP=8036; MN=q38Bhqs2t-img3-stock; GRP=qwen35-4b-sft; PREV=vlbase; PJOB=eval4bvlb ;;
