@@ -214,4 +214,6 @@ if [ "$N" -lt "$T" ]; then
   MISS=$(find "$R" -mindepth 2 -maxdepth 2 -type d '!' -exec test -e '{}/result.txt' ';' -print 2>/dev/null | sed "s|$R/||" | tr '\n' ' ')
   echo "[$(date '+%F %T')] INCOMPLETE $N/$T -- crashed: ${MISS:-none} (any remainder never started)"
 fi
-echo "[$(date '+%F %T')] === $ARM RESULT $N/$T: $(find "$R" -name result.txt -exec cat {} \; 2>/dev/null | sort | uniq -c | tr '\n' ' ')"
+# awk per file, NOT cat: a result.txt without a trailing newline (the orphan-fix
+# used to write bare "0.0") makes cat glue two values into one ("0.0"+"1"->"0.01")
+echo "[$(date '+%F %T')] === $ARM RESULT $N/$T: $(find "$R" -name result.txt -exec awk '{print $1; exit}' {} \; 2>/dev/null | sort | uniq -c | tr '\n' ' ')"
