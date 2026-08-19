@@ -849,3 +849,12 @@ kE-r2 一次 2h 即可闭洞;②base 未在 no-split 口径重跑(预期不动:b
   ②对同一份 50 题的适应性过拟合(一周 15+ 臂在其上比选)。解药:eval-50b
   (剩余 319 题、同分层规则、新种子),kE+base 各跑一遍即同时闭合赢家诅咒/
   适应性过拟合/样本运气三问。
+
+**结构级复核(同日,回应"文本相似度是否只是弱 proxy")**:复刻可换措辞但不可换
+判分目标,故对比判分签名(域+evaluator 函数+getter 类型)。结果:eval-50 里仅
+1/50(os 域通用 `check_include_exclude`+`vm_command_line` 模式,语料 63 题共用,
+且非 kE 胜题)在语料中存在同签名;**kE 的 9 道胜题 9/9 零签名匹配**——官方判分
+函数(compare_pptx_files/compare_docx_files/is_expected_bookmarks/…)与 cloud_file
+getter 在 ostg 评分词汇表中根本不存在。换皮复刻在判分目标层面排除;残余风险
+收敛为技能级分布贴合(非污染,是 domain-targeted SFT 的定义),由 eval-50b 与
+跨基准评测负责量化。
