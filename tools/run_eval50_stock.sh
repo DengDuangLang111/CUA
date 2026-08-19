@@ -126,9 +126,9 @@ wait_up 90 || { echo "[$(date '+%F %T')] FATAL: endpoint $PORT never came up"; e
 ROOT=$(curl -s -H "Authorization: Bearer $OPENAI_API_KEY" http://127.0.0.1:$PORT/v1/models \
        | python3 -c "import json,sys;print(json.load(sys.stdin)['data'][0].get('root',''))")
 echo "[$(date '+%F %T')] endpoint UP; vLLM reports root=$ROOT"
-python3 - "$R/MODEL_BOUNDARY.json" "$ARM" "$MN" "$ROOT" <<'PY'
+python3 - "$R/MODEL_BOUNDARY.json" "$ARM" "$MN" "$ROOT" "${OSTG_TYPE_NO_SPLIT:-0}" <<'PY'
 import json, sys
-path, arm, served, root = sys.argv[1:5]
+path, arm, served, root, no_split = sys.argv[1:6]
 json.dump({
     "arm": arm, "served_model_name": served,
     "weights_reported_by_vllm": root,
@@ -139,7 +139,10 @@ json.dump({
                  "presence_penalty": 0.0, "repetition_penalty": 1.0},
     "max_steps": 50, "sleep_after_execution": 3, "num_envs": 3,
     "tasks": "verified_eval50_nonproxy.json (frozen stratified sample, seed 20260815)",
-    "harness": "UNMODIFIED upstream behaviour; no OSTG_* env vars",
+    "harness": ("OSTG_NO_RECORD=1 (no guest mp4, screenshots unaffected); "
+                "OSTG_TYPE_NO_SPLIT=%s (1 = multi-line type sent as ONE typewrite, "
+                "0 = upstream per-line split; semantics change landed 2026-08-18, "
+                "arms through kD ran under split)" % no_split),
 }, open(path, "w"), indent=1, ensure_ascii=False)
 PY
 
@@ -156,7 +159,7 @@ for TRY in 1 2 3 4 5; do
   # task length and nothing reads them (build.py's mp4 fallback has fired
   # 0 times across 16 builds); on a sick guest end_recording adds 15s of
   # retries to a task that is already failing. Screenshots are unaffected.
-  OSWORLD_OPENAI_TIMEOUT=600 OSTG_NO_RECORD=1 \
+  OSWORLD_OPENAI_TIMEOUT=600 OSTG_NO_RECORD=1 OSTG_TYPE_NO_SPLIT=${OSTG_TYPE_NO_SPLIT:-0} \
   .venv/bin/python scripts/python/run_multienv_qwen.py \
     --provider_name docker --path_to_vm /mnt/d/research/OSWorld/docker_vm_data/Ubuntu.qcow2 \
     --headless --observation_type screenshot --action_space pyautogui \
