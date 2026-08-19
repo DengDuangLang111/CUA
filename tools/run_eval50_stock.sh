@@ -46,7 +46,13 @@ case "$ARM" in
   # and a stale forward there would silently score one arm against another model.
   kE)   SB=4b-lr3e6-stock;  JOB=eval4blr3; RP=8028; MN=q38Bhqs2t-lr3e6-stock;  GRP=qwen35-4b-sft; PREV=bsstock; PJOB=eval4bbss ;;
   kD15) SB=4b-gb64e15-stock; JOB=eval4bd15; RP=8029; MN=q38Bhqs2t-gb64e15-stock; GRP=qwen35-4b-sft; PREV=kE;   PJOB=eval4blr3 ;;
-  kG)   SB=4b-loranp-stock; JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=t38;    PJOB=eval38 ;;
+  # vlbase: stock Qwen3-VL-4B-Thinking, the reference for all VL SFT arms.
+  # No training dependency -- runs the moment t38 releases the VMs.
+  vlbase) SB=vl-base-stock; JOB=eval4bvlb; RP=8034; MN=q3vl-4b-base-stock; GRP=qwen3vl-4b-base; PREV=t38;  PJOB=eval38 ;;
+  # nocap: kE minus the think-cap (user rank #1 of the trained arms). The
+  # chain launcher gates on training completion before this driver starts.
+  nocap) SB=4b-nocap-stock; JOB=eval4bnc; RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft; PREV=vlbase; PJOB=eval4bvlb ;;
+  kG)   SB=4b-loranp-stock; JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=nocap;  PJOB=eval4bnc ;;
   kF)   SB=4b-loralean-stock; JOB=eval4bll; RP=8032; MN=q38Bhqs2t-loralean-stock; GRP=qwen35-4b-sft; PREV=kG;   PJOB=eval4bnp ;;
   # teacher ceiling: Qwen3.8-27B on the SAME frozen 50, same sampling protocol
   # (t=1.0 top_p .95 max_tokens 81920), no-split semantics like every k-era arm.

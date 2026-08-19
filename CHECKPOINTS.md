@@ -38,6 +38,21 @@ LoRA 的 14G vs 全量 592G = adapter 存储优势的实测量级(**42 倍**)。
 > 0.5%,详 `SFT_DATA.md` 事故章)。量级远小于臂间差异,不重训;引用这些分数
 > 时带上此脚注。**Bhqs 起已修复**(build/verify/census 三层防线)。
 
+## 2.1 在训/待训模型登记(2026-08-19,按用户优先级排序)
+
+用户裁定的下一批 eval 顺序(已排进 `tools/tillicum_chain.sh`,全部 no-split 口径):
+
+| 序 | 臂 | 模型/训练 | 状态 | eval 安排 |
+|---|---|---|---|---|
+| 0 | **vlbase** | `models/Qwen3-VL-4B-Thinking`(基座,零训练依赖) | 在盘 | **t38 后立即跑**(VL 系的参照,插队令 2026-08-19) |
+| 1 | **nocap** | `out/q38Bhqs2t-lr3e6-nocap`(= kE 配置去 think-cap;作业 247800 在训) | 在训 | vlbase 后跑;链上有**完训闸**(作业退队 + endpoint epoch≥2.99),半熟权重进不了 serve |
+| 2 | **img3** | (尚无训练、无目录;历史图从全量降为 3 张的 token 经济学臂,OpenWebRL 先例) | **不存在** | **只登记,不排跑**(用户令) |
+| 3 | **VL-SFT** | `out/q3vl-r5vl-lr3e6`(Qwen3-VL-4B-Thinking × r5vl 语料;作业 248101 在训) | 在训 | **只登记,不排跑**(用户令;评它之前先要 vlbase 参照 + serve 兼容冒烟) |
+| 4 | loranp = kG | `out/q38Bhqs2t-loranp-merged-300` | 在盘 | 已在链上(nocap 后) |
+| — | loralean = kF | `out/q38Bhqs2t-loralean-merged-300` | 在盘 | 链尾(此前用户令) |
+
+> nocap 与 VL 的训练由另一会话发起;此表只管 eval 排期与登记。
+
 ## 3 数据集(Tillicum `sft/data/`)
 
 | 名 | 内容 | 用于 |

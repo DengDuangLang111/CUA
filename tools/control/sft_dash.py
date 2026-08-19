@@ -155,6 +155,15 @@ EVAL50_ARMS = {
                   "loranp corpus = r5 with ALL inter-think prose stripped (two"
                   " build gates: zero-prose + strip-both-identical); differs from"
                   " r5lora only by prose removal"),
+    "vlbase":    ("stock Qwen3-VL-4B-Thinking · (no-split)", "reference",
+                  "the baseline for the VL stack experiments: untouched"
+                  " Qwen3-VL-4B-Thinking on the same frozen 50 -- every VL SFT"
+                  " arm reads against this number, not against the Qwen3.5"
+                  " base"),
+    "nocap":     ("r5 lr3e-6 e3.00 no-cap · stock (no-split)", "sft",
+                  "kE's exact config without the 2048 think-cap: the pair with"
+                  " kE isolates the cap, the only quality intervention not yet"
+                  " superseded (capped arms overran 2048 MORE, 11.0% vs 2.8%)"),
     "t38":       ("teacher Qwen3.8-27B · stock (no-split)", "teacher",
                   "the ceiling reference: the 27B teacher that generated every r5"
                   " corpus, on the SAME frozen 50 tasks, same harness, same"

@@ -40,8 +40,11 @@
   18pp,首个越过噪声底线的读数;对 kD 的 +8pp 混着 lr/语义/硬件三变量,归因待
   kD15);跑动中 kD15(gb64-e150,epoch 1.501;原定 ~1ep 因 save_steps 30∤100
   无 1.0 边界存档,用户改选中点)→ **t38(教师 Qwen3.8-27B 天花板,同冻结 50 题、同采样协议、同 no-split
-  口径;用户令其紧跟 kD15)** → kG(loranp-merged-300,无散文臂)
-  → kF(loralean-merged-300,lean LoRA;与 r5lora·kG 构成同语料散文三点对照)。修法 B 附带红利:单臂 2h(原 4-6h),风暴磨步时间消失;
+  口径;用户令其紧跟 kD15)** → vlbase(基座 Qwen3-VL-4B-Thinking,VL 系参照,
+  插队令 08-19)→ nocap(kE 去 cap,带完训闸)→ kG(无散文 LoRA)
+  → kF(lean LoRA;r5lora·kG·kF = 同语料散文三点)。**img3 与 VL-SFT 只登记
+  不排跑**(`CHECKPOINTS.md` §2.1)。已出分:kD15(epoch 1.5)= **39.81%**,
+  3ep 比 1.5ep 高整 10pp —— r5 全量上「多训有益」,与 Bs 语料方向相反。修法 B 附带红利:单臂 2h(原 4-6h),风暴磨步时间消失;
   serve 端口 8028/8029/8031(8030 让给旧 Klone 隧道位,防串线)。
 - **datagenv12 首波启动:补格式类任务 50 道(fmt-w1)**。依据:语料 544 道里
   格式类 **1 道(0.2%)** vs 基准全量 15.2% / eval-50 18%;该类并集解开 3/9,
