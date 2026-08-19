@@ -155,6 +155,12 @@ EVAL50_ARMS = {
                   "loranp corpus = r5 with ALL inter-think prose stripped (two"
                   " build gates: zero-prose + strip-both-identical); differs from"
                   " r5lora only by prose removal"),
+    "t38":       ("teacher Qwen3.8-27B · stock (no-split)", "teacher",
+                  "the ceiling reference: the 27B teacher that generated every r5"
+                  " corpus, on the SAME frozen 50 tasks, same harness, same"
+                  " sampling protocol as the student arms. How much of the gap"
+                  " to the teacher has SFT closed -- and how high is the"
+                  " ceiling itself?"),
     "kF":        ("r5-LoRA lean e3.00 · stock (no-split)", "sft",
                   "lean variant of the r5 LoRA, endpoint merge. Dropped from the"
                   " Klone maintenance plan, restored 2026-08-18; with r5lora"

@@ -37,17 +37,20 @@ ARM="${1:?usage: run_eval50_stock.sh <arm>}"
 
 #         serve sbatch          slurm job   port  served-model-name    result group     waits for
 case "$ARM" in
-  basestock) SB=base-stock; JOB=eval4bbo;  RP=8023; MN=q35-4b-stock;     GRP=qwen35-4b-base; PREV=leanstock; PJOB=eval4bls  ;;
-  lorastock) SB=lora-stock; JOB=eval4blos; RP=8024; MN=q38Bs-lora-stock; GRP=qwen35-4b-sft;  PREV=leanstock; PJOB=eval4bls  ;;
-  r5lora)    SB=r5-lora-stock; JOB=eval4br5l; RP=8027; MN=q38Bhqs2t-lora-stock; GRP=qwen35-4b-sft; PREV=lorastock; PJOB=eval4blos ;;
-  bsstock)   SB=bs-stock;   JOB=eval4bbss; RP=8025; MN=q38Bs-gb64-stock; GRP=qwen35-4b-sft;  PREV=lorastock; PJOB=eval4blos ;;
+  basestock) SB=4b-base-stock; JOB=eval4bbo;  RP=8023; MN=q35-4b-stock;     GRP=qwen35-4b-base; PREV=leanstock; PJOB=eval4bls  ;;
+  lorastock) SB=4b-lora-stock; JOB=eval4blos; RP=8024; MN=q38Bs-lora-stock; GRP=qwen35-4b-sft;  PREV=leanstock; PJOB=eval4bls  ;;
+  r5lora)    SB=4b-r5-lora-stock; JOB=eval4br5l; RP=8027; MN=q38Bhqs2t-lora-stock; GRP=qwen35-4b-sft; PREV=lorastock; PJOB=eval4blos ;;
+  bsstock)   SB=4b-bs-stock;   JOB=eval4bbss; RP=8025; MN=q38Bs-gb64-stock; GRP=qwen35-4b-sft;  PREV=lorastock; PJOB=eval4blos ;;
   # ---- post-recovery chain, all under OSTG_TYPE_NO_SPLIT=1 (set by launcher) ----
   # port 8030 deliberately skipped: local 18030 was the Klone kD tunnel port,
   # and a stale forward there would silently score one arm against another model.
-  kE)   SB=lr3e6-stock;  JOB=eval4blr3; RP=8028; MN=q38Bhqs2t-lr3e6-stock;  GRP=qwen35-4b-sft; PREV=bsstock; PJOB=eval4bbss ;;
-  kD15) SB=gb64e15-stock; JOB=eval4bd15; RP=8029; MN=q38Bhqs2t-gb64e15-stock; GRP=qwen35-4b-sft; PREV=kE;   PJOB=eval4blr3 ;;
-  kG)   SB=loranp-stock; JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=kD15;   PJOB=eval4bd15 ;;
-  kF)   SB=loralean-stock; JOB=eval4bll; RP=8032; MN=q38Bhqs2t-loralean-stock; GRP=qwen35-4b-sft; PREV=kG;   PJOB=eval4bnp ;;
+  kE)   SB=4b-lr3e6-stock;  JOB=eval4blr3; RP=8028; MN=q38Bhqs2t-lr3e6-stock;  GRP=qwen35-4b-sft; PREV=bsstock; PJOB=eval4bbss ;;
+  kD15) SB=4b-gb64e15-stock; JOB=eval4bd15; RP=8029; MN=q38Bhqs2t-gb64e15-stock; GRP=qwen35-4b-sft; PREV=kE;   PJOB=eval4blr3 ;;
+  kG)   SB=4b-loranp-stock; JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=kD15;   PJOB=eval4bd15 ;;
+  kF)   SB=4b-loralean-stock; JOB=eval4bll; RP=8032; MN=q38Bhqs2t-loralean-stock; GRP=qwen35-4b-sft; PREV=kG;   PJOB=eval4bnp ;;
+  # teacher ceiling: Qwen3.8-27B on the SAME frozen 50, same sampling protocol
+  # (t=1.0 top_p .95 max_tokens 81920), no-split semantics like every k-era arm.
+  t38)  SB=38-i;       JOB=eval38;   RP=8000; MN=qwen38-27b-local; GRP=qwen38-27b-local; PREV=kF;   PJOB=eval4bll ;;
   *) echo "unknown arm: $ARM" >&2; exit 2 ;;
 esac
 
@@ -87,7 +90,7 @@ wait_up(){                       # $1 = how many minutes to keep trying
     if [ $((i % 20)) -eq 0 ]; then   # every 10 min, make sure a serve exists
       if [ -z "$($SSHT "squeue -u jy050706 -h -n $JOB -o %i" 2>/dev/null | tr -dc 0-9)" ]; then
         echo "[$(date '+%F %T')] no $JOB in the queue -- resubmitting"
-        $SSHT "sbatch --parsable /gpfs/scrubbed/jy050706/qwen-serve/serve-chain-4b-$SB.sbatch" >/dev/null 2>&1
+        $SSHT "sbatch --parsable /gpfs/scrubbed/jy050706/qwen-serve/serve-chain-$SB.sbatch" >/dev/null 2>&1
       fi
     fi
     sleep 30
@@ -119,7 +122,7 @@ $SSHT "scancel -n $PJOB -u jy050706" 2>/dev/null
 sleep 5
 HAVE=$($SSHT "squeue -u jy050706 -h -n $JOB -o %i" 2>/dev/null | tr -dc 0-9)
 if [ -z "$HAVE" ]; then
-  JID=$($SSHT "sbatch --parsable /gpfs/scrubbed/jy050706/qwen-serve/serve-chain-4b-$SB.sbatch" 2>/dev/null | tr -dc 0-9)
+  JID=$($SSHT "sbatch --parsable /gpfs/scrubbed/jy050706/qwen-serve/serve-chain-$SB.sbatch" 2>/dev/null | tr -dc 0-9)
   echo "[$(date '+%F %T')] submitted serve $JID ($SB)"
 else
   echo "[$(date '+%F %T')] reusing live serve $HAVE ($JOB)"
