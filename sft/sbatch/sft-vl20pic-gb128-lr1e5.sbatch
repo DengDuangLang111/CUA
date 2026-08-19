@@ -8,7 +8,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=120G
-#SBATCH --time=06:00:00
+#SBATCH --time=12:00:00
 #SBATCH --output=/gpfs/scrubbed/jy050706/sft/sft_vl20pic_gb128_lr1e5_%j.out
 # Arm VL 20-image (r5vl, full window), lr 1e-5, global batch 128 = 8 nodes x 1 GPU x bs1 x accum16.
 # RETOPOLOGIZED 2026-08-19 (user order) after the 1-node x 8-GPU x bs2 x accum8
@@ -101,7 +101,7 @@ if [ -f "$B/wandb.env" ]; then set +x; source "$B/wandb.env"; set -x
 export WANDB_NOTES="VL 20-image (r5vl data, FULL window), gb128 = 8 nodes x 1 GPU x bs1 x accum16, lr 1e-5. NOT a 3-image arm: EVAL uses the STANDARD 20-image protocol (image_max 20, fold_size 10). Fifth arm outside the original 2x2; overlaps 248781 except gb 128 vs 64."
 export B DS1 DS2 REPORT RUN_NAME
 export MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n1)
-export MASTER_PORT=29500 NNODES=8 NPROC_PER_NODE=1
+export MASTER_PORT=$((20000 + SLURM_JOB_ID % 9000)) NNODES=8 NPROC_PER_NODE=1
 echo ">>> multinode: nodes=$SLURM_JOB_NODELIST master=$MASTER_ADDR"
 srun --ntasks=8 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
   export NODE_RANK=$SLURM_NODEID

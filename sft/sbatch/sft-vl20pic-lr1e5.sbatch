@@ -1,15 +1,15 @@
 #!/bin/bash
-#SBATCH --job-name=sft-vl3pic-base
+#SBATCH --job-name=sft-vl20pic-lr1e5
 #SBATCH --account=video
 #SBATCH --partition=gpu-h200
 #SBATCH --qos=normal
-#SBATCH --nodes=8
-#SBATCH --gpus-per-node=1
+#SBATCH --nodes=2
+#SBATCH --gpus-per-node=8
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=120G
+#SBATCH --cpus-per-task=64
+#SBATCH --mem=600G
 #SBATCH --time=06:00:00
-#SBATCH --output=/gpfs/scrubbed/jy050706/sft/sft_vl3pic_base_%j.out
+#SBATCH --output=/gpfs/scrubbed/jy050706/sft/sft_vl20pic_lr1e5_%j.out
 # Arm Bhqs-2-terminal at lr 3e-6, full fine-tune, 16xH200.
 #
 # Single variable vs the 1e-5 full-FT arm: the learning rate. Everything else
@@ -65,8 +65,8 @@
 umask 077
 set -x
 B=/gpfs/scrubbed/jy050706/sft
-DS1=$B/data/q38-Bhqs2t-vl3pic-v11100
-DS2=$B/data/q38-Bhqs2t-vl3pic-v11500
+DS1=$B/data/q38-Bhqs2t-r5vl-v11100
+DS2=$B/data/q38-Bhqs2t-r5vl-v11500
 export PATH="$HOME/.local/bin:$PATH"
 cd $B/runcwd && source $B/venv/bin/activate
 export CUDA_HOME=$B/cuda13 PATH="$B/cuda13/bin:$PATH"
@@ -89,32 +89,32 @@ print(f"preflight {ds}: {tot} image refs, {bad} unresolved")
 sys.exit(1 if bad else 0)
 PY
 done
-REPORT=none; RUN_NAME=vl3pic-base-${SLURM_JOB_ID}
+REPORT=none; RUN_NAME=vl20pic-lr1e5-${SLURM_JOB_ID}
 if [ -f "$B/wandb.env" ]; then set +x; source "$B/wandb.env"; set -x
   export WANDB_PROJECT="${WANDB_PROJECT:-cua-sft}"; REPORT=wandb; fi
-export WANDB_NOTES="img3-on-VL at lr 3e-6 (the kE-recipe twin): vl3pic data, gb64 = 8 nodes x 1 GPU x bs1 x accum8. Retopologized after OOM (248809). EVAL uses --image_max 3 --fold_size 1."
+export WANDB_NOTES="VL + 20-image window at lr 1e-5. Fourth cell of a 2x2 over {window 20, 3} x {lr 3e-6, 1e-5}: 248101 is 20pic/3e-6, 248770 is 3pic/3e-6, 248771 is 3pic/1e-5. Corpus identical to 248101 (q38-Bhqs2t-r5vl, Hermes JSON, AST round-trip 6385/6385); only lr differs from it. EVAL MUST PASS OSTG_PARAM_DIALECT=json (20-image window needs no --image_max override)."
 export B DS1 DS2 REPORT RUN_NAME
 export MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n1)
-export MASTER_PORT=$((20000 + SLURM_JOB_ID % 9000)) NNODES=8 NPROC_PER_NODE=1
+export MASTER_PORT=$((20000 + SLURM_JOB_ID % 9000)) NNODES=2 NPROC_PER_NODE=8
 echo ">>> multinode: nodes=$SLURM_JOB_NODELIST master=$MASTER_ADDR"
-srun --ntasks=8 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
+srun --ntasks=2 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
   export NODE_RANK=$SLURM_NODEID
-  echo ">>> node $SLURM_NODEID ($(hostname)) launching NPROC=1"
+  echo ">>> node $SLURM_NODEID ($(hostname)) launching NPROC=8"
   swift sft \
     --model $B/../models/Qwen3-VL-4B-Thinking \
     --dataset $DS1/train_swift.jsonl $DS2/train_swift.jsonl \
     --enable_channel_loss true \
-    --tuner_type full --freeze_vit true --freeze_aligner true --loss_scale last_round --gradient_accumulation_steps 8 \
+    --tuner_type full --freeze_vit true --freeze_aligner true --loss_scale last_round --gradient_accumulation_steps 4 \
     --preserve_thinking true \
     --attn_impl sdpa --deepspeed zero2_offload \
     --torch_dtype bfloat16 \
     --num_train_epochs 3 --per_device_train_batch_size 1 \
-    --learning_rate 3e-6 --warmup_ratio 0.1 \
+    --learning_rate 1e-5 --warmup_ratio 0.1 \
     --weight_decay 0.0 --adam_beta2 0.999 \
     --max_length 65536 --gradient_checkpointing true \
-    --save_strategy steps --save_steps 25 --save_total_limit 16 \
+    --save_strategy steps --save_steps 30 --save_total_limit 12 \
     --logging_steps 2 \
     --report_to $REPORT --run_name $RUN_NAME \
-    --output_dir $B/out/vl3pic-base
+    --output_dir $B/out/vl20pic-lr1e5
 '
 echo "EXIT_q38e3B_gb128 $?"

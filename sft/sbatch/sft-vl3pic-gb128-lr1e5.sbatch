@@ -101,7 +101,7 @@ if [ -f "$B/wandb.env" ]; then set +x; source "$B/wandb.env"; set -x
 export WANDB_NOTES="img3-on-VL: vl3pic data (3-image window), gb128 = 8 nodes x 1 GPU x bs1 x accum16, lr 1e-5. Retopologized after OOM (248818: bs2 stacked two long samples, peak 136G+34G ask vs 139.79G). EVAL of this arm uses --image_max 3 --fold_size 1."
 export B DS1 DS2 REPORT RUN_NAME
 export MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n1)
-export MASTER_PORT=29500 NNODES=8 NPROC_PER_NODE=1
+export MASTER_PORT=$((20000 + SLURM_JOB_ID % 9000)) NNODES=8 NPROC_PER_NODE=1
 echo ">>> multinode: nodes=$SLURM_JOB_NODELIST master=$MASTER_ADDR"
 srun --ntasks=8 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
   export NODE_RANK=$SLURM_NODEID

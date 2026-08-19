@@ -45,7 +45,7 @@ train_gate(){  # $1 arm, $2 job, $3 dir glob; up to 12h; returns 1 on timeout (c
 
 log "chain start (resume-safe)"
 PREV=bsstock
-for arm in kE kD15 t38 vlbase img3 vlsft img3h3 kEh3 nocap gb128 kG vl20 vl3b vl20g; do
+for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap gb128 kG vl20 vl3b vl20g vlsft; do
   if alive "$arm"; then
     log "adopt $arm: already in flight"
   elif complete "$arm"; then

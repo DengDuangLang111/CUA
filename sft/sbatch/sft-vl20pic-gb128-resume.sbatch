@@ -1,5 +1,6 @@
 #!/bin/bash
-#SBATCH --job-name=sft-vl3pic-base
+#SBATCH --job-name=sft-vl20pic-gb128-lr1e5
+#  RESUME variant from ckpt-110 (first run TIMEOUT at 6h, epoch 2.20)
 #SBATCH --account=video
 #SBATCH --partition=gpu-h200
 #SBATCH --qos=normal
@@ -8,9 +9,15 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=120G
-#SBATCH --time=06:00:00
-#SBATCH --output=/gpfs/scrubbed/jy050706/sft/sft_vl3pic_base_%j.out
-# Arm Bhqs-2-terminal at lr 3e-6, full fine-tune, 16xH200.
+#SBATCH --time=12:00:00
+#SBATCH --output=/gpfs/scrubbed/jy050706/sft/sft_vl20pic_gb128_lr1e5_%j.out
+# Arm VL 20-image (r5vl, full window), lr 1e-5, global batch 128 = 8 nodes x 1 GPU x bs1 x accum16.
+# RETOPOLOGIZED 2026-08-19 (user order) after the 1-node x 8-GPU x bs2 x accum8
+# attempt OOMed in 16 min (job 248818, 5x CUDA OOM). bs1 halves activations;
+# 1 rank/node gives each rank a whole node of host RAM, which retires the
+# ms-swift channel_loss accum-memory growth that killed accum>=16 before.
+# save_steps 30 -> 10: 6385 samples / gb128 = 50 steps/epoch, 30 does not
+# divide 50 (TRAINING.md density rule); 10 gives every epoch boundary.
 #
 # Single variable vs the 1e-5 full-FT arm: the learning rate. Everything else
 # -- corpus (r5), global batch 64, 3 epochs, wd 0.0, beta2 0.999, think-cap
@@ -65,8 +72,8 @@
 umask 077
 set -x
 B=/gpfs/scrubbed/jy050706/sft
-DS1=$B/data/q38-Bhqs2t-vl3pic-v11100
-DS2=$B/data/q38-Bhqs2t-vl3pic-v11500
+DS1=$B/data/q38-Bhqs2t-r5vl-v11100
+DS2=$B/data/q38-Bhqs2t-r5vl-v11500
 export PATH="$HOME/.local/bin:$PATH"
 cd $B/runcwd && source $B/venv/bin/activate
 export CUDA_HOME=$B/cuda13 PATH="$B/cuda13/bin:$PATH"
@@ -89,10 +96,10 @@ print(f"preflight {ds}: {tot} image refs, {bad} unresolved")
 sys.exit(1 if bad else 0)
 PY
 done
-REPORT=none; RUN_NAME=vl3pic-base-${SLURM_JOB_ID}
+REPORT=none; RUN_NAME=vl20pic-gb128-lr1e5-${SLURM_JOB_ID}
 if [ -f "$B/wandb.env" ]; then set +x; source "$B/wandb.env"; set -x
   export WANDB_PROJECT="${WANDB_PROJECT:-cua-sft}"; REPORT=wandb; fi
-export WANDB_NOTES="img3-on-VL at lr 3e-6 (the kE-recipe twin): vl3pic data, gb64 = 8 nodes x 1 GPU x bs1 x accum8. Retopologized after OOM (248809). EVAL uses --image_max 3 --fold_size 1."
+export WANDB_NOTES="VL 20-image (r5vl data, FULL window), gb128 = 8 nodes x 1 GPU x bs1 x accum16, lr 1e-5. NOT a 3-image arm: EVAL uses the STANDARD 20-image protocol (image_max 20, fold_size 10). Fifth arm outside the original 2x2; overlaps 248781 except gb 128 vs 64."
 export B DS1 DS2 REPORT RUN_NAME
 export MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n1)
 export MASTER_PORT=$((20000 + SLURM_JOB_ID % 9000)) NNODES=8 NPROC_PER_NODE=1
@@ -104,17 +111,17 @@ srun --ntasks=8 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
     --model $B/../models/Qwen3-VL-4B-Thinking \
     --dataset $DS1/train_swift.jsonl $DS2/train_swift.jsonl \
     --enable_channel_loss true \
-    --tuner_type full --freeze_vit true --freeze_aligner true --loss_scale last_round --gradient_accumulation_steps 8 \
+    --tuner_type full --freeze_vit true --freeze_aligner true --loss_scale last_round --gradient_accumulation_steps 16 \
     --preserve_thinking true \
     --attn_impl sdpa --deepspeed zero2_offload \
     --torch_dtype bfloat16 \
     --num_train_epochs 3 --per_device_train_batch_size 1 \
-    --learning_rate 3e-6 --warmup_ratio 0.1 \
+    --learning_rate 1e-5 --warmup_ratio 0.1 \
     --weight_decay 0.0 --adam_beta2 0.999 \
     --max_length 65536 --gradient_checkpointing true \
-    --save_strategy steps --save_steps 25 --save_total_limit 16 \
+    --save_strategy steps --save_steps 10 --save_total_limit 16 \
     --logging_steps 2 \
     --report_to $REPORT --run_name $RUN_NAME \
-    --output_dir $B/out/vl3pic-base
+    --resume_from_checkpoint /gpfs/scrubbed/jy050706/sft/out/vl20pic-gb128-lr1e5/v0-20260819-052720/checkpoint-110 --output_dir $B/out/vl20pic-gb128-lr1e5
 '
 echo "EXIT_q38e3B_gb128 $?"
