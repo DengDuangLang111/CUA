@@ -40,11 +40,12 @@
   18pp,首个越过噪声底线的读数;对 kD 的 +8pp 混着 lr/语义/硬件三变量,归因待
   kD15)。已收官:**kD15=39.81%**(3ep 比 1.5ep 高 10pp,r5 上多训有益)、
   **t38 教师=69.81%**(SFT 关掉 base→teacher 30pp 差距的 60%,剩 12pp 蒸馏
-  空间;教师与 kE 双败 12 题=当前范式天花板)。当前链(08-19 晨定稿):
-  vlbase(跑动中)→ img3(kE 同配方、训练窗 20→3,**标准 20 图协议评**,完训闸)
-  → vlsft(VL×r5vl,完训闸)→ nocap(回锅)→ kG(无散文 LoRA,回锅)→ img3h3 / kEh3(历史窗 2×2
-  另两格,`--image_max 3 --fold_size 1`,收官)。**kG 与 kF 均撤下不排**
-  (用户令;散文三点对照暂缓)。臂表与状态明细 → `CHECKPOINTS.md` §2.1。
+  空间;教师与 kE 双败 12 题=当前范式天花板)。**vlbase 收官 = 33.3%**(VL 基座比 Qwen3.5 基座低 6.5pp,vlsft 对着它读)。
+  当前链:img3(**eval 跑动中**;kE 同配方、训练窗 20→3,标准 20 图协议评)
+  → vlsft(完训闸,训练收尾中)→ nocap(已训完)→ kG(无散文 LoRA)
+  → img3h3 / kEh3(历史窗 2×2 另两格,`--image_max 3 --fold_size 1`,收官)。
+  **kF 撤下不排**。明细 → `CHECKPOINTS.md` §2.1。插曲:img3 起 serve 撞上
+  scrubbed 吃掉 uv Python 标准库的定时炸弹(三次秒死;验尸与修复 → `OPS.md`)。
 - **eval100 决赛(用户定,2026-08-19;当前链跑完后执行)**:等全部臂在 eval-50
   出分 → 取 SFT 最高分者(冠军)→ **冠军 + base + teacher 三方跑 eval100**
   (`verified_eval100_nonproxy.json`)。要点:eval50 ⊂ eval100 已验证,**另 50 题
