@@ -25,11 +25,19 @@
   但 max 从 969 炸到 84k/100k;**cap2048 臂失控步 11.0% vs 无 cap 2.8%**
   (配对 t=+3.37,epoch 对齐 1.01/1.02)。重尾承自教师 3.8
   (p99/p50=42.8× vs 基座 1.8×;**3.6 仅 6.0×,其同任务轨迹在盘上从未使用**)。
-- **Tillicum 维护 08-18 09:00 → 08-19 09:00;eval 已迁 Klone L40S**
-  (`gpu-l40s`/krishna 账户,30h serve,apptainer vLLM v0.25.1 与 Tillicum 同版,
-  实测约 H200 一半速;三次 GPFS 小文件卡死教训 → 一律节点本地盘;客户端超时
-  600→1800s,否则长生成死锁)。队列 kD(38/50)→kC→kE→kD1→kG,kF 撤销;
-  六份权重 + 散文臂合并结果已全部转移。
+- **Tillicum 08-18 傍晚提前恢复,eval 链迁回**(Klone 迁移的教训留档:L40S 约
+  H200 一半速、GPFS 小文件三次卡死 → 一律节点本地盘、客户端超时 600→1800s)。
+  **kD 在 Klone 收官:48/50 计分、0 补齐 49.81% —— 目前最高臂**(超 basestock
+  45.81%);缺的 2 题:`5d901039`(impress,卡死)与 `5bc63fb9`(multi_apps,
+  即 217 条命令风暴题,旧语义下磨上限,用户裁定放弃)。Klone serve 已撤,账户清空。
+- **修法 B 已落地并从 kC 起生效**:`actions.py` 多行 type 在
+  `OSTG_TYPE_NO_SPLIT=1` 下一条 typewrite 直发(默认 0=上游拆行;验收
+  58,211 真实响应双闸 0 差异 + 灵敏度对照,→ `sft/FAILURE_ANATOMY.md`)。
+  **口径边界:kD 及之前=拆行语义,kC 起=合并语义**,每次运行的
+  `MODEL_BOUNDARY.json` 记录该 flag。当前链(Tillicum,`tillicum_chain.sh`):
+  kC=bsstock(跑动中,checkpoint-264 已由 vLLM root 复核)→ kE(lr3e6-e300)
+  → kD1(gb64-e090,即 ~1ep)→ kG(loranp-merged-300,无散文臂);
+  serve 端口 8028/8029/8031(8030 让给旧 Klone 隧道位,防串线)。
 - **datagenv12 首波启动:补格式类任务 50 道(fmt-w1)**。依据:语料 544 道里
   格式类 **1 道(0.2%)** vs 基准全量 15.2% / eval-50 18%;该类并集解开 3/9,
   其余 32/41。计划、五条硬约束与闸 → `PLAN-20260818-datagenv12-fmt-w1.md`;
