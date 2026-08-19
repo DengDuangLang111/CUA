@@ -628,3 +628,20 @@ RESULTS.md 全部写着 3 epoch。错了一周。
 
 13 个 serve/merge 脚本全部走它,`CKPT_POLICY` 环境变量可覆盖。要跑 ep1/ep2
 对照时只改这一个变量,不改脚本。
+
+### scrubbed 定时炸弹:解释器标准库被清理器吃掉(2026-08-19 凌晨)
+
+现象:04:10 起 qwen-serve/.venv 所有 serve 3 秒暴毙,`init_fs_encoding: unknown
+encoding UTF-8`;重装后又变 `No module named encodings.idna`——边装边被吃。
+根因:**Tillicum 的 `~/.local` 整个软链到 `/gpfs/scrubbed/jiayuan/home/.local`**
+(旧 netid 目录),uv 管理的 CPython 物理上住在 scrubbed 上,标准库里不常 import
+的文件被自动清理(stdlib 202→64 项,encodings 125→35)。与安装动作无关。
+修复:`UV_PYTHON_INSTALL_DIR=~/uv-python-real uv python install 3.12.13`(真实
+home,不过 `~/.local` 软链),再把 `.venv/bin/python` 软链与 `pyvenv.cfg home=`
+指过去;`import vllm` 验证后 serve 正常(248861)。**未动 3.11 与 `~/.local`**
+(另一会话两个训练在用)。遗留:`~/.local` 下 uv 二进制、3.11、caches 仍在
+scrubbed 上,同款炸弹未拆;.venv 的 site-packages 也在 scrubbed(日常访问频繁,
+风险低但非零)。彻底解法=把 `~/.local` 迁回真实 home(需与所有在跑作业协调)。
+排查时的误判也记一笔:曾把"lib 里新出现 itcl4.3.5"当成外部污染证据——实为
+CPython 发行自带组件,4590 个文件的变更是自己的 reinstall。**先问"我自己刚做了
+什么",再指控环境。**
