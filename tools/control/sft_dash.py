@@ -186,6 +186,10 @@ EVAL50_ARMS = {
                   "kE's 20-image-trained weights evaluated with --image_max 3"
                   " --fold_size 1 -- the 20-train/3-eval cell: how much does the"
                   " champion lose when history is starved at eval time?"),
+    "gb128":     ("VL img3 @ gb128 · 3-img eval (no-split)", "sft",
+                  "VL backbone x 3-image corpus at global batch 128 (8 nodes x"
+                  " 1 GPU x bs1 x accum16 after the bs2 OOM); evaluated at its"
+                  " matched 3-image window"),
     "kF":        ("r5-LoRA lean e3.00 · stock (no-split)", "sft",
                   "lean variant of the r5 LoRA, endpoint merge. Dropped from the"
                   " Klone maintenance plan, restored 2026-08-18; with r5lora"

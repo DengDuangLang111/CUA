@@ -45,7 +45,7 @@ train_gate(){  # $1 arm, $2 job, $3 dir glob; up to 12h; returns 1 on timeout (c
 
 log "chain start (resume-safe)"
 PREV=bsstock
-for arm in kE kD15 t38 vlbase img3 vlsft nocap kG img3h3 kEh3; do
+for arm in kE kD15 t38 vlbase img3 vlsft gb128 img3h3 kEh3 nocap kG; do
   if alive "$arm"; then
     log "adopt $arm: already in flight"
   elif complete "$arm"; then
@@ -58,6 +58,7 @@ for arm in kE kD15 t38 vlbase img3 vlsft nocap kG img3h3 kEh3; do
       nocap) GJOB=sft-q38Bhqs2t-lr3e6-nocap; GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-lr3e6-nocap/v*" ;;
       vlsft) GJOB=sft-q3vl-r5vl-lr3e6;  GDIR="/gpfs/scrubbed/jy050706/sft/out/q3vl-r5vl-lr3e6/v*" ;;
       img3)  GJOB=sft-q38Bhqs2t-img3;   GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-img3-lr3e6/v*" ;;
+      gb128) GJOB=sft-vl3pic-gb128-lr1e5; GDIR="/gpfs/scrubbed/jy050706/sft/out/vl3pic-gb128-lr1e5/v*" ;;
     esac
     if [ -n "$GJOB" ]; then
       if ! train_gate "$arm" "$GJOB" "$GDIR"; then
@@ -72,4 +73,4 @@ for arm in kE kD15 t38 vlbase img3 vlsft nocap kG img3h3 kEh3; do
   fi
   PREV=$arm
 done
-log "chain done (order vlbase -> img3 -> vlsft -> nocap -> kG -> img3h3 -> kEh3; kF dropped; NOTE kEh3 serve eval4blr3 has no recycler, scancel after)"
+log "chain done (final order img3 -> vlsft -> gb128 -> img3h3 -> kEh3 -> nocap -> kG; kF dropped; NOTE kG serve eval4bnp has no recycler, scancel after)"
