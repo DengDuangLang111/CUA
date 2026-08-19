@@ -47,6 +47,7 @@ case "$ARM" in
   kE)   SB=lr3e6-stock;  JOB=eval4blr3; RP=8028; MN=q38Bhqs2t-lr3e6-stock;  GRP=qwen35-4b-sft; PREV=bsstock; PJOB=eval4bbss ;;
   kD15) SB=gb64e15-stock; JOB=eval4bd15; RP=8029; MN=q38Bhqs2t-gb64e15-stock; GRP=qwen35-4b-sft; PREV=kE;   PJOB=eval4blr3 ;;
   kG)   SB=loranp-stock; JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=kD15;   PJOB=eval4bd15 ;;
+  kF)   SB=loralean-stock; JOB=eval4bll; RP=8032; MN=q38Bhqs2t-loralean-stock; GRP=qwen35-4b-sft; PREV=kG;   PJOB=eval4bnp ;;
   *) echo "unknown arm: $ARM" >&2; exit 2 ;;
 esac
 

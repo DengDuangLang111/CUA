@@ -37,7 +37,7 @@
   `MODEL_BOUNDARY.json` 记录该 flag。当前链(Tillicum,`tillicum_chain.sh`):
   kC=bsstock(跑动中,checkpoint-264 已由 vLLM root 复核)→ kE(lr3e6-e300)
   → kD15(gb64-e150,**epoch 1.501 训练一半**;原定 ~1ep 因 save_steps 30∤100
-  无 1.0 边界存档,用户改选中点)→ kG(loranp-merged-300,无散文臂);
+  无 1.0 边界存档,用户改选中点)→ kG(loranp-merged-300,无散文臂)→ kF(loralean-merged-300,lean LoRA,用户 08-18 恢复;与 r5lora·kG 构成同语料散文三点对照);
   serve 端口 8028/8029/8031(8030 让给旧 Klone 隧道位,防串线)。
 - **datagenv12 首波启动:补格式类任务 50 道(fmt-w1)**。依据:语料 544 道里
   格式类 **1 道(0.2%)** vs 基准全量 15.2% / eval-50 18%;该类并集解开 3/9,

@@ -155,6 +155,11 @@ EVAL50_ARMS = {
                   "loranp corpus = r5 with ALL inter-think prose stripped (two"
                   " build gates: zero-prose + strip-both-identical); differs from"
                   " r5lora only by prose removal"),
+    "kF":        ("r5-LoRA lean e3.00 · stock (no-split)", "sft",
+                  "lean variant of the r5 LoRA, endpoint merge. Dropped from the"
+                  " Klone maintenance plan, restored 2026-08-18; with r5lora"
+                  " (rich) and kG (no-prose) it completes the three-point prose"
+                  " axis on the same corpus and adapter config"),
 }
 
 # What each arm isolates. Anything not listed still appears -- an unlabelled
