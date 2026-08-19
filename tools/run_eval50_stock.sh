@@ -45,8 +45,8 @@ case "$ARM" in
   # port 8030 deliberately skipped: local 18030 was the Klone kD tunnel port,
   # and a stale forward there would silently score one arm against another model.
   kE)   SB=lr3e6-stock;  JOB=eval4blr3; RP=8028; MN=q38Bhqs2t-lr3e6-stock;  GRP=qwen35-4b-sft; PREV=bsstock; PJOB=eval4bbss ;;
-  kD1)  SB=gb64e1-stock; JOB=eval4bd1;  RP=8029; MN=q38Bhqs2t-gb64e1-stock; GRP=qwen35-4b-sft; PREV=kE;      PJOB=eval4blr3 ;;
-  kG)   SB=loranp-stock; JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=kD1;     PJOB=eval4bd1 ;;
+  kD15) SB=gb64e15-stock; JOB=eval4bd15; RP=8029; MN=q38Bhqs2t-gb64e15-stock; GRP=qwen35-4b-sft; PREV=kE;   PJOB=eval4blr3 ;;
+  kG)   SB=loranp-stock; JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=kD15;   PJOB=eval4bd15 ;;
   *) echo "unknown arm: $ARM" >&2; exit 2 ;;
 esac
 

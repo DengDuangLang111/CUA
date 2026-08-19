@@ -146,9 +146,11 @@ EVAL50_ARMS = {
     "kE":        ("r5 lr3e-6 e3.00 · stock (no-split)", "sft",
                   "same r5 corpus at lr 3e-6 (displacement probe), checkpoint-300"
                   " endpoint"),
-    "kD1":       ("r5 full-FT ~1ep · stock (no-split)", "sft",
-                  "kD's weights at checkpoint-90 (~epoch 1) -- the 1-epoch"
-                  " comparator for the 49.81% endpoint"),
+    "kD15":      ("r5 full-FT epoch 1.5 · stock (no-split)", "sft",
+                  "kD's weights at checkpoint-150 -- epoch 1.501, exactly half"
+                  " the 3-epoch schedule. Replaces the planned ~1ep arm: the run"
+                  " saved no epoch-1.0 boundary (save_steps 30 does not divide"
+                  " 100 steps/epoch), so the user chose the halfway point"),
     "kG":        ("r5-LoRA no-prose e3.00 · stock (no-split)", "sft",
                   "loranp corpus = r5 with ALL inter-think prose stripped (two"
                   " build gates: zero-prose + strip-both-identical); differs from"

@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=eval4bd1
+#SBATCH --job-name=eval4bd15
 #SBATCH --account=video
 #SBATCH --partition=gpu-h200
 #SBATCH --qos=interactive
@@ -9,21 +9,24 @@
 #SBATCH --mem=100G
 #SBATCH --time=08:00:00   # maintenance reservation verified RELEASED
                           # (scontrol show reservation, 2026-08-18 evening)
-#SBATCH --output=/gpfs/scrubbed/jy050706/qwen-serve/eval4bd1_%j.out
+#SBATCH --output=/gpfs/scrubbed/jy050706/qwen-serve/eval4bd15_%j.out
 #SBATCH --exclude=g018    # CUDA 'available devices to be zero' node; not
                           # drained by admins yet -- remove once known good
 #SBATCH --signal=B:USR1@600
 #
-# kD1: Bhqs2t-gb64 (full FT, r5 corpus) at ~1 EPOCH (checkpoint-90), official
-# stock template. Epoch comparator for kD (same run, endpoint weights, scored
-# 49.81% 0-filled on Klone). Default policy is step:90 because that IS this
-# arm identity; override with CKPT_POLICY if the arm definition changes.
+# kD15: Bhqs2t-gb64 (full FT, r5 corpus) at MID-TRAINING -- checkpoint-150,
+# epoch 1.501, exactly half the 3-epoch schedule. Comparator for kD (same run,
+# endpoint 3.00, 49.81% 0-filled on Klone). Replaces the planned ~1ep arm:
+# the run saved no epoch-1.0 boundary (save_steps 30 does not divide the 100
+# steps/epoch -- see TRAINING.md density rule), nearest points were 0.902 and
+# 1.201, and the user chose the halfway point instead. Default policy step:150
+# IS this arm's identity; override with CKPT_POLICY if it changes.
 #
 set -uo pipefail
 
 PROJ=/gpfs/scrubbed/jy050706/qwen-serve
-SELF="$PROJ/serve-chain-4b-gb64e1-stock.sbatch"
-MODEL=$(/gpfs/scrubbed/jy050706/qwen-serve/pick_ckpt.sh "/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-gb64/v*" "${CKPT_POLICY:-step:90}") || exit 1
+SELF="$PROJ/serve-chain-4b-gb64e15-stock.sbatch"
+MODEL=$(/gpfs/scrubbed/jy050706/qwen-serve/pick_ckpt.sh "/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-gb64/v*" "${CKPT_POLICY:-step:150}") || exit 1
 KEYFILE="${VLLM_API_KEY_FILE:-$PROJ/.vllm_api_key}"
 CHAIN_IDX="${CHAIN_IDX:-1}"; CHAIN_MAX="${CHAIN_MAX:-2}"
 
@@ -59,11 +62,11 @@ resubmit() {
 trap resubmit USR1
 
 source "$PROJ/.venv/bin/activate"
-echo ">>> [q38Bhqs2t-gb64e1-stock chain $CHAIN_IDX/$CHAIN_MAX] node=$(hostname) job=$SLURM_JOB_ID bind=127.0.0.1:8029"
+echo ">>> [q38Bhqs2t-gb64e15-stock chain $CHAIN_IDX/$CHAIN_MAX] node=$(hostname) job=$SLURM_JOB_ID bind=127.0.0.1:8029"
 python -c "import vllm; print('>>> vllm', vllm.__version__)" 2>/dev/null || true
 
 vllm serve "$MODEL" \
-  --served-model-name q38Bhqs2t-gb64e1-stock \
+  --served-model-name q38Bhqs2t-gb64e15-stock \
   --tensor-parallel-size 1 \
   --max-model-len 262144 \
   --kv-cache-dtype fp8 \
@@ -74,4 +77,4 @@ vllm serve "$MODEL" \
   --port 8029 &
 VLLM_PID=$!
 while kill -0 "$VLLM_PID" 2>/dev/null; do wait "$VLLM_PID"; done
-echo ">>> [q38Bhqs2t-gb64e1-stock chain $CHAIN_IDX] vLLM exited; this link ends."
+echo ">>> [q38Bhqs2t-gb64e15-stock chain $CHAIN_IDX] vLLM exited; this link ends."

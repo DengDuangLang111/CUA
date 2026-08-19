@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=sft-q38Bhqs2t-gb64
+#SBATCH --job-name=sft-q38Bhqs2t-r5-gb64
 #SBATCH --account=video
 #SBATCH --partition=gpu-h200
 #SBATCH --qos=normal
@@ -87,6 +87,22 @@ set -x
 B=/gpfs/scrubbed/jy050706/sft
 DS1=$B/data/q38-Bhqs2t-r5-v11100
 DS2=$B/data/q38-Bhqs2t-r5-v11500
+
+# ---- 防撞自检 (2026-08-18) --------------------------------------------
+# 曾有三份 sbatch 共用 output_dir=$B/out/q38Bhqs2t-gb64，产物名不编码语料
+# 版本，事后只能靠 args.json 才分辨得出某个 checkpoint 是哪份语料训的。
+# 现在每份各走各的 OUT，并在开跑前确认目录里没有别的语料的产物。
+OUT=$B/out/q38Bhqs2t-r5-gb64
+for _a in "$OUT"/*/args.json; do
+  [ -e "$_a" ] || continue
+  grep -q "q38-Bhqs2t-r5-v11500" "$_a" || {
+    echo "FATAL: $OUT 里已有别的语料训出的产物: $_a" >&2
+    echo "       换 OUT，或把旧产物移走。拒绝启动以免口径混淆。" >&2
+    exit 1; }
+done
+mkdir -p "$OUT" && echo "$DS1 $DS2" > "$OUT/CORPUS.txt"
+# -----------------------------------------------------------------------
+
 export PATH="$HOME/.local/bin:$PATH"
 cd $B/runcwd && source $B/venv/bin/activate
 export CUDA_HOME=$B/cuda13 PATH="$B/cuda13/bin:$PATH"
@@ -109,11 +125,11 @@ print(f"preflight {ds}: {tot} image refs, {bad} unresolved")
 sys.exit(1 if bad else 0)
 PY
 done
-REPORT=none; RUN_NAME=q38Bhqs2t-gb64-${SLURM_JOB_ID}
+REPORT=none; RUN_NAME=q38Bhqs2t-r5-gb64-${SLURM_JOB_ID}
 if [ -f "$B/wandb.env" ]; then set +x; source "$B/wandb.env"; set -x
   export WANDB_PROJECT="${WANDB_PROJECT:-cua-sft}"; REPORT=wandb; fi
 export WANDB_NOTES="Bhqs-2-terminal: rev2 evidence-based curation (376 trajs = 227 clean + 84 flagged-unconvicted + 65 adversarially-survived rescues) with every ending canonicalised to an explicit terminate(success); 35 stalled tails truncated. Same gb64 recipe as Bs, corpus is the only variable."
-export B DS1 DS2 REPORT RUN_NAME
+export B DS1 DS2 REPORT RUN_NAME OUT
 export MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n1)
 export MASTER_PORT=29500 NNODES=2 NPROC_PER_NODE=8
 echo ">>> multinode: nodes=$SLURM_JOB_NODELIST master=$MASTER_ADDR"
@@ -135,6 +151,6 @@ srun --ntasks=2 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
     --save_strategy steps --save_steps 30 --save_total_limit 12 \
     --logging_steps 2 \
     --report_to $REPORT --run_name $RUN_NAME \
-    --output_dir $B/out/q38Bhqs2t-gb64
+    --output_dir $OUT
 '
 echo "EXIT_q38e3B_gb128 $?"
