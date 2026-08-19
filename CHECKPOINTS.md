@@ -41,9 +41,9 @@ LoRA 的 14G vs 全量 592G = adapter 存储优势的实测量级(**42 倍**)。
 ## 2.1 在训/待训模型登记(2026-08-19 深夜更新;eval 顺序=用户令)
 
 当前链(`tools/tillicum_chain.sh`,全 no-split,08-19 晨定稿):**vlbase(跑动中)
-→ img3 → vlsft → nocap → img3h3 → kEh3**,之后进入 eval100 决赛(EXPERIMENTS.md)。
-**kG(无散文 LoRA)与 kF(lean LoRA)均被用户撤下不排**——权重与 serve 脚本齐备,
-散文三点对照(r5lora/kG/kF)暂缓,要跑随时可挂。
+→ img3 → vlsft → nocap → kG → img3h3 → kEh3**,之后进入 eval100 决赛
+(EXPERIMENTS.md)。**kF(lean LoRA)撤下不排**;kG(无散文 LoRA)几经调序
+最终排 nocap 后——权重与 serve 脚本均齐备。
 
 | 臂 | 模型/权重 | 状态 | 说明 |
 |---|---|---|---|
