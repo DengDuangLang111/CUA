@@ -2,6 +2,16 @@
 
 ## 现状(2026-08-16 深夜,过时即改)
 
+- **VL 训练拓扑定式(2026-08-19,实测)**:8 节点 × 1 卡 × bs1 × accum 补足
+  global batch。不只是绕开 OOM(bs2 会把两条长样本挤同一 micro-batch,峰值
+  136G+34G 索求爆 139.79G),**它本身更快**:vl3pic-gb128 实测 56 s/it,比
+  8卡×bs2 的预测快 40%——bs1 彻底消掉 padding 浪费(本语料 bs2 随机配对实测
+  浪费 21.1% token,另一会话测)。MASTER_PORT 必须按 job 派生
+  (`$((20000 + SLURM_JOB_ID % 9000))`),写死端口在共享节点必撞
+  (248869/248870/248883 三次 8 秒暴毙的死因)。20 图样本 3.3 分/步,
+  150 步要 12h 墙钟;3 图样本 56 秒/步,6h 足够。**跨阶段约束要落在下游会读的
+  地方**:eval 侧的方言/窗口要求写进驱动的 DIALECT/XARGS 列与 MODEL_BOUNDARY,
+  写在训练 sbatch 的 WANDB_NOTES 里等于自言自语(vlsft 烧毁 50 题的教训)。
 - **checkpoint 密度标准(用户 2026-08-17 立规,2026-08-18 升级为硬整除)**:
   此后所有训练 sbatch 用 `--save_strategy steps`,且 **`save_steps` 必须整除
   每 epoch 步数**(steps/epoch = ceil(样本数 / 全局批);取整除数中最接近
