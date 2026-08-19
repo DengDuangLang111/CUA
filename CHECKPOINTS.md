@@ -54,6 +54,11 @@ LoRA 的 14G vs 全量 592G = adapter 存储优势的实测量级(**42 倍**)。
 | kEh3 | 同 kE 权重 | 在盘 | eval 侧 `--image_max 3 --fold_size 1`(20训/3评格) |
 | kF | loralean-merged-300 | 在盘 | **不排**(用户令 08-19 撤销);权重与 serve 脚本齐备,要跑随时可挂 |
 
+> ⚠ **scrubbed 吃文件是实证过的**(08-19 凌晨吃掉 uv Python 标准库,验尸在
+> OPS.md)。checkpoint 同住 scrubbed:新写的暂安全,**长期保留的(冠军 kE 的
+> checkpoint-300 等)应尽快异地备份**——krishna 盘 99% 满、home 仅 10G,
+> 现实去处是 Klone `/gscratch/cse/jy050706/`。
+
 历史窗 2×2 全景:kE@20 = 57.81%(已有)| img3@20 | kE@3 | img3@3 —— 四格齐后
 "训练窗×评测窗"的交互一图定案(img3 训练把视觉 token 砍到 29%,若 img3@3
 不掉分,token 经济学成立)。
