@@ -170,6 +170,22 @@ EVAL50_ARMS = {
                   " sampling protocol as the student arms. How much of the gap"
                   " to the teacher has SFT closed -- and how high is the"
                   " ceiling itself?"),
+    "vlsft":     ("Qwen3-VL x r5vl lr3e-6 e3.00 · stock (no-split)", "sft",
+                  "the VL-backbone experiment: Qwen3-VL-4B-Thinking fine-tuned"
+                  " on the r5vl corpus at lr 3e-6; reads against vlbase, not the"
+                  " Qwen3.5 base"),
+    "img3":      ("img3 @ 20-img eval · stock (no-split)", "sft",
+                  "kE's exact recipe with the TRAINING screenshot window 20->3"
+                  " (visual tokens cut to 29%); evaluated on the STANDARD"
+                  " 20-image protocol by user order -- the deliberate"
+                  " train/eval-skew cell of the history-window 2x2"),
+    "img3h3":    ("img3 @ 3-img eval · stock (no-split)", "sft",
+                  "same img3 weights evaluated with --image_max 3 --fold_size 1"
+                  " -- the matched cell (3-train/3-eval) of the 2x2"),
+    "kEh3":      ("kE @ 3-img eval · stock (no-split)", "sft",
+                  "kE's 20-image-trained weights evaluated with --image_max 3"
+                  " --fold_size 1 -- the 20-train/3-eval cell: how much does the"
+                  " champion lose when history is starved at eval time?"),
     "kF":        ("r5-LoRA lean e3.00 · stock (no-split)", "sft",
                   "lean variant of the r5 LoRA, endpoint merge. Dropped from the"
                   " Klone maintenance plan, restored 2026-08-18; with r5lora"

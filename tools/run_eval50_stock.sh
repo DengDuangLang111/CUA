@@ -34,6 +34,7 @@
 # Canonical location: WSL /mnt/d/research/osworld-verified-control/
 set -u
 ARM="${1:?usage: run_eval50_stock.sh <arm>}"
+XARGS=""   # per-arm extra runner flags (e.g. "--image_max 3 --fold_size 1")
 
 #         serve sbatch          slurm job   port  served-model-name    result group     waits for
 case "$ARM" in
@@ -53,7 +54,16 @@ case "$ARM" in
   # chain launcher gates on training completion before this driver starts.
   nocap) SB=4b-nocap-stock; JOB=eval4bnc; RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft; PREV=vlbase; PJOB=eval4bvlb ;;
   kG)   SB=4b-loranp-stock; JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=nocap;  PJOB=eval4bnc ;;
-  kF)   SB=4b-loralean-stock; JOB=eval4bll; RP=8032; MN=q38Bhqs2t-loralean-stock; GRP=qwen35-4b-sft; PREV=kG;   PJOB=eval4bnp ;;
+  # vlsft: Qwen3-VL-4B-Thinking x r5vl corpus, lr3e-6 3ep (chain gates on training done)
+  vlsft) SB=vl-r5vl-stock; JOB=eval4bvls; RP=8035; MN=q3vl-r5vl-lr3e6-stock; GRP=qwen3vl-4b-sft; PREV=kG; PJOB=eval4bnp ;;
+  # img3: kE's exact recipe with the training screenshot window 20->3; STANDARD 20-image
+  # eval protocol by user order (the deliberate train/eval-skew cell of the 2x2)
+  img3)  SB=4b-img3-stock; JOB=eval4bim3; RP=8036; MN=q38Bhqs2t-img3-stock; GRP=qwen35-4b-sft; PREV=vlsft; PJOB=eval4bvls ;;
+  # the other two cells of the history-window 2x2 (user 2026-08-19): same weights,
+  # eval-side window 3. img3h3 reuses img3's live serve (same JOB); kEh3 resubmits kE's.
+  img3h3) SB=4b-img3-stock; JOB=eval4bim3; RP=8036; MN=q38Bhqs2t-img3-stock; GRP=qwen35-4b-sft; PREV=img3; PJOB=none; XARGS="--image_max 3 --fold_size 1" ;;
+  kEh3)  SB=4b-lr3e6-stock; JOB=eval4blr3; RP=8028; MN=q38Bhqs2t-lr3e6-stock; GRP=qwen35-4b-sft; PREV=img3h3; PJOB=eval4bim3; XARGS="--image_max 3 --fold_size 1" ;;
+  kF)   SB=4b-loralean-stock; JOB=eval4bll; RP=8032; MN=q38Bhqs2t-loralean-stock; GRP=qwen35-4b-sft; PREV=kEh3; PJOB=eval4blr3 ;;
   # teacher ceiling: Qwen3.8-27B on the SAME frozen 50, same sampling protocol
   # (t=1.0 top_p .95 max_tokens 81920), no-split semantics like every k-era arm.
   t38)  SB=38-i;       JOB=eval38;   RP=8000; MN=qwen38-27b-local; GRP=qwen38-27b-local; PREV=kD15; PJOB=eval4bd15 ;;
@@ -142,9 +152,9 @@ wait_up 90 || { echo "[$(date '+%F %T')] FATAL: endpoint $PORT never came up"; e
 ROOT=$(curl -s -H "Authorization: Bearer $OPENAI_API_KEY" http://127.0.0.1:$PORT/v1/models \
        | python3 -c "import json,sys;print(json.load(sys.stdin)['data'][0].get('root',''))")
 echo "[$(date '+%F %T')] endpoint UP; vLLM reports root=$ROOT"
-python3 - "$R/MODEL_BOUNDARY.json" "$ARM" "$MN" "$ROOT" "${OSTG_TYPE_NO_SPLIT:-0}" <<'PY'
+python3 - "$R/MODEL_BOUNDARY.json" "$ARM" "$MN" "$ROOT" "${OSTG_TYPE_NO_SPLIT:-0}" "$XARGS" <<'PY'
 import json, sys
-path, arm, served, root, no_split = sys.argv[1:6]
+path, arm, served, root, no_split, xargs = sys.argv[1:7]
 json.dump({
     "arm": arm, "served_model_name": served,
     "weights_reported_by_vllm": root,
@@ -154,6 +164,7 @@ json.dump({
     "sampling": {"temperature": 1.0, "top_p": 0.95, "top_k": 20, "min_p": 0.0,
                  "presence_penalty": 0.0, "repetition_penalty": 1.0},
     "max_steps": 50, "sleep_after_execution": 3, "num_envs": 3,
+    "runner_extra_args": xargs or "(none: image_max 20, fold_size 10 defaults)",
     "tasks": "verified_eval50_nonproxy.json (frozen stratified sample, seed 20260815)",
     "harness": ("OSTG_NO_RECORD=1 (no guest mp4, screenshots unaffected); "
                 "OSTG_TYPE_NO_SPLIT=%s (1 = multi-line type sent as ONE typewrite, "
@@ -183,7 +194,7 @@ for TRY in 1 2 3 4 5; do
     --temperature 1.0 --top_p 0.95 --max_tokens 81920 --max_steps 50 \
     --sleep_after_execution 3 --enable_thinking --preserve_thinking --num_envs 3 --simple_path \
     --screen_width 1920 --screen_height 1080 \
-    --test_config_base_dir $C --test_all_meta_path $META --result_dir "$R"
+    --test_config_base_dir $C --test_all_meta_path $META --result_dir "$R" $XARGS
   stop_eval
 done
 N=$(scored "$R")

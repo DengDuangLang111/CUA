@@ -38,20 +38,23 @@ LoRA 的 14G vs 全量 592G = adapter 存储优势的实测量级(**42 倍**)。
 > 0.5%,详 `SFT_DATA.md` 事故章)。量级远小于臂间差异,不重训;引用这些分数
 > 时带上此脚注。**Bhqs 起已修复**(build/verify/census 三层防线)。
 
-## 2.1 在训/待训模型登记(2026-08-19,按用户优先级排序)
+## 2.1 在训/待训模型登记(2026-08-19 深夜更新;eval 顺序=用户令)
 
-用户裁定的下一批 eval 顺序(已排进 `tools/tillicum_chain.sh`,全部 no-split 口径):
+当前链(`tools/tillicum_chain.sh`,全 no-split):**vlbase(跑动中)→ nocap →
+kG → vlsft → img3 → img3h3 → kEh3 → kF**,之后进入 eval100 决赛(EXPERIMENTS.md)。
 
-| 序 | 臂 | 模型/训练 | 状态 | eval 安排 |
-|---|---|---|---|---|
-| 0 | **vlbase** | `models/Qwen3-VL-4B-Thinking`(基座,零训练依赖) | 在盘 | **t38 后立即跑**(VL 系的参照,插队令 2026-08-19) |
-| 1 | **nocap** | `out/q38Bhqs2t-lr3e6-nocap`(= kE 配置去 think-cap;作业 247800 在训) | 在训 | vlbase 后跑;链上有**完训闸**(作业退队 + endpoint epoch≥2.99),半熟权重进不了 serve |
-| 2 | **img3** | (尚无训练、无目录;历史图从全量降为 3 张的 token 经济学臂,OpenWebRL 先例) | **不存在** | **只登记,不排跑**(用户令) |
-| 3 | **VL-SFT** | `out/q3vl-r5vl-lr3e6`(Qwen3-VL-4B-Thinking × r5vl 语料;作业 248101 在训) | 在训 | **只登记,不排跑**(用户令;评它之前先要 vlbase 参照 + serve 兼容冒烟) |
-| 4 | loranp = kG | `out/q38Bhqs2t-loranp-merged-300` | 在盘 | 已在链上(nocap 后) |
-| — | loralean = kF | `out/q38Bhqs2t-loralean-merged-300` | 在盘 | 链尾(此前用户令) |
+| 臂 | 模型/权重 | 状态 | 说明 |
+|---|---|---|---|
+| nocap | `out/q38Bhqs2t-lr3e6-nocap`(kE 配置去 think-cap) | **已训完** | 一度被撤,用户改令回锅,排 vlbase 后;链有完训闸 |
+| vlsft | `out/q3vl-r5vl-lr3e6`(Qwen3-VL-4B-Thinking × r5vl,lr3e-6 3ep) | 在训 | 排 kG 后,完训闸;对照 = vlbase |
+| img3 | `out/q38Bhqs2t-img3`(**kE 字节级同配方**,仅训练截图窗 20→3) | 在训 | 排 vlsft 后,完训闸;**按用户令用标准 20 图协议评**(2×2 的故意 skew 格) |
+| img3h3 | 同 img3 权重 | — | eval 侧 `--image_max 3 --fold_size 1`(3训/3评格),复用 img3 serve |
+| kEh3 | 同 kE 权重 | 在盘 | eval 侧 `--image_max 3 --fold_size 1`(20训/3评格) |
+| kF | loralean-merged-300 | 在盘 | 链尾(此前用户令未撤) |
 
-> nocap 与 VL 的训练由另一会话发起;此表只管 eval 排期与登记。
+历史窗 2×2 全景:kE@20 = 57.81%(已有)| img3@20 | kE@3 | img3@3 —— 四格齐后
+"训练窗×评测窗"的交互一图定案(img3 训练把视觉 token 砍到 29%,若 img3@3
+不掉分,token 经济学成立)。
 
 ## 3 数据集(Tillicum `sft/data/`)
 
