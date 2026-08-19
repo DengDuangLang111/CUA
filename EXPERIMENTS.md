@@ -41,7 +41,13 @@
   kD15)。已收官:**kD15=39.81%**(3ep 比 1.5ep 高 10pp,r5 上多训有益)、
   **t38 教师=69.81%**(SFT 关掉 base→teacher 30pp 差距的 60%,剩 12pp 蒸馏
   空间;教师与 kE 双败 12 题=当前范式天花板)。**vlbase 收官 = 33.3%**(VL 基座比 Qwen3.5 基座低 6.5pp,vlsft 对着它读)。
-  当前链:img3(跑动中)→ vlsft → gb128(vl3pic-gb128,3 图评,完训闸)→ img3h3 → kEh3 → nocap → kG(尾)
+  已收官(08-19):img3=47.81 / img3h3=53.81 / kEh3=57.81 / **nocap=59.81 新冠军**
+  / vlsft=44.00(首跑烧于 XML/json 方言错配,修后重跑)/ gb128=37.81(vl3pic
+  语料 gb128@1e-5,3 图评;对 vlbase +4.5pp、低 vlsft 6.2pp,语料窗×累积 LR
+  双混杂,干净拆解等 vl3b)。当前链:kG(跑动中)→ vl20 → vl3b → vl20g →
+  kEh1 → **baseh1 → vlbaseh1(新尾,08-19 用户令:两个未训基座的 1 图评下限,
+  服务 1pic-vs-3pic 训练窗决策)**。训练排队:249457 vl20nocap(max_length
+  81920)、249458 img1(kE 配方 × 1 图窗);完训后各接匹配窗 eval 臂。
   **kF 撤下不排**。明细 → `CHECKPOINTS.md` §2.1。插曲:img3 起 serve 撞上
   scrubbed 吃掉 uv Python 标准库的定时炸弹(三次秒死;验尸与修复 → `OPS.md`)。
 - **eval100 决赛(用户定,2026-08-19;当前链跑完后执行)**:等全部臂在 eval-50

@@ -187,6 +187,13 @@ EVAL50_ARMS = {
                   " (--image_max 1 --fold_size 1): the extreme point of the"
                   " eval-window curve 20/3/1 -- how much history does the"
                   " champion recipe actually need at serve time?"),
+    "baseh1":    ("stock 4B @ 1-img eval · stock (no-split)", "reference",
+                  "untrained Qwen3.5-4B with only the current screenshot"
+                  " (--image_max 1 --fold_size 1): the no-SFT floor of the"
+                  " 1-image column for the 1pic-vs-3pic training-window call"),
+    "vlbaseh1":  ("stock VL @ 1-img eval · (no-split)", "reference",
+                  "untrained Qwen3-VL-4B-Thinking at the 1-image window: the"
+                  " VL-backbone floor of the same 1-image column"),
     "kEh3":      ("kE @ 3-img eval · stock (no-split)", "sft",
                   "kE's 20-image-trained weights evaluated with --image_max 3"
                   " --fold_size 1 -- the 20-train/3-eval cell: how much does the"

@@ -63,7 +63,12 @@ case "$ARM" in
   vl20g) SB=vl20g-stock; JOB=eval4bv2g; RP=8040; MN=vl20pic-gb128-stock; GRP=qwen3vl-4b-sft; PREV=vl3b;  PJOB=eval4bv3b; DIALECT=json ;;
   # kEh1: kE weights at a ONE-image eval window -- completes the eval-window
   # curve 20/3/1. fold_size MUST be 1 (fold 10 alternates into total blindness).
-  kEh1)  SB=4b-lr3e6-stock; JOB=eval4blr3; RP=8028; MN=q38Bhqs2t-lr3e6-stock; GRP=qwen35-4b-sft; PREV=vl20g; PJOB=eval4bv2g; XARGS="--image_max 1 --fold_size 1" ;;  # tail: scancel eval4blr3 after
+  kEh1)  SB=4b-lr3e6-stock; JOB=eval4blr3; RP=8028; MN=q38Bhqs2t-lr3e6-stock; GRP=qwen35-4b-sft; PREV=vl20g; PJOB=eval4bv2g; XARGS="--image_max 1 --fold_size 1" ;;
+  # 1-image floor for BOTH untrained backbones (user 08-19, the 1pic-vs-3pic
+  # training-window decision): basestock/vlbase weights, eval window 1.
+  # fold_size MUST be 1 (fold 10 alternates into total blindness, see kEh1).
+  baseh1)   SB=4b-base-stock; JOB=eval4bbo;  RP=8023; MN=q35-4b-stock;       GRP=qwen35-4b-base;  PREV=kEh1;   PJOB=eval4blr3; XARGS="--image_max 1 --fold_size 1" ;;
+  vlbaseh1) SB=vl-base-stock; JOB=eval4bvlb; RP=8034; MN=q3vl-4b-base-stock; GRP=qwen3vl-4b-base; PREV=baseh1; PJOB=eval4bbo;  XARGS="--image_max 1 --fold_size 1" ;;  # tail: scancel eval4bvlb after
   # vlsft: Qwen3-VL-4B-Thinking x r5vl corpus, lr3e-6 3ep (chain gates on training done)
   vlsft) SB=vl-r5vl-stock; JOB=eval4bvls; RP=8035; MN=q3vl-r5vl-lr3e6-stock; GRP=qwen3vl-4b-sft; PREV=nocap; PJOB=eval4bnc; DIALECT=json ;;  # rerun right after nocap; first attempt burned on the XML/json dialect mismatch
   # img3: kE's exact recipe with the training screenshot window 20->3; STANDARD 20-image
