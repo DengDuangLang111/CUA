@@ -2,10 +2,15 @@
 
 ## 现状(2026-08-16 深夜,过时即改)
 
-- **checkpoint 密度标准(用户 2026-08-17 立规)**:此后所有训练 sbatch 用
-  `--save_strategy steps`,`save_steps ≈ 每epoch步数/3`(每 epoch 三存:
-  1/3、2/3、边界),`save_total_limit ≈ 3×epochs+2`。动机:细粒度损伤
-  曲线 + 崩溃止损(235513 死于 120/135 丢 30 步;三存制最多丢 15)。
+- **checkpoint 密度标准(用户 2026-08-17 立规,2026-08-18 升级为硬整除)**:
+  此后所有训练 sbatch 用 `--save_strategy steps`,且 **`save_steps` 必须整除
+  每 epoch 步数**(steps/epoch = ceil(样本数 / 全局批);取整除数中最接近
+  steps/epoch÷3 者),`save_total_limit ≥ epochs × (steps/epoch ÷ save_steps) + 1`
+  以免轮转丢早期点;**sbatch 启动时把 steps/epoch 和 save_steps 打进日志**
+  (选择连判据一起留痕)。旧版"≈/3 取整"的教训:gb64 r5 全量跑
+  100 步/epoch 取了 save_steps=30,30∤100 → **全程没有任何 epoch 边界存档**,
+  1-epoch 对照臂 kD1 被迫用 0.902(ckpt-90;次近是 1.201)。动机不变:
+  细粒度损伤曲线 + 崩溃止损 + **每个 epoch 边界必须可评**。
   在飞作业(235820/235322,epoch 存)不追改。
 
 - **量的裁决第一票(2026-08-17 02:39):B-1ep = 15/50 = 30%**——语料 4.8 倍
