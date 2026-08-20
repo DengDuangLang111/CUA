@@ -19,7 +19,84 @@
 版本目录 `v<N>-<YYYYMMDD-HHMMSS>` 由 swift 自动生成;同名臂多次尝试会累积
 多个 v 目录,**只有含 checkpoint 的那个是真跑起来的**(见下表 ckpt=0 的行)。
 
-## 2 现役 checkpoint(2026-08-17 07:00 盘点,总占用 4.1 TB)
+## 2 全臂总表(2026-08-19)
+
+**口径与来源**:超参逐臂取自各 checkpoint 自带的 `args.json`(ms-swift 写的,
+不是 sbatch 意图);分数为 `result_dir/**/result.txt` **逐文件**求和 ÷ 50
+(缺题记 0;禁 `cat` 拼接,见 `sft/RESULTS.md` §5.12);臂名↔权重映射取自
+各 eval 目录的 `MODEL_BOUNDARY.json`。**分数是权重的属性,不是 sbatch 的属性** ——
+下表"服务的存档"列凡标注的,都是没跑到终点的权重。
+
+### Qwen3.5-4B 学生线(已 eval)
+
+| 臂 | 权重目录 | 语料 | lr | gb | ep | 微调 | **eval50** | 注 |
+|---|---|---|---|---|---|---|---|---|
+| **nocap** | `q38Bhqs2t-lr3e6-nocap` | r5nocap | 3e-6 | 64 | 3 | full | **59.81%** | 🏆 最高 |
+| **kE / kEh3** | `q38Bhqs2t-lr3e6` | r5 | 3e-6 | 64 | 3 | full | **57.81%** | 同权重,h3=3 图评测窗,分数相同 |
+| img3h3 | `q38Bhqs2t-img3-lr3e6` | r5-img3 | 3e-6 | 64 | 3 | full | 53.81% | 3 图训练 × 3 图评(匹配窗) |
+| **kD** | `q38Bhqs2t-gb64` | r5 | **1e-5** | 64 | 3 | full | 49.81% | ⚠ **48/50**,缺 2 题记 0;Klone L40S |
+| kG | `q38Bhqs2t-loranp` | r5np(去 prose) | 1e-4 | 64 | 3 | lora | 49.81% | |
+| img3 | `q38Bhqs2t-img3-lr3e6` | r5-img3 | 3e-6 | 64 | 3 | full | 47.81% | 同 img3h3 权重,20 图评 |
+| Bs-LoRA | `q38Bs-lora` | B+cap2048 | 1e-4 | 64 | 3 | lora | 47.81 / 45.81 | ⚠ 服务 ckpt-90(**1.02ep**),终点 264 |
+| Bs-gb64 | `q38Bs-gb64` | B+cap2048 | 1e-5 | 64 | 3 | full | 45.81 / 43.81 | ⚠ 同上,服务 ckpt-90 |
+| gb128ep2 | `q38e3B-gb128` | B | 1e-5 | 128 | 取 ep2 | full | 43.81% | 49/50;3ep 从未跑完(六连 OOM) |
+| B-gb64o | `q38e3B-gb64o` | B | 1e-5 | 64 | 3 | full | 41.81% | 47/50;服务 ckpt-90(1.01ep) |
+| r5lora | `q38Bhqs2t-lora` | r5 | 1e-4 | 64 | 3 | lora | 41.81% | |
+| kD15 | `q38Bhqs2t-gb64` @ckpt-150 | r5 | 1e-5 | 64 | **1.5** | full | 39.81% | kD 的中途存档 |
+| B-1ep | `q38e1B` | B | 1e-5 | **8** | 1 | full | 31.81% | |
+| rich | `q38e3-rich` | v11100 | 1e-5 | 8 | 3 | full | 28.00 / 30.00 | 两读数=同配置重跑(§5.7) |
+| lean | `q38e3-lean` | v11100 | 1e-5 | 8 | 3 | full | 23.81 / 25.81 | 训练侧 `preserve_thinking false` |
+
+### Qwen3-VL-4B 线
+
+| 臂 | 权重目录 | 语料 | lr | gb | ep | **eval50** |
+|---|---|---|---|---|---|---|
+| vl20 | `vl20pic-lr1e5` | r5vl(20 图) | 1e-5 | 64 | 3 | **45.81%** |
+| vlsft | `q3vl-r5vl-lr3e6` | r5vl | 3e-6 | 64 | 3 | 44.00% |
+| gb128 | `vl3pic-gb128-lr1e5` | vl3pic(3 图) | 1e-5 | 128 | 3 | 37.81% |
+
+### 基线
+
+| | eval50 |
+|---|---|
+| 教师 Qwen3.8-27B(t38) | **69.81%** |
+| Qwen3.5-4B 基座 | 39.81% |
+| Qwen3-VL-4B 基座 | 33.31% |
+
+### 训练完成但未 eval
+
+| 权重目录 | 语料 | lr | gb | ckpt 数 | 状态 |
+|---|---|---|---|---|---|
+| **`q38Bhqs-gb64`** | Bhqs-v11100 | 1e-5 | 64 | 9 | Bhqs-1;sbatch 明写"不花 eval slot",被 curation rev2 取代 |
+| `q38Bhqs2t-img1-lr3e6` | r5-img1 | 3e-6 | 64 | 12 | 完训,链上待评 |
+| **`vl3pic-base`**(=vl3b) | vl3pic | 3e-6 | 64 | 12 | 完训待评;**gb128 的干净拆解** |
+| **`vl20pic-gb128-lr1e5`**(=vl20g) | r5vl | 1e-5 | **128** | 4 | 完训待评;累积 lr 7.5e-4 = §5.13 剂量曲线中点 |
+| `q38Bhqs2t-nocapnp` | r5nocapnp | 3e-6 | 64 | 2 | 在训 |
+| `vl20nocap-lr1e5` | r5vlnocap | 1e-5 | 64 | 2 | 训练已停(0.6ep,非完整臂) |
+| `q38Bhqs2t-nocaplean` · `vlnocapnp-lr3e6` | — | 3e-6 | 64 | **0** | 无存档 |
+| `q38e3B-gb128o` | B | 1e-5 | 128 | **0** | 六连 OOM 全灭 |
+| `q38e3B` | B | 1e-5 | 8 | 1 | 未评 |
+
+早期 9 题面板时代(`e1`/`e3`/`more`/`more3`/`more3np`/`ep5np`/`ep5pt`,
+全部 lr 1e-5、gb 8、abs-pilot 语料)与 eval50 口径不可比,不列入。
+
+### 从这张表读出来的三件事
+
+1. **lr 只有两档**:1e-5 与 3e-6。**5e-6 全项目空白** —— `sft/sbatch/` 里
+   `sft-q38Bhqs-lr5e6.sbatch` 与 `-lr3e6.sbatch` 都自称
+   "EXACT twin of Bhqs-gb64 except learning_rate",但 Tillicum `out/` 无产出、
+   全库 md 无结果:**这组三点单变量 lr 曲线设计好了从没跑**。
+2. **三个臂的分数其实是 1 epoch 权重**(Bs-gb64 / Bs-LoRA / B-gb64o 都服务
+   ckpt-90,因挑选器按字典序取)。与 3ep 臂并排读会低估。
+3. **kD vs kE 的 +8pp 被缺题放大**:kD 只有 48/50,缺 2 题按 0 入分,
+   光这一项最多压低 4pp(每题 2pp)。kD 上界 53.81% 与 kE 57.81% 之差
+   落在 5-6pp 噪声底内,再叠加语义(拆行/合并)与硬件(Klone/Tillicum)两个
+   混杂 —— **"3e-6 优于 1e-5"目前不是干净结论**,干净做法是只比共同题。
+
+## 2.1 存储占用盘点(2026-08-17 07:00,总占用 4.1 TB)
+
+> **只看体积。** 本表的 eval 列是 08-17 当时的整数题数口径(不含部分分),
+> 已被 §2 总表取代;引用分数请用 §2 或 `sft/RESULTS.md` §6。
 
 | 臂 | 目录 | ckpt | 末步 | 体积 | 语料 | eval |
 |---|---|---|---|---|---|---|
@@ -38,7 +115,7 @@ LoRA 的 14G vs 全量 592G = adapter 存储优势的实测量级(**42 倍**)。
 > 0.5%,详 `SFT_DATA.md` 事故章)。量级远小于臂间差异,不重训;引用这些分数
 > 时带上此脚注。**Bhqs 起已修复**(build/verify/census 三层防线)。
 
-## 2.1 在训/待训模型登记(2026-08-19 深夜更新;eval 顺序=用户令)
+## 2.2 在训/待训模型登记(2026-08-19 深夜更新;eval 顺序=用户令)
 
 当前链(`tools/tillicum_chain.sh`,全 no-split,08-19 深夜版):**vl20(跑动中)
 → kEh1 → baseh1 → nocapt0 → nocapnp → img1 → vlnocapnp(尾,训练 249567
@@ -99,6 +176,8 @@ bs2→1,不是节点拓扑**(1 rank/节点多的是 CPU 内存,显存还是那�
 | **249492**(原 249458 撤) | **img1** | q38-Bhqs2t-img1-*(6385 条,窗 1,fold 1,cap 同 img3;自助构建,code e6b6e034,双端 md5 + 6385/6385 图片 resolve) | kE 配方同(lr3e-6/3ep/seed 同默认),仅窗口变量;**08-19 重拓扑 2×8→8×1,accum 4→8,gb64 梯度数学不变**(整节点申请卡到次日 01:15,碎片单卡秒排——**调度差异是唯一成立的理由**;曾附的"1 卡/节点避 PCIe 争用快 2.3×/rank"归因已由另一会话撤回:误把续训作业的墙钟除以全步数,拓扑对吞吐的影响**无定论**,教训见 TRAINING.md;原 sbatch 注记已同步撤回标注,存 .bak-2x8) | **完训**(EXIT 0,1h42m,endpoint=checkpoint-300 @epoch3.00,12 ckpt;eval 臂 img1 已接链 @1图匹配窗;当时 8 节点 g001/002/006/010/011/017/019/020,新规前豁免形状) |
 | **249500**(249457→249486→249496→249500,定稿) | **vl20nocap** | q38-Bhqs2t-r5vlnocap-*(6474 条,另一会话建+过闸) | **4 节点×2 卡×bs1×accum8 = gb64**(用户新规 ≤4 节点;训练超参与 249486 一字未动,cpus 16/mem 400G/墙钟 10h——实测 95.87 s/it×306 步=8h09m,6h 会在 74% 处砍出一个"看着像 3ep 实为 2.2ep"的不可比 checkpoint),**max_length 81920**(smoke 实测 99% 峰值可容;65536-delete 会恰好丢掉 3 条轨迹的 terminate 目标行——19a5b6dd/acd3db2e/128c9ca6 终止行各 18 图),lr1e-5/3ep | **跑动中**(另一会话管理,g[001,004,017,020];249486 撤于墙钟 6h<ETA 8.1h、249496 撤于拓扑新规,两次都在个位数步、零 checkpoint 损失) |
 | ~~249536~~ | ~~nocaplean~~ | r5nocap 同 nocap | nocap 配方 + preserve_thinking false | **已撤(用户令,27/306,零 ckpt 损失)**:真实 payload 渲染证明 **eval 历史 think 全保留(27/27)**——"匹配 eval 模板"的立项前提反了,false 训的是最坏方向 skew;旧 lean/rich(23.81<28.00)同向。eval 臂已撤、img1 重连 nocapnp;serve-chain-4b-nocaplean-stock.sbatch 留盘未用。§5.14/CONTEXT§4 口径修正由 64333 会话统一负责 |
+| **249612** | **np2e6** | r5nocapnp 同 nocapnp | **nocapnp 配方唯一变量 lr 3e-6→2e-6**(累积 3.1e-4,冠军剂量 4.5e-4 以左从未采样区;4×2/3ep/81920/save34);对照 nocapnp;用户阶梯假设:loss 台阶轻→分高 | 排队(与 249613 同波,等 01:10 nocapnp 释放) |
+| **249613** | **np1e6e5** | r5nocapnp 同 nocapnp | **lr 1e-6 × 5ep**(累积 2.6e-4 ≈ np2e6 的 3.1e-4,差 20%)——**与 np2e6 构成"总剂量 vs 重复次数"配对**:重复记忆有害则输给 np2e6,只看剂量则平;510 步,墙钟 12h(实测 74s/it≈10.5h) | 排队 |
 | 249567 | vlnocapnp(另一会话) | r5vlnocapnp(VL 语料,think 无 cap + 去 prose,strip_prose d7d14632) | 4×2×bs1×accum8=gb64,lr3e-6/3ep,81920,freeze_vit;对照 vlsft 44.00(cap+prose 双变量);硬证据:no-prose 模型 eval 输出 0/1293 含 prose | 排队(12h 墙钟);eval 臂 vlnocapnp 已接链尾 @标准20图+json |
 | **249538**(249531→249537→249538) | nocapnp(同事建,我修数据) | r5nocapnp(prose 唯一变量,ostg strip_prose 56a3bb70;**249537 四秒死于 preflight:13,436 引用全是相对路径且目录无 images/——jsonl 已改写为指向 r5nocap 绝对路径(截图逐名复用,零传输),6474 行 63,146 引用 0 缺失,原文件存 .bak-relpaths;**同事从源头重生成交叉验证:两 pool 逐字节一致 630f0350/bce56618**;builder 已修 --images-prefix d7d14632**) | **4×2×bs1×accum8=gb64**、墙钟 10h、81920;对照 nocap 59.81,先验 kG +8pp | **跑动中**(25 秒排上 g[005,010,012,014],preflight 过,NPROC 环境正确、echo 文案陈旧无害) |
 
