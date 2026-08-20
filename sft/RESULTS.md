@@ -933,3 +933,26 @@ kE ≤10 步的 20 道简单题 kE 17 胜 vs img3 15 胜;②"输在长视觉"—
 5 题里 3 题 kE 仅 8 步即解(短题),而 >25 步的 21 道长题 img3 5 胜 vs kE 4 胜,
 不落下风。定性:3 图训练 = 便宜、无功无过、略毛糙的整体漂移(丢短题手感 +
 两道回看型打转),非"牺牲长程换效率"。翻面仅 5:3,方向性读数。
+
+## 5.14 eval 历史的真实组成与 kG 判读预注册(2026-08-19 晚,kG 33/50 时写下)
+
+**已验证(Qwen3.5-4B `chat_template.jinja:94-101`)**:模板只为"最后一个 user
+查询之后"的 assistant 轮保留 `<think>`;OSWorld 布局里最新一条永远是 user
+(新截图),故**所有历史轮的 think 都被模板剪掉,每步阅后即焚**(这也是 nocap
+的 92k 失控 think 不炸上下文的原因)。agent 确实把 think 内联发出
+(client.py:46-51),剪的是服务端模板。eval 时模型可见的"过去"只有三样:
+**截图窗 + 历史 prose + 历史动作序列**。
+
+**推论**:prose 是 eval 时跨步的唯一自然语言记忆载体。kG(loranp,只剥 prose,
+think 与动作保留)的模型不产 prose → 其 eval 历史只剩动作+截图。
+kG vs r5lora(41.81)即"prose-as-memory 值多少分"的直接配对。**判读预注册**:
+显著低(>6pp,长题掉最狠)= prose 是关键记忆;噪声内 = prose 是装饰、白花
+token;反超 = teacher 冗长旁白是分心源,剥掉更利落。
+
+**对 prose-mask 提案(loss 不计、history 计)的含义**:eval 历史里的 prose
+只能来自模型自己生成——mask 掉 loss 就没人生成 prose,训练时见过的 prose-rich
+历史反成 train/eval skew。kG 的三个分支没有一个支持该提案;唯一支持场景
+("prose 有用但 loss 计入伤了动作学习")需另行举证。
+
+**未验证口子**:训练侧(swift encode)历史轮 think 留不留未查;若训留/评剪,
+是全臂共同的背景 skew,不影响 kG vs r5lora 的配对差。
