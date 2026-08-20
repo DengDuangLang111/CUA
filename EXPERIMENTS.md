@@ -51,8 +51,10 @@
   nocapt0(尾;各臂注记见 driver)。训练:249492 img1(跑动中,尾声)、
   249500 vl20nocap(4×2,同事管)、**249536 nocaplean(08-19 用户令:nocap
   配方+preserve_thinking false+81920,4×2,18 秒排上)**、249531 nocapnp
-  (同事,nocap+去prose,PENDING);think 权重 0.5 臂在与同事论证中
-  (think 占 loss 轮字符质量 70.8%)。完训后各接匹配 eval 臂。
+  (同事,nocap+去prose,PENDING);think 权重 0.5 臂论证已结:值得跑
+  (think 占 loss 轮 70.8% 字符质量,最大杠杆;channel_loss 不冲突、token
+  边界已验),**定序在 nocaplean/nocapnp 两个粗旋钮出分之后**——三者机制
+  不同(eval 可见输入/训练输入/训练信号分配),先粗后细省一轮。完训后各接匹配 eval 臂。
   **kF 撤下不排**。明细 → `CHECKPOINTS.md` §2.1。插曲:img3 起 serve 撞上
   scrubbed 吃掉 uv Python 标准库的定时炸弹(三次秒死;验尸与修复 → `OPS.md`)。
 - **eval100 决赛(用户定,2026-08-19;当前链跑完后执行)**:等全部臂在 eval-50
