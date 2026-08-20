@@ -63,7 +63,7 @@ for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 ba
       nocapnp)   GJOB=eval4b-np;               GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-nocapnp/v*" ;;  # 16-rank rerun 249689; opaque queue name per user rule. pick_ckpt spans v0+v1 by epoch, so v0 ckpt-204 (2.00) cannot satisfy the >=2.99 gate
       img1)      GJOB=sft-q38Bhqs2t-img1;      GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-img1-lr3e6/v*" ;;
       vlnocapnp) GJOB=sft-vlnocapnp-lr3e6;      GDIR="/gpfs/scrubbed/jy050706/sft/out/vlnocapnp-lr3e6/v*" ;;
-      np1e6)     GJOB=eval4b-n1;               GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-np1e6/v*" ;;  # queue-visible name obscured per user rule 08-19
+      np1e6)     GJOB=eval4b-n1r;              GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-np1e6/v*" ;;  # opaque name per user rule 08-19; GJOB tracks the RESUME job 250344 after the first attempt died at epoch 2.36 on an NVLink fault. pick_ckpt spans v0+v1 by epoch, so the >=2.99 gate can only be satisfied by the resume writing checkpoint-303 into v1
     esac
     if [ -n "$GJOB" ]; then
       if ! train_gate "$arm" "$GJOB" "$GDIR"; then
