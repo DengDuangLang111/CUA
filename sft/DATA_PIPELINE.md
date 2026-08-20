@@ -239,3 +239,40 @@ assistant 段。由此:
 
 同类的既有条目:`log the choice, not just the result`(选权重的代码必须打印
 它选了什么,见 `OPS.md`)。那条讲的是选择,这条讲的是测量与构建 —— 同一个病。
+
+### 第五种:方法对了、输入形状错了(2026-08-19 同日,我栽的)
+
+前四种是工具坏了,这一种更隐蔽:**工具没坏,是喂给它的输入不是生产环境的形状**。
+
+当天我用 `tokenizer.apply_chat_template` 测"eval 时历史 `<think>` 还在不在",
+结论"被剪光",还据此跟用户讲了一通"prose 是 eval 唯一的自然语言记忆载体"。
+两路独立实测(另一会话的活体 `/v1/chat/completions/render` + 我的离线复验)
+都推翻了它:**历史 think 全部保留**。
+
+错在我手搓的 messages 里 user 轮是普通文本,而这个 harness 的每个非首轮 user
+都包在 `<tool_response>` 里。模板的倒序扫描只在"不带该包装的 user 轮"处停下:
+```jinja
+{%- if not(content.startswith('<tool_response>') and content.endswith('</tool_response>')) %}
+    {%- set ns.last_query_index = index %}
+```
+普通 user 轮 → 扫描停在最后一个 user → 历史轮全部走剥除分支;
+真实形状 → 26/27 个 user 轮被跳过 → `last_query_index` 钉在 1 → 历史轮全部保留。
+**generic chat 会剥,这个 harness 的形状不会。**
+
+实测对照(真实 payload 54 条消息 / 26 个带 think 的 assistant 轮):
+```
+                真实形状(user带tool_response)   手搓形状(普通user)
+Qwen3.5-4B           27 个 <think>                    1 个
+Qwen3-VL-4B          27 个 <think>                    1 个
+```
+
+**规矩**:任何涉及 chat template 行为的实验(think 去留、tool_call 渲染、
+system 拼接),**输入必须取自 `draft/message_cache/qwen_messages_step_*.json`
+的真实 payload,不许手搓 messages**;并且必须带一个"能让被测行为翻面"的
+灵敏度对照(这里是剥掉 `<tool_response>` 包装),否则无法区分"结论成立"
+和"方法对任何输入都给同一个答案"。
+
+更深一层的教训:**这条早就写在 `sft/RESULTS.md` §5.7 里**
+("On generic chat messages the template does strip; on the message shape this
+harness actually produces it does not"),我没查就自己重推了一遍。
+先查 md 是防线,跳过防线的代价是一整条错误推论已经讲给了用户。
