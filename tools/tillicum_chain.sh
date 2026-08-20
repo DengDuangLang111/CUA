@@ -45,7 +45,7 @@ train_gate(){  # $1 arm, $2 job, $3 dir glob; up to 12h; returns 1 on timeout (c
 
 log "chain start (resume-safe)"
 PREV=bsstock
-for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 baseh1 nocapt0 nocapnp img1 vlnocapnp np2e6 np1e6e5; do
+for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 baseh1 nocapt0 nocapnp img1 vlnocapnp np1e6; do
   if alive "$arm"; then
     log "adopt $arm: already in flight"
   elif complete "$arm"; then
@@ -63,8 +63,7 @@ for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 ba
       nocapnp)   GJOB=sft-q38Bhqs2t-nocapnp;   GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-nocapnp/v*" ;;
       img1)      GJOB=sft-q38Bhqs2t-img1;      GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-img1-lr3e6/v*" ;;
       vlnocapnp) GJOB=sft-vlnocapnp-lr3e6;      GDIR="/gpfs/scrubbed/jy050706/sft/out/vlnocapnp-lr3e6/v*" ;;
-      np2e6)     GJOB=sft-q38Bhqs2t-np2e6;     GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-np2e6/v*" ;;
-      np1e6e5)   GJOB=sft-q38Bhqs2t-np1e6e5;   GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-np1e6e5/v*" ;;
+      np1e6)     GJOB=sft-q38Bhqs2t-np1e6;     GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-np1e6/v*" ;;
     esac
     if [ -n "$GJOB" ]; then
       if ! train_gate "$arm" "$GJOB" "$GDIR"; then
@@ -79,4 +78,4 @@ for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 ba
   fi
   PREV=$arm
 done
-log "chain done (tail arm np1e6e5, the repetition half of the LR left-flank pair; scancel eval4bnp5 after)"
+log "chain done (tail arm np1e6, the LR left-flank sample; scancel eval4bnp1 after)"

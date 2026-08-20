@@ -200,14 +200,11 @@ EVAL50_ARMS = {
                   "the champion recipe with teacher prose stripped -- PROSE IS"
                   " THE ONLY VARIABLE vs nocap 59.81; prior: kG (LoRA+no-prose)"
                   " beat r5lora by 8pp past the noise floor"),
-    "np2e6":     ("no-prose @ lr 2e-6 · stock (no-split)", "sft",
-                  "the nocapnp recipe with lr 3e-6 -> 2e-6 as the only"
-                  " variable (cumulative dose 3.1e-4 vs the champion's"
-                  " 4.5e-4): the first sample ever taken left of the peak"),
-    "np1e6e5":   ("no-prose @ lr 1e-6 x 5ep · stock (no-split)", "sft",
-                  "same dose as np2e6 within 20% (2.6e-4) but FIVE passes"
-                  " over the data instead of three -- paired with np2e6 it"
-                  " separates total dose from repetition (staircase axis)"),
+    "np1e6":     ("no-prose @ lr 1e-6 · stock (no-split)", "sft",
+                  "the nocapnp recipe with lr 3e-6 -> 1e-6 as the only"
+                  " variable (cumulative dose 1.5e-4 vs the champion's"
+                  " 4.5e-4, a 3x cut): the first sample ever taken left of"
+                  " the peak"),
     "vlnocapnp": ("VL nocap+no-prose lr3e-6 · stock (no-split)", "sft",
                   "the VL line re-enters with the winning recipe: r5vlnocapnp"
                   " (think uncapped, teacher prose stripped) at lr 3e-6 gb64;"
