@@ -44,12 +44,15 @@
   已收官(08-19):img3=47.81 / img3h3=53.81 / kEh3=57.81 / **nocap=59.81 新冠军**
   / vlsft=44.00(首跑烧于 XML/json 方言错配,修后重跑)/ gb128=37.81(vl3pic
   语料 gb128@1e-5,3 图评;对 vlbase +4.5pp、低 vlsft 6.2pp,语料窗×累积 LR
-  双混杂,干净拆解等 vl3b)。当前链:kG(跑动中)→ vl20 → vl3b → vl20g →
-  kEh1 → **baseh1 → vlbaseh1(08-19 用户令:两个未训基座的 1 图评下限,
-  服务 1pic-vs-3pic 训练窗决策)→ nocapt0(新尾,08-19 用户令:冠军权重贪心
-  重跑 t=0/top_p=1;runner 无 top_k 旗,t=0 下 vLLM 本就无视 top_k——答
-  "冠军分里有几分是采样运气")**。训练排队:249457 vl20nocap(max_length
-  81920)、249458 img1(kE 配方 × 1 图窗);完训后各接匹配窗 eval 臂。
+  双混杂,干净拆解等 vl3b)/ **kG=49.81(24 满分+1 部分分):剥 prose 比
+  r5lora 高 8pp,越过噪声底,LoRA 系登顶追平 kD——"prose 是跨步记忆"假设
+  证伪,teacher 旁白反是分心源(判读预注册 → RESULTS §5.14)**。
+  当前链:vl20(跑动中)→ vl3b → vl20g → kEh1 → baseh1 → vlbaseh1 →
+  nocapt0(尾;各臂注记见 driver)。训练:249492 img1(跑动中,尾声)、
+  249500 vl20nocap(4×2,同事管)、**249536 nocaplean(08-19 用户令:nocap
+  配方+preserve_thinking false+81920,4×2,18 秒排上)**、249531 nocapnp
+  (同事,nocap+去prose,PENDING);think 权重 0.5 臂在与同事论证中
+  (think 占 loss 轮字符质量 70.8%)。完训后各接匹配 eval 臂。
   **kF 撤下不排**。明细 → `CHECKPOINTS.md` §2.1。插曲:img3 起 serve 撞上
   scrubbed 吃掉 uv Python 标准库的定时炸弹(三次秒死;验尸与修复 → `OPS.md`)。
 - **eval100 决赛(用户定,2026-08-19;当前链跑完后执行)**:等全部臂在 eval-50

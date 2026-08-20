@@ -954,6 +954,13 @@ token;反超 = teacher 冗长旁白是分心源,剥掉更利落。
 历史反成 train/eval skew。kG 的三个分支没有一个支持该提案;唯一支持场景
 ("prose 有用但 loss 计入伤了动作学习")需另行举证。
 
+**判读裁决(同晚,kG 收官)**:kG = **49.81**(24 满分 + 1 部分分,50/50),
+比 r5lora 41.81 **高 8pp,越过 5-6pp 噪声底**——预注册表的"反超"分支命中且
+超预期:prose 不是跨步记忆,是**分心源**;截图+动作序列足以撑记忆。LoRA 系
+登顶(超 lorastock 47.81),追平全量 kD 49.81。直接后果:①"prose-as-memory"
+假设死;②prose-mask 提案失去仅存动机;③去 prose 上冠军配方(nocapnp,
+另一会话已排)与 think 降权轴(用户提议 0.5,论证中)获得强背书。
+
 **口子已关(同晚,用户问"lean 是不是 think 双不计"引出)**:swift 的
 `--preserve_thinking` 正是这个开关(template/base.py:1259 注释:False=剥除
 除末轮外所有 assistant 轮的 think;True=全保留;文档 template_args.py:106)。
