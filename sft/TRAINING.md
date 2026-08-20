@@ -53,6 +53,17 @@
   (`template/base.py:1436`),保留末尾与全部图像 token,但砍掉的开头正是 system prompt。
   **图窗小的臂无此问题**:实测 img1 max=39,583、img3 max=43,663,
   离 65536 还有 2.2~2.6 万余量,一条不丢。
+- **ZeRO-3 在长序列上帮倒忙(2026-08-19 实测,负面结果存档)**:想用
+  `--deepspeed zero3_offload` 把 8.3G 权重也分片来腾显存,**直接 OOM**
+  (作业 249480,8节点×1卡,0/2 步就炸,`EXIT 143`):
+  `GPU 0: 139.79 GiB 总量仅剩 1,011 MiB 空闲,本进程已用 138.78 GiB`,
+  栈顶在 `transformers/activations.py:51 forward`。原因:**ZeRO-3 在 forward
+  时要 all-gather 回完整参数,那个临时 buffer 比分片省下的还大**;
+  `offload_param=cpu` 更糟,每层都要从 CPU 传回。
+  在我们这种"激活值占 ~130G、参数只占 8.3G"的长序列 regime 下,
+  分片参数是在小头上省、在大头上赔。**不要再试**。
+  同理可推:能省的只有 bs、序列长度、图像 token 预算三样,
+  而后两样都会改变实验变量(见上条)。gb 大小与显存无关(见上上条)。
 - **checkpoint 密度标准(用户 2026-08-17 立规,2026-08-18 升级为硬整除)**:
   此后所有训练 sbatch 用 `--save_strategy steps`,且 **`save_steps` 必须整除
   每 epoch 步数**(steps/epoch = ceil(样本数 / 全局批);取整除数中最接近
