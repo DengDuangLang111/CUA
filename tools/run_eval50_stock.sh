@@ -91,7 +91,14 @@ case "$ARM" in
   # vlnocapnp: VL x (nocap + no-prose) at lr3e-6 -- the VL line re-enters with
   # the no-prose recipe (user 08-19 night, appended after img1). Reads against
   # vlsft 44.00 (cap+prose joint change). Gated on training 249567.
-  vlnocapnp) SB=vlnocapnp-stock;     JOB=eval4bvnp; RP=8045; MN=vlnocapnp-lr3e6-stock;     GRP=qwen3vl-4b-sft; PREV=img1;      PJOB=eval4bim1; DIALECT=json ;;  # tail: scancel eval4bvnp after
+  vlnocapnp) SB=vlnocapnp-stock;     JOB=eval4bvnp; RP=8045; MN=vlnocapnp-lr3e6-stock;     GRP=qwen3vl-4b-sft; PREV=img1;      PJOB=eval4bim1; DIALECT=json ;;
+  # LR left-flank pair (user 08-19 night). np2e6 = nocapnp with lr 2e-6 (dose
+  # 3.1e-4); np1e6e5 = lr 1e-6 x 5ep (dose 2.6e-4, ~equal) -- together they
+  # separate total dose from data repetition (the loss-staircase hypothesis:
+  # measured epoch-boundary drops 16-22% on the winning arms vs 38-48% on the
+  # losing ones, but that axis is confounded with lr until this pair lands).
+  np2e6)     SB=4b-np2e6-stock;      JOB=eval4bnp2; RP=8046; MN=q38Bhqs2t-np2e6-stock;     GRP=qwen35-4b-sft;  PREV=vlnocapnp; PJOB=eval4bvnp ;;
+  np1e6e5)   SB=4b-np1e6e5-stock;    JOB=eval4bnp5; RP=8047; MN=q38Bhqs2t-np1e6e5-stock;   GRP=qwen35-4b-sft;  PREV=np2e6;     PJOB=eval4bnp2 ;;  # tail: scancel eval4bnp5 after
   # vlsft: Qwen3-VL-4B-Thinking x r5vl corpus, lr3e-6 3ep (chain gates on training done)
   vlsft) SB=vl-r5vl-stock; JOB=eval4bvls; RP=8035; MN=q3vl-r5vl-lr3e6-stock; GRP=qwen3vl-4b-sft; PREV=nocap; PJOB=eval4bnc; DIALECT=json ;;  # rerun right after nocap; first attempt burned on the XML/json dialect mismatch
   # img3: kE's exact recipe with the training screenshot window 20->3; STANDARD 20-image
