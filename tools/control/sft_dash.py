@@ -191,9 +191,6 @@ EVAL50_ARMS = {
                   "untrained Qwen3.5-4B with only the current screenshot"
                   " (--image_max 1 --fold_size 1): the no-SFT floor of the"
                   " 1-image column for the 1pic-vs-3pic training-window call"),
-    "vlbaseh1":  ("stock VL @ 1-img eval · (no-split)", "reference",
-                  "untrained Qwen3-VL-4B-Thinking at the 1-image window: the"
-                  " VL-backbone floor of the same 1-image column"),
     "nocapt0":   ("nocap @ greedy t0 · stock (no-split)", "sft",
                   "the champion weights rerun at temperature 0 / top_p 1"
                   " (greedy; vLLM ignores top_k at t=0, and the request never"

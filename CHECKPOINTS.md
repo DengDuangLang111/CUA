@@ -41,7 +41,7 @@ LoRA 的 14G vs 全量 592G = adapter 存储优势的实测量级(**42 倍**)。
 ## 2.1 在训/待训模型登记(2026-08-19 深夜更新;eval 顺序=用户令)
 
 当前链(`tools/tillicum_chain.sh`,全 no-split,08-19 深夜版):**vl20(跑动中)
-→ kEh1 → baseh1 → vlbaseh1 → nocapt0 → nocapnp → img1(尾)**,
+→ kEh1 → baseh1 → nocapt0 → nocapnp → img1(尾)**,
 之后 eval100 决赛。baseh1/vlbaseh1 = 两个未训基座 @ 1 图窗(用户令);
 nocapt0 = 冠军贪心重跑;后三臂带完训闸。kF 不排;vl3b/vl20g 已撤评
 (训毕保留待评,见下方撤单注记);nocaplean 已撤(前提反转,见其行)。
@@ -77,10 +77,12 @@ nocapt0 = 冠军贪心重跑;后三臂带完训闸。kF 不排;vl3b/vl20g 已撤
 (彼时 9 臂待评 18-27h),而"VL 骨干负收益"已由 vlsft 44.00 vs kE 57.81
 立住,这两个细分变体信息量最低。**归类:保留待评,不许清理**;随时可
 按原臂配置(vl3b @3图匹配窗、vl20g @20图,均 json)补评。
-**vl20nc 同令撤评(随后追加)**:训练 249500 继续跑(用户是否停炉由另一
-会话在问),权重同样**保留待评**;补评配置 = 标准 20 图 + json 方言,
-serve-chain-vl20nocap-stock.sbatch(8044)留盘即用。VL 线三个待评臂至此
-全撤;用户点名必跑:img1、kEh1、baseh1、nocapt0(nocapnp 原位保留)。
+**vl20nc 同令撤评,训练亦停(用户令"不评就释放资源")**:249500 中止于
+**66/306(仅 0.6 epoch,checkpoint-30/60)——非完整臂**,与 vl3b/vl20g 的
+"完整 3ep 训毕待评"性质不同,补评前必须先补训;释放 g[001,004,017,020]。
+**vlbaseh1 同令撤**(VL 线连基座参照一起清空)。用户点名必跑:img1、kEh1、
+baseh1、nocapt0(nocapnp 原位保留);serve-chain-vl20nocap-stock.sbatch
+(8044)留盘。
 
 OOM 验尸(248818/248809,均第 8/16 步死):峰值 ∝ bs × 批内最长样本(语料 max
 39,552 token);bs2 两条长样本同批 → 136G+34G 索求 > 139.79G。**治好它的是

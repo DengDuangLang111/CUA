@@ -66,17 +66,17 @@ case "$ARM" in
   # kEh1: kE weights at a ONE-image eval window -- completes the eval-window
   # curve 20/3/1. fold_size MUST be 1 (fold 10 alternates into total blindness).
   kEh1)  SB=4b-lr3e6-stock; JOB=eval4blr3; RP=8028; MN=q38Bhqs2t-lr3e6-stock; GRP=qwen35-4b-sft; PREV=vl20; PJOB=eval4bv20; XARGS="--image_max 1 --fold_size 1" ;;
-  # 1-image floor for BOTH untrained backbones (user 08-19, the 1pic-vs-3pic
-  # training-window decision): basestock/vlbase weights, eval window 1.
+  # 1-image floor for the untrained 3.5 backbone (user 08-19, the 1pic-vs-3pic
+  # training-window decision): basestock weights, eval window 1.
   # fold_size MUST be 1 (fold 10 alternates into total blindness, see kEh1).
+  # vlbaseh1 (the VL twin) was PULLED in the user's VL eval-shed 08-19 late.
   baseh1)   SB=4b-base-stock; JOB=eval4bbo;  RP=8023; MN=q35-4b-stock;       GRP=qwen35-4b-base;  PREV=kEh1;   PJOB=eval4blr3; XARGS="--image_max 1 --fold_size 1" ;;
-  vlbaseh1) SB=vl-base-stock; JOB=eval4bvlb; RP=8034; MN=q3vl-4b-base-stock; GRP=qwen3vl-4b-base; PREV=baseh1; PJOB=eval4bbo;  XARGS="--image_max 1 --fold_size 1" ;;
   # nocapt0: the champion weights rerun GREEDY (user 08-19: temp0 topk-1 topp1).
   # Runner has no --top_k flag and the request never carried top_k (the 20 in the
   # sampling block is vLLM adopting the model generation_config) -- moot anyway:
   # at temperature 0 vLLM decodes greedy and ignores top_k/top_p entirely.
   # argparse last-wins lets XARGS override the protocol -- checked, no dedup.
-  nocapt0) SB=4b-nocap-stock; JOB=eval4bnc; RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft; PREV=vlbaseh1; PJOB=eval4bvlb; XARGS="--temperature 0.0 --top_p 1.0" ;;
+  nocapt0) SB=4b-nocap-stock; JOB=eval4bnc; RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft; PREV=baseh1; PJOB=eval4bbo; XARGS="--temperature 0.0 --top_p 1.0" ;;
   # ---- the fresh furnaces (2026-08-19 late), ordered by user priority.
   # Each is gated on its training in tillicum_chain.sh. nocapnp reads against
   # nocap 59.81 (prose axis at full FT); img1 at its MATCHED 1-image window

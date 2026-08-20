@@ -47,12 +47,12 @@
   双混杂,干净拆解等 vl3b)/ **kG=49.81(24 满分+1 部分分):剥 prose 比
   r5lora 高 8pp,越过噪声底,LoRA 系登顶追平 kD——"prose 是跨步记忆"假设
   证伪,teacher 旁白反是分心源(判读预注册 → RESULTS §5.14)**。
-  当前链:vl20(跑动中)→ kEh1 → baseh1 → vlbaseh1 → nocapt0 →
-  **nocapnp → img1(1图匹配窗,尾)**,后两臂带完训闸(serve 8041/8043)。
-  **VL 线三个待评臂 vl3b/vl20g/vl20nc 全撤(用户令,eval 是瓶颈而 VL 骨干
-  负收益已立住;权重全部保留待评,详 CHECKPOINTS;vl20nc 训练 249500 是否
-  停炉在问)**;vlbaseh1 去留待用户回话;用户点名必跑 img1/kEh1/baseh1/
-  nocapt0,nocapnp 原位。预计全链明晨 06-08 点收官,随后 eval100 决赛。训练:249492 img1 **完训**(EXIT 0,
+  当前链:vl20(跑动中)→ kEh1 → baseh1 → nocapt0 → **nocapnp →
+  img1(1图匹配窗,尾)**,后两臂带完训闸(serve 8041/8043)。**VL 线
+  eval 全清(用户令,eval 是瓶颈而 VL 骨干负收益已立住):vl3b/vl20g 训毕
+  保留待评;vl20nc 训练也停(66/306,仅 0.6ep,非完整臂);vlbaseh1 撤**。
+  用户点名必跑 img1/kEh1/baseh1/nocapt0,nocapnp 原位。预计明晨 ~04:30
+  全链收官(撤三臂省 ~3.3h),随后 eval100 决赛。训练:249492 img1 **完训**(EXIT 0,
   1h42m,endpoint=ckpt-300 @ep3.00)、249500 vl20nocap(4×2,同事管,ETA
   贴墙余量 ~40 分)、**249538 nocapnp 跑动中**(249531 preflight 死于相对
   路径,数据修复经双路径交叉验证后重交);~~nocaplean 249536 已撤~~
