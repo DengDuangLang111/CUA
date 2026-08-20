@@ -82,8 +82,8 @@ bs2→1,不是节点拓扑**(1 rank/节点多的是 CPU 内存,显存还是那�
 
 | job | 臂 | 数据 | 配置 | 状态 |
 |---|---|---|---|---|
-| 249458 | **img1** | q38-Bhqs2t-img1-*(6385 条,窗 1,fold 1,cap 同 img3;自助构建,code e6b6e034,双端 md5 + 6385/6385 图片 resolve) | kE 配方逐字节同(16 rank/lr3e-6/3ep/seed 同默认),仅窗口变量 | 排队 |
-| 249457 | **vl20nocap** | q38-Bhqs2t-r5vlnocap-*(6474 条,另一会话建+过闸) | 16卡×bs1×accum4,**max_length 81920**(smoke 实测 99% 峰值可容;65536-delete 会恰好丢掉 3 条轨迹的 terminate 目标行——19a5b6dd/acd3db2e/128c9ca6 终止行各 18 图) | 排队(另一会话提交) |
+| **249492**(原 249458 撤) | **img1** | q38-Bhqs2t-img1-*(6385 条,窗 1,fold 1,cap 同 img3;自助构建,code e6b6e034,双端 md5 + 6385/6385 图片 resolve) | kE 配方同(lr3e-6/3ep/seed 同默认),仅窗口变量;**08-19 重拓扑 2×8→8×1,accum 4→8,gb64 梯度数学不变**(整节点申请卡到次日 01:15;1 卡/节点秒排 + 避 zero2_offload 的 PCIe 争用,实测 2.3× 每 rank;原 sbatch 存 .bak-2x8) | 排队 |
+| **249486**(原 249457 撤) | **vl20nocap** | q38-Bhqs2t-r5vlnocap-*(6474 条,另一会话建+过闸) | **8 节点×1 卡×bs1×accum8 = gb64**(与 16卡×accum4 梯度等价),**max_length 81920**(smoke 实测 99% 峰值可容;65536-delete 会恰好丢掉 3 条轨迹的 terminate 目标行——19a5b6dd/acd3db2e/128c9ca6 终止行各 18 图),lr1e-5/3ep | **跑动中**(另一会话提交,19 秒排上) |
 
 > 扫描 swift 多轮语料的教训:一行 = 截到第 k 步的整段对话,终止调用只在任务
 > **最后一行的最后一个 assistant 轮**;读第一个 assistant 轮会得出"全语料无
