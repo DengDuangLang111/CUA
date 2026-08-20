@@ -205,6 +205,10 @@ EVAL50_ARMS = {
                   " died at 73%: an early read on whether stripping teacher"
                   " prose survives at full fine-tune. Two variables vs nocap"
                   " 59.81 (prose AND epochs), so it answers 'did it break'"),
+    "t3850b":    ("teacher 27B @ HELD-OUT 50 · stock (no-split)", "teacher",
+                  "the 69.81 teacher on the held-out half: the ceiling read"
+                  " out of sample, so the champion-to-teacher gap can be"
+                  " compared on tasks no decision ever touched"),
     "nocap50b":  ("champion @ HELD-OUT 50 · stock (no-split)", "sft",
                   "the 59.81 champion on the other half of the frozen 100:"
                   " 50 tasks held out since 2026-08-15, never run by any model"
@@ -388,7 +392,11 @@ HELDOUT_META = EVAL50_META.replace("verified_eval50_nonproxy",
 # columns, so the frozen-100 accuracy is readable directly instead of being
 # added up by hand. Keyed child -> parent; the parent is the run on the SEEN
 # half (the untrained base's seen-half run is "basekeep", not "base").
-HELDOUT_PAIRS = {"nocap50b": "nocap", "base50b": "basekeep"}
+HELDOUT_PAIRS = {"nocap50b": "nocap", "base50b": "basekeep", "t3850b": "t38"}
+
+# Arms not scored on the default (seen) panel.
+ARM_PANEL = {"nocap50b": "heldout", "base50b": "heldout", "t3850b": "heldout",
+             "np1e6": "all100"}
 
 
 def eval50():
@@ -408,7 +416,12 @@ def eval50():
         m = re.match(r"^eval50-([A-Za-z0-9]+)-\d+$", run)
         key = m.group(1) if m else run
         label, group, note = EVAL50_ARMS.get(key, (key, "?", ""))
-        panel = heldout if key.endswith("50b") else tasks
+        # Which frozen panel this arm was scored on. Explicit, not inferred
+        # from the name: np1e6 runs the whole 100 in one pass while the "50b"
+        # arms run only the held-out half, and getting this wrong silently
+        # discards an arm's entire result set (it read scored=0 on 2026-08-20).
+        panel = {"heldout": heldout, "all100": dict(tasks, **heldout)}.get(
+            ARM_PANEL.get(key), tasks)
         got = {tid: r for tid, r in read_arm(d).items() if tid in panel}
         arms.append({"key": key, "run": run, "modeldir": modeldir,
                      "label": label, "group": group, "note": note,
