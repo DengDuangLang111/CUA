@@ -68,7 +68,13 @@ case "$ARM" in
   # training-window decision): basestock/vlbase weights, eval window 1.
   # fold_size MUST be 1 (fold 10 alternates into total blindness, see kEh1).
   baseh1)   SB=4b-base-stock; JOB=eval4bbo;  RP=8023; MN=q35-4b-stock;       GRP=qwen35-4b-base;  PREV=kEh1;   PJOB=eval4blr3; XARGS="--image_max 1 --fold_size 1" ;;
-  vlbaseh1) SB=vl-base-stock; JOB=eval4bvlb; RP=8034; MN=q3vl-4b-base-stock; GRP=qwen3vl-4b-base; PREV=baseh1; PJOB=eval4bbo;  XARGS="--image_max 1 --fold_size 1" ;;  # tail: scancel eval4bvlb after
+  vlbaseh1) SB=vl-base-stock; JOB=eval4bvlb; RP=8034; MN=q3vl-4b-base-stock; GRP=qwen3vl-4b-base; PREV=baseh1; PJOB=eval4bbo;  XARGS="--image_max 1 --fold_size 1" ;;
+  # nocapt0: the champion weights rerun GREEDY (user 08-19: temp0 topk-1 topp1).
+  # Runner has no --top_k flag and the request never carried top_k (the 20 in the
+  # sampling block is vLLM adopting the model generation_config) -- moot anyway:
+  # at temperature 0 vLLM decodes greedy and ignores top_k/top_p entirely.
+  # argparse last-wins lets XARGS override the protocol -- checked, no dedup.
+  nocapt0) SB=4b-nocap-stock; JOB=eval4bnc; RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft; PREV=vlbaseh1; PJOB=eval4bvlb; XARGS="--temperature 0.0 --top_p 1.0" ;;  # tail: scancel eval4bnc after
   # vlsft: Qwen3-VL-4B-Thinking x r5vl corpus, lr3e-6 3ep (chain gates on training done)
   vlsft) SB=vl-r5vl-stock; JOB=eval4bvls; RP=8035; MN=q3vl-r5vl-lr3e6-stock; GRP=qwen3vl-4b-sft; PREV=nocap; PJOB=eval4bnc; DIALECT=json ;;  # rerun right after nocap; first attempt burned on the XML/json dialect mismatch
   # img3: kE's exact recipe with the training screenshot window 20->3; STANDARD 20-image
@@ -178,6 +184,9 @@ json.dump({
     "precision": "BF16 weights, fp8 kv-cache",
     "sampling": {"temperature": 1.0, "top_p": 0.95, "top_k": 20, "min_p": 0.0,
                  "presence_penalty": 0.0, "repetition_penalty": 1.0},
+    "sampling_note": ("chain protocol values; any --temperature/--top_p in "
+                      "runner_extra_args OVERRIDE them (argparse last-wins), "
+                      "e.g. nocapt0 runs greedy t=0"),
     "max_steps": 50, "sleep_after_execution": 3, "num_envs": 3,
     "runner_extra_args": xargs or "(none: image_max 20, fold_size 10 defaults)",
     "tool_call_dialect": dialect or "xml (upstream block dialect)",

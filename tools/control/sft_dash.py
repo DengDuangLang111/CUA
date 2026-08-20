@@ -194,6 +194,11 @@ EVAL50_ARMS = {
     "vlbaseh1":  ("stock VL @ 1-img eval · (no-split)", "reference",
                   "untrained Qwen3-VL-4B-Thinking at the 1-image window: the"
                   " VL-backbone floor of the same 1-image column"),
+    "nocapt0":   ("nocap @ greedy t0 · stock (no-split)", "sft",
+                  "the champion weights rerun at temperature 0 / top_p 1"
+                  " (greedy; vLLM ignores top_k at t=0, and the request never"
+                  " carried top_k anyway): how many of the champion's points"
+                  " are sampling luck, and does greedy loop a thinking model?"),
     "kEh3":      ("kE @ 3-img eval · stock (no-split)", "sft",
                   "kE's 20-image-trained weights evaluated with --image_max 3"
                   " --fold_size 1 -- the 20-train/3-eval cell: how much does the"

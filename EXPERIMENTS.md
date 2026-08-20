@@ -45,8 +45,10 @@
   / vlsft=44.00(首跑烧于 XML/json 方言错配,修后重跑)/ gb128=37.81(vl3pic
   语料 gb128@1e-5,3 图评;对 vlbase +4.5pp、低 vlsft 6.2pp,语料窗×累积 LR
   双混杂,干净拆解等 vl3b)。当前链:kG(跑动中)→ vl20 → vl3b → vl20g →
-  kEh1 → **baseh1 → vlbaseh1(新尾,08-19 用户令:两个未训基座的 1 图评下限,
-  服务 1pic-vs-3pic 训练窗决策)**。训练排队:249457 vl20nocap(max_length
+  kEh1 → **baseh1 → vlbaseh1(08-19 用户令:两个未训基座的 1 图评下限,
+  服务 1pic-vs-3pic 训练窗决策)→ nocapt0(新尾,08-19 用户令:冠军权重贪心
+  重跑 t=0/top_p=1;runner 无 top_k 旗,t=0 下 vLLM 本就无视 top_k——答
+  "冠军分里有几分是采样运气")**。训练排队:249457 vl20nocap(max_length
   81920)、249458 img1(kE 配方 × 1 图窗);完训后各接匹配窗 eval 臂。
   **kF 撤下不排**。明细 → `CHECKPOINTS.md` §2.1。插曲:img3 起 serve 撞上
   scrubbed 吃掉 uv Python 标准库的定时炸弹(三次秒死;验尸与修复 → `OPS.md`)。
