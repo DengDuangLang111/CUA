@@ -954,5 +954,15 @@ token;反超 = teacher 冗长旁白是分心源,剥掉更利落。
 历史反成 train/eval skew。kG 的三个分支没有一个支持该提案;唯一支持场景
 ("prose 有用但 loss 计入伤了动作学习")需另行举证。
 
-**未验证口子**:训练侧(swift encode)历史轮 think 留不留未查;若训留/评剪,
-是全臂共同的背景 skew,不影响 kG vs r5lora 的配对差。
+**口子已关(同晚,用户问"lean 是不是 think 双不计"引出)**:swift 的
+`--preserve_thinking` 正是这个开关(template/base.py:1259 注释:False=剥除
+除末轮外所有 assistant 轮的 think;True=全保留;文档 template_args.py:106)。
+lean 与 rich **同语料**(q38-v11100,历史轮 think 实测 14099/0 全带、末轮
+1127/1127 全带),训练脚本唯一差异就是这个 flag。故 **lean = think 计入
+loss(末轮保留、loss_scale=last_round 恰好训它)、不计入 history(历史轮被
+剥)**;"think 既不计 loss 也不计 history"的臂从未存在过。r5 时代全臂
+`--preserve_thinking true`(img1 sbatch 实证,kE 配方逐字节同)+ r5 语料
+历史轮 15984/0 全带 think → **训练历史带 think、eval 模板剪光:全臂共同的
+train/eval skew**,不影响任何配对差;lean 反而是唯一 eval-匹配形态,但其
+23.81 混杂旧语料与 epoch,不可反推 skew 的代价。候选干净实验(未排):
+kE 配方 + preserve_thinking false 的单 flag 配对,直接量这个 skew 的价格。
