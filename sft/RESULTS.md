@@ -970,6 +970,23 @@ loss(末轮保留、loss_scale=last_round 恰好训它)、不计入 history(历�
 剥)**;"think 既不计 loss 也不计 history"的臂从未存在过。r5 时代全臂
 `--preserve_thinking true`(img1 sbatch 实证,kE 配方逐字节同)+ r5 语料
 历史轮 15984/0 全带 think → **训练历史带 think、eval 模板剪光:全臂共同的
-train/eval skew**,不影响任何配对差;lean 反而是唯一 eval-匹配形态,但其
-23.81 混杂旧语料与 epoch,不可反推 skew 的代价。候选干净实验(未排):
-kE 配方 + preserve_thinking false 的单 flag 配对,直接量这个 skew 的价格。
+train/eval skew**,不影响任何配对差;lean 反而是唯一 eval-匹配形态。
+
+**订正(2026-08-19 晚,args.json 逐项实测)**:上一版这里写的"lean 的 23.81
+混杂旧语料与 epoch,不可反推 skew 的代价"**是错的**,同段把"kE 配方 +
+preserve_thinking false 的单 flag 配对"列为候选未做实验也**不成立** ——
+lean 与 rich 是**同批提交的干净单 flag 配对**,时间戳都是
+`v0-20260815-012706`,`dataset`(同为 q38-v11100)、`num_train_epochs`(3.0)、
+`learning_rate`(1e-05)、`tuner_type`(full)、`per_device_train_batch_size`(1)、
+`gradient_accumulation_steps`(8)、`max_length`(65536)、`loss_scale`、`model`、
+`warmup_ratio`、`weight_decay`、`adam_beta2`、`lr_scheduler_type` **全部相同,
+差异项只有 `preserve_thinking` 一个**。这个实验早就做过了。
+
+它的读数是:**训练/推理不匹配的那一边反而更高**(rich 28.00 > lean 23.81,
++4.19),即"训练时多给历史 think 上下文"的收益 > train/eval skew 的代价。
+但 4.19 落在 5-6pp 噪声底内,只能说"没有证据支持 lean 更好",不能说反过来。
+
+**真正该保留的意见是外推风险,不是数据脏**:这对臂在 23.81/28.00 的低分区,
+而当前冠军是 59.81。低分区的模型可能还没学会用 think,此时剥不剥历史对它的
+作用机制未必和高分区相同。要在高分区重做,应该用 nocap 配方 + preserve_thinking
+false 的单 flag 配对(即 nocaplean,2026-08-19 已排)。
