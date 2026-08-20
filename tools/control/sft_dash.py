@@ -353,11 +353,19 @@ def read_arm(d):
     return tasks
 
 
-def eval50_tasks():
-    """The frozen 50, keyed by id; column order = domain, then id."""
+def eval50_tasks(meta_path=None):
+    """A frozen 50-task panel, keyed by id; column order = domain, then id.
+
+    Two panels exist. The default is the SEEN 50 every arm has been scored on.
+    Arms whose key ends in "50b" run the HELD-OUT 50 -- the other half of the
+    frozen 100, never used for any decision -- and their task ids appear in
+    neither the seen panel nor each other's. Filtering every arm through the
+    seen panel (as this did until 2026-08-20) silently reported the held-out
+    arms as scored=0 with a full result directory on disk.
+    """
     out = {}
     try:
-        meta = json.load(open(EVAL50_META, encoding="utf-8"))
+        meta = json.load(open(meta_path or EVAL50_META, encoding="utf-8"))
     except Exception:
         return out
     for dom, ids in meta.items():
@@ -372,8 +380,13 @@ def eval50_tasks():
     return out
 
 
+HELDOUT_META = EVAL50_META.replace("verified_eval50_nonproxy",
+                                   "verified_eval50b_nonproxy")
+
+
 def eval50():
     tasks = eval50_tasks()
+    heldout = eval50_tasks(HELDOUT_META)
     order = sorted(tasks.values(), key=lambda t: (t["dom"], t["id"]))
     arms = []
     for d in sorted(glob.glob(BASE + "/*/eval50-*")):
@@ -382,7 +395,8 @@ def eval50():
         m = re.match(r"^eval50-([A-Za-z0-9]+)-\d+$", run)
         key = m.group(1) if m else run
         label, group, note = EVAL50_ARMS.get(key, (key, "?", ""))
-        got = {tid: r for tid, r in read_arm(d).items() if tid in tasks}
+        panel = heldout if key.endswith("50b") else tasks
+        got = {tid: r for tid, r in read_arm(d).items() if tid in panel}
         arms.append({"key": key, "run": run, "modeldir": modeldir,
                      "label": label, "group": group, "note": note,
                      "scored": len(got),
