@@ -179,7 +179,20 @@ bs2→1,不是节点拓扑**(1 rank/节点多的是 CPU 内存,显存还是那�
 | **249612** | **np2e6** | r5nocapnp 同 nocapnp | **nocapnp 配方唯一变量 lr 3e-6→2e-6**(累积 3.1e-4,冠军剂量 4.5e-4 以左从未采样区;4×2/3ep/81920/save34);对照 nocapnp;用户阶梯假设:loss 台阶轻→分高 | 排队(与 249613 同波,等 01:10 nocapnp 释放) |
 | **249613** | **np1e6e5** | r5nocapnp 同 nocapnp | **lr 1e-6 × 5ep**(累积 2.6e-4 ≈ np2e6 的 3.1e-4,差 20%)——**与 np2e6 构成"总剂量 vs 重复次数"配对**:重复记忆有害则输给 np2e6,只看剂量则平;510 步,墙钟 12h(实测 74s/it≈10.5h) | 排队 |
 | 249567 | vlnocapnp(另一会话) | r5vlnocapnp(VL 语料,think 无 cap + 去 prose,strip_prose d7d14632) | 4×2×bs1×accum8=gb64,lr3e-6/3ep,81920,freeze_vit;对照 vlsft 44.00(cap+prose 双变量);硬证据:no-prose 模型 eval 输出 0/1293 含 prose | 排队(12h 墙钟);eval 臂 vlnocapnp 已接链尾 @标准20图+json |
-| **249538**(249531→249537→249538) | nocapnp(同事建,我修数据) | r5nocapnp(prose 唯一变量,ostg strip_prose 56a3bb70;**249537 四秒死于 preflight:13,436 引用全是相对路径且目录无 images/——jsonl 已改写为指向 r5nocap 绝对路径(截图逐名复用,零传输),6474 行 63,146 引用 0 缺失,原文件存 .bak-relpaths;**同事从源头重生成交叉验证:两 pool 逐字节一致 630f0350/bce56618**;builder 已修 --images-prefix d7d14632**) | **4×2×bs1×accum8=gb64**、墙钟 10h、81920;对照 nocap 59.81,先验 kG +8pp | **跑动中**(25 秒排上 g[005,010,012,014],preflight 过,NPROC 环境正确、echo 文案陈旧无害) |
+| **249538**(249531→249537→249538) | nocapnp(同事建,我修数据) | r5nocapnp(prose 唯一变量,ostg strip_prose 56a3bb70;**249537 四秒死于 preflight:13,436 引用全是相对路径且目录无 images/——jsonl 已改写为指向 r5nocap 绝对路径(截图逐名复用,零传输),6474 行 63,146 引用 0 缺失,原文件存 .bak-relpaths;**同事从源头重生成交叉验证:两 pool 逐字节一致 630f0350/bce56618**;builder 已修 --images-prefix d7d14632**) | **4×2×bs1×accum8=gb64**、墙钟 10h、81920;对照 nocap 59.81,先验 kG +8pp | **死于 73%**(step 226/306,cuDNN fused-attention 在 checkpointing 反向重算时申请 workspace 失败——该路径不走 caching allocator 故无重试,而全程 136.7/139.79 GiB;留下 v0 ckpt-204 @ epoch 2.00)→ **16 卡重训 249689 排队中** |
+
+**nocapnp 与 nocap 不是严格单变量对(2026-08-20 补,另一会话指出)**:除散文外还差
+`max_length 65536 → 81920`。算术自洽旁证:语料 6474 条,nocapnp(81920)全留 →
+102 步/epoch → **306 步**;nocap(65536)丢掉 14 条超长样本 → 6460 条 →
+101 步/epoch → **303 步**,两边步数差正好由那 14 条解释。所以"prose is the only
+variable"应读作"prose + 14 条超长样本的去留"。
+
+**中途快照读法警告(nocapnp2 臂适用)**:ckpt-204 **不是"2 epoch 模型"而是
+"跑到 2 epoch 的中途快照"** —— cosine schedule 按 306 步定,该点学习率仍有
+**9.08e-7**(峰值 3e-6 的 30%),整段退火没走完;实测同族对照 nocap ckpt-210
+@epoch2.079 是 7.85e-7、其终点 ckpt-303 才降到 1.0e-10。故 nocapnp2 **系统性
+偏低,幅度未知**,只能读"崩没崩",不能读"提升多少"。若要让散文重新成为唯一
+变量,现成对照是 **nocap ckpt-210**(同阶段未退火,权重在盘,只花一个 eval 槽)。
 
 > 扫描 swift 多轮语料的教训:一行 = 截到第 k 步的整段对话,终止调用只在任务
 > **最后一行的最后一个 assistant 轮**;读第一个 assistant 轮会得出"全语料无
