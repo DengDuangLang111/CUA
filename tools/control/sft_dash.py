@@ -205,6 +205,13 @@ EVAL50_ARMS = {
                   " died at 73%: an early read on whether stripping teacher"
                   " prose survives at full fine-tune. Two variables vs nocap"
                   " 59.81 (prose AND epochs), so it answers 'did it break'"),
+    "nocap50b":  ("champion @ HELD-OUT 50 · stock (no-split)", "sft",
+                  "the 59.81 champion on the other half of the frozen 100:"
+                  " 50 tasks held out since 2026-08-15, never run by any model"
+                  " and never seen by any decision -- the out-of-sample paper"),
+    "base50b":   ("stock 4B @ HELD-OUT 50 · stock (no-split)", "reference",
+                  "the untrained base on the same held-out 50, so the"
+                  " champion-vs-base margin can be read out of sample"),
     "np1e6":     ("no-prose @ lr 1e-6 · stock (no-split)", "sft",
                   "the nocapnp recipe with lr 3e-6 -> 1e-6 as the only"
                   " variable (cumulative dose 1.5e-4 vs the champion's"

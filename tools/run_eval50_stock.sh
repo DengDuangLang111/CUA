@@ -35,6 +35,13 @@
 set -u
 ARM="${1:?usage: run_eval50_stock.sh <arm>}"
 XARGS=""   # per-arm extra runner flags (e.g. "--image_max 3 --fold_size 1")
+METAF="verified_eval50_nonproxy.json"  # per-arm task set. The default is the
+           # frozen 50 every arm has been scored on. Arms ending in "50b" use
+           # verified_eval50b_nonproxy.json instead: the OTHER half of the
+           # frozen 100, held out since 2026-08-15, never run by any model and
+           # never looked at by any decision -- the pre-registered out-of-
+           # sample paper. Same scoring convention either way: sum over the
+           # task set, missing = 0, divide by 50.
 DIALECT="" # per-arm tool-call dialect; "json" for models TRAINED on the json
            # corpus serialization (all VL SFT arms). Gates BOTH the system
            # prompt and the parser (prompts.py / actions.py). vlbase stays XML.
@@ -103,7 +110,17 @@ case "$ARM" in
   # sample ever taken left of the peak). The 2e-6 and 1e-6x5ep variants were
   # withdrawn: the 2e-6 pilot's loss curve sat 2.0% from 3e-6 at matched
   # epochs, far inside eval-50's 5-6pp noise floor, i.e. underpowered.
-  np1e6)     SB=4b-np1e6-stock;      JOB=eval4bnp1; RP=8047; MN=q38Bhqs2t-np1e6-stock;     GRP=qwen35-4b-sft;  PREV=nocapnp;   PJOB=eval4bnnp ;;  # tail: scancel eval4bnp1 after
+  # ---- eval100 final (user order 2026-08-20): the champion and the untrained
+  # base on the HELD-OUT half of the frozen 100. This is the pre-registered
+  # out-of-sample test: those 50 tasks were frozen 2026-08-15 and have never
+  # been run by any model, so no selection pressure has touched them. Both
+  # arms reuse their existing serves and weights -- no training needed.
+  # Reading: the primary comparison is champion vs base ON THESE 50, paired by
+  # task. Expect the margin to shrink versus the seen 50 (59.81 - 39.81 = 20pp);
+  # a margin that survives here is the one that generalises.
+  nocap50b)  SB=4b-nocap-stock;      JOB=eval4bnc;  RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft;  PREV=nocapnp;  PJOB=eval4bnnp; METAF="verified_eval50b_nonproxy.json" ;;
+  base50b)   SB=4b-base-stock;       JOB=eval4bbo;  RP=8023; MN=q35-4b-stock;               GRP=qwen35-4b-base; PREV=nocap50b; PJOB=eval4bnc;  METAF="verified_eval50b_nonproxy.json" ;;
+  np1e6)     SB=4b-np1e6-stock;      JOB=eval4bnp1; RP=8047; MN=q38Bhqs2t-np1e6-stock;     GRP=qwen35-4b-sft;  PREV=base50b;   PJOB=eval4bbo ;;  # tail: scancel eval4bnp1 after
   # vlsft: Qwen3-VL-4B-Thinking x r5vl corpus, lr3e-6 3ep (chain gates on training done)
   vlsft) SB=vl-r5vl-stock; JOB=eval4bvls; RP=8035; MN=q3vl-r5vl-lr3e6-stock; GRP=qwen3vl-4b-sft; PREV=nocap; PJOB=eval4bnc; DIALECT=json ;;  # rerun right after nocap; first attempt burned on the XML/json dialect mismatch
   # img3: kE's exact recipe with the training screenshot window 20->3; STANDARD 20-image
@@ -127,7 +144,7 @@ cd /mnt/d/research/OSWorld; set -a; . ./.env; set +a
 SSHT="ssh -n -S $HOME/.ssh/cm/qwen36-tillicum-login -o ControlMaster=no -o BatchMode=yes jy050706@tillicum-login02.hyak.uw.edu"
 PORT=$((RP + 10000))
 C=/mnt/d/research/OSWorld/evaluation_examples
-META=$C/verified_eval50_nonproxy.json
+META=$C/$METAF
 RES=/mnt/d/research/OSWorld/results_generated
 
 # Reuse an existing result dir for this arm so a restart resumes instead of
@@ -211,9 +228,9 @@ wait_up 720 || { echo "[$(date '+%F %T')] FATAL: endpoint $PORT never came up in
 ROOT=$(curl -s -H "Authorization: Bearer $OPENAI_API_KEY" http://127.0.0.1:$PORT/v1/models \
        | python3 -c "import json,sys;print(json.load(sys.stdin)['data'][0].get('root',''))")
 echo "[$(date '+%F %T')] endpoint UP; vLLM reports root=$ROOT"
-python3 - "$R/MODEL_BOUNDARY.json" "$ARM" "$MN" "$ROOT" "${OSTG_TYPE_NO_SPLIT:-0}" "$XARGS" "$DIALECT" <<'PY'
+python3 - "$R/MODEL_BOUNDARY.json" "$ARM" "$MN" "$ROOT" "${OSTG_TYPE_NO_SPLIT:-0}" "$XARGS" "$DIALECT" "$METAF" <<'PY'
 import json, sys
-path, arm, served, root, no_split, xargs, dialect = sys.argv[1:8]
+path, arm, served, root, no_split, xargs, dialect, tasks_file = sys.argv[1:9]
 json.dump({
     "arm": arm, "served_model_name": served,
     "weights_reported_by_vllm": root,
@@ -228,7 +245,7 @@ json.dump({
     "max_steps": 50, "sleep_after_execution": 3, "num_envs": 3,
     "runner_extra_args": xargs or "(none: image_max 20, fold_size 10 defaults)",
     "tool_call_dialect": dialect or "xml (upstream block dialect)",
-    "tasks": "verified_eval50_nonproxy.json (frozen stratified sample, seed 20260815)",
+    "tasks": tasks_file,
     "harness": ("OSTG_NO_RECORD=1 (no guest mp4, screenshots unaffected); "
                 "OSTG_TYPE_NO_SPLIT=%s (1 = multi-line type sent as ONE typewrite, "
                 "0 = upstream per-line split; semantics change landed 2026-08-18, "
