@@ -200,6 +200,11 @@ EVAL50_ARMS = {
                   "the champion recipe with teacher prose stripped -- PROSE IS"
                   " THE ONLY VARIABLE vs nocap 59.81; prior: kG (LoRA+no-prose)"
                   " beat r5lora by 8pp past the noise floor"),
+    "nocapnp2":  ("no-prose @ e2.00 (salvage) · stock (no-split)", "sft",
+                  "the 2-epoch checkpoint rescued from the no-prose run that"
+                  " died at 73%: an early read on whether stripping teacher"
+                  " prose survives at full fine-tune. Two variables vs nocap"
+                  " 59.81 (prose AND epochs), so it answers 'did it break'"),
     "np1e6":     ("no-prose @ lr 1e-6 · stock (no-split)", "sft",
                   "the nocapnp recipe with lr 3e-6 -> 1e-6 as the only"
                   " variable (cumulative dose 1.5e-4 vs the champion's"

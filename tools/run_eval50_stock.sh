@@ -86,7 +86,13 @@ case "$ARM" in
   # direction skew). vl20nc was PULLED with vl3b/vl20g in the user's VL
   # eval-shed (its training 249500 continues; weights keep-unevaluated;
   # serve-chain-vl20nocap-stock.sbatch stays on disk for a later slot).
-  nocapnp)   SB=4b-nocapnp-stock;   JOB=eval4bnnp; RP=8041; MN=q38Bhqs2t-nocapnp-stock;   GRP=qwen35-4b-sft; PREV=vlnocapnp; PJOB=eval4bvnp ;;  # moved behind the ready-weight arms 08-20: its training was resubmitted as a 16-rank rerun and may not start for hours; the 12h gate would otherwise expire and skip it
+  # nocapnp2: the 2-epoch checkpoint rescued from the run that died at 73%.
+  # Weights exist, so it fills the window while the 3ep rerun queues. Its
+  # serve pins the v0 directory (the rerun writes v1 with its own ckpt-204).
+  # Two variables vs nocap 59.81 (prose AND epochs) -- reads "did it break",
+  # not "by how much".
+  nocapnp2)  SB=4b-nocapnp2-stock;  JOB=eval4bnn2; RP=8048; MN=q38Bhqs2t-nocapnp-e2-stock; GRP=qwen35-4b-sft; PREV=vlnocapnp; PJOB=eval4bvnp ;;
+  nocapnp)   SB=4b-nocapnp-stock;   JOB=eval4bnnp; RP=8041; MN=q38Bhqs2t-nocapnp-stock;   GRP=qwen35-4b-sft; PREV=nocapnp2;  PJOB=eval4bnn2 ;;  # moved behind the ready-weight arms 08-20: its training was resubmitted as a 16-rank rerun and may not start for hours; the 12h gate would otherwise expire and skip it
   img1)      SB=4b-img1-stock;      JOB=eval4bim1; RP=8043; MN=q38Bhqs2t-img1-stock;      GRP=qwen35-4b-sft; PREV=nocapt0;   PJOB=eval4bnc;  XARGS="--image_max 1 --fold_size 1" ;;
   # vlnocapnp: VL x (nocap + no-prose) at lr3e-6 -- the VL line re-enters with
   # the no-prose recipe (user 08-19 night, appended after img1). Reads against
