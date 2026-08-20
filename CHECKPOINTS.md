@@ -41,7 +41,8 @@ LoRA 的 14G vs 全量 592G = adapter 存储优势的实测量级(**42 倍**)。
 ## 2.1 在训/待训模型登记(2026-08-19 深夜更新;eval 顺序=用户令)
 
 当前链(`tools/tillicum_chain.sh`,全 no-split,08-19 深夜版):**vl20(跑动中)
-→ kEh1 → baseh1 → nocapt0 → nocapnp → img1(尾)**,
+→ kEh1 → baseh1 → nocapt0 → nocapnp → img1 → vlnocapnp(尾,训练 249567
+完训闸)**,
 之后 eval100 决赛。baseh1/vlbaseh1 = 两个未训基座 @ 1 图窗(用户令);
 nocapt0 = 冠军贪心重跑;后三臂带完训闸。kF 不排;vl3b/vl20g 已撤评
 (训毕保留待评,见下方撤单注记);nocaplean 已撤(前提反转,见其行)。
@@ -98,6 +99,7 @@ bs2→1,不是节点拓扑**(1 rank/节点多的是 CPU 内存,显存还是那�
 | **249492**(原 249458 撤) | **img1** | q38-Bhqs2t-img1-*(6385 条,窗 1,fold 1,cap 同 img3;自助构建,code e6b6e034,双端 md5 + 6385/6385 图片 resolve) | kE 配方同(lr3e-6/3ep/seed 同默认),仅窗口变量;**08-19 重拓扑 2×8→8×1,accum 4→8,gb64 梯度数学不变**(整节点申请卡到次日 01:15,碎片单卡秒排——**调度差异是唯一成立的理由**;曾附的"1 卡/节点避 PCIe 争用快 2.3×/rank"归因已由另一会话撤回:误把续训作业的墙钟除以全步数,拓扑对吞吐的影响**无定论**,教训见 TRAINING.md;原 sbatch 注记已同步撤回标注,存 .bak-2x8) | **完训**(EXIT 0,1h42m,endpoint=checkpoint-300 @epoch3.00,12 ckpt;eval 臂 img1 已接链 @1图匹配窗;当时 8 节点 g001/002/006/010/011/017/019/020,新规前豁免形状) |
 | **249500**(249457→249486→249496→249500,定稿) | **vl20nocap** | q38-Bhqs2t-r5vlnocap-*(6474 条,另一会话建+过闸) | **4 节点×2 卡×bs1×accum8 = gb64**(用户新规 ≤4 节点;训练超参与 249486 一字未动,cpus 16/mem 400G/墙钟 10h——实测 95.87 s/it×306 步=8h09m,6h 会在 74% 处砍出一个"看着像 3ep 实为 2.2ep"的不可比 checkpoint),**max_length 81920**(smoke 实测 99% 峰值可容;65536-delete 会恰好丢掉 3 条轨迹的 terminate 目标行——19a5b6dd/acd3db2e/128c9ca6 终止行各 18 图),lr1e-5/3ep | **跑动中**(另一会话管理,g[001,004,017,020];249486 撤于墙钟 6h<ETA 8.1h、249496 撤于拓扑新规,两次都在个位数步、零 checkpoint 损失) |
 | ~~249536~~ | ~~nocaplean~~ | r5nocap 同 nocap | nocap 配方 + preserve_thinking false | **已撤(用户令,27/306,零 ckpt 损失)**:真实 payload 渲染证明 **eval 历史 think 全保留(27/27)**——"匹配 eval 模板"的立项前提反了,false 训的是最坏方向 skew;旧 lean/rich(23.81<28.00)同向。eval 臂已撤、img1 重连 nocapnp;serve-chain-4b-nocaplean-stock.sbatch 留盘未用。§5.14/CONTEXT§4 口径修正由 64333 会话统一负责 |
+| 249567 | vlnocapnp(另一会话) | r5vlnocapnp(VL 语料,think 无 cap + 去 prose,strip_prose d7d14632) | 4×2×bs1×accum8=gb64,lr3e-6/3ep,81920,freeze_vit;对照 vlsft 44.00(cap+prose 双变量);硬证据:no-prose 模型 eval 输出 0/1293 含 prose | 排队(12h 墙钟);eval 臂 vlnocapnp 已接链尾 @标准20图+json |
 | **249538**(249531→249537→249538) | nocapnp(同事建,我修数据) | r5nocapnp(prose 唯一变量,ostg strip_prose 56a3bb70;**249537 四秒死于 preflight:13,436 引用全是相对路径且目录无 images/——jsonl 已改写为指向 r5nocap 绝对路径(截图逐名复用,零传输),6474 行 63,146 引用 0 缺失,原文件存 .bak-relpaths;**同事从源头重生成交叉验证:两 pool 逐字节一致 630f0350/bce56618**;builder 已修 --images-prefix d7d14632**) | **4×2×bs1×accum8=gb64**、墙钟 10h、81920;对照 nocap 59.81,先验 kG +8pp | **跑动中**(25 秒排上 g[005,010,012,014],preflight 过,NPROC 环境正确、echo 文案陈旧无害) |
 
 > 扫描 swift 多轮语料的教训:一行 = 截到第 k 步的整段对话,终止调用只在任务
