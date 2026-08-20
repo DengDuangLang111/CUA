@@ -226,6 +226,19 @@ b1ep, bhqs, bhqs2lr}`。其中 3 个已经影响了已发布的分数(上表加�
 训练与推理形状一致,而这正是 OpenWebRL 的格式(其可见散文占 0.3%)。
 代价是改变了教师的原生输出形状。
 
+**评测侧的量级完全不同(2026-08-19 实测,真实 payload step_49,49 个 assistant 轮)**
+—— 上面 13.9% 是**训练目标内部**的占比,而在 eval 的 prompt 里:
+
+| 从历史中去掉 | 文本 token | 省下 | 占整个 prompt(含 20 张图 × 2040) |
+|---|---:|---:|---:|
+| (原样) | 61,850 | — | 102,650 |
+| 可见散文 | 59,734 | 2,116 | **2.1%** |
+| **历史 think** | **7,130** | **54,720** | **53.3%** |
+
+学生 eval 时实际产出的 think 是 **1,262 token/轮**,远高于 B 语料 target 的中位
+146 token。**历史 think 是 eval prompt 里最大的单一成分,比 20 张截图加起来还大**;
+可见散文则连 3% 都不到,减重时不必考虑它。
+
 ---
 
 ## 5.7 两个模板渲染出的 prompt 逐字节相同(2026-08-18 查实)
@@ -274,17 +287,80 @@ b1ep, bhqs, bhqs2lr}`。其中 3 个已经影响了已发布的分数(上表加�
 
 - `--preserve_thinking`:两份模板 grep 命中都是 0,只往 `extra_body` 塞
   `chat_template_kwargs`(`main.py:277-283`)。上游根本没有这个参数(grep 命中 0)。
-- `--enable_thinking`:只影响当前轮的生成前缀(`:149`),与历史无关;而且
-  `enable_thinking=True` 的渲染与不传相同,代码路径永远送不出 `False`。
+- `--enable_thinking`:与历史无关。**2026-08-19 更正**:此前写"只影响当前轮的
+  生成前缀",实际上连这个也影响不了 —— 部署模板第 109 行**无条件**输出
+  `<|im_start|>assistant\n<think>\n`,传 `enable_thinking=False` 也关不掉思考。
+  这两个 flag 在评测侧是纯装饰。
 
-### 等价性的成立条件(会失效的三种情况)
+**"无影响"是模板不读这两个变量,不是管道断了**(2026-08-19 用碰撞探针证明,
+这一步此前缺失 —— 只比字节相同无法区分"模板忽略它"和"kwargs 根本没送到"):
+
+| 探针 | 结果 |
+|---|---|
+| 用 `chat_template_kwargs` 传 `messages` | 400 `Template.render() got multiple values for keyword argument 'messages'` |
+| 用 `chat_template_kwargs` 注入 `tools` | 200,注入的 `ZZZ_PLUMB_TOOL` 出现在渲染结果里 |
+
+kwargs 被 splat 进 `Template.render(**kwargs)`,任意名字都生效;而部署的 jinja 里
+`grep -c enable_thinking` 与 `grep -c preserve_thinking` **都是 0**。
+
+### 等价性的成立条件(会失效的四种情况)
 
 分歧要发生,历史里必须出现**至少两个真正的、没有被 `<tool_response>` 包裹的
 user 轮**。因此以下任一变化会立刻让两个模板不再等价,都可以 grep 确认:
 
 1. 换 agent(例如走 `mm_agents/qwen25vl_agent.py` 路径);
 2. 改 `history.py:27-32` / `55-72` 的包裹策略;
-3. 把观测改成普通 user 消息而非 tool_response。
+3. 把观测改成普通 user 消息而非 tool_response;
+4. **在 tool_response 包裹的首尾多出任何字符**(2026-08-19 补,见下)。
+
+### 这条依赖有多脆:一个字符,88% 的上下文
+
+模板的判据是 `content.startswith("<tool_response>") and content.endswith("</tool_response>")`
+—— **两端都要严格命中**。同一份真实 payload(step_49,49 个 assistant 轮),
+只在最后一个 user 轮末尾追加几个字符破坏 `endswith`:
+
+| 变体 | 渲染 `<think>` 数 | prompt token |
+|---|---:|---:|
+| 真实形状原样 | 50(49 历史 + 1 生成前缀) | 61,850 |
+| 最后一个 user 轮去掉包裹 | 1 | 7,131 |
+| **仅在末尾追加 `" trailing junk"`** | **1** | **7,132** |
+
+**历史 think 占了文本 prompt 的 88%**,而保住它的全部机制就是这两个字符串边界。
+一旦被破坏:50 个 think 静默归零、上下文瘦掉 88%,**没有任何断言或日志会报警**,
+现象与"正常运行"无法区分。任何改 `wrap_tool_response`、改观测格式、
+在 tool_response 里加时间戳/编号的想法,都必须先看这一节。
+
+### 服务端本来就把 think 拆走了,是客户端拼回来的(2026-08-19 查实)
+
+此前只从客户端代码推断,没查过服务端。查实:eval serve 开着
+**`--reasoning-parser qwen3`,所以 `content` 里本来没有 think** —— 是
+`client.py:merge_reasoning_content` 把 `reasoning_content` 拼回
+`<think>…</think>\n\n` 的。本次 run 22 个 `traj.jsonl` 共 786 条 response,
+**786/786 严格符合该函数的拼接格式**,merge 一次都没失败过(失败的唯一条件是
+服务端字段既不叫 `reasoning_content` 也不叫 `reasoning`;魔改版
+`client.py:107` 两个名字都试)。
+
+也就是说,"历史里有 think"是**三个环节接力**的结果:服务端拆走 → 客户端拼回
+→ 模板保留。任何一环断掉,结果都是历史 think 消失,而且都不报错。
+
+**这不是假想 —— 断过一次**:official-361 那次跑出 **7,906 步、0 步含 `<think>`**
+(`RUNBOOK.md` L314、`EXPERIMENTS.md` L730),就是"客户端拼回"这一环断掉的样子。
+两个方向为什么必须分开说(response 方向 parser 拆走、request 方向 vLLM 丢弃
+输入的 `reasoning_content`),已在 `RUNBOOK.md`「Qwen3.8's chat template, read at
+source」讲透,**本节不重复**;那里也已经指出:任何 hide-thinking 实验都只能做在
+客户端 `QwenAgent._response_transform`(`main.py:264`)上。
+
+> serve 的完整启动形状、`--limit-mm-per-prompt` 与客户端 `image_max` 的硬耦合、
+> 以及"怎么查某个端口背后真正在跑什么",都在 `OPS.md` §4「serve 参数与客户端的
+> 硬耦合」。本节只留与渲染语义有关的部分。
+
+### 暗雷:空 think 会被模板整块丢弃
+
+模板第 68 行 `{%- if loop.last or (not loop.last and reasoning_content) %}`:
+某个历史轮的 think **为空**时,该轮渲染时**连 think 标签都不出现**。
+目前 786/786 都非空所以没触发,但 merge 一旦失败(见上),表现就是上下文
+静默瘦身而非报错。这也意味着:**想在历史里去掉 think,把它换成空壳与
+让模板剥掉是等价的** —— 实测两条路径分别得到 7,130 与 7,131 token。
 
 ### 由此重读已有结果
 
@@ -898,6 +974,14 @@ Qwen3.5 的 eval 甜点在 acc≈0.90 档(kE 57.81;0.959 的 kD 反跌 8pp)。
 acc 0.830,判欠训,44.00);vl20g(7.5e-4)居中。若中,"两骨干最佳累积学习率
 不同"成立,VL 最优档 ≈ Qwen3.5 的 3 倍。注记:token_acc 跨 tokenizer 有轻微
 失真,远小于 0.07 的档位差。
+
+**§5.13 裁决(08-19 20:29,vl20 收官)= 45.81%(22 满分 + 1 部分分)**:
+预注册预测"vl20 > vlsft(44.00)"**方向命中、幅度在噪声内**(+1.8pp,
+本底 5-6pp)。3.3× 累积学习率(4.5e-4→1.5e-3)只买到 ≤2pp——"VL 档位
+错开一级"的弱形式存活,强形式(补齐档位即可追平 Qwen3.5)**死亡**:
+VL 最好读数 45.81 仍落后 kE 57.81 / nocap 59.81 约 12-14pp,骨干负收益
+的判断进一步坐实(与当晚用户撤空 VL eval 线的决策同向;剂量曲线的中点
+vl20g 已训毕待评,如需三点曲线可补)。对 vlbase 33.31 提升 +12.5pp。
 
 **gb128 收官(08-19 晚)= 37.81%(18 满分 + 1 部分分 0.90)**:对 vlbase
 +4.5pp,低 vlsft 6.2pp。注意它在 vl3pic(3 图)语料支线上,**不属于上面

@@ -47,7 +47,9 @@
   双混杂,干净拆解等 vl3b)/ **kG=49.81(24 满分+1 部分分):剥 prose 比
   r5lora 高 8pp,越过噪声底,LoRA 系登顶追平 kD——"prose 是跨步记忆"假设
   证伪,teacher 旁白反是分心源(判读预注册 → RESULTS §5.14)**。
-  当前链:vl20(跑动中)→ kEh1 → baseh1 → nocapt0 → **nocapnp →
+  **vl20 收官 = 45.81**(§5.13 预注册:方向命中幅度扑空,3.3× 累积 LR 只买
+  ≤2pp,VL 最好读数仍落后 3.5 系 12-14pp,骨干负收益坐实)。
+  当前链:kEh1(起跑)→ baseh1 → nocapt0 → **nocapnp →
   img1(1图匹配窗)→ vlnocapnp(尾,08-19 深夜用户令追加:VL×nocap×去prose
   @lr3e-6,训练 249567 排队中,完训闸接住;对照 vlsft 44.00,cap+prose
   双变量)**,后三臂带完训闸(serve 8041/8043/8045)。**VL 线
