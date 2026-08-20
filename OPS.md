@@ -304,6 +304,42 @@ serve 角色固定专属节点端口,与 WSL 本地端口同尾号**:教师=8000
 历史遗留尾号不一致,不动它),4B rich=8011,base=8012,lean=8013,ep1=8014…
 新 serve sbatch 一律按此表取港;隧道 RPORT 同步。
 
+### serve 参数与客户端的硬耦合(2026-08-19 补,查 eval4bv20 时发现)
+
+4B eval serve 的真实启动形状(角色化端口见上节;**端口号与作业号是易变状态,
+不写死在这里,用下面的方法现查**):
+
+```
+vllm serve <checkpoint 绝对路径> --served-model-name <臂名> \
+  --max-model-len 262144 --kv-cache-dtype fp8 \
+  --reasoning-parser qwen3 --limit-mm-per-prompt {"image": 20} \
+  --host 127.0.0.1 --port <角色端口>
+```
+
+两条会咬人的耦合:
+
+1. **`--limit-mm-per-prompt {"image": N}` 必须 ≥ 客户端 `image_max`**。
+   目前两边都是 20。**只调大 runner 的 `--image_max` 而不同步改 serve
+   sbatch → 请求直接 400**,而且是跑到中途图数超了才炸,不是启动就炸。
+   改图窗的实验(img1/img3/vl20 这类)必须两边一起改。
+2. **`--reasoning-parser qwen3` 决定了 think 不在 `content` 里**,而在
+   `reasoning_content`。客户端 `mm_agents/qwen/client.py:107` 两个字段名都试,
+   再由 `merge_reasoning_content` 拼回 `<think>…</think>`。**一旦 merge 拿不到
+   reasoning,历史 think 会变空,而空 think 被 chat template 整块丢弃 ——
+   表现是上下文静默瘦掉 ~88%,不报错、不留日志**。这一环断过一次:official-361
+   跑出 7,906 步 0 个 `<think>`。两个方向的完整说明在 `RUNBOOK.md`
+   「Qwen3.8's chat template, read at source」;渲染侧机制与实测数字在
+   `sft/RESULTS.md` §5.7。
+
+另外服务端没开 `--enable-auto-tool-choice` / `--tool-call-parser`:tool_call 以
+纯文本回来,由 `mm_agents/qwen/actions.py` 自己解析(顶层传 `tools` 字段会报错)。
+
+**怎么查某个端口背后真正在跑什么**:WSL 上 `ss -lntp` 只看得到 ssh 进程 ——
+本地端口都是隧道,服务在 Tillicum 计算节点上。要看真实启动命令,先
+`squeue -u jy050706` 找到作业与节点,再穿到该节点 `pgrep -af vllm`;
+`/v1/models` 返回的 `root` 字段是 checkpoint 绝对路径,可用来核对臂与步数
+(分数是权重的属性,不是 sbatch 意图的属性 —— 见 `sft/RESULTS.md` §5.2)。
+
 ### 隧道自去重与孤儿自灭(2026-08-16 加固)
 
 历史病:每个 driver 启动都无条件拉新隧道,旧清理(`pkill -f "LPORT=..."`)匹配
@@ -402,6 +438,35 @@ docker volume prune -f
 ```
 
 ---
+
+### 5.x Tillicum 排队优先级:fairshare 是我们自己花掉的(2026-08-20 实测)
+
+用户问"优先级怎么又变低了"后查 `sprio` / `sshare` / `scontrol show config`,
+数据如下(权重:Age 1000、FairShare 1000、JobSize 1000、Partition 1000、QOS 5000):
+
+| 作业 | 总分 | AGE | **FAIRSHARE** | JOBSIZE |
+|---|---|---|---|---|
+| 我们 249662 / 249689 | 1101 / 1099 | 4 / 2 | **1** | 83 |
+| 他人 249686 / 249638 / 249653 | 1169 / 1122 / 1101 | 3 / 6 / 5 | **123 / 71 / 53** | 31 / 34 / 31 |
+
+**差距全在 fairshare。** `sshare`:jy050706 RawUsage **3.77 亿**,同账户其他人各约
+5000 万(**7.4 倍**),独占 `video` 账户用量的 **51.6%**,fairshare 得分 0.001333
+(账户内最低;零用量的 ranjay 是 0.0107)。账户本身也超支:名义份额 0.66%,
+实占集群 21.5%。**同时开四炉训练 + 常驻 eval serve 就是这么把分花光的。**
+
+**恢复很慢**:`PriorityDecayHalfLife = 30 天`,`PriorityUsageResetPeriod = NONE`
+——用量按 30 天半衰期消,没有周期清零,今晚的消耗压未来几周。
+
+**能控的杠杆只有 AGE**:`PriorityWeightAge=1000`、`PriorityMaxAge=7 天`,
+即**排队每小时约 +6 分,满 7 天 +1000 分**,和 fairshare 同权重。
+**每次撤了重交,AGE 归零。** 由此定两条操作规矩:
+1. **改拓扑/改配置要一次改到位**,别靠反复重交试(今晚 np2e6→np1e6→nocapnp
+   连撤四轮,AGE 全清);真要调顺序用 `scontrol update jobid=X Nice=N`,
+   改名用 `scontrol update JobName=`(PENDING 状态改名不丢排队年龄,实测)。
+2. **控制并发炉数**:并发不只让当下排队变慢,它加深的是未来几周所有作业的坑。
+
+注:JobSize 反而对我们有利(16 卡作业 83 分 vs 小作业 23-34),所以"拆小作业
+提高优先级"在这台机器上是反的。
 
 ## 6 OSWorld 任务定义速查(2026-08-08 用 AST 重新核过)
 
