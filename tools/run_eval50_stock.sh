@@ -99,7 +99,7 @@ case "$ARM" in
   # Two variables vs nocap 59.81 (prose AND epochs) -- reads "did it break",
   # not "by how much".
   nocapnp2)  SB=4b-nocapnp2-stock;  JOB=eval4bnn2; RP=8048; MN=q38Bhqs2t-nocapnp-e2-stock; GRP=qwen35-4b-sft; PREV=vlnocapnp; PJOB=eval4bvnp ;;
-  nocapnp)   SB=4b-nocapnp-stock;   JOB=eval4bnnp; RP=8041; MN=q38Bhqs2t-nocapnp-stock;   GRP=qwen35-4b-sft; PREV=nocap50b;  PJOB=eval4bnc ;;  # runs after nocap50b: by then its 16-rank rerun has finished training: its training was resubmitted as a 16-rank rerun and may not start for hours; the 12h gate would otherwise expire and skip it
+  nocapnp)   SB=4b-nocapnp-stock;   JOB=eval4bnnp; RP=8041; MN=q38Bhqs2t-nocapnp-stock;   GRP=qwen35-4b-sft; PREV=base50b;   PJOB=eval4bbo ;;  # after both eval100 arms; its 16-rank rerun finishes training long before then: its training was resubmitted as a 16-rank rerun and may not start for hours; the 12h gate would otherwise expire and skip it
   img1)      SB=4b-img1-stock;      JOB=eval4bim1; RP=8043; MN=q38Bhqs2t-img1-stock;      GRP=qwen35-4b-sft; PREV=nocapt0;   PJOB=eval4bnc;  XARGS="--image_max 1 --fold_size 1" ;;
   # vlnocapnp: VL x (nocap + no-prose) at lr3e-6 -- the VL line re-enters with
   # the no-prose recipe (user 08-19 night, appended after img1). Reads against
@@ -119,8 +119,8 @@ case "$ARM" in
   # task. Expect the margin to shrink versus the seen 50 (59.81 - 39.81 = 20pp);
   # a margin that survives here is the one that generalises.
   nocap50b)  SB=4b-nocap-stock;      JOB=eval4bnc;  RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft;  PREV=nocapnp2; PJOB=eval4bnn2; METAF="verified_eval50b_nonproxy.json" ;;  # 08-20: moved AHEAD of nocapnp -- its weights already exist while nocapnp was still training, and the eval VMs were idling behind that training gate
-  base50b)   SB=4b-base-stock;       JOB=eval4bbo;  RP=8023; MN=q35-4b-stock;               GRP=qwen35-4b-base; PREV=nocapnp;  PJOB=eval4bnnp; METAF="verified_eval50b_nonproxy.json" ;;
-  np1e6)     SB=4b-np1e6-stock;      JOB=eval4bnp1; RP=8047; MN=q38Bhqs2t-np1e6-stock;     GRP=qwen35-4b-sft;  PREV=base50b;   PJOB=eval4bbo ;;  # tail: scancel eval4bnp1 after
+  base50b)   SB=4b-base-stock;       JOB=eval4bbo;  RP=8023; MN=q35-4b-stock;               GRP=qwen35-4b-base; PREV=nocap50b; PJOB=eval4bnc;  METAF="verified_eval50b_nonproxy.json" ;;  # 08-20 user order: immediately after nocap50b, so the eval100 paired comparison completes back to back instead of straddling another arm
+  np1e6)     SB=4b-np1e6-stock;      JOB=eval4bnp1; RP=8047; MN=q38Bhqs2t-np1e6-stock;     GRP=qwen35-4b-sft;  PREV=nocapnp;   PJOB=eval4bnnp ;;  # tail: scancel eval4bnp1 after
   # vlsft: Qwen3-VL-4B-Thinking x r5vl corpus, lr3e-6 3ep (chain gates on training done)
   vlsft) SB=vl-r5vl-stock; JOB=eval4bvls; RP=8035; MN=q3vl-r5vl-lr3e6-stock; GRP=qwen3vl-4b-sft; PREV=nocap; PJOB=eval4bnc; DIALECT=json ;;  # rerun right after nocap; first attempt burned on the XML/json dialect mismatch
   # img3: kE's exact recipe with the training screenshot window 20->3; STANDARD 20-image
