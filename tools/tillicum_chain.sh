@@ -45,7 +45,7 @@ train_gate(){  # $1 arm, $2 job, $3 dir glob; up to 12h; returns 1 on timeout (c
 
 log "chain start (resume-safe)"
 PREV=bsstock
-for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 baseh1 nocapt0 nocapnp img1 vlnocapnp np1e6; do
+for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 baseh1 nocapt0 img1 vlnocapnp nocapnp np1e6; do
   if alive "$arm"; then
     log "adopt $arm: already in flight"
   elif complete "$arm"; then
@@ -60,7 +60,7 @@ for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 ba
       img3)  GJOB=sft-q38Bhqs2t-img3;   GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-img3-lr3e6/v*" ;;
       gb128) GJOB=sft-vl3pic-gb128-lr1e5; GDIR="/gpfs/scrubbed/jy050706/sft/out/vl3pic-gb128-lr1e5/v*" ;;
       vl20)  GJOB=sft-vl20pic-lr1e5;       GDIR="/gpfs/scrubbed/jy050706/sft/out/vl20pic-lr1e5/v*" ;;
-      nocapnp)   GJOB=sft-q38Bhqs2t-nocapnp;   GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-nocapnp/v*" ;;
+      nocapnp)   GJOB=eval4b-np;               GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-nocapnp/v*" ;;  # 16-rank rerun 249689; opaque queue name per user rule. pick_ckpt spans v0+v1 by epoch, so v0 ckpt-204 (2.00) cannot satisfy the >=2.99 gate
       img1)      GJOB=sft-q38Bhqs2t-img1;      GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-img1-lr3e6/v*" ;;
       vlnocapnp) GJOB=sft-vlnocapnp-lr3e6;      GDIR="/gpfs/scrubbed/jy050706/sft/out/vlnocapnp-lr3e6/v*" ;;
       np1e6)     GJOB=eval4b-n1;               GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-np1e6/v*" ;;  # queue-visible name obscured per user rule 08-19

@@ -86,8 +86,8 @@ case "$ARM" in
   # direction skew). vl20nc was PULLED with vl3b/vl20g in the user's VL
   # eval-shed (its training 249500 continues; weights keep-unevaluated;
   # serve-chain-vl20nocap-stock.sbatch stays on disk for a later slot).
-  nocapnp)   SB=4b-nocapnp-stock;   JOB=eval4bnnp; RP=8041; MN=q38Bhqs2t-nocapnp-stock;   GRP=qwen35-4b-sft; PREV=nocapt0;   PJOB=eval4bnc  ;;
-  img1)      SB=4b-img1-stock;      JOB=eval4bim1; RP=8043; MN=q38Bhqs2t-img1-stock;      GRP=qwen35-4b-sft; PREV=nocapnp;   PJOB=eval4bnnp; XARGS="--image_max 1 --fold_size 1" ;;
+  nocapnp)   SB=4b-nocapnp-stock;   JOB=eval4bnnp; RP=8041; MN=q38Bhqs2t-nocapnp-stock;   GRP=qwen35-4b-sft; PREV=vlnocapnp; PJOB=eval4bvnp ;;  # moved behind the ready-weight arms 08-20: its training was resubmitted as a 16-rank rerun and may not start for hours; the 12h gate would otherwise expire and skip it
+  img1)      SB=4b-img1-stock;      JOB=eval4bim1; RP=8043; MN=q38Bhqs2t-img1-stock;      GRP=qwen35-4b-sft; PREV=nocapt0;   PJOB=eval4bnc;  XARGS="--image_max 1 --fold_size 1" ;;
   # vlnocapnp: VL x (nocap + no-prose) at lr3e-6 -- the VL line re-enters with
   # the no-prose recipe (user 08-19 night, appended after img1). Reads against
   # vlsft 44.00 (cap+prose joint change). Gated on training 249567.
@@ -97,7 +97,7 @@ case "$ARM" in
   # sample ever taken left of the peak). The 2e-6 and 1e-6x5ep variants were
   # withdrawn: the 2e-6 pilot's loss curve sat 2.0% from 3e-6 at matched
   # epochs, far inside eval-50's 5-6pp noise floor, i.e. underpowered.
-  np1e6)     SB=4b-np1e6-stock;      JOB=eval4bnp1; RP=8047; MN=q38Bhqs2t-np1e6-stock;     GRP=qwen35-4b-sft;  PREV=vlnocapnp; PJOB=eval4bvnp ;;  # tail: scancel eval4bnp1 after
+  np1e6)     SB=4b-np1e6-stock;      JOB=eval4bnp1; RP=8047; MN=q38Bhqs2t-np1e6-stock;     GRP=qwen35-4b-sft;  PREV=nocapnp;   PJOB=eval4bnnp ;;  # tail: scancel eval4bnp1 after
   # vlsft: Qwen3-VL-4B-Thinking x r5vl corpus, lr3e-6 3ep (chain gates on training done)
   vlsft) SB=vl-r5vl-stock; JOB=eval4bvls; RP=8035; MN=q3vl-r5vl-lr3e6-stock; GRP=qwen3vl-4b-sft; PREV=nocap; PJOB=eval4bnc; DIALECT=json ;;  # rerun right after nocap; first attempt burned on the XML/json dialect mismatch
   # img3: kE's exact recipe with the training screenshot window 20->3; STANDARD 20-image
