@@ -188,7 +188,16 @@ else
   echo "[$(date '+%F %T')] reusing live serve $HAVE ($JOB)"
 fi
 JOB=$JOB LPORT=$PORT RPORT=$RP setsid nohup $CTL/tunnel_qwen36_auto.sh > $HOME/tunnel_$JOB.log 2>&1 < /dev/null &
-wait_up 90 || { echo "[$(date '+%F %T')] FATAL: endpoint $PORT never came up"; exit 1; }
+# 2026-08-20: initial wait raised 90 min -> 12 h. A 90-minute patience was
+# sized for a serve that only ever waited on node health. It is far too short
+# when the CLUSTER is saturated: on this night every usable node sat 8/8
+# allocated, our own 1-GPU serve pended with a 6-hour Slurm estimate, and the
+# driver would have FATALed at 90 minutes. Worse, the chain reads a dead
+# driver as "arm finished" and immediately starts the next arm, which submits
+# its own serve into the same full cluster -- so one saturated night would
+# have marched through every remaining arm in 90-minute increments and
+# evaluated nothing. Patience here costs nothing: the arm is idle either way.
+wait_up 720 || { echo "[$(date '+%F %T')] FATAL: endpoint $PORT never came up in 12h"; exit 1; }
 
 # Record what the server ACTUALLY loaded, not what any script intended to load.
 # vLLM's /v1/models reports `root` = the real weight path. A week of results
