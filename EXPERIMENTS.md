@@ -47,9 +47,10 @@
   双混杂,干净拆解等 vl3b)/ **kG=49.81(24 满分+1 部分分):剥 prose 比
   r5lora 高 8pp,越过噪声底,LoRA 系登顶追平 kD——"prose 是跨步记忆"假设
   证伪,teacher 旁白反是分心源(判读预注册 → RESULTS §5.14)**。
-  当前链:vl20(跑动中)→ vl3b → vl20g → kEh1 → baseh1 → vlbaseh1 →
-  nocapt0 → **nocapnp → img1(1图匹配窗)→ vl20nc(json,尾)**,后三臂带
-  完训闸(serve 8041/8043/8044)。训练:249492 img1 **完训**(EXIT 0,
+  当前链:vl20(跑动中)→ kEh1 → baseh1 → vlbaseh1 → nocapt0 →
+  **nocapnp → img1(1图匹配窗)→ vl20nc(json,尾)**,后三臂带完训闸
+  (serve 8041/8043/8044)。**vl3b/vl20g 撤评(用户令,eval 是瓶颈而 VL
+  骨干负收益已立住;两炉训毕权重保留待评,详 CHECKPOINTS)**。训练:249492 img1 **完训**(EXIT 0,
   1h42m,endpoint=ckpt-300 @ep3.00)、249500 vl20nocap(4×2,同事管,ETA
   贴墙余量 ~40 分)、**249538 nocapnp 跑动中**(249531 preflight 死于相对
   路径,数据修复经双路径交叉验证后重交);~~nocaplean 249536 已撤~~

@@ -57,13 +57,15 @@ case "$ARM" in
   gb128) SB=vl3gb128-stock; JOB=eval4bg28; RP=8037; MN=vl3pic-gb128-stock; GRP=qwen3vl-4b-sft; PREV=vlsft; PJOB=eval4bvls; XARGS="--image_max 3 --fold_size 1"; DIALECT=json ;;
   nocap) SB=4b-nocap-stock; JOB=eval4bnc; RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft; PREV=kEh3; PJOB=eval4blr3 ;;
   kG)   SB=4b-loranp-stock; JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=gb128;  PJOB=eval4bg28 ;;
-  # VL tail (user 08-19): vl20 -> vl3b -> vl20g, all gated on their trainings
+  # VL tail (user 08-19): vl20 gated on its training. vl3b/vl20g were PULLED
+  # by user order 08-19 late (eval is the bottleneck; the VL-backbone-negative
+  # conclusion already stands on vlsft 44.00 vs kE 57.81) -- both trainings
+  # are COMPLETE on disk (vl3pic-base ckpt-300, vl20pic-gb128 ckpt-150),
+  # kept UNEVALUATED for a later slot; rows removable from git history.
   vl20)  SB=vl20-stock;  JOB=eval4bv20; RP=8038; MN=vl20pic-lr1e5-stock; GRP=qwen3vl-4b-sft; PREV=kG;    PJOB=eval4bnp; DIALECT=json ;;
-  vl3b)  SB=vl3b-stock;  JOB=eval4bv3b; RP=8039; MN=vl3pic-base-stock;   GRP=qwen3vl-4b-sft; PREV=vl20;  PJOB=eval4bv20; XARGS="--image_max 3 --fold_size 1"; DIALECT=json ;;
-  vl20g) SB=vl20g-stock; JOB=eval4bv2g; RP=8040; MN=vl20pic-gb128-stock; GRP=qwen3vl-4b-sft; PREV=vl3b;  PJOB=eval4bv3b; DIALECT=json ;;
   # kEh1: kE weights at a ONE-image eval window -- completes the eval-window
   # curve 20/3/1. fold_size MUST be 1 (fold 10 alternates into total blindness).
-  kEh1)  SB=4b-lr3e6-stock; JOB=eval4blr3; RP=8028; MN=q38Bhqs2t-lr3e6-stock; GRP=qwen35-4b-sft; PREV=vl20g; PJOB=eval4bv2g; XARGS="--image_max 1 --fold_size 1" ;;
+  kEh1)  SB=4b-lr3e6-stock; JOB=eval4blr3; RP=8028; MN=q38Bhqs2t-lr3e6-stock; GRP=qwen35-4b-sft; PREV=vl20; PJOB=eval4bv20; XARGS="--image_max 1 --fold_size 1" ;;
   # 1-image floor for BOTH untrained backbones (user 08-19, the 1pic-vs-3pic
   # training-window decision): basestock/vlbase weights, eval window 1.
   # fold_size MUST be 1 (fold 10 alternates into total blindness, see kEh1).

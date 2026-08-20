@@ -40,11 +40,11 @@ LoRA 的 14G vs 全量 592G = adapter 存储优势的实测量级(**42 倍**)。
 
 ## 2.1 在训/待训模型登记(2026-08-19 深夜更新;eval 顺序=用户令)
 
-当前链(`tools/tillicum_chain.sh`,全 no-split,08-19 17:00 版):**kG(跑动中)
-→ vl20 → vl3b → vl20g → kEh1 → baseh1 → vlbaseh1(尾)**,之后 eval100 决赛。
-baseh1/vlbaseh1 = 两个未训基座 @ `--image_max 1 --fold_size 1`(08-19 用户令,
-1pic-vs-3pic 决策的下限参照;serve 复用 eval4bbo/eval4bvlb,无训练闸)。
-kF 不排。VL 三尾臂均带完训闸;vl20g 即第五臂(用户排上=保留)。
+当前链(`tools/tillicum_chain.sh`,全 no-split,08-19 深夜版):**vl20(跑动中)
+→ kEh1 → baseh1 → vlbaseh1 → nocapt0 → nocapnp → img1 → vl20nc(尾)**,
+之后 eval100 决赛。baseh1/vlbaseh1 = 两个未训基座 @ 1 图窗(用户令);
+nocapt0 = 冠军贪心重跑;后三臂带完训闸。kF 不排;vl3b/vl20g 已撤评
+(训毕保留待评,见下方撤单注记);nocaplean 已撤(前提反转,见其行)。
 插曲三:248869/248870 首交 8 秒死于 MASTER_PORT=29500 写死(1 卡/节点作业与
 248868 共享节点抢端口),改为 `20000+JOBID%9000` 后重交为 248882/248883;
 四个 VL 训练脚本的端口全部改成 job 派生,此坑永闭。
@@ -70,6 +70,13 @@ kF 不排。VL 三尾臂均带完训闸;vl20g 即第五臂(用户排上=保留)�
 | 248868 vl3pic-gb128 | vl3pic(3 图窗) | 8 节点×1 卡×bs1×accum16 = gb128 | 1e-5 | 10/16 |
 | 248869 vl20pic-gb128 | **r5vl(20 图)** | 同上 | 1e-5 | 10/16 |
 | 248870 vl3pic-base | vl3pic | 8 节点×1 卡×bs1×**accum8** = gb64 | **3e-6** | 25/16 |
+
+**vl3b/vl20g 评测撤单(08-19 深夜,用户令)**:两炉训练**完整**在盘
+(out/vl3pic-base 12 ckpt 至 checkpoint-300、out/vl20pic-gb128-lr1e5 15 ckpt
+至 checkpoint-150,均满 3 epoch),eval 臂从链上撤下——eval 已成瓶颈
+(彼时 9 臂待评 18-27h),而"VL 骨干负收益"已由 vlsft 44.00 vs kE 57.81
+立住,这两个细分变体信息量最低。**归类:保留待评,不许清理**;随时可
+按原臂配置(vl3b @3图匹配窗、vl20g @20图,均 json)补评。
 
 OOM 验尸(248818/248809,均第 8/16 步死):峰值 ∝ bs × 批内最长样本(语料 max
 39,552 token);bs2 两条长样本同批 → 136G+34G 索求 > 139.79G。**治好它的是
