@@ -48,7 +48,9 @@
   r5lora 高 8pp,越过噪声底,LoRA 系登顶追平 kD——"prose 是跨步记忆"假设
   证伪,teacher 旁白反是分心源(判读预注册 → RESULTS §5.14)**。
   当前链:vl20(跑动中)→ kEh1 → baseh1 → nocapt0 → **nocapnp →
-  img1(1图匹配窗,尾)**,后两臂带完训闸(serve 8041/8043)。**VL 线
+  img1(1图匹配窗)→ vlnocapnp(尾,08-19 深夜用户令追加:VL×nocap×去prose
+  @lr3e-6,训练 249567 排队中,完训闸接住;对照 vlsft 44.00,cap+prose
+  双变量)**,后三臂带完训闸(serve 8041/8043/8045)。**VL 线
   eval 全清(用户令,eval 是瓶颈而 VL 骨干负收益已立住):vl3b/vl20g 训毕
   保留待评;vl20nc 训练也停(66/306,仅 0.6ep,非完整臂);vlbaseh1 撤**。
   用户点名必跑 img1/kEh1/baseh1/nocapt0,nocapnp 原位。预计明晨 ~04:30

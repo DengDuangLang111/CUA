@@ -87,7 +87,11 @@ case "$ARM" in
   # eval-shed (its training 249500 continues; weights keep-unevaluated;
   # serve-chain-vl20nocap-stock.sbatch stays on disk for a later slot).
   nocapnp)   SB=4b-nocapnp-stock;   JOB=eval4bnnp; RP=8041; MN=q38Bhqs2t-nocapnp-stock;   GRP=qwen35-4b-sft; PREV=nocapt0;   PJOB=eval4bnc  ;;
-  img1)      SB=4b-img1-stock;      JOB=eval4bim1; RP=8043; MN=q38Bhqs2t-img1-stock;      GRP=qwen35-4b-sft; PREV=nocapnp;   PJOB=eval4bnnp; XARGS="--image_max 1 --fold_size 1" ;;  # tail: scancel eval4bim1 after
+  img1)      SB=4b-img1-stock;      JOB=eval4bim1; RP=8043; MN=q38Bhqs2t-img1-stock;      GRP=qwen35-4b-sft; PREV=nocapnp;   PJOB=eval4bnnp; XARGS="--image_max 1 --fold_size 1" ;;
+  # vlnocapnp: VL x (nocap + no-prose) at lr3e-6 -- the VL line re-enters with
+  # the no-prose recipe (user 08-19 night, appended after img1). Reads against
+  # vlsft 44.00 (cap+prose joint change). Gated on training 249567.
+  vlnocapnp) SB=vlnocapnp-stock;     JOB=eval4bvnp; RP=8045; MN=vlnocapnp-lr3e6-stock;     GRP=qwen3vl-4b-sft; PREV=img1;      PJOB=eval4bim1; DIALECT=json ;;  # tail: scancel eval4bvnp after
   # vlsft: Qwen3-VL-4B-Thinking x r5vl corpus, lr3e-6 3ep (chain gates on training done)
   vlsft) SB=vl-r5vl-stock; JOB=eval4bvls; RP=8035; MN=q3vl-r5vl-lr3e6-stock; GRP=qwen3vl-4b-sft; PREV=nocap; PJOB=eval4bnc; DIALECT=json ;;  # rerun right after nocap; first attempt burned on the XML/json dialect mismatch
   # img3: kE's exact recipe with the training screenshot window 20->3; STANDARD 20-image

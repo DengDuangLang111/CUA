@@ -200,6 +200,10 @@ EVAL50_ARMS = {
                   "the champion recipe with teacher prose stripped -- PROSE IS"
                   " THE ONLY VARIABLE vs nocap 59.81; prior: kG (LoRA+no-prose)"
                   " beat r5lora by 8pp past the noise floor"),
+    "vlnocapnp": ("VL nocap+no-prose lr3e-6 · stock (no-split)", "sft",
+                  "the VL line re-enters with the winning recipe: r5vlnocapnp"
+                  " (think uncapped, teacher prose stripped) at lr 3e-6 gb64;"
+                  " reads against vlsft 44.00 with cap+prose changed jointly"),
     "img1":      ("img1 @ 1-img eval · stock (no-split)", "sft",
                   "kE's exact recipe with the TRAINING screenshot window"
                   " 20 -> 1, evaluated at the matched 1-image window"
