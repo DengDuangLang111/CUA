@@ -208,9 +208,6 @@ EVAL50_ARMS = {
                   " 20 -> 1, evaluated at the matched 1-image window"
                   " (--image_max 1 --fold_size 1): the extreme cell of the"
                   " training-window axis (20: 57.81, 3: 53.81 matched)"),
-    "vl20nc":    ("VL 20-img nocap lr1e-5 · stock (no-split)", "sft",
-                  "VL backbone x r5vlnocap at lr 1e-5 gb64, max_length 81920:"
-                  " the no-cap twin of vl20 on the VL side; json dialect"),
     "kEh3":      ("kE @ 3-img eval · stock (no-split)", "sft",
                   "kE's 20-image-trained weights evaluated with --image_max 3"
                   " --fold_size 1 -- the 20-train/3-eval cell: how much does the"

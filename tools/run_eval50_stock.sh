@@ -80,13 +80,14 @@ case "$ARM" in
   # ---- the fresh furnaces (2026-08-19 late), ordered by user priority.
   # Each is gated on its training in tillicum_chain.sh. nocapnp reads against
   # nocap 59.81 (prose axis at full FT); img1 at its MATCHED 1-image window
-  # (fold MUST be 1); vl20nc is a VL SFT arm -> DIALECT=json.
-  # nocaplean was CANCELLED by user order at 27/306 before its first
-  # checkpoint: real-payload rendering proved eval history keeps ALL think
-  # (27/27), so preserve_thinking=false trains the worst-direction skew.
+  # (fold MUST be 1).
+  # nocaplean was CANCELLED at 27/306 (real-payload rendering proved eval
+  # history keeps ALL think, so preserve_thinking=false trains the worst-
+  # direction skew). vl20nc was PULLED with vl3b/vl20g in the user's VL
+  # eval-shed (its training 249500 continues; weights keep-unevaluated;
+  # serve-chain-vl20nocap-stock.sbatch stays on disk for a later slot).
   nocapnp)   SB=4b-nocapnp-stock;   JOB=eval4bnnp; RP=8041; MN=q38Bhqs2t-nocapnp-stock;   GRP=qwen35-4b-sft; PREV=nocapt0;   PJOB=eval4bnc  ;;
-  img1)      SB=4b-img1-stock;      JOB=eval4bim1; RP=8043; MN=q38Bhqs2t-img1-stock;      GRP=qwen35-4b-sft; PREV=nocapnp;   PJOB=eval4bnnp; XARGS="--image_max 1 --fold_size 1" ;;
-  vl20nc)    SB=vl20nocap-stock;    JOB=eval4bvnc; RP=8044; MN=vl20nocap-lr1e5-stock;     GRP=qwen3vl-4b-sft; PREV=img1;     PJOB=eval4bim1; DIALECT=json ;;  # tail: scancel eval4bvnc after
+  img1)      SB=4b-img1-stock;      JOB=eval4bim1; RP=8043; MN=q38Bhqs2t-img1-stock;      GRP=qwen35-4b-sft; PREV=nocapnp;   PJOB=eval4bnnp; XARGS="--image_max 1 --fold_size 1" ;;  # tail: scancel eval4bim1 after
   # vlsft: Qwen3-VL-4B-Thinking x r5vl corpus, lr3e-6 3ep (chain gates on training done)
   vlsft) SB=vl-r5vl-stock; JOB=eval4bvls; RP=8035; MN=q3vl-r5vl-lr3e6-stock; GRP=qwen3vl-4b-sft; PREV=nocap; PJOB=eval4bnc; DIALECT=json ;;  # rerun right after nocap; first attempt burned on the XML/json dialect mismatch
   # img3: kE's exact recipe with the training screenshot window 20->3; STANDARD 20-image
