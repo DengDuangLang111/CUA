@@ -48,12 +48,16 @@
   r5lora 高 8pp,越过噪声底,LoRA 系登顶追平 kD——"prose 是跨步记忆"假设
   证伪,teacher 旁白反是分心源(判读预注册 → RESULTS §5.14)**。
   当前链:vl20(跑动中)→ vl3b → vl20g → kEh1 → baseh1 → vlbaseh1 →
-  nocapt0(尾;各臂注记见 driver)。训练:249492 img1(跑动中,尾声)、
-  249500 vl20nocap(4×2,同事管)、**249536 nocaplean(08-19 用户令:nocap
-  配方+preserve_thinking false+81920,4×2,18 秒排上)**、249531 nocapnp
-  (同事,nocap+去prose,PENDING);think 权重 0.5 臂论证已结:值得跑
+  nocapt0 → **nocapnp → img1(1图匹配窗)→ vl20nc(json,尾)**,后三臂带
+  完训闸(serve 8041/8043/8044)。训练:249492 img1 **完训**(EXIT 0,
+  1h42m,endpoint=ckpt-300 @ep3.00)、249500 vl20nocap(4×2,同事管,ETA
+  贴墙余量 ~40 分)、**249538 nocapnp 跑动中**(249531 preflight 死于相对
+  路径,数据修复经双路径交叉验证后重交);~~nocaplean 249536 已撤~~
+  (用户令,27/306 零损失:真实 payload 渲染证明 eval 历史 think **全保留
+  (27/27)**,preserve_thinking=false 是最坏方向 skew,立项前提反了;
+  §5.14/CONTEXT§4 口径修正归 64333 会话);think 权重 0.5 臂论证已结:值得跑
   (think 占 loss 轮 70.8% 字符质量,最大杠杆;channel_loss 不冲突、token
-  边界已验),**定序在 nocaplean/nocapnp 两个粗旋钮出分之后**——三者机制
+  边界已验),**定序在粗旋钮出分之后(nocaplean 已撤,粗旋钮=nocapnp)**——三者机制
   不同(eval 可见输入/训练输入/训练信号分配),先粗后细省一轮。完训后各接匹配 eval 臂。
   **kF 撤下不排**。明细 → `CHECKPOINTS.md` §2.1。插曲:img3 起 serve 撞上
   scrubbed 吃掉 uv Python 标准库的定时炸弹(三次秒死;验尸与修复 → `OPS.md`)。
