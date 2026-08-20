@@ -45,7 +45,7 @@ train_gate(){  # $1 arm, $2 job, $3 dir glob; up to 12h; returns 1 on timeout (c
 
 log "chain start (resume-safe)"
 PREV=bsstock
-for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 vl3b vl20g kEh1 baseh1 vlbaseh1 nocapt0; do
+for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 vl3b vl20g kEh1 baseh1 vlbaseh1 nocapt0 nocapnp nocaplean img1 vl20nc; do
   if alive "$arm"; then
     log "adopt $arm: already in flight"
   elif complete "$arm"; then
@@ -62,6 +62,10 @@ for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 vl3b vl
       vl20)  GJOB=sft-vl20pic-lr1e5;       GDIR="/gpfs/scrubbed/jy050706/sft/out/vl20pic-lr1e5/v*" ;;
       vl3b)  GJOB=sft-vl3pic-base;         GDIR="/gpfs/scrubbed/jy050706/sft/out/vl3pic-base/v*" ;;
       vl20g) GJOB=sft-vl20pic-gb128-lr1e5; GDIR="/gpfs/scrubbed/jy050706/sft/out/vl20pic-gb128-lr1e5/v*" ;;
+      nocapnp)   GJOB=sft-q38Bhqs2t-nocapnp;   GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-nocapnp/v*" ;;
+      nocaplean) GJOB=sft-q38Bhqs2t-nocaplean; GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-nocaplean/v*" ;;
+      img1)      GJOB=sft-q38Bhqs2t-img1;      GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-img1-lr3e6/v*" ;;
+      vl20nc)    GJOB=sft-vl20nocap-lr1e5;     GDIR="/gpfs/scrubbed/jy050706/sft/out/vl20nocap-lr1e5/v*" ;;
     esac
     if [ -n "$GJOB" ]; then
       if ! train_gate "$arm" "$GJOB" "$GDIR"; then
@@ -76,4 +80,4 @@ for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 vl3b vl
   fi
   PREV=$arm
 done
-log "chain done (tail arm nocapt0, the greedy-decode champion rerun; scancel eval4bnc after)"
+log "chain done (tail arm vl20nc; scancel eval4bvnc after)"

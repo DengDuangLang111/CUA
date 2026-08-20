@@ -199,6 +199,23 @@ EVAL50_ARMS = {
                   " (greedy; vLLM ignores top_k at t=0, and the request never"
                   " carried top_k anyway): how many of the champion's points"
                   " are sampling luck, and does greedy loop a thinking model?"),
+    "nocapnp":   ("nocap no-prose e3.00 · stock (no-split)", "sft",
+                  "the champion recipe with teacher prose stripped -- PROSE IS"
+                  " THE ONLY VARIABLE vs nocap 59.81; prior: kG (LoRA+no-prose)"
+                  " beat r5lora by 8pp past the noise floor"),
+    "nocaplean": ("nocap lean-history e3.00 · stock (no-split)", "sft",
+                  "nocap recipe trained with preserve_thinking false: history"
+                  " turns lose their think at encode time, matching the eval"
+                  " template; does removing the think-history train/eval skew"
+                  " matter at the champion config?"),
+    "img1":      ("img1 @ 1-img eval · stock (no-split)", "sft",
+                  "kE's exact recipe with the TRAINING screenshot window"
+                  " 20 -> 1, evaluated at the matched 1-image window"
+                  " (--image_max 1 --fold_size 1): the extreme cell of the"
+                  " training-window axis (20: 57.81, 3: 53.81 matched)"),
+    "vl20nc":    ("VL 20-img nocap lr1e-5 · stock (no-split)", "sft",
+                  "VL backbone x r5vlnocap at lr 1e-5 gb64, max_length 81920:"
+                  " the no-cap twin of vl20 on the VL side; json dialect"),
     "kEh3":      ("kE @ 3-img eval · stock (no-split)", "sft",
                   "kE's 20-image-trained weights evaluated with --image_max 3"
                   " --fold_size 1 -- the 20-train/3-eval cell: how much does the"
