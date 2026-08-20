@@ -181,11 +181,21 @@ bs2→1,不是节点拓扑**(1 rank/节点多的是 CPU 内存,显存还是那�
 | 249567 | vlnocapnp(另一会话) | r5vlnocapnp(VL 语料,think 无 cap + 去 prose,strip_prose d7d14632) | 4×2×bs1×accum8=gb64,lr3e-6/3ep,81920,freeze_vit;对照 vlsft 44.00(cap+prose 双变量);硬证据:no-prose 模型 eval 输出 0/1293 含 prose | 排队(12h 墙钟);eval 臂 vlnocapnp 已接链尾 @标准20图+json |
 | **249538**(249531→249537→249538) | nocapnp(同事建,我修数据) | r5nocapnp(prose 唯一变量,ostg strip_prose 56a3bb70;**249537 四秒死于 preflight:13,436 引用全是相对路径且目录无 images/——jsonl 已改写为指向 r5nocap 绝对路径(截图逐名复用,零传输),6474 行 63,146 引用 0 缺失,原文件存 .bak-relpaths;**同事从源头重生成交叉验证:两 pool 逐字节一致 630f0350/bce56618**;builder 已修 --images-prefix d7d14632**) | **4×2×bs1×accum8=gb64**、墙钟 10h、81920;对照 nocap 59.81,先验 kG +8pp | **死于 73%**(step 226/306,cuDNN fused-attention 在 checkpointing 反向重算时申请 workspace 失败——该路径不走 caching allocator 故无重试,而全程 136.7/139.79 GiB;留下 v0 ckpt-204 @ epoch 2.00)→ **16 卡重训 249689 排队中** |
 
-**nocapnp 与 nocap 不是严格单变量对(2026-08-20 补,另一会话指出)**:除散文外还差
-`max_length 65536 → 81920`。算术自洽旁证:语料 6474 条,nocapnp(81920)全留 →
-102 步/epoch → **306 步**;nocap(65536)丢掉 14 条超长样本 → 6460 条 →
-101 步/epoch → **303 步**,两边步数差正好由那 14 条解释。所以"prose is the only
-variable"应读作"prose + 14 条超长样本的去留"。
+**nocapnp 与 nocap 不是严格单变量对(2026-08-20 补)**:除散文外还差
+`max_length 65536 → 81920`(14 条超长样本的去留)。所以"prose is the only
+variable"应读作"prose + 那 14 条样本"。
+
+**但"步数差由那 14 条解释"这条算术是错的(08-20 实测推翻,原由另一会话提出、
+我一度写进本文件)**:三炉的 `num_rows` 日志都是 **6474**,而步数只跟**拓扑**走——
+```
+np1e6    6474 行 · 81920 · 16卡accum4 → 303 步   ← 一条不丢,照样 303
+nocapnp  6474 行 · 81920 · 8卡accum8  → 306 步
+nocap    (65536)        · 16卡accum4 → 303 步
+```
+即 **8 卡 306 / 16 卡 303**,与 max_length 无关(swift/HF 在最后一个不满的累积组
+上的取整随 rank 数变化;确切机制未查到底)。实际影响是好的:**np1e6 与
+16 卡重训的 nocapnp 都会是 303 步,彼此严格对齐**,也和冠军 nocap 的 303 一致。
+教训同前:**自洽的算术不等于正确的机制**——两个数能对上时,先找第三个点验证。
 
 **中途快照读法警告(nocapnp2 臂适用)**:ckpt-204 **不是"2 epoch 模型"而是
 "跑到 2 epoch 的中途快照"** —— cosine schedule 按 306 步定,该点学习率仍有
