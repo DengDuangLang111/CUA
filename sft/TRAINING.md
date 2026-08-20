@@ -12,6 +12,24 @@
   150 步要 12h 墙钟;3 图样本 56 秒/步,6h 足够。**跨阶段约束要落在下游会读的
   地方**:eval 侧的方言/窗口要求写进驱动的 DIALECT/XARGS 列与 MODEL_BOUNDARY,
   写在训练 sbatch 的 WANDB_NOTES 里等于自言自语(vlsft 烧毁 50 题的教训)。
+- **8 节点 × 1 卡不但不慢,反而快 2.3 倍(2026-08-19 实测,推翻直觉)**;
+  **用户 2026-08-19 立规:训练最多允许 8 个节点。** 同为 VL 20 图语料:
+  ```
+  248101  16rank(2节点×8卡) 每rank 4 样本/步  50.72 s/it  → 12.68 s/样本/rank
+  248781  16rank(2节点×8卡) 每rank 4 样本/步  51.53 s/it  → 12.88 s/样本/rank
+  249176   8rank(8节点×1卡) 每rank16 样本/步  88.03 s/it  →  5.50 s/样本/rank
+  ```
+  常识说跨节点走 IB 比节点内 NVLink 慢,**但这个 workload 的瓶颈不在梯度通信**:
+  `zero2_offload` 每个 optimizer step 都要 CPU↔GPU 大量往返 optimizer state,
+  8 个 rank 挤一个节点会**抢同一条 PCIe 和同一份内存带宽**;1 rank/节点则独占。
+  真正的跨节点通信很小:ZeRO-2 在 accum 期间不通信,一步只 all-reduce 一次梯度
+  (8G ÷ IB 约 25GB/s ≈ 320ms),相对 88s 的步时占 0.4%,完全淹没。
+  (之前把"8×1 比预测快 40%"归因于 bs1 消 padding 浪费,现在看 **PCIe 不再竞争是大头**。)
+  调度上也压倒性更优:22 张空闲卡碎在 11 个节点、最多的一个才 5 张时,
+  2 节点×8卡 要等 8 小时,8节点×1卡 **19 秒**就上(249457 vs 249486 同日实测)。
+  代价:8 rank 的 ZeRO-2 梯度分片比 16 rank 粗一倍(1.04 vs 0.52 GB/rank),
+  再加 accum 翻倍的 ~250MB/微批,合计约多 1.5G 显存;`--mem` 还受 240G/GPU 限制
+  (1 卡/节点时必须从 600G 降到 200G,否则 sbatch 直接拒收)。
 - **global batch 相同时,bs 与 accum 怎么拆不改变梯度(2026-08-19 读源码+实测)**:
   swift 的 loss 是 `outputs.loss.sum() / num_items_in_batch`
   (`trainers/seq2seq_trainer.py:202`),而 `num_items_in_batch =
