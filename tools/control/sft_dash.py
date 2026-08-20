@@ -384,10 +384,23 @@ HELDOUT_META = EVAL50_META.replace("verified_eval50_nonproxy",
                                    "verified_eval50b_nonproxy")
 
 
+# A model that ran both halves gets a third, synthetic row spanning all 100
+# columns, so the frozen-100 accuracy is readable directly instead of being
+# added up by hand. Keyed child -> parent; the parent is the run on the SEEN
+# half (the untrained base's seen-half run is "basekeep", not "base").
+HELDOUT_PAIRS = {"nocap50b": "nocap", "base50b": "basekeep"}
+
+
 def eval50():
     tasks = eval50_tasks()
     heldout = eval50_tasks(HELDOUT_META)
-    order = sorted(tasks.values(), key=lambda t: (t["dom"], t["id"]))
+    # Columns are the full frozen 100: the seen half first, then the held-out
+    # half. Arms that ran one half fill their own columns and show "-" in the
+    # other, which is what makes the two halves line up task-by-task on screen.
+    # Every arm's DENOMINATOR stays its own panel (50), so no existing number
+    # moves when the column count doubles.
+    order = sorted(tasks.values(), key=lambda t: (t["dom"], t["id"])) + \
+            sorted(heldout.values(), key=lambda t: (t["dom"], t["id"]))
     arms = []
     for d in sorted(glob.glob(BASE + "/*/eval50-*")):
         run = os.path.basename(d)
@@ -408,11 +421,36 @@ def eval50():
                      # rewarded arms that lost tasks to VM stalls -- gb64keep
                      # read 44.5% on 47 tasks where the panel score is 41.8%.
                      "mean": (round(sum(r["score"] or 0 for r in got.values())
-                                    / len(order), 4) if got else None),
+                                    / len(panel), 4) if got else None),
                      "mean_scored": (round(sum(r["score"] or 0 for r in got.values())
                                            / len(got), 4) if got else None),
-                     "missing": len(order) - len(got),
+                     "missing": len(panel) - len(got),
+                     "panel_n": len(panel),
                      "tasks": got})
+    # synthetic all-100 rows for models that ran both halves
+    by_key = {a["key"]: a for a in arms}
+    for child, parent in HELDOUT_PAIRS.items():
+        c, pa = by_key.get(child), by_key.get(parent)
+        if not (c and pa):
+            continue
+        merged = dict(pa["tasks"]); merged.update(c["tasks"])
+        arms.append({
+            "key": parent + "100", "run": "", "modeldir": pa["modeldir"],
+            "label": pa["label"].split(" · ")[0] + " · ALL 100 (seen + held-out)",
+            "group": pa["group"],
+            "note": "the same weights over the whole frozen 100: the left half is"
+                    " the panel every arm was selected on, the right half was"
+                    " never used for any decision. run=\"\" on purpose so cells"
+                    " render as plain marks -- the two halves come from two runs"
+                    " and a single traj link would point at the wrong one.",
+            "scored": len(merged),
+            "passed": sum(1 for r in merged.values() if r["score"] == 1.0),
+            "mean": round(sum(r["score"] or 0 for r in merged.values()) / 100.0, 4),
+            "mean_scored": (round(sum(r["score"] or 0 for r in merged.values())
+                                  / len(merged), 4) if merged else None),
+            "missing": 100 - len(merged),
+            "panel_n": 100,
+            "tasks": merged})
     return {"panel": order, "n": len(order), "arms": arms}
 
 
