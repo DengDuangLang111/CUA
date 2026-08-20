@@ -203,11 +203,6 @@ EVAL50_ARMS = {
                   "the champion recipe with teacher prose stripped -- PROSE IS"
                   " THE ONLY VARIABLE vs nocap 59.81; prior: kG (LoRA+no-prose)"
                   " beat r5lora by 8pp past the noise floor"),
-    "nocaplean": ("nocap lean-history e3.00 · stock (no-split)", "sft",
-                  "nocap recipe trained with preserve_thinking false: history"
-                  " turns lose their think at encode time, matching the eval"
-                  " template; does removing the think-history train/eval skew"
-                  " matter at the champion config?"),
     "img1":      ("img1 @ 1-img eval · stock (no-split)", "sft",
                   "kE's exact recipe with the TRAINING screenshot window"
                   " 20 -> 1, evaluated at the matched 1-image window"

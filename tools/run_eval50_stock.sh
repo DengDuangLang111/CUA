@@ -75,14 +75,15 @@ case "$ARM" in
   # at temperature 0 vLLM decodes greedy and ignores top_k/top_p entirely.
   # argparse last-wins lets XARGS override the protocol -- checked, no dedup.
   nocapt0) SB=4b-nocap-stock; JOB=eval4bnc; RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft; PREV=vlbaseh1; PJOB=eval4bvlb; XARGS="--temperature 0.0 --top_p 1.0" ;;
-  # ---- the four fresh furnaces (2026-08-19 late), ordered by user priority.
-  # Each is gated on its training in tillicum_chain.sh. nocapnp/nocaplean read
-  # against nocap 59.81 (prose axis at full FT / history-think axis); img1 at
-  # its MATCHED 1-image window (fold MUST be 1); vl20nc is a VL SFT arm ->
-  # DIALECT=json like every corpus trained on the json serialization.
+  # ---- the fresh furnaces (2026-08-19 late), ordered by user priority.
+  # Each is gated on its training in tillicum_chain.sh. nocapnp reads against
+  # nocap 59.81 (prose axis at full FT); img1 at its MATCHED 1-image window
+  # (fold MUST be 1); vl20nc is a VL SFT arm -> DIALECT=json.
+  # nocaplean was CANCELLED by user order at 27/306 before its first
+  # checkpoint: real-payload rendering proved eval history keeps ALL think
+  # (27/27), so preserve_thinking=false trains the worst-direction skew.
   nocapnp)   SB=4b-nocapnp-stock;   JOB=eval4bnnp; RP=8041; MN=q38Bhqs2t-nocapnp-stock;   GRP=qwen35-4b-sft; PREV=nocapt0;   PJOB=eval4bnc  ;;
-  nocaplean) SB=4b-nocaplean-stock; JOB=eval4bncl; RP=8042; MN=q38Bhqs2t-nocaplean-stock; GRP=qwen35-4b-sft; PREV=nocapnp;   PJOB=eval4bnnp ;;
-  img1)      SB=4b-img1-stock;      JOB=eval4bim1; RP=8043; MN=q38Bhqs2t-img1-stock;      GRP=qwen35-4b-sft; PREV=nocaplean; PJOB=eval4bncl; XARGS="--image_max 1 --fold_size 1" ;;
+  img1)      SB=4b-img1-stock;      JOB=eval4bim1; RP=8043; MN=q38Bhqs2t-img1-stock;      GRP=qwen35-4b-sft; PREV=nocapnp;   PJOB=eval4bnnp; XARGS="--image_max 1 --fold_size 1" ;;
   vl20nc)    SB=vl20nocap-stock;    JOB=eval4bvnc; RP=8044; MN=vl20nocap-lr1e5-stock;     GRP=qwen3vl-4b-sft; PREV=img1;     PJOB=eval4bim1; DIALECT=json ;;  # tail: scancel eval4bvnc after
   # vlsft: Qwen3-VL-4B-Thinking x r5vl corpus, lr3e-6 3ep (chain gates on training done)
   vlsft) SB=vl-r5vl-stock; JOB=eval4bvls; RP=8035; MN=q3vl-r5vl-lr3e6-stock; GRP=qwen3vl-4b-sft; PREV=nocap; PJOB=eval4bnc; DIALECT=json ;;  # rerun right after nocap; first attempt burned on the XML/json dialect mismatch
