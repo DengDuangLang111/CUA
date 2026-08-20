@@ -938,8 +938,10 @@ kE ≤10 步的 20 道简单题 kE 17 胜 vs img3 15 胜;②"输在长视觉"—
 
 **已验证(Qwen3.5-4B `chat_template.jinja:94-101`)**:模板只为"最后一个 user
 查询之后"的 assistant 轮保留 `<think>`;OSWorld 布局里最新一条永远是 user
-(新截图),故**所有历史轮的 think 都被模板剪掉,每步阅后即焚**(这也是 nocap
-的 92k 失控 think 不炸上下文的原因)。agent 确实把 think 内联发出
+(新截图),故历史轮的 think 被模板剪掉——**同事用真实 eval 布局渲染实测
+修正:5 个历史 think 块剪 4 个,最新一轮的保留**(模板的 last_query 判定对
+observation 类 user 消息的处理所致;单步回看不构成跨步记忆,大结论不变),
+prose 段则全部存活。这也是 nocap 的 92k 失控 think 不炸上下文的原因。agent 确实把 think 内联发出
 (client.py:46-51),剪的是服务端模板。eval 时模型可见的"过去"只有三样:
 **截图窗 + 历史 prose + 历史动作序列**。
 
