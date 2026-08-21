@@ -33,14 +33,26 @@
 - **候选池 1405 条**(taskgen 历代产物去重、除训练),但横跨 18 个时代
   (v8~v11),且产出分布与语料同偏(file_or_text 83%)——池只能按动作补,
   补不了 checker 形态。checker 形态对 SFT 教学影响待议(模型看不到 checker)。
-- **v11-only 池(647 条)下纯"需生成"格子扩到 ~13 个**:calc/pivot、
-  calc/chart、impress/theme_background、gimp/layers、writer/char_format、
-  multi/{extensions,install,downloads,playback,speaker_notes}、
-  vs_code/install、vlc/export_convert(全量池时可补的那些候选全是老时代)。
-  池可补但存量吃紧的:impress/char_format(OSWorld 16,池仅 1)、
-  chrome/sort_filter(5,池 1)、gimp/color_tone(4,池 2)。
-  池充裕的:thunderbird/sort_filter(池 13)、vlc 杂项(池 4-8)、
-  vs_code/theme(池 6)。
+- **v1 表被反驳审计否决(08-20)**,v2 重写后重算。审计要点:纯伪影格
+  (vlc/formula_compute 100% 是 "computer" 误命中)、"池可补"多格是假的
+  (vs_code/theme 的池 13 条全是 "template" 伪命中)、多标签按格加总超配
+  13-23%、27% 需求(101 条 untagged:网页导航/跨应用搬运/单元格编辑)
+  完全不在表上、infeasible 混占动作格。v2 修法:负向上下文正则、补 4 类
+  词表(web_navigation/data_transfer/cell_edit/git_ops)、infeasible 剥离
+  (27 条,gimp 占 9)、旗标改覆盖率阈值(教得少也亮)、需求按任务去重。
+- **v2 缺口需求(v11 池 647 条,按任务去重 119 条)**:
+  multi 38 · impress 25 · calc 18 · writer 12 · vlc 12 · os 4 · chrome 3 ·
+  vs_code 3 · gimp 2 · thunderbird 2。
+  **需生成格**(v11 池 0 条):calc/pivot 5、calc/chart 4、impress/theme_bg 7、
+  writer/char_format 6、chrome/sort_filter 3、multi/{install 6、downloads 6、
+  extensions 5、theme_bg 4、git 2、playback 2}、vs_code/install 3、
+  vlc/export 2。**池可补大格**:impress/char_format(16 题,池仅 1)、
+  multi/export_convert(17 题教 1,池 16)、calc/sheet_ops(13 题教 1,池 1)、
+  writer/para_page_layout(8 题教 1,池 3)、thunderbird/sort_filter(池 11)。
+- **选池任务的三道人工闸**(审计固化):①逐条过全文,不信格子计数;
+  ②GUI 格必须核 checker 强制 GUI 产物(include_exclude 型 checker 会放过
+  纯终端解法,筛出的"成功轨迹"可能全程不演示目标 GUI 动作);③配额按
+  任务 ID 去重分配。
 - 打标器是关键词多标签,精度未审计,已知有误标;**配额定稿前必须过
   反驳审计**(进行中)。
 
