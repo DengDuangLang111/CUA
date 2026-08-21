@@ -290,7 +290,11 @@ const ev50Best = ()=> (ev50().arms||[]).filter(a=>a.group!=="reference"
                                               && (a.panel_n||50)<=50)
                                        .reduce((m,a)=>Math.max(m,a.passed),0);
 function ev50Matrix(){
-  const E = ev50(), P = E.panel||[], A = E.arms||[];
+  const E = ev50(), P = E.panel||[];
+  /* Rows whose panel is bigger than these columns (the 261/361 arms) live on
+     the OSWorld-361 view instead: this table's columns ARE the frozen 100, so
+     such a row could only ever show 261 empty cells. */
+  const A = (E.arms||[]).filter(a=>(a.panel_n||50)<=100);
   if (!A.length) return `<p class="note">waiting for the first eval-50 arm…</p>`;
   /* trajectory publication is owned by the OTHER daemon (status.json), so a
      cell becomes a link exactly when that run's row says traj_published. */
@@ -691,6 +695,41 @@ const VIEWS = [
  traj:{picker:"eval50", n:"50 tasks per arm · every step the model took",
    note:"Same step player as the rollouts: verbatim thinking, tool call, the pyautogui that ran, and the VM screenshot at each step. Viewers refresh on the daemon's 30-minute cycle while the arm is still filling in."}},
 
+{id:"sft361", group:"SFT", title:"OSWorld 361", rate:"live",
+ head:{t:"OSWorld 361 — the official benchmark, end to end", pills:[P.good("live"),P.warn("312 non-proxy is the headline"),P.dim("test_nogdrive · modified harness")],
+   lede:"The same weights over all 361 tasks of test_nogdrive, assembled from three runs: the frozen 50 every arm was selected on, the held-out 50, and the remaining 261. Task sets are disjoint, so nothing is counted twice. The unit here is the slice, not the task — that is why this view exists separately from the eval-50 matrix, whose columns are the frozen 100 and could never hold a 261-task row."},
+ design:()=>{ const D=(window.SFT&&window.SFT.sft361)||{models:[]}; if(!D.models.length) return `<p class="note">waiting for the first 361 slice…</p>`;
+  const pct=(v)=>v==null?"—":(v*100).toFixed(2)+"%";
+  const cell=(g)=>`<td class="num hl">${pct(g.rate)}${g.scored<g.n?`<small class="why"> ${g.scored}/${g.n} · now ${pct(g.rate_now)}</small>`:""}</td>`;
+  const rows=D.models.map(m=>`<td><b>${esc(m.label)}</b><div class="why">${esc(m.key)}</div></td>`
+    +cell(m.nonproxy)+cell(m.proxy)+cell(m.all361)
+    +["seen50","held50","rest261"].map(k=>{const v=m.slices[k];
+        return `<td class="num">${v.scored}/${v.n}${v.scored?`<small class="why"> ${v.sum.toFixed(1)}</small>`:""}</td>`;}).join(""));
+  return `
+  <div class="seclabel">Headline${window.SFT&&window.SFT.updated?` · as of ${window.SFT.updated}`:""}</div>
+  <div class="cards">${[["312","non-proxy tasks — the headline denominator"],[String(D.proxy_n||49),"proxy tasks — reported apart, never merged"],["3","runs per model, disjoint task sets"]].map(card).join("")}</div>
+  ${tbl([["model"],["non-proxy 312",'class="num"'],["proxy 49",'class="num"'],["all 361",'class="num"'],
+         ["seen 50",'class="num"'],["held-out 50",'class="num"'],["rest 261",'class="num"']],rows)}
+  <p class="note"><b>Two numbers per cell while a model is still filling in.</b> The big one divides by
+  the FIXED denominator — an unfinished task scores 0, which is the standing accounting policy, so it
+  reads low on purpose until the slice completes. <code>now</code> divides by what actually finished
+  and is the current hit rate. Slice columns show scored/total with the raw score sum.</p>
+  <div class="seclabel">Why proxy-49 is not folded in</div>
+  <p class="note">49 of the 361 declare <code>proxy: true</code> and run here with
+  <code>enable_proxy=False</code>. That is not free: the 2026-08-08 <b>Proxy-49 · Direct</b> experiment
+  scored <b>11% (5/45)</b> on exactly this subset against ~45% overall, with failures matching
+  datacenter-IP bot-walls and geo-blocks (Amazon, Delta, TripAdvisor) rather than model ability.
+  Host reachability is not the test — a plain HEAD returns 200 for most of these domains, which is
+  why an earlier reachability check wrongly cleared them. Read the 312 column.</p>
+  <div class="seclabel">What these numbers may and may not be compared to</div>
+  ${tbl([["comparison"],["verdict"]],[
+   `<td><b>arm vs arm on this page</b></td><td class="hl">valid — same harness, same sampler, same task sets</td>`,
+   `<td><b>vs Baseline / OSWorld-Verified 361 (45%, 2026-07-31)</b></td><td>NOT directly comparable: that campaign ran temp 0.6 and its thinking flag was later found inert, while these run temp 1.0 with thinking genuinely on</td>`,
+   `<td><b>vs the public OSWorld leaderboard</b></td><td>NOT comparable without disclosure: this is our MODIFIED harness (9 changed files plus an untracked evaluator module, OPS.md §1)</td>`,
+   `<td><b>base's frozen-50 half</b></td><td>provenance gap: <code>basekeep</code> predates MODEL_BOUNDARY.json, so its served weights are inferred, not recorded. nocap's three slices all carry one</td>`])}`;},
+ traj:{picker:"eval50", n:"the 361 in three slices",
+   note:"Step players live with each slice's own run; the eval-50 view links the frozen 100, and the 261 run publishes its own bundle."}},
+
 {id:"sft-train", group:"SFT", title:"Training runs", rate:"",
  head:{t:"Training runs", pills:[P.dim("full-parameter · 1 GPU · ms-swift")],
    lede:"What has been trained, on what, and what each arm is there to isolate. Arms with a tier-3 result are in the panel view; this page is the recipe and the schedule caveats that make those numbers readable."},
@@ -905,6 +944,9 @@ function renderNav(sel){
       if (v.id === "v11"){ const s = lv(); r = s ? s.rate + "%" : "live"; }
       if (v.id === "sft-panel" && sftArms().length){ r = sftBest() + "/9"; }
       if (v.id === "sft-eval50" && ev50().arms.length){ r = ev50Best() + "/50"; }
+      if (v.id === "sft361"){ const D=(window.SFT&&window.SFT.sft361)||{models:[]};
+        const m=(D.models||[]).find(x=>x.group!=="reference")||(D.models||[])[0];
+        if (m && m.nonproxy.scored) r = (m.nonproxy.rate_now*100).toFixed(0)+"%"; }
       if (v.id === "sft-train" && sftArms().length){ r = sftArms().length + " arms"; }
       return `<a href="#${v.id}" class="${v.id===sel?'sel':''}">${v.title}<span class="r ${r&&r!=="—"?'':'na'}">${r||""}</span></a>`;}).join("");
   }).join("");
