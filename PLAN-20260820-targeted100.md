@@ -13,6 +13,14 @@
 - **FAIL 类(infeasible)不做**——太麻烦。假报成功的病只治"自检"这一半。
 - 候选不够的格子用 **Opus 5 生成**(datagenv12 分支,不动 main)。
 - 超参全冻结:4B 全量 / lr 3e-6 / gb64 / 3ep / 20 图 / 带散文 / no-cap。
+- **候选池只用 v11 及以后**(2026-08-20 补令):数据标准 = r5 标准基础上修改;
+  v11 前时代(v8/v9/v10)一律不做候选。池从 1405 缩到 **647**。
+- **本轮训练加 eval loss 节点**(2026-08-20):`ostg.sft.build --val-ratio 0.05`
+  (按任务/slug 切,前缀不泄漏;该旗 08-13 abs-pilot3 实战验证过,
+  1288+178 行走完全链)→ swift `--val_dataset` + `--eval_strategy steps
+  --eval_steps 34`(与 save_steps 对齐,每个 checkpoint 配一个 eval loss 点)。
+  零新代码。代价:约 5% 任务(~18/462)不进训练,训练集 ~444;sbatch diff
+  训练提交前给用户过目。
 - 曝光 +28%(6474→约 8262 行,累积 lr 4.5e-4→约 5.8e-4,正好越过实测峰顶)
   接受;**另评一个 ~2.35ep 的 checkpoint** 把"曝光变多"和"覆盖变好"拆开
   (checkpoint 本来每 34 步存一个,零训练成本,只多一次 eval)。
@@ -25,8 +33,14 @@
 - **候选池 1405 条**(taskgen 历代产物去重、除训练),但横跨 18 个时代
   (v8~v11),且产出分布与语料同偏(file_or_text 83%)——池只能按动作补,
   补不了 checker 形态。checker 形态对 SFT 教学影响待议(模型看不到 checker)。
-- 纯"需生成"格子(池 0 条):calc/chart、gimp/layers、multi+vscode/install、
-  multi/speaker_notes。其余缺口格池里有或多或少的候选。
+- **v11-only 池(647 条)下纯"需生成"格子扩到 ~13 个**:calc/pivot、
+  calc/chart、impress/theme_background、gimp/layers、writer/char_format、
+  multi/{extensions,install,downloads,playback,speaker_notes}、
+  vs_code/install、vlc/export_convert(全量池时可补的那些候选全是老时代)。
+  池可补但存量吃紧的:impress/char_format(OSWorld 16,池仅 1)、
+  chrome/sort_filter(5,池 1)、gimp/color_tone(4,池 2)。
+  池充裕的:thunderbird/sort_filter(池 13)、vlc 杂项(池 4-8)、
+  vs_code/theme(池 6)。
 - 打标器是关键词多标签,精度未审计,已知有误标;**配额定稿前必须过
   反驳审计**(进行中)。
 
