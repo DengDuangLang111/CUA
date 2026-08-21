@@ -44,12 +44,23 @@ def funcs(ev):
 
 
 def load_corpus(train_instr, taskgen_glob):
+    """Map every TRAINING KEY to its generated task definition.
+
+    The key is "<ostg.slug>-<8 hex>" and the slug alone is NOT unique: two
+    distinct tasks can share it (verified 2026-08-20 -- campaign-brief-broken-
+    links and retainer-trust-balance-sheet each name two different tasks with
+    different instructions). Keying by slug silently folded those pairs and
+    undercounted the corpus by 2, which is harmless for a "3 evaluator
+    families" headline and NOT harmless for quota arithmetic. So: group the
+    candidate definitions by slug, then disambiguate on the instruction text.
+    """
     tr = json.load(open(train_instr, encoding="utf-8"))
-    base = {}
-    for s in tr:
-        m = re.match(r"^(.*)-[0-9a-f]{8}$", s)
-        base.setdefault(m.group(1) if m else s, s)
-    found = {}
+    by_slug = {}
+    for k in tr:
+        m = re.match(r"^(.*)-[0-9a-f]{8}$", k)
+        by_slug.setdefault(m.group(1) if m else k, []).append(k)
+
+    cands = {}
     files = glob.glob(taskgen_glob)
     for p in files:
         try:
@@ -57,9 +68,27 @@ def load_corpus(train_instr, taskgen_glob):
         except Exception:
             continue
         sl = (d.get("ostg") or {}).get("slug")
-        if sl in base and sl not in found:
-            found[sl] = d
-    return tr, base, found, len(files)
+        if sl in by_slug:
+            cands.setdefault(sl, []).append(d)
+
+    def norm(x):
+        return re.sub(r"\s+", " ", (x or "").strip().lower())
+
+    found = {}
+    for sl, keys in by_slug.items():
+        defs = cands.get(sl, [])
+        if len(keys) == 1 and defs:
+            found[keys[0]] = defs[0]
+            continue
+        for k in keys:                       # disambiguate by instruction
+            want = norm(tr[k])
+            hit = next((d for d in defs if norm(d.get("instruction")) == want), None)
+            if hit is None:                  # fall back to prefix match
+                hit = next((d for d in defs
+                            if want[:60] and norm(d.get("instruction")).startswith(want[:60])), None)
+            if hit is not None:
+                found[k] = hit
+    return tr, by_slug, found, len(files)
 
 
 def mix(defs):
@@ -93,11 +122,11 @@ def main():
     ap.add_argument("--panel", action="append", default=[], help="NAME=/path/to/panel.json")
     a = ap.parse_args()
 
-    tr, base, found, nfiles = load_corpus(a.train_instr, a.taskgen_glob)
-    print(f"训练样本 {len(tr)} 条 -> {len(base)} 个 slug;扫描 {nfiles} 个 taskgen 定义,"
-          f"匹配 {len(found)}")
-    if len(found) < len(base):
-        print(f"  !! {len(base)-len(found)} 个 slug 找不到定义 —— 覆盖率结论会偏,先查 --taskgen-glob")
+    tr, by_slug, found, nfiles = load_corpus(a.train_instr, a.taskgen_glob)
+    print(f"训练任务 {len(tr)} 条({len(by_slug)} 个 slug,故有 {len(tr)-len(by_slug)} 组同名不同题);"
+          f"扫描 {nfiles} 个定义,按任务粒度匹配 {len(found)}/{len(tr)}")
+    if len(found) < len(tr):
+        print(f"  !! {len(tr)-len(found)} 条任务找不到定义 —— 配额分母会偏,先查 --taskgen-glob")
     cmix, capps = mix(found.values())
     n = max(len(found), 1)
     print(f"\n=== 语料教了什么({len(found)} 个任务)")
