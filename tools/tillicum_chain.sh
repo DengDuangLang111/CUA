@@ -25,14 +25,27 @@ complete(){  # newest result dir for arm $1 has ALL ITS OWN tasks scored.
   local d need
   d=$(ls -dt $RES/*/eval50-$1-* 2>/dev/null | head -1)
   [ -n "$d" ] || return 1
-  need=$(python3 - "$d" <<'PYNEED' 2>/dev/null
-import json, sys
+  # The boundary file's key is "tasks" and it stores the BARE meta filename
+  # (run_eval50_stock.sh:291) -- the first version of this read "tasks_file"
+  # as an absolute path, silently fell back to 50, and the monitor made the
+  # same class of mistake and declared base261 complete at 50/261. Resolve
+  # against evaluation_examples, and keep a static per-arm map as the last
+  # resort so a missing boundary file can never shrink a 261-task arm.
+  need=$(python3 - "$d" "$1" <<'PYNEED' 2>/dev/null
+import json, os, sys
+d, arm = sys.argv[1], sys.argv[2]
+E = "/mnt/d/research/OSWorld/evaluation_examples"
 try:
-    m = json.load(open(sys.argv[1] + "/MODEL_BOUNDARY.json"))
-    t = json.load(open(m["tasks_file"]))
+    m = json.load(open(os.path.join(d, "MODEL_BOUNDARY.json")))
+    tf = m["tasks"]
+    if not os.path.isabs(tf):
+        tf = os.path.join(E, tf)
+    t = json.load(open(tf))
     print(sum(len(v) for v in t.values()))
 except Exception:
-    print(50)
+    static = {"base261": 261, "nocap261": 261,
+              "np1e6": 100, "nocapnp": 100, "nocapnp238": 100}
+    print(static.get(arm, 50))
 PYNEED
 )
   [ "$(find "$d" -name result.txt 2>/dev/null | wc -l)" -ge "${need:-50}" ]
