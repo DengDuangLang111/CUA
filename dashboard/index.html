@@ -191,7 +191,7 @@ function renderFresh(){
   const el = document.getElementById("fresh"); if(!el) return;
   const F = window.FRESH; const L = window.LIVE||{}; const S = window.SFT||{};
   const active = (L.runs||[]).some(r=>r.total && r.scored < r.total) ||
-                 ((S.eval50||{}).arms||[]).some(a=>a.scored < ((S.eval50||{}).n||50));
+                 ((S.eval50||{}).arms||[]).some(a=>a.scored < (a.panel_n||(S.eval50||{}).n||50));
   let push = "—", state = "idle", color = "var(--muted)";
   if (F.pushed){
     const m = Math.round((Date.now() - new Date(F.pushed).getTime())/60000);
@@ -286,7 +286,8 @@ function sftArmTable(){
 
 /* ---- SFT: verified eval-50 matrix, same sft.json feed ------------------- */
 const ev50 = ()=> (window.SFT && window.SFT.eval50) || {panel:[],arms:[]};
-const ev50Best = ()=> (ev50().arms||[]).filter(a=>a.group!=="reference")
+const ev50Best = ()=> (ev50().arms||[]).filter(a=>a.group!=="reference"
+                                              && (a.panel_n||50)<=50)
                                        .reduce((m,a)=>Math.max(m,a.passed),0);
 function ev50Matrix(){
   const E = ev50(), P = E.panel||[], A = E.arms||[];
@@ -315,8 +316,11 @@ function ev50Matrix(){
         : `<td class="cell"><span class="${cls}" title="${esc(tip)}">${body}</span></td>`;
     }).join("");
     return `<td><b>${esc(a.label)}</b><div class="why">${esc(a.note)}</div></td>`
-         + `<td class="num hl">${a.passed}/${a.scored}</td>`
-         + `<td class="num">${a.mean==null?"—":a.mean.toFixed(2)}</td>` + cells;
+         + `<td class="num hl">${a.passed}/${a.scored}`
+         + `${a.panel_n&&a.scored<a.panel_n?`<small class="why"> of ${a.panel_n}</small>`:""}</td>`
+         + `<td class="num">${a.mean==null?"—":a.mean.toFixed(2)}`
+         + `${a.panel_n&&a.scored<a.panel_n&&a.mean_scored!=null
+              ?`<small class="why"> now ${a.mean_scored.toFixed(2)}</small>`:""}</td>` + cells;
   });
   return tbl(heads, rows);
 }
