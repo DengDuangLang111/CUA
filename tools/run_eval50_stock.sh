@@ -142,7 +142,14 @@ case "$ARM" in
   # configured -- they run direct from the campus IP; score them as a separate
   # stratum. 08-21 user order relayed via peer session: nocapnp238 pulled,
   # base261 follows nocapnp directly.
-  base261)   SB=4b-base-stock;       JOB=eval4bbo;  RP=8023; MN=q35-4b-stock;               GRP=qwen35-4b-base; PREV=nocapnp;  PJOB=eval4bnnp; METAF="verified_eval261_rest.json" ;;  # 08-20 user order: immediately after nocap50b, so the eval100 paired comparison completes back to back instead of straddling another arm
+  base261)   SB=4b-base-stock;       JOB=eval4bbo;  RP=8023; MN=q35-4b-stock;               GRP=qwen35-4b-base; PREV=nocapnp;  PJOB=eval4bnnp; METAF="verified_eval261_rest.json" ;;
+  # nocap261: the champion over the same remaining 261, after the user read
+  # nocapnp's tape at 95/100 (seen half tracking 59.81, held half ~30% vs
+  # nocap's 38.00) and ruled prose stays. Cleaner provenance than base261:
+  # both existing nocap halves carry MODEL_BOUNDARY.json with the identical
+  # checkpoint path (v0-20260818-225915/checkpoint-303), so the 361 union has
+  # no inferred-weights caveat; the 49 proxy-true stratum caveat still applies.
+  nocap261)  SB=4b-nocap-stock;      JOB=eval4bnc;  RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft;  PREV=base261;  PJOB=eval4bbo;  METAF="verified_eval261_rest.json" ;;  # 08-20 user order: immediately after nocap50b, so the eval100 paired comparison completes back to back instead of straddling another arm
   # t3850b: the 27B teacher on the held-out half, completing the eval100 final
   # as the three-way (champion / base / teacher) pre-registered on the seen
   # half. Same serve as t38 (1 GPU, TP1), same sampling protocol.

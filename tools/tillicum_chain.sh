@@ -59,7 +59,7 @@ train_gate(){  # $1 arm, $2 job, $3 dir glob; up to 12h; returns 1 on timeout (c
 
 log "chain start (resume-safe)"
 PREV=bsstock
-for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 baseh1 nocapt0 img1 vlnocapnp nocapnp2 nocap50b base50b t3850b np1e6 nocapnp base261; do
+for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 baseh1 nocapt0 img1 vlnocapnp nocapnp2 nocap50b base50b t3850b np1e6 nocapnp base261 nocap261; do
   if alive "$arm"; then
     log "adopt $arm: already in flight"
   elif complete "$arm"; then
@@ -92,4 +92,4 @@ for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 ba
   fi
   PREV=$arm
 done
-log "chain done (tail arm base261: the base backbone over the remaining 261 of test_nogdrive, completing a 361 union with basekeep+base50b; scancel eval4bbo after)"
+log "chain done (tail arms base261 then nocap261 over the remaining 261 of test_nogdrive, completing 361 unions for both the backbone and the champion; scancel eval4bnc after)"
