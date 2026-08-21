@@ -176,12 +176,17 @@ def main():
                     default="/mnt/d/research/OSWorld/evaluation_examples/test_all.json")
     ap.add_argument("--examples-root",
                     default="/mnt/d/research/OSWorld/evaluation_examples")
+    ap.add_argument("--pool-glob", default=None,
+                    help="restrict the CANDIDATE POOL to this glob while the "
+                         "training corpus keeps matching against the full "
+                         "--taskgen-glob (user decree 2026-08-20: only v11+ "
+                         "eras are candidates; the data standard is r5's)")
     a = ap.parse_args()
 
     tr, by_slug, found, _ = load_corpus(a.train_instr, a.taskgen_glob)
     trn = tag([(app_of_generated(d), d, None) for d in found.values()])
     osw = tag(load_osworld(a.osworld_meta, a.examples_root))
-    pool_raw = load_pool(a.taskgen_glob, tr)
+    pool_raw = load_pool(a.pool_glob or a.taskgen_glob, tr)
     pool = tag(pool_raw)
     print(f"语料 {len(trn)} | OSWorld {len(osw)} | 候选池(去重、除训练) {len(pool)}")
     eras = Counter(e for *_x, e in pool)
