@@ -95,6 +95,14 @@
   是有用上下文。用户裁决:散文保留,nocap 仍是冠军,targeted-300 配方
   冻结(带散文 + no-cap)不变。四次训练尝试(cuDNN 显存 / NVLink×2 /
   坏节点 g018)换来这个负结果,轴彻底关闭。
+- **base 361 全量出分(08-21 午,basekeep+base50b+base261 并集,零重叠,
+  ==test_nogdrive)**:**31.67%**(114.33/361)。**proxy 分层差距巨大**:
+  非 proxy 312 题 **35.04%** vs proxy 直连 49 题 **10.20%** —— "在美国直连
+  就行"的假设基本不成立,49 题拖低总分 ~3.4pp(混杂:proxy 题也偏难/偏
+  multi_apps,未拆网络失败 vs 能力失败)。按域:multi_apps 15%(93 题,
+  最弱、最大)· calc 26% · chrome 30% · impress 32% · writer/vs_code 48% ·
+  gimp 54% · thunderbird 67%。基座口径 caveat:basekeep 半无权重存档。
+  nocap261 已于 12:02 自动接棒。
 - **散文机制解剖(08-21,`tools/eval_emit_compare.py`,100 题配对)**:
   ①训练期剥除在推理期是**彻底的**——nocapnp 100% 的步零散文(每步均值
   2 字符 vs nocap 145),末步上下文累计散文 61 vs **3810 字符(≈950 token)**;
