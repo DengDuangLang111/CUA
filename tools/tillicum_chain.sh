@@ -18,10 +18,24 @@ alive(){   # driver or runner for arm $1 still running
   pgrep -f "run_eval50_stock.sh $1\$" >/dev/null || \
   pgrep -f "run_multienv_qwen.*eval50-$1-" >/dev/null
 }
-complete(){  # newest result dir for arm $1 has all 50 scored
-  local d
+complete(){  # newest result dir for arm $1 has ALL ITS OWN tasks scored.
+  # The need is read from MODEL_BOUNDARY.json's tasks_file, because arms no
+  # longer share one panel size (50 / 100 / 261); the hardcoded 50 would have
+  # declared a 261-task arm complete at one fifth done on any chain restart.
+  local d need
   d=$(ls -dt $RES/*/eval50-$1-* 2>/dev/null | head -1)
-  [ -n "$d" ] && [ "$(find "$d" -name result.txt 2>/dev/null | wc -l)" -ge 50 ]
+  [ -n "$d" ] || return 1
+  need=$(python3 - "$d" <<'PYNEED' 2>/dev/null
+import json, sys
+try:
+    m = json.load(open(sys.argv[1] + "/MODEL_BOUNDARY.json"))
+    t = json.load(open(m["tasks_file"]))
+    print(sum(len(v) for v in t.values()))
+except Exception:
+    print(50)
+PYNEED
+)
+  [ "$(find "$d" -name result.txt 2>/dev/null | wc -l)" -ge "${need:-50}" ]
 }
 wait_for(){
   local a=$1 i
@@ -45,7 +59,7 @@ train_gate(){  # $1 arm, $2 job, $3 dir glob; up to 12h; returns 1 on timeout (c
 
 log "chain start (resume-safe)"
 PREV=bsstock
-for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 baseh1 nocapt0 img1 vlnocapnp nocapnp2 nocap50b base50b t3850b np1e6 nocapnp nocapnp238; do
+for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 baseh1 nocapt0 img1 vlnocapnp nocapnp2 nocap50b base50b t3850b np1e6 nocapnp base261; do
   if alive "$arm"; then
     log "adopt $arm: already in flight"
   elif complete "$arm"; then
@@ -78,4 +92,4 @@ for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 ba
   fi
   PREV=$arm
 done
-log "chain done (tail arm nocapnp238, the furthest no-prose checkpoint over the full 100; scancel eval4bn238 after)"
+log "chain done (tail arm base261: the base backbone over the remaining 261 of test_nogdrive, completing a 361 union with basekeep+base50b; scancel eval4bbo after)"
