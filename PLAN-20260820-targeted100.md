@@ -111,12 +111,15 @@
    gimp/layers 无 stdlib xcf 解析,主用 image-grade 代理(RGBA/尺寸),
    指令层要求 GUI 图层操作,配额小(3)。
 
-**配额(200 条,按 119 条去重缺口比例 ×1.68)**:
-multi **64**(export_convert 28 · install 10 · downloads 10 · extensions 8 ·
-git 4 · playback 4)· impress **42**(char_format 27 · theme_bg 12 ·
-para_layout 3)· calc **30**(sheet_ops 15 · pivot 8 · chart 7)·
-writer **20**(para_page_layout 13 · char_format 7)· vlc **20** ·
-os **8** · chrome **6** · vs_code **5**(install)· gimp **3** · tb **2**。
+**配额(300 条,2026-08-20 用户升量:"这些任务不是很好成功",按 119 条
+去重缺口比例 ×2.52)**:
+multi **96**(export_convert 42 · install 15 · downloads 15 · extensions 12 ·
+git 6 · playback 6)· impress **63**(char_format 40 · theme_bg 18 ·
+para_layout 5)· calc **45**(sheet_ops 22 · pivot 12 · chart 11)·
+writer **30**(para_page_layout 19 · char_format 11)· vlc **30** ·
+os **10** · chrome **8** · vs_code **8**(install)· gimp **5** · tb **5**。
+PPAPI 确认可用(08-20)。--focus 补丁已打在 datagenv12 工作区(未提交,
+diff 待用户批;dry-run 验证 focus 块落入 prompt)。
 
 **流程**:gen(gap-w1,4 shards)→ ship(prebuild/accept/scan)→ control →
 teacher rollout → 通过率复盘(<15% 的 cell 修任务不加量)→ 五道闸 build
