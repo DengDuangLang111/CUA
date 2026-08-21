@@ -49,6 +49,18 @@
   vlc/export 2。**池可补大格**:impress/char_format(16 题,池仅 1)、
   multi/export_convert(17 题教 1,池 16)、calc/sheet_ops(13 题教 1,池 1)、
   writer/para_page_layout(8 题教 1,池 3)、thunderbird/sort_filter(池 11)。
+- **池核选结果(08-20,`tools/pool_vet.py`,68 候选逐条过三闸)**:
+  真可用约 **25-30 条** —— multi/export_convert ~10-12(题材对口,checker 验
+  产物)、os/terminal 4(checker 直接验终端使用,最干净)、vlc ~6(配置类,
+  有 sed 旁路风险)、gimp/color_tone 2、impress 2-3、multi 杂项 3、calc
+  sheet_ops 1、writer 1。判废的典型:calc/char_format 池 1 条实为数值检查、
+  impress/para_layout 4 条里 2 条是网格 XML 配置、writer 3 条里 2 条是
+  "header" 伪命中、multi/web_navigation 6 条里 5 条是 price/order 伪命中。
+- **逆向选择发现(影响配额算术)**:池里有 rollout 历史的 10 条,9 条全挂
+  (TB 过滤类 0/5,invoice-chaser 0/2)——因为**当年 teacher 做成的任务都进
+  了训练集,留在池里的"有历史"任务全是失败者**。所以:①这 10 条的通过率
+  不能外推到整个池;②58 条无历史任务要先查是被 cull 掉的还是没被抽中出货
+  的(前者有质量问题);③TB 过滤格 teacher 0/5,按 p̂<15% 规则先修再说。
 - **选池任务的三道人工闸**(审计固化):①逐条过全文,不信格子计数;
   ②GUI 格必须核 checker 强制 GUI 产物(include_exclude 型 checker 会放过
   纯终端解法,筛出的"成功轨迹"可能全程不演示目标 GUI 动作);③配额按
