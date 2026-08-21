@@ -108,7 +108,12 @@ case "$ARM" in
   # a run finishes: it needs an endpoint at epoch >= 2.99, and today the best
   # on disk is v1 checkpoint-238 @ 2.36. If retried, exclude g021 (all three
   # jobs that touched it failed) and probably g014.
-  nocapnp)   SB=4b-nocapnp-stock;   JOB=eval4bnnp; RP=8041; MN=q38Bhqs2t-nocapnp-stock;   GRP=qwen35-4b-sft; PREV=base50b;   PJOB=eval4bbo ;;
+  # nocapnp: back on the chain 2026-08-20 after the fourth training attempt
+  # finally reached 3 epochs (v2 checkpoint-303, lr annealed to 0, token_acc
+  # 0.9027 against the champion's 0.8938). Runs the FULL 100 by user order.
+  # pick_ckpt spans v0/v1/v2 by epoch, so it resolves to the 3.00 endpoint and
+  # cannot pick up either of the two dead attempts' partial checkpoints.
+  nocapnp)   SB=4b-nocapnp-stock;   JOB=eval4bnnp; RP=8041; MN=q38Bhqs2t-nocapnp-stock;   GRP=qwen35-4b-sft; PREV=np1e6; PJOB=eval4bnp1; METAF="verified_eval100_nonproxy.json" ;;
   img1)      SB=4b-img1-stock;      JOB=eval4bim1; RP=8043; MN=q38Bhqs2t-img1-stock;      GRP=qwen35-4b-sft; PREV=nocapt0;   PJOB=eval4bnc;  XARGS="--image_max 1 --fold_size 1" ;;
   # vlnocapnp: VL x (nocap + no-prose) at lr3e-6 -- the VL line re-enters with
   # the no-prose recipe (user 08-19 night, appended after img1). Reads against
