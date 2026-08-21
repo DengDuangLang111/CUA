@@ -82,7 +82,54 @@
 8. 训练(参数冻结)→ dev100(已烧的 100)选型 → 新面板一次性报告
    (从剩余 213 非代理题冻结,**建议只冻 80,留 133 缓冲**——最后一块干净面板)
 
-## 应用配额草案(反驳审计+通过率出来后定稿)
+## 补丁设计(2026-08-20 晚,通读 taskgen 代码后;池线已按用户令关闭)
+
+**读码结论:补丁比预想小得多,fmt-w1 已把地基打好。**
+
+已有可直接复用(零新代码):
+- **生成模型就是 Claude**:`llm.py` 按模型名自动走 anthropic 协议,
+  `gen --model claude-opus-5` 即可;PPAPI 网关。**前提:PPAPI key 可用
+  (fmt-w1 上次就卡在这)**。
+- 定向机制:`--apps`(应用过滤)+ `--intents`(v12 新增)+ shards/waves +
+  `--spent-from`(补差额)+ 自家/公共 avoid 清单 + repair-before-reject。
+- v12 fmt-w1 已交付:`intent=restyle`("一个属性跨多个对象")、
+  `grade=pptx`(宿主 python-pptx 判 shape/slide 属性 —— **正中 impress
+  char_format 16 题 + theme_bg 7 题**)、`grade=image`(PIL 判 mode/尺寸,
+  RGBA 证透明 —— 正中 gimp 透明/变换)、prebuild 容器造 deck。
+
+需新增(小补丁,和 fmt-w1 动同三个文件 gen/taxonomy/prompts):
+1. **`--focus FILE`**:每 wave 一份技能清单注入 user prompt(与 own/ext
+   avoid 块同构),把缺口 cell 写成"每条 spec 必须落在这些操作里+配额"。
+   这是动作级(pivot/chart/layers/install)定向的唯一新机制。
+2. **prompt <grades> 加两份 probe 配方(不加新 grade)**:pivot/chart 用
+   .ods 目标 + VM 内 zipfile/ElementTree 解析 content.xml(data-pilot-table
+   / chart Object 的存在与属性;明示别用 xlsx,DataPilot 转存有损);
+   writer 格式类用 odt/docx XML 解析(v11 池任务已有成熟先例)。
+3. **taxonomy 一行**:restyle 的 INTENT_ARTIFACTS 加 text_document
+   (writer char_format 是 restyle 语义,host=writer,grade=probe)。
+4. 风险标注:install 类依赖 VM 网络与 sudo(可行但要 control 验证);
+   gimp/layers 无 stdlib xcf 解析,主用 image-grade 代理(RGBA/尺寸),
+   指令层要求 GUI 图层操作,配额小(3)。
+
+**配额(200 条,按 119 条去重缺口比例 ×1.68)**:
+multi **64**(export_convert 28 · install 10 · downloads 10 · extensions 8 ·
+git 4 · playback 4)· impress **42**(char_format 27 · theme_bg 12 ·
+para_layout 3)· calc **30**(sheet_ops 15 · pivot 8 · chart 7)·
+writer **20**(para_page_layout 13 · char_format 7)· vlc **20** ·
+os **8** · chrome **6** · vs_code **5**(install)· gimp **3** · tb **2**。
+
+**流程**:gen(gap-w1,4 shards)→ ship(prebuild/accept/scan)→ control →
+teacher rollout → 通过率复盘(<15% 的 cell 修任务不加量)→ 五道闸 build
+(`--val-ratio 0.05`)→ 追加成 DS4。**写代码前 diff 给用户过目。**
+
+## 仓库版本状态(2026-08-20 整理)
+
+- ostg:main == v11.1(a1707aa9,同步✓);datagenv12 工作区干净(c84145a6);
+  v11.1 树有两个他人脏文件(sft/corpusaudit.py 改动、sft/tools/
+  ship_dataset.sh 未跟踪),归属另一会话,不动。
+- CUA:全部落 main 并已推送;本计划文档为 targeted-200 campaign 唯一定都点。
+
+## 应用配额草案(已被上节 200 条配额取代,存档)
 
 multi 20-25 · Calc ~20(chart/pivot/sheet_ops 为主)· Impress ~15(char_format
 16|0 是最大单格)· GIMP ~10(layers/color_tone)· Writer ~10(char_format 6|0、
