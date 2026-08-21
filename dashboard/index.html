@@ -113,6 +113,13 @@
     .shell{grid-template-columns:1fr;}
     aside{position:static; height:auto; border-right:none; border-bottom:1px solid var(--line); padding-bottom:10px;}
   }
+.evbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 14px}
+.evq{flex:1 1 260px;min-width:200px;padding:7px 10px;border:1px solid var(--line);
+     border-radius:7px;background:var(--bg);color:inherit;font:inherit}
+.evf{display:flex;gap:5px;align-items:center;font-size:12px;color:var(--muted)}
+.evf select{padding:5px 7px;border:1px solid var(--line);border-radius:6px;
+            background:var(--bg);color:inherit;font:inherit;font-size:12px}
+th.sortable:hover{text-decoration:underline}
 </style>
 <div class="shell">
 <aside id="nav"></aside>
@@ -289,13 +296,116 @@ const ev50 = ()=> (window.SFT && window.SFT.eval50) || {panel:[],arms:[]};
 const ev50Best = ()=> (ev50().arms||[]).filter(a=>a.group!=="reference"
                                               && (a.panel_n||50)<=50)
                                        .reduce((m,a)=>Math.max(m,a.passed),0);
-function ev50Matrix(){
+/* Filter/sort state for the eval-50 view. Lives outside render() because
+   render() rebuilds #content wholesale; the controls write here and repaint
+   only #ev50out, so typing in the search box never loses focus. */
+const EV = {q:"", sort:"mean", dir:-1, f:{}};
+const EVCOL = {
+  arm:    a=>String(a.label||a.key||"").toLowerCase(),
+  corpus: a=>((a.facets||{}).corpus||[]).join(","),
+  lr:     a=>Number((a.facets||{}).lr ?? -1),
+  ep:     a=>Number((a.facets||{}).ep ?? -1),
+  len:    a=>Number((a.facets||{}).len ?? -1),
+  tuner:  a=>String((a.facets||{}).tuner||""),
+  win:    a=>String((a.facets||{}).window||""),
+  temp:   a=>Number((a.facets||{}).temp ?? -1),
+  set:    a=>String((a.facets||{}).taskset||""),
+  scored: a=>Number(a.scored||0),
+  mean:   a=>(a.mean==null?-1:a.mean),
+};
+/* Display only. The option VALUE and the filter comparison both stay on the
+   raw String(v), so formatting can never desync the two. */
+const evFmt = (k,v)=> (k==="lr" && v!=="" && isFinite(+v)) ? Number(v).toExponential(0) : v;
+const EVFACETS = [["corpus","dataset"],["lr","lr"],["ep","epochs"],
+                  ["tuner","tuner"],["window","eval window"],["taskset","task set"]];
+function evVals(k){                       /* distinct values, from the data */
+  const out = new Set();
+  (ev50().arms||[]).filter(a=>(a.panel_n||50)<=100).forEach(a=>{
+    const v = (a.facets||{})[k];
+    if (Array.isArray(v)) v.forEach(x=>out.add(String(x)));
+    else if (v!=null && v!=="") out.add(String(v));
+  });
+  return [...out].sort((x,y)=>{const nx=+x, ny=+y;
+    return (isFinite(nx)&&isFinite(ny)) ? nx-ny : x.localeCompare(y);});
+}
+function evRows(){
+  const A = (ev50().arms||[]).filter(a=>(a.panel_n||50)<=100);
+  const q = (EV.q||"").trim().toLowerCase();
+  const rows = A.filter(a=>{
+    const f = a.facets||{};
+    for (const k in EV.f){
+      const want = EV.f[k]; if (!want) continue;
+      const have = Array.isArray(f[k]) ? f[k].map(String) : [String(f[k]??"")];
+      if (!have.includes(String(want))) return false;
+    }
+    if (!q) return true;
+    /* the haystack deliberately includes the prose note: an arm is often
+       looked for by what it was testing, not by its parameters */
+    const hay = [a.key, a.label, a.note, (f.corpus||[]).join(" "), f.lr, f.ep,
+                 f.len, f.tuner, f.base, f.accum, f.window, f.temp, f.taskset,
+                 f.loss_scale, f.ckpt].join(" ").toLowerCase();
+    return q.split(/\s+/).every(t=>hay.includes(t));
+  });
+  const get = EVCOL[EV.sort] || EVCOL.mean;
+  return rows.sort((x,y)=>{
+    const a=get(x), b=get(y);
+    const c = (typeof a==="number"&&typeof b==="number") ? a-b : String(a).localeCompare(String(b));
+    return c*EV.dir || EVCOL.arm(x).localeCompare(EVCOL.arm(y));
+  });
+}
+function evSort(c){ if(EV.sort===c) EV.dir=-EV.dir; else {EV.sort=c; EV.dir=(c==="arm"||c==="corpus"||c==="tuner")?1:-1;} ev50Fill(); }
+function evSet(k,v){ if(v) EV.f[k]=v; else delete EV.f[k]; ev50Fill(); }
+function evQ(v){ EV.q=v; ev50Fill(); }
+function evClear(){ EV.q=""; EV.f={}; const b=document.getElementById("evq"); if(b) b.value=""; ev50Fill(); }
+function ev50Controls(){
+  const sel = EVFACETS.map(([k,lbl])=>{
+    const vs = evVals(k); if(!vs.length) return "";
+    return `<label class="evf">${lbl}
+      <select onchange="evSet('${k}',this.value)">
+        <option value="">any</option>
+        ${vs.map(v=>`<option value="${esc(v)}" ${EV.f[k]===v?"selected":""}>${esc(evFmt(k,v))}</option>`).join("")}
+      </select></label>`;}).join("");
+  return `<div class="evbar">
+    <input id="evq" class="evq" type="search" placeholder="search arm, note, corpus, any parameter…"
+           value="${esc(EV.q)}" oninput="evQ(this.value)">
+    ${sel}<button class="btn ghost" onclick="evClear()">clear</button>
+    <span class="note" id="evcount" style="margin:0"></span></div>`;
+}
+function ev50Summary(rows){
+  const h=(c,lbl,attr)=>[`${lbl}${EV.sort===c?(EV.dir>0?" ▲":" ▼"):""}`,
+                         `${attr||""} class="${attr&&attr.includes('class=')?'':'sortable'}" onclick="evSort('${c}')" style="cursor:pointer"`];
+  const heads=[h("arm","arm"),h("corpus","dataset"),h("lr","lr"),h("ep","ep"),
+               h("len","max_len"),h("tuner","tuner"),h("win","eval win"),
+               h("temp","temp"),h("set","tasks"),h("scored","scored"),h("mean","score")];
+  const F=a=>a.facets||{};
+  const body=rows.map(a=>{const f=F(a); const unk=f.known===false;
+    return `<td><b>${esc(a.label)}</b><div class="why">${esc(a.key)}${unk?" · params unknown (pre-MODEL_BOUNDARY arm)":""}</div></td>`
+      +`<td>${esc((f.corpus||[]).join(", ")||"—")}</td>`
+      +`<td class="num">${f.lr==null?"—":Number(f.lr).toExponential(0)}</td>`
+      +`<td class="num">${f.ep==null?"—":f.ep}</td>`
+      +`<td class="num">${f.len==null?"—":f.len}</td>`
+      +`<td>${esc(f.tuner||"—")}</td>`
+      +`<td class="num">${esc(f.window||"—")}</td>`
+      +`<td class="num">${f.temp==null?"—":f.temp}</td>`
+      +`<td class="num">${esc(f.taskset||"—")}</td>`
+      +`<td class="num">${a.passed}/${a.scored}${a.panel_n&&a.scored<a.panel_n?`<small class="why"> of ${a.panel_n}</small>`:""}</td>`
+      +`<td class="num hl">${a.mean==null?"—":(a.mean*100).toFixed(2)+"%"}${a.panel_n&&a.scored<a.panel_n&&a.mean_scored!=null?`<small class="why"> now ${(a.mean_scored*100).toFixed(0)}%</small>`:""}</td>`;});
+  return tbl(heads,body);
+}
+function ev50Fill(){
+  const el=document.getElementById("ev50out"); if(!el) return;
+  const rows=evRows();
+  el.innerHTML = ev50Summary(rows) + `<div class="seclabel">Task × arm — same rows, one column per task of the frozen 100</div>` + ev50Matrix(rows);
+  const c=document.getElementById("evcount");
+  if(c) c.textContent = `${rows.length} of ${(ev50().arms||[]).filter(a=>(a.panel_n||50)<=100).length} arms`;
+}
+function ev50Matrix(picked){
   const E = ev50(), P = E.panel||[];
-  /* Rows whose panel is bigger than these columns (the 261/361 arms) live on
-     the OSWorld-361 view instead: this table's columns ARE the frozen 100, so
-     such a row could only ever show 261 empty cells. */
-  const A = (E.arms||[]).filter(a=>(a.panel_n||50)<=100);
-  if (!A.length) return `<p class="note">waiting for the first eval-50 arm…</p>`;
+  /* Rows come from evRows(): already filtered to panels this table has columns
+     for (the 261/361 arms live on the OSWorld-361 view) and to whatever the
+     controls select, so filtering the summary shrinks the matrix with it. */
+  const A = picked || [];
+  if (!A.length) return `<p class="note">no arm matches the current filter.</p>`;
   /* trajectory publication is owned by the OTHER daemon (status.json), so a
      cell becomes a link exactly when that run's row says traj_published. */
   const pub = new Set(((window.LIVE&&window.LIVE.runs)||[])
@@ -680,8 +790,15 @@ const VIEWS = [
  head:{t:"Verified eval-50 — the arms on the real benchmark", pills:[P.good("live"),P.dim("frozen 50-task sample · non-proxy · ms50"),P.warn("arms comparable only under the identical config")],
    lede:"The eval matrix that decides the arms: a frozen, domain-stratified 50-task sample of OSWorld-Verified (seed 20260815, proxy tasks excluded), every arm run by the same script — ms50, sleep 3, temp 1.0 / top_p 0.95 (client) with top_k 20 riding the serve override, history 100, image_max 20, no OSTG_* env vars. Score = each task's own evaluator. Cells open the step player once that run's trajectories are published."},
  design:()=>{ const S=window.SFT; return `
-  <div class="seclabel">Task × arm — the 50 columns are the frozen sample, domain-ordered${S&&S.updated?` · as of ${S.updated}`:""}</div>
-  ${ev50Matrix()}
+  <div class="seclabel">Arms${S&&S.updated?` · as of ${S.updated}`:""} — sort by any column, filter by dataset or training parameter</div>
+  ${ev50Controls()}
+  <div id="ev50out"></div>
+  <p class="note"><b>Where these parameters come from.</b> lr, epochs, max_len, tuner and dataset are read
+  out of the served checkpoint's own ms-swift <code>args.json</code> — the config that actually produced
+  the weights, not a label retyped by hand. Eval window, temperature and task set come from the runner's
+  <code>args.json</code> in the result directory. An arm marked <i>params unknown</i> predates
+  <code>MODEL_BOUNDARY.json</code>, so its served weights were never recorded; it is shown with blank
+  parameters rather than dropped, because a missing row is invisible and a blank one is not.</p>
   <p class="note">Cell = pass (✓) or fail (·) with steps taken; tooltip carries distinct-action count,
   longest repeat and whether the run emitted <code>terminate</code>. An arm still filling in is a row
   with — cells: the eval runs one VM alongside the rollout, roughly a task every 8 minutes.
@@ -965,6 +1082,7 @@ function render(){
       <div class="tabbody">${curTab==='design'||!hasTraj ? v.design() : trajBody(v.traj)}</div>`;
   }
   document.getElementById("content").innerHTML = html;
+  ev50Fill();          /* no-op unless the eval-50 view is the one on screen */
   renderFresh();
 }
 /* eval-50 arms whose run has published viewers (publication state lives in

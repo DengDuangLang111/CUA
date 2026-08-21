@@ -101,6 +101,36 @@ the source run per task. Hardlinks on purpose — no extra disk, and it cannot
 drift from the run it was judged in. Its 9/9 is selection, not a score, and the
 page says so next to the table. Rebuild it if the panel ever changes.
 
+### 筛选用的训练参数从哪来(2026-08-21)
+
+eval-50 视图可以按**数据集**和**训练参数**筛选、按任意列排序。那些参数不是手抄的
+标签,是**被服务的那个 checkpoint 自己的 ms-swift `args.json`** —— 真正产出这份权重
+的配置。标签会漂,`args.json` 不会。
+
+```
+Tillicum  <checkpoint>/args.json          ← 权威:lr / epochs / max_length /
+   │                                         tuner / dataset 路径 / loss_scale
+   │  refresh_train_facets.sh(按需跑,一次 ssh 抓全量)
+   ▼
+osworld-verified-control/train_facets.json ← WSL 本地缓存,按 checkpoint 路径索引
+   │  sft_dash.py 的 arm_facets() 纯本地读
+   ▼
+sft.json 的 eval50.arms[].facets           ← 页面消费
+```
+
+**daemon 循环里绝不能有 ssh** —— 一个卡住的 control socket 会拖垮每一次刷新。所以
+取数(ssh)和消费(本地读)必须分开,这是上面这条链存在的唯一理由。
+
+- **新臂第一次出结果后,跑一次 `refresh_train_facets.sh`**(它从各臂的
+  `MODEL_BOUNDARY.json` 收集 checkpoint 路径,只抓缓存里没有的)。
+- 忘了跑不会静默出错:缓存里没有的臂被标成 `known:false`,页面显示
+  "params unknown" 并照常列出。**露出一个没参数的行,好过少一行。**
+- 早于 `MODEL_BOUNDARY.json` 约定的老臂(basekeep、bskeep、richstock 等)永远是
+  unknown —— 它们的服务权重当时就没记录,这是事实,不要去猜。
+
+评测侧的参数(image_max/fold_size、temperature、task set)来自结果目录自己的
+`args.json`,一直是本地的,不需要缓存。
+
 ### Why two daemons
 
 `sft_dash_daemon.sh` works in a **second clone** (`cua-dash-sft`), sparse-checked
