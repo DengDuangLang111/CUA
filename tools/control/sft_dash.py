@@ -216,6 +216,12 @@ EVAL50_ARMS = {
     "base50b":   ("stock 4B @ HELD-OUT 50 · stock (no-split)", "reference",
                   "the untrained base on the same held-out 50, so the"
                   " champion-vs-base margin can be read out of sample"),
+    "nocapnp238":("no-prose @ e2.36 (furthest) · ALL 100", "sft",
+                  "the furthest checkpoint the no-prose full fine-tune ever"
+                  " reached before two hardware failures: epoch 2.356 with the"
+                  " learning rate already down to 4.03e-7, i.e. 87% of the"
+                  " anneal done -- a much closer stand-in for the 3-epoch"
+                  " endpoint than the 55.81 salvage at epoch 2.00"),
     "np1e6":     ("no-prose @ lr 1e-6 · stock (no-split)", "sft",
                   "the nocapnp recipe with lr 3e-6 -> 1e-6 as the only"
                   " variable (cumulative dose 1.5e-4 vs the champion's"
@@ -396,7 +402,7 @@ HELDOUT_PAIRS = {"nocap50b": "nocap", "base50b": "basekeep", "t3850b": "t38"}
 
 # Arms not scored on the default (seen) panel.
 ARM_PANEL = {"nocap50b": "heldout", "base50b": "heldout", "t3850b": "heldout",
-             "np1e6": "all100"}
+             "np1e6": "all100", "nocapnp238": "all100"}
 
 
 def eval50():

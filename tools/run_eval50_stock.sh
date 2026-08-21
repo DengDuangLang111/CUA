@@ -136,7 +136,13 @@ case "$ARM" in
   # np1e6 runs the FULL 100 in one pass (user order 08-20) rather than the seen
   # half: it is the first arm whose weights postdate the eval100 decision, so
   # there is no reason to score it on the selection panel alone. ~4h, not ~2h.
-  np1e6)     SB=4b-np1e6-stock;      JOB=eval4bnp1; RP=8047; MN=q38Bhqs2t-np1e6-stock;     GRP=qwen35-4b-sft;  PREV=t3850b;    PJOB=eval38; METAF="verified_eval100_nonproxy.json" ;;  # tail: scancel eval4bnp1 after
+  np1e6)     SB=4b-np1e6-stock;      JOB=eval4bnp1; RP=8047; MN=q38Bhqs2t-np1e6-stock;     GRP=qwen35-4b-sft;  PREV=t3850b;    PJOB=eval38; METAF="verified_eval100_nonproxy.json" ;;
+  # nocapnp238: the furthest checkpoint the no-prose full-FT run ever reached
+  # (v1 checkpoint-238, epoch 2.356, anneal 87% complete) over the FULL 100.
+  # It is the closest available stand-in for the 3-epoch endpoint while the
+  # resume queues, and it stays useful afterwards as the 2.36-vs-3.00 pair.
+  # Serve pins the exact v1 path; the resume writes v2 into the same dir.
+  nocapnp238) SB=4b-nocapnp238-stock; JOB=eval4bn238; RP=8049; MN=q38Bhqs2t-nocapnp-e238-stock; GRP=qwen35-4b-sft; PREV=np1e6; PJOB=eval4bnp1; METAF="verified_eval100_nonproxy.json" ;;  # tail: scancel eval4bn238 after
   # vlsft: Qwen3-VL-4B-Thinking x r5vl corpus, lr3e-6 3ep (chain gates on training done)
   vlsft) SB=vl-r5vl-stock; JOB=eval4bvls; RP=8035; MN=q3vl-r5vl-lr3e6-stock; GRP=qwen3vl-4b-sft; PREV=nocap; PJOB=eval4bnc; DIALECT=json ;;  # rerun right after nocap; first attempt burned on the XML/json dialect mismatch
   # img3: kE's exact recipe with the training screenshot window 20->3; STANDARD 20-image
