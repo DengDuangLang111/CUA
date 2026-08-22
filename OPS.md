@@ -10,7 +10,7 @@
 
 ```
  M desktop_env/evaluators/getters/file.py        自定义 get_local_file(见下)
- M desktop_env/evaluators/metrics/__init__.py    导入 18 个自定义 metric
+ M desktop_env/evaluators/metrics/__init__.py    导入 20 个自定义 metric;**2026-08-22 补回 9 个被误删的上游导入** —— 加 generated_tasks 块时同一个 diff 里删掉了它们,导致 361 里 8 题在 env.reset() 就崩、全臂强制 0 分(清单与影响面 sft/FAILURE_ANATOMY.md §9)
  M desktop_env/evaluators/metrics/vscode.py      改了官方 check_json_settings 行为
  M mm_agents/qwen/actions.py                     normalize_inline_parameters(环境变量门控,默认关)+ 日志;**空解析 fallback 已于 08-14 恢复上游 DONE**(可比性优先,旧文误记为 WAIT);08-18 起 OSTG_TYPE_NO_SPLIT=1 时多行 type 一条 typewrite 直发(默认 0=上游逐行拆,验收报告 sft/FAILURE_ANATOMY.md;**kD 及之前所有臂 = 拆行语义,kC 起 = 合并语义**);08-18 深夜再加 **OSTG_PARAM_DIALECT=json**:把 Qwen3-VL 原生 Hermes JSON tool_call 归一化成本模块既有的嵌套 XML 形式(与既有 `inline` 方言同构),**默认不设=行为逐字节不变**(闸A 全库 6,385 条回放 100% 一致;闸B JSON 与 XML 产生相同 pyautogui 100%;灵敏度对照能抓错)。目的:VL backbone 对照实验复用全部动作语义,避免重写时丢失 terminate(failure)。闸的 pipeline 命令 `ostg.sft.vlcheck dialect`
  M mm_agents/qwen/main.py                        加 preserve_thinking,透传 chat_template_kwargs
@@ -34,6 +34,12 @@
 > 两份 chat template 都不引用这个变量,而 stock 模板本来就保留历史思考。
 > 详见 `sft/RESULTS.md` §5.7。同名的 **swift 训练参数不是空转的**。
 **"我跑的是纯净官方 OSWorld"这个说法不成立**,报告官方分数时这 8 处都要披露。
+
+> **2026-08-22 追加,披露时必须带上**:上表 `metrics/__init__.py` 那一行在
+> 2026-08-18 到 2026-08-22 之间是**有害的**,不只是"加了自定义 metric"。它删掉了
+> 九个上游导入,使 **361 里 8 题从未真正评测过**(全臂 0 分,含教师)。已补回,
+> 但**在此之前产出的所有 361 / 留出 50 数字都带这个折损**:全 361 −2.2pp、
+> 留出 50 −4.0pp、multi_apps −5.4pp。补跑范围待定,未补跑前引用这些数字要标注。
 
 **对官方 361 题结果的影响已逐一验证(2026-08-13 下午)**:
 - 评分通路三处全部无效——`vscode.py` 的 `defaults` 是任务 JSON 主动传参才激活,

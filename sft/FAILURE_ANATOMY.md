@@ -543,3 +543,81 @@ think **不会**提升其 eval-50 分数。这同时降低了 §8.4 末尾那个
 强制注入 `</think>` 让模型收尾,需改客户端两阶段生成。另注:`reasoning_effort`
 三档(xhigh/medium/low)是 **Qwen3.8 教师模板独有**,学生 Qwen3.5-4B 的基座模板与
 SFT checkpoint 模板均 **0 处命中**,不能拿它当现成开关。
+
+
+## 9 8 道题从来不是模型没做出来:我们自己的 fork 把 evaluator 导入删了(2026-08-22)
+
+**361 题里有 8 题在 `env.reset()` 阶段就抛异常,agent 一步都没被调用过。**
+每个臂都是同样的 8 题、同样的 0 分,教师也不例外。
+
+```
+module 'desktop_env.evaluators.metrics' has no attribute 'compare_pptx_files_tolerant'
+  → lib_run_single.run_single_example → env.reset(task_config) → _set_task_info
+```
+
+`traj.jsonl` 只有一行 `{"Error": ...}`,`result.txt` 是 `0.0`,`runtime.log` 是空的
+—— 这就是 §5.23 里那 2 条"0 步、`last_action=null`"的真面目,而它们只是全部 8 题
+中落在留出 50 里的那两道。
+
+### 根因:加 `generated_tasks` 模块时顺手删掉了上游导入
+
+函数**全都在**,`slides.py` / `docs.py` / `chrome.py` / `others.py` / `table.py` 一个不缺,
+而且**这几个文件我们一行都没改过**。坏的是 `metrics/__init__.py` 的导入清单:
+纯净版 worktree 里九个名字全部导出,我们那份把它们删了。
+
+同一次改动加进了 `from .generated_tasks import (...)` 那 20 个自定义 metric ——
+**删除和新增在同一个 diff 里**,所以看上去像是"整理导入",没人觉得少了什么。
+
+### 权威受影响清单(用任务 JSON 的 `evaluator.func` 反查,不是靠错误日志凑)
+
+| task | 域 | 缺的函数 | 切片 |
+|---|---|---|---|
+| `a434992a` | libreoffice_impress | `compare_pptx_files_tolerant` | **留出 50** |
+| `a669ef01` | libreoffice_impress | `check_continuation_line_indent_no_bullet` | **留出 50** |
+| `4ed5abd0` | libreoffice_impress | `compare_pptx_files_robust` | 其余 261 |
+| `185f29bd` | multi_apps | `compare_pdf_form_fields` | 其余 261 |
+| `236833a3` | multi_apps | `compare_docx_paper_records` | 其余 261 |
+| `2c1ebcd7` | multi_apps | `compare_references_gain` | 其余 261 |
+| `42d25c08` | multi_apps | `compare_epub_semantic` | 其余 261 |
+| `67890eb6` | multi_apps | `compare_table_records` | 其余 261 |
+
+第 9 题 `6f4073b8`(multi_apps,`compare_conference_city_in_order`)**不受影响**
+—— 那个名字碰巧还在导出里。别把它算进补跑清单。
+
+### 影响面
+
+| 口径 | 结构性归零 | 折损上限 |
+|---|---|---|
+| 全 361 | 8 题 | **2.2pp** |
+| 留出 50(教师、base9b、np1e6、nocapnp 都在这个面板上) | 2 题 | **4.0pp** |
+| 已见 50 | 0 题 | 0 |
+| **multi_apps(93 题)** | **5 题** | **5.4pp** |
+
+**两条要点**:
+
+1. **所有臂同等受害,所以臂间差、师生差都不受影响**,受影响的只有绝对值。
+   nocap 的 47.00% 真实上限是 49.2%,教师留出 50 的 68.00 上限是 72.0。
+2. **§5.20 说 multi_apps 最弱要打个折**:它 93 题里有 5 题压根没跑,占 5.4pp,
+   是所有域里被削得最狠的。multi_apps 的 35.3% 至少有一部分是记账问题而非能力问题。
+
+### 已修(2026-08-22),但不追溯
+
+`metrics/__init__.py` 补回九个导入,纯增量,备份在 `__init__.py.bak-before-restore-imports`。
+用 runner 自己的 `.venv/bin/python` 验过:整包导入成功、九个名字全部可解析、
+抽查八个原有导出未被破坏。
+
+**不追溯已有结果**:evaluator 缺失是确定性的,重跑才能拿到真分数,补跑哪些由用户决定。
+在补跑之前,任何引用 47.00 / 68.00 / multi_apps 35.3% 的地方都带着这 2.2 / 4.0 / 5.4pp
+的结构性折损。
+
+**正在跑的 eval 不受影响也不受益**:runner 是长驻 worker(5 个进程在 run 开始时
+一次性起好),Python 已经把 metrics 模块加载进内存,改文件不会热更 —— 所以
+nocapms100 那轮里 `a434992a` / `a669ef01` 仍然是崩的,而 a1/a2/a3/a5v 起新进程时
+会拿到修好的版本。**这本身就是一处口径差,补跑决策要把它算进去。**
+
+### 归类
+
+这是 `sft/DATA_PIPELINE.md` §9 的第 9 例,而且是最贵的一例:**删除与新增在同一个
+diff 里,于是"少了什么"被"多了什么"盖住**。断言该放在哪很清楚 —— 任务 JSON 里
+出现的每一个 `evaluator.func` 都应该能在 `metrics` 里 `getattr` 到,这是**跑之前
+就能全量静态检查**的,不需要等某一题崩。
