@@ -28,7 +28,7 @@ Wrapper strings are exact (`history.wrap_tool_response`,
 
 | knob | value | consequence |
 |---|---|---|
-| `history_n` | 100 | `start_step` is always 1 at ms100 — history never truncates, "Previous actions" is always `None` |
+| `history_n` | 100 | `start_step` is always 1 — history never truncates, "Previous actions" is always `None`. Measured activation threshold: the prose action list first appears at `total_steps >= history_n + 2` = 102, so at `max_steps 50` it never does (verified 2026-08-19 across all 100 cached payloads: `{'None': 100}`) |
 | `image_max` | 20 | at most 20 real screenshots in context |
 | `fold_size` | 10 | past 20 screenshots, the oldest 10 (then 20, 30…) collapse to the text `This screenshot has been collapsed.` inside their tool_response — the images drop out |
 
@@ -49,11 +49,50 @@ on which step you are building — see §6.
 - the client NEVER strips `<think>` from history (`ensure_empty_think_prefix`
   only prepends an empty block when one is missing)
 - the campaign sends `chat_template_kwargs={"enable_thinking": true}` — **no
-  `preserve_thinking` key** — and the server template strips `<think>` from
-  every assistant turn at/before the last user message (verified in
-  `chat_template.jinja` on the serving node)
-- ⇒ render history through the model's own chat template with the same
-  kwargs; keep the full `<think>` only on the final (target) turn
+  `preserve_thinking` key** — and **on this harness's message shape the server
+  template does NOT strip history `<think>`**. The template's last-query rule
+  (`loop.index0 > ns.last_query_index`) would strip it, but the backward scan
+  that computes `last_query_index` skips user turns wrapped in
+  `<tool_response>`, and `history.py:27-32,55-72` wraps every non-first user
+  turn — so the index is pinned at 1 and the keep branch fires for every
+  historical assistant turn. On generic multi-turn chat the same template DOES
+  strip: that is a real measurement taken on hand-made messages, and it is what
+  the old version of this bullet reported as if it applied to us.
+- ⇒ render history through the model's own chat template with the same kwargs
+  (never hand-strip — that duplicates template logic and WILL drift); the full
+  `<think>` survives on history turns AND on the target turn
+- **evaluation-side `preserve_thinking`/`enable_thinking` are no-ops** (the
+  jinja has no such variable); the identically-named **training-side** ms-swift
+  flag is real and does strip history think in swift's own encoder
+  (`template/base.py:1254-1266`). Same name, different layer — see
+  `sft/RESULTS.md` §5.7
+
+- **the server strips think before we ever see it** — the eval server runs
+  `--reasoning-parser qwen3`, so `content` arrives WITHOUT think;
+  `client.py:merge_reasoning_content` splices `reasoning_content` back into
+  `<think>…</think>\n\n` and `main.py:183` stores THAT verbatim. 786/786
+  responses of the running eval match the splice format exactly. This bridge
+  has failed once before (official-361: 7,906 steps, 0 `<think>`) — both
+  directions of the field are explained in `RUNBOOK.md` "Qwen3.8's chat
+  template, read at source"; serve-side flags live in `OPS.md` §4
+- ⚠️ **this all hangs on two string boundaries.** The template keeps history
+  think only because `content.startswith("<tool_response>") and
+  content.endswith("</tool_response>")` holds for every non-first user turn.
+  Append one stray character to the wrapper and 50 think blocks vanish, the
+  prompt drops 88% (61,850 → 7,132 tokens), and **nothing warns you** — the
+  failure is indistinguishable from normal operation. Also: an EMPTY think
+  block is dropped whole by the template (`:68`), so a merge failure would
+  shrink the context silently too. Before touching `wrap_tool_response`, the
+  observation format, or anything that adds a prefix/suffix inside the
+  wrapper, read `sft/RESULTS.md` §5.7
+
+> Verified 2026-08-19 by three independent routes (live `/render` on the
+> running eval server, offline `apply_chat_template` on two tokenizers, and a
+> third pass that pulled the deployed jinja and the vllm launch command), each
+> with its own sensitivity control. Numbers, probes and the deployed template
+> excerpt: `sft/RESULTS.md` §5.7. The mechanism was first recorded there on
+> 2026-08-18; THIS section was not updated then, and it misled two sessions on
+> 2026-08-19 before the re-measurement.
 
 ## 5 Free verification source
 
@@ -63,6 +102,15 @@ The directory is shared by all concurrent envs and keyed only by step index,
 so files overwrite each other: it is a rolling sample of real payloads, not a
 per-task archive. Sufficient to byte-diff the builder's rendering; not
 sufficient to reconstruct a specific task's context.
+
+Two traps when reading it (2026-08-19):
+- **stale files from older runs sit next to live ones.** On 2026-08-19 the
+  directory held 100 files of which only `step_0..49` were from the running
+  eval; `step_50..99` were left over from a 2026-08-14 run. Always filter by
+  mtime before aggregating, or you will mix two experiments.
+- **adjacent `step_N` files come from different tasks** (3 env workers share
+  the directory, keyed only by step index), so they cannot be read as one
+  trajectory. For per-trajectory truth use `traj.jsonl` under `result_dir`.
 
 ## 6 Consequences for the builder
 
