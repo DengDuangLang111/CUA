@@ -776,6 +776,13 @@ poisoned 目录,不删);②隔离目录命名**不能匹配** driver 的
 结果目录认走,已改 `poisoned-eval-...`);③墙钟回 4h;④driver 重启后
 凭 skip-scored 语义补跑。
 
+**同夜续集(9B 首飞,08-22 凌晨)**:复制 serve 脚本时一条 sed 把 vLLM
+端口改到 8025,验证时 `diff | head -12` 恰好截掉了端口那个 hunk,误判
+"sed 没生效"——vLLM 绑 8025、隧道指 8023,两侧各自"正常"。排障链:
+vLLM 日志 startup complete → 隧道日志 connection refused → 对质节点一致
+→ 读 sbatch 原文才见 8025。**规矩:验证 diff/日志必须完整读或按关键词
+grep,禁止 head 截断当全貌**(本项目第三次栽在"读了个开头就下结论")。
+
 **规矩**:
 1. **长臂宁可多滚墙,不加长墙钟**——排队延迟的期望损失远大于滚墙开销;
 2. 监控必须盯 **"runner 活 + serve 不在 RUNNING"** 这个组合态(已加
