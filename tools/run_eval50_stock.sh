@@ -190,10 +190,19 @@ case "$ARM" in
   # three -- its epoch-3 checkpoint does not exist (save_steps was computed
   # for the unsplit corpus; 97 steps/epoch is prime) -- so it never sits in a
   # same-epoch comparison row with the other three.
-  a3)  SB=img10-a3;  JOB=eval4ba3; RP=8053; MN=img10-hrm-stock;  GRP=qwen35-4b-sft; PREV=r5lorah; PJOB=eval4br5l; METAF="verified_eval100_nonproxy.json" ;;
+  a3)  SB=img10-a3;  JOB=eval4ba3; RP=8053; MN=img10-hrm-stock;  GRP=qwen35-4b-sft; PREV=kGh;     PJOB=eval4bnp;  METAF="verified_eval100_nonproxy.json" ;;  # 08-22: r5lorah pulled by user order, a3 follows kGh directly
   a1)  SB=img10-a1;  JOB=eval4ba1; RP=8051; MN=img10-4b-stock;   GRP=qwen35-4b-sft; PREV=a3;      PJOB=eval4ba3;  METAF="verified_eval100_nonproxy.json" ;;
   a2)  SB=img10-a2;  JOB=eval4ba2; RP=8052; MN=img10-9b-stock;   GRP=qwen35-9b-sft; PREV=a1;      PJOB=eval4ba1;  METAF="verified_eval100_nonproxy.json" ;;
-  a5v) SB=img10-a5v; JOB=eval4ba5; RP=8054; MN=img10-ep5v-stock; GRP=qwen35-4b-sft; PREV=a2;      PJOB=eval4ba2;  METAF="verified_eval100_nonproxy.json" ;;  # 08-20 user order: immediately after nocap50b, so the eval100 paired comparison completes back to back instead of straddling another arm
+  # a6v replaces a5v (user order 08-22): a5v trained five epochs with
+  # save_steps computed for the wrong corpus size, so every checkpoint sits
+  # just past an epoch-boundary memorization jump and the endpoint is the
+  # WORST eval_loss on the curve; its checkpoints stay on disk as the
+  # "five epochs overtrains" evidence. a6v is the same recipe at two epochs
+  # with dense saves (every 17 of 194 steps), and -- a project first -- its
+  # serving checkpoint is CHOSEN BY VALIDATION LOSS, read from a6v_pick.txt
+  # which gets written when the curve is final; the serve script refuses to
+  # start while the pick is missing.
+  a6v) SB=img10-a6v; JOB=eval4ba6; RP=8054; MN=img10-ep2v-stock; GRP=qwen35-4b-sft; PREV=a2;      PJOB=eval4ba2;  METAF="verified_eval100_nonproxy.json" ;;  # 08-20 user order: immediately after nocap50b, so the eval100 paired comparison completes back to back instead of straddling another arm
   # t3850b: the 27B teacher on the held-out half, completing the eval100 final
   # as the three-way (champion / base / teacher) pre-registered on the seen
   # half. Same serve as t38 (1 GPU, TP1), same sampling protocol.
