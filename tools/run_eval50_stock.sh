@@ -166,7 +166,7 @@ case "$ARM" in
   # the full-FT sign flip (-5pp) cited in RESULTS.md hangs on it. Paired or
   # meaningless. Weights verified against the two arms' own MODEL_BOUNDARY
   # (the peer's quoted paths were missing /out/).
-  kGh)      SB=4b-loranp-stock;  JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=base9b;    PJOB=eval9bbo;  METAF="verified_eval50b_nonproxy.json" ;;  # 08-22 freeze-100 order: the 261 arms are pulled, kGh follows base9b directly
+  kGh)      SB=4b-loranp-stock;  JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=nocapms100; PJOB=eval4bnc; METAF="verified_eval50b_nonproxy.json" ;;  # follows the verdict arm after the 08-22 reprioritization
   r5lorah)  SB=4b-r5-lora-stock; JOB=eval4br5l; RP=8027; MN=q38Bhqs2t-lora-stock;   GRP=qwen35-4b-sft; PREV=kGh;      PJOB=eval4bnp;  METAF="verified_eval50b_nonproxy.json" ;;
   # t38261: the teacher over the remaining 261 -- the third full-361 line
   # (user order 08-22 via peer). Serve config is the same 38-i sbatch that
@@ -180,7 +180,7 @@ case "$ARM" in
   # with task length while the teacher stays ~100%, and multi_apps hits the
   # 50-step cap 47.3% of the time -- this separates "ran out of budget" from
   # "went wrong". Own result dir; never mixes with the plain nocap runs.
-  nocapms100) SB=4b-nocap-stock;  JOB=eval4bnc;  RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft; PREV=r5lorah; PJOB=eval4br5l; METAF="verified_eval100_nonproxy.json"; XARGS="--max_steps 100" ;;  # 08-20 user order: immediately after nocap50b, so the eval100 paired comparison completes back to back instead of straddling another arm
+  nocapms100) SB=4b-nocap-stock;  JOB=eval4bnc;  RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft; PREV=base9b;  PJOB=eval9bbo;  METAF="verified_eval100_nonproxy.json"; XARGS="--max_steps 100" ;;  # 08-22 user reprioritized: verdict arm jumps the LoRA pair -- its result reorders the v13 corpus plan  # 08-20 user order: immediately after nocap50b, so the eval100 paired comparison completes back to back instead of straddling another arm
   # t3850b: the 27B teacher on the held-out half, completing the eval100 final
   # as the three-way (champion / base / teacher) pre-registered on the seen
   # half. Same serve as t38 (1 GPU, TP1), same sampling protocol.
