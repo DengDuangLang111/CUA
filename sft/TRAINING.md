@@ -2907,3 +2907,91 @@ steps_per_epoch = ceil(per_rank / accum)   # 尾巴不满一组也算一步
 
 对照:a1/a2/a3 跑 img10、`save_steps 34`,102 整除 34,**306 就是精确的
 epoch 3.00**,四臂里只有 a5v 错位。
+
+
+## 到底哪些 token 参与 loss:实测,不是读模板猜的(2026-08-22)
+
+用 runner 自己的 `venv` 把一条**真样本**按训练参数编码出来,dump 每个 token 的权重。
+样本:v11100 里 95 轮 / 10 图的那条,共 **33,601 token**。
+
+### 实际生效的 loss_scale 不是 sbatch 里写的那个
+
+```
+sbatch 写的      --loss_scale last_round
+args.json 实际   last_round+ignore_empty_think          (a1 / a2 / a5v)
+                 last_round+hermes+ignore_empty_think   (a3)
+```
+
+`+ignore_empty_think` 是 **ms-swift 自动追加**的,条件在
+`arguments/base_args/template_args.py:172` 的 `_set_loss_scale()`:模板
+`is_thinking and non_thinking_prefix` 就追加。Qwen3.5 模板实测
+`is_thinking=True`、`non_thinking_prefix='<think>\n\n</think>\n\n'`,条件成立。
+关掉要 `--disable_ignore_empty_think true`。
+
+**但它在我们语料上从不触发**:四份语料 **空 think 块命中 0 条**。所以历史上那
+17 个纯 `last_round` 的臂和 69 个带追加的臂,**在我们数据上行为逐字节相同** ——
+没有隐藏的口径断层。
+
+### 权重表(w=0 不参与,w=1 正常,w=2 加权)
+
+| 段 | 位置 | 权重 | token 数(该样本) |
+|---|---|---|---|
+| system(含全部工具定义) | prompt | **0** | ~1,600 |
+| 图片 token | prompt | **0** | 10 × ≤2048 |
+| 每个 user / tool_response 轮 | prompt | **0** | |
+| **历史 assistant 轮的 `<think>`** | prompt | **0** | 46 次全部为 0 |
+| **历史 assistant 轮的推理正文 / `</think>` / `<tool_call>`** | prompt | **0** | |
+| `<\|im_start\|>assistant\n` 头 | prompt | **0** | 属于前缀 |
+| **最后一轮的 `<think>`** | response | **1** | ← **算 loss,没有被 mask** |
+| **最后一轮的推理正文** | response | **1** | |
+| **最后一轮的 `</think>`** | response | **1** | |
+| **最后一轮的散文 / 答案** | response | **1** | |
+| **最后一轮的 `<tool_call>…</tool_call>`** | response | **1**(a3 = **2**) | 37 |
+| `<\|im_end\|>\n`(SUFFIX) | response | **1** | 2 |
+| | | **合计参与** | **524 / 33,601 = 1.56%** |
+
+编码结果**只有两段**:33,077 个 0 + 524 个 1。`last_round` 的判据在
+`loss_scale/base.py:124`:`is_assistant and is_last_round`,否则 `[0.]`
+(`base.py:130`)。`is_assistant` 含 `SUFFIX`,所以结尾的 `<|im_end|>` 也在 loss 里。
+
+### 数量级:中位每条样本只有 142 个 token 参与 loss
+
+前 40 条实测:
+
+| | 中位 | 均值 | min | max |
+|---|---|---|---|---|
+| 总 token | 23,710 | 19,373 | 3,577 | 26,561 |
+| **被监督 token** | **142** | 199 | 58 | 943 |
+| 监督占比 | **0.78%** | 1.40% | 0.25% | 6.63% |
+
+### 历史轮权重 0 ≠ 丢失监督:语料是前缀嵌套的
+
+v11100 的 1,358 条记录只来自 **129 条轨迹**,最大一组的轮数是等差数列
+`23, 25, 27, … 97` —— **每一步各成一条记录,轮流当"最后一轮"**。所以某一步的
+think 在自己那条记录里权重 1,在后续记录里当上下文、权重 0。
+
+**但覆盖不是 100%**:
+
+| 语料 | 轨迹 | 记录 | 总步 | 被监督步 | 从未被监督 |
+|---|---|---|---|---|---|
+| v11100 | 129 | 1,358 | 1,898 | 1,358 | **540(28.5%)** |
+| v11500 | 515 | 5,116 | 7,399 | 5,116 | **2,283(30.9%)** |
+
+每轨迹覆盖率中位 **100%**,但最低 **9.1%** —— 缺口集中在被质量闸砍得多的轨迹上,
+是 cull 的设计结果,不是 bug。**约三成的步从来没有产生过梯度。**
+
+### `ignore_think_prefix` 已经内置了,不用自己写
+
+外部提议"新增一个 opt-in 的 `ignore_think_prefix`"——ms-swift **4.5.0.dev0 自带**,
+`loss_scale/other.py:9`,配置 `{"^<think>\n?": [0.0]}`。直接
+`--loss_scale last_round+ignore_think_prefix` 即可。
+
+**实测它值多少**:同一条样本 524 → **522**,只少 **2 个 token**(`<think>` 和 `\n`),
+占被监督量的 **0.38%**。opening `<think>` 在我们的语料里**每条样本恰好出现一次**
+(4 份语料的末轮 100% 以 `<think>` 开头),所以这个开关的作用面就是每样本 2 个 token。
+
+### 顺带:sequence parallel 的那个坑与我们无关
+
+旧版 ms-swift 对 Qwen3.5/3.6 hybrid attention 在 `sequence_parallel>1` 时静默出错、
+日志正常。**扫了 87 份 args.json,`sequence_parallel_size != 1` 的 0 份** ——
+所有臂都是 1,该 bug 从未进入过任何一次训练。
