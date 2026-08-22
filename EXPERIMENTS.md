@@ -95,6 +95,17 @@
   是有用上下文。用户裁决:散文保留,nocap 仍是冠军,targeted-300 配方
   冻结(带散文 + no-cap)不变。四次训练尝试(cuDNN 显存 / NVLink×2 /
   坏节点 g018)换来这个负结果,轴彻底关闭。
+- **a3(hermes 动作加权)判读规则预注册(08-22,出分前锁定)**:同事的
+  loss 质量测算 —— tool_call 占 16% token 但只占 **2.2% loss**,hermes ×2
+  只把动作信号从 2.2% 挪到 4.3%;文献侧 ActFocus(2605.14558)的最优口径
+  是动作占 ~25%(**五倍力度**,且 β 扫描有峰、过头崩),ms-swift 的 ×2
+  出处是 2023 demo 论文的未扫描默认值。因此:①a3 明显高 → 方向成立且
+  轻剂量就够;②**a3 平 ≠ 方向证伪** —— 剂量不足与方向无效在单点上不可
+  分,下一探针应是压 think(α<1)而非 ×N;③a3 低 → 先查假 DONE 率
+  (预言:termination 是 tool_call 且语料全 success,加权可能推高假报)。
+  顺带三条:hermes 正则依赖 swift 传 re.DOTALL(已实测生效,自写配置者
+  的第一雷);我们语料每步 think 268 token 为已发表最长(GUI-Libra 210、
+  AGUVIS 85、多家为 0);a3 完训干净(306/306,loss 0.855→0.304)。
 - **8 题从未真正跑过(08-22,同事定案;权威明细 sft/FAILURE_ANATOMY.md §9)**:
   魔改 OSWorld 的 metrics/__init__.py 在加自定义 metric 的同一个 diff 里
   删了 9 个上游导出,8/361 题(留出半 2 题、其余 261 中 6 题,multi_apps
