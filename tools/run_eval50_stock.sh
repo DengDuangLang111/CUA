@@ -396,11 +396,22 @@ esac
 # no expectation the skip is PRINTED, never silent: an unasserted arm should
 # look unasserted in the log, not look checked.
 if [ -n "$EXPECT_ROOT" ]; then
-  case "$ROOT" in
-    "$EXPECT_ROOT"*) echo "[$(date '+%F %T')] weights OK: $ROOT" ;;
-    *) echo "[$(date '+%F %T')] FATAL: port $PORT loaded '$ROOT' but arm $ARM expects weights under '$EXPECT_ROOT' -- right name, wrong weights"
-       exit 1 ;;
-  esac
+  # Match on PATH-COMPONENT boundaries, never raw prefix. A raw prefix lets a
+  # longer sibling through: expecting ".../img10-ep2v" would have accepted
+  # ".../img10-ep2v-OLD/checkpoint-1". Rather than write down a convention
+  # about trailing slashes -- which is itself an author-must-remember rule of
+  # exactly the kind that keeps failing here -- both spellings are made safe:
+  # a leaf path matches itself or anything beneath it, a trailing-slash path
+  # matches only what is beneath it, and neither can match a sibling whose
+  # name merely starts the same way. (Sibling case found by the peer, who
+  # tested the shape I had not: not "a different arm" but "a longer neighbour".)
+  _exp="${EXPECT_ROOT%/}"
+  if [ "$ROOT" = "$_exp" ] || case "$ROOT" in "$_exp"/*) true ;; *) false ;; esac; then
+    echo "[$(date '+%F %T')] weights OK: $ROOT"
+  else
+    echo "[$(date '+%F %T')] FATAL: port $PORT loaded '$ROOT' but arm $ARM expects weights at or under '$_exp' -- right name, wrong weights"
+    exit 1
+  fi
 else
   echo "[$(date '+%F %T')] NOTE: arm $ARM declares no EXPECT_ROOT; weights path NOT asserted (loaded $ROOT)"
 fi
