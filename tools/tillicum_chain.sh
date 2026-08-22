@@ -45,7 +45,8 @@ try:
 except Exception:
     static = {"base261": 261, "nocap261": 261, "base9b261": 261, "t38261": 261,
               "np1e6": 100, "nocapnp": 100, "nocapnp238": 100, "base9b": 100,
-              "nocapms100": 100, "a1": 100, "a2": 100, "a3": 100, "a6v": 100}
+              "nocapms100": 100, "a1": 100, "a2": 100, "a3": 100, "a6v": 100,
+              "a1h10": 100}
     print(static.get(arm, 50))
 PYNEED
 )
@@ -73,7 +74,7 @@ train_gate(){  # $1 arm, $2 job, $3 dir glob, $4 min epoch; up to 12h; returns 1
 
 log "chain start (resume-safe)"
 PREV=bsstock
-for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 baseh1 nocapt0 img1 vlnocapnp nocapnp2 nocap50b base50b t3850b np1e6 nocapnp base261 nocap261 base9b nocapms100 kGh a3 a1 a2 a6v; do
+for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 baseh1 nocapt0 img1 vlnocapnp nocapnp2 nocap50b base50b t3850b np1e6 nocapnp base261 nocap261 base9b nocapms100 kGh a3 a1 a2 a6v r5lorah a1h10; do
   if alive "$arm"; then
     log "adopt $arm: already in flight"
   elif complete "$arm"; then
@@ -93,6 +94,7 @@ for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 ba
       vlnocapnp) GJOB=sft-vlnocapnp-lr3e6;      GDIR="/gpfs/scrubbed/jy050706/sft/out/vlnocapnp-lr3e6/v*" ;;
       np1e6)     GJOB=eval4b-n1r;              GDIR="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-np1e6/v*" ;;
       a1)  GJOB=eval4b-a1;  GDIR="/gpfs/scrubbed/jy050706/sft/out/img10-4b/v*" ;;
+      a1h10) GJOB=eval4b-a1; GDIR="/gpfs/scrubbed/jy050706/sft/out/img10-4b/v*" ;;  # same weights as a1, served at the trained window
       a2)  GJOB=eval4b-a2;  GDIR="/gpfs/scrubbed/jy050706/sft/out/img10-9b/v*" ;;
       a3)  GJOB=eval4b-a3;  GDIR="/gpfs/scrubbed/jy050706/sft/out/img10-hrm/v*" ;;
       a6v) GJOB=eval4b-a6v; GDIR="/gpfs/scrubbed/jy050706/sft/out/img10-ep2v/v*"; GEPOCH=1.99 ;;  # two epochs, dense saves; serving checkpoint chosen by validation loss via a6v_pick.txt  # opaque name per user rule 08-19; GJOB tracks the RESUME job 250344 after the first attempt died at epoch 2.36 on an NVLink fault. pick_ckpt spans v0+v1 by epoch, so the >=2.99 gate can only be satisfied by the resume writing checkpoint-303 into v1
@@ -110,4 +112,4 @@ for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 ba
   fi
   PREV=$arm
 done
-log "chain done (tail: kGh then the img10 generation a3/a1/a2/a6v each gated on its own training, a6v serving its validation-loss pick; r5lorah and the 261 arms rest pulled; scancel eval4ba6 after)"
+log "chain done (tail: img10 generation, r5lorah for the LoRA prose pair, then a1h10 serving a1 at its trained ten-image window; scancel eval4ba1 after)"

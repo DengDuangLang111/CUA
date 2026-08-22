@@ -173,7 +173,25 @@ case "$ARM" in
   # meaningless. Weights verified against the two arms' own MODEL_BOUNDARY
   # (the peer's quoted paths were missing /out/).
   kGh)      SB=4b-loranp-stock;  JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=nocapms100; PJOB=eval4bnc; METAF="verified_eval50b_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-loranp-merged-300" ;;  # follows the verdict arm after the 08-22 reprioritization
-  r5lorah)  SB=4b-r5-lora-stock; JOB=eval4br5l; RP=8027; MN=q38Bhqs2t-lora-stock;   GRP=qwen35-4b-sft; PREV=kGh;      PJOB=eval4bnp;  METAF="verified_eval50b_nonproxy.json" ;;
+  # r5lorah restored to the TAIL (user order 08-22, after kGh posted 44.00 --
+  # the best held-out score of any 4B student). Without it the pair is broken
+  # and kGh's number cannot be split into "LoRA generalizes" versus "prose
+  # strip helps": the seen-50 pair kG 49.81 / r5lora 41.81 is the only prose
+  # reading on LoRA and it sits at 1.2 sigma of a 50-task panel.
+  r5lorah)  SB=4b-r5-lora-stock; JOB=eval4br5l; RP=8027; MN=q38Bhqs2t-lora-stock;   GRP=qwen35-4b-sft; PREV=a6v;      PJOB=eval4ba6;  METAF="verified_eval50b_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-lora-merged-300" ;;
+  # a1h10: a1's weights served at the window they were TRAINED on. Measured
+  # 2026-08-22: the img10 corpus hard-caps at ten and 48% of samples sit at
+  # the cap, so serving twenty puts half the steps out of distribution --
+  # while the 20-image corpus reaches its own cap in only 2.6% of samples,
+  # which is why the champion's history needs no such correction. Precedent
+  # for the size of this: img3 scored 47.81 served at twenty and 53.81 served
+  # at three, six points of pure window mismatch. fold_size 1, not the
+  # default 10: the corpus keeps the LAST ten every step, whereas folding ten
+  # at a time would sawtooth between six and ten and match nothing.
+  # Only ONE matched arm is needed -- a1/a2/a3 share the mismatch, so their
+  # comparisons to each other already hold; this one prices img10 against the
+  # champion, the single cross-family comparison the mismatch would distort.
+  a1h10) SB=img10-a1; JOB=eval4ba1; RP=8051; MN=img10-4b-stock; GRP=qwen35-4b-sft; PREV=r5lorah; PJOB=eval4br5l; METAF="verified_eval100_nonproxy.json"; XARGS="--image_max 10 --fold_size 1"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-4b/" ;;
   # t38261: the teacher over the remaining 261 -- the third full-361 line
   # (user order 08-22 via peer). Serve config is the same 38-i sbatch that
   # carried both 50-task teacher runs; throughput is VM-bound, measured
