@@ -177,9 +177,12 @@ case "$ARM" in
   # nocapms100: the champion with DOUBLE the step budget (max_steps 100), the
   # only changed parameter, over the frozen 100 (user order 08-22 via peer).
   # Verdict arm for RESULTS 5.22: the teacher-student gap grows 17.4->65.2pp
-  # with task length while the teacher stays ~100%, and multi_apps hits the
-  # 50-step cap 47.3% of the time -- this separates "ran out of budget" from
-  # "went wrong". Own result dir; never mixes with the plain nocap runs.
+  # with task length while the teacher stays ~100%. Cap-hit rates by the
+  # DEDUPED step_num criterion (RESULTS 5.23 corrected 5.20's mislabeled
+  # column): calc 46.8% is the highest, multi_apps 38.7%, overall 30.7%.
+  # This arm separates "ran out of budget" from "went wrong": denominator 25
+  # (zero-scored full-50-step tasks). Own result dir; never mixes with the
+  # plain nocap runs.
   nocapms100) SB=4b-nocap-stock;  JOB=eval4bnc;  RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft; PREV=base9b;  PJOB=eval9bbo;  METAF="verified_eval100_nonproxy.json"; XARGS="--max_steps 100" ;;  # 08-22 user reprioritized: verdict arm jumps the LoRA pair -- its result reorders the v13 corpus plan
   # a1/a2/a3/a5v: the img10 training generation, final checkpoint only, all on
   # the frozen 100 (user pre-registration 08-22 via peer; epoch curves

@@ -114,14 +114,20 @@ def arm_stats(tasks):
                 false_succ += 1
         elif la == "FAIL":
             endings["FAIL"] += 1
+        elif len(t["steps"]) >= 50:
+            # steps is keyed by step_num, so this is the DEDUPED step count.
+            # History of this branch, kept because it flip-flopped once: the
+            # original criterion (this one) was briefly replaced by "last
+            # action not DONE/FAIL" after a peer recount said 30, not 28 --
+            # but that recount counted RECORDS, and one step emits one record
+            # PER ACTION, so it double-counted (their 219-record trajectory
+            # had 69 deduped steps; they retracted, RESULTS 34143e1e4). A
+            # cut-off 37-step trajectory is NOT a cap hit: more budget would
+            # not have helped it, so the two buckets must stay separate for
+            # any budget-vs-ability arithmetic.
+            endings["撞上限"] += 1
         else:
-            # Action-field criterion (RESULTS 5.17): anything not ending in an
-            # explicit DONE/FAIL was cut off by the harness. The old
-            # steps>=50 test misread a task that called DONE exactly at step
-            # 50 as a cap hit and misread an interrupted 37-step trajectory
-            # as "other" -- reconciled 08-22 against the peer's recount
-            # (30 vs my 28 on the same dirs).
-            endings["撞上限/掐断"] += 1
+            endings["其他/中断"] += 1
     n = max(len(tasks), 1)
     return {
         "任务数": len(tasks),
