@@ -180,7 +180,17 @@ case "$ARM" in
   # with task length while the teacher stays ~100%, and multi_apps hits the
   # 50-step cap 47.3% of the time -- this separates "ran out of budget" from
   # "went wrong". Own result dir; never mixes with the plain nocap runs.
-  nocapms100) SB=4b-nocap-stock;  JOB=eval4bnc;  RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft; PREV=base9b;  PJOB=eval9bbo;  METAF="verified_eval100_nonproxy.json"; XARGS="--max_steps 100" ;;  # 08-22 user reprioritized: verdict arm jumps the LoRA pair -- its result reorders the v13 corpus plan  # 08-20 user order: immediately after nocap50b, so the eval100 paired comparison completes back to back instead of straddling another arm
+  nocapms100) SB=4b-nocap-stock;  JOB=eval4bnc;  RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft; PREV=base9b;  PJOB=eval9bbo;  METAF="verified_eval100_nonproxy.json"; XARGS="--max_steps 100" ;;  # 08-22 user reprioritized: verdict arm jumps the LoRA pair -- its result reorders the v13 corpus plan
+  # a1/a2/a3/a5v: the img10 training generation, final checkpoint only, all on
+  # the frozen 100 (user pre-registration 08-22 via peer; epoch curves
+  # cancelled). Order = training arrival order. a5v ends at epoch FIVE, not
+  # three -- its epoch-3 checkpoint does not exist (save_steps was computed
+  # for the unsplit corpus; 97 steps/epoch is prime) -- so it never sits in a
+  # same-epoch comparison row with the other three.
+  a3)  SB=img10-a3;  JOB=eval4ba3; RP=8053; MN=img10-hrm-stock;  GRP=qwen35-4b-sft; PREV=r5lorah; PJOB=eval4br5l; METAF="verified_eval100_nonproxy.json" ;;
+  a1)  SB=img10-a1;  JOB=eval4ba1; RP=8051; MN=img10-4b-stock;   GRP=qwen35-4b-sft; PREV=a3;      PJOB=eval4ba3;  METAF="verified_eval100_nonproxy.json" ;;
+  a2)  SB=img10-a2;  JOB=eval4ba2; RP=8052; MN=img10-9b-stock;   GRP=qwen35-9b-sft; PREV=a1;      PJOB=eval4ba1;  METAF="verified_eval100_nonproxy.json" ;;
+  a5v) SB=img10-a5v; JOB=eval4ba5; RP=8054; MN=img10-ep5v-stock; GRP=qwen35-4b-sft; PREV=a2;      PJOB=eval4ba2;  METAF="verified_eval100_nonproxy.json" ;;  # 08-20 user order: immediately after nocap50b, so the eval100 paired comparison completes back to back instead of straddling another arm
   # t3850b: the 27B teacher on the held-out half, completing the eval100 final
   # as the three-way (champion / base / teacher) pre-registered on the seen
   # half. Same serve as t38 (1 GPU, TP1), same sampling protocol.
