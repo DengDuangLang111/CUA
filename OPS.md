@@ -758,3 +758,27 @@ scrubbed 上,同款炸弹未拆;.venv 的 site-packages 也在 scrubbed(日常�
 排查时的误判也记一笔:曾把"lib 里新出现 itcl4.3.5"当成外部污染证据——实为
 CPython 发行自带组件,4590 个文件的变更是自己的 reinstall。**先问"我自己刚做了
 什么",再指控环境。**
+
+## §X serve 断档灌 0 事故(2026-08-21,nocap261)
+
+**机制**:serve 撞墙退出后,**runner 不会死** —— agent 的 API 调用失败被吞,
+任务照常推进并全部记 0。断档窗口内产出的 result.txt 与真实 0 分无法区分,
+只能靠完成时间戳事后隔离。np1e6 那次"20 秒自动接力"掩盖了这个洞:接力快
+是因为 serve 排队快,不是因为 runner 会等。
+
+**诱因**:应用户要求把 serve 墙钟 4h→9h,想让长臂一口气跑完。副作用:
+fairshare=1 的账号只能靠 backfill 排队,**4h 的缝塞得进、9h 塞不进**——
+续班 serve PENDING 2.5 小时,runner 在无 serve 状态跑掉 157 题全 0。
+
+**处置**:①按 result.txt mtime ≥ serve 死点 + 得分 0 隔离 157 题(mv 到
+poisoned 目录,不删);②隔离目录命名**不能匹配** driver 的
+`eval50-<arm>-*` glob(第一次命名 `eval50-...-poisoned` 被 driver 当最新
+结果目录认走,已改 `poisoned-eval-...`);③墙钟回 4h;④driver 重启后
+凭 skip-scored 语义补跑。
+
+**规矩**:
+1. **长臂宁可多滚墙,不加长墙钟**——排队延迟的期望损失远大于滚墙开销;
+2. 监控必须盯 **"runner 活 + serve 不在 RUNNING"** 这个组合态(已加
+   SERVE-GAP 告警,连续两拍才响);告警后的正确处置是**杀 runner**,
+   driver 会在 serve 就绪后重启它,已计分任务不受影响;
+3. 断档窗口的 0 分是**毒数据**,任何汇总前先查各臂分数按完成时间的分桶。
