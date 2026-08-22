@@ -166,7 +166,7 @@ case "$ARM" in
   # the full-FT sign flip (-5pp) cited in RESULTS.md hangs on it. Paired or
   # meaningless. Weights verified against the two arms' own MODEL_BOUNDARY
   # (the peer's quoted paths were missing /out/).
-  kGh)      SB=4b-loranp-stock;  JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=base9b261; PJOB=eval9bbo;  METAF="verified_eval50b_nonproxy.json" ;;
+  kGh)      SB=4b-loranp-stock;  JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=base9b;    PJOB=eval9bbo;  METAF="verified_eval50b_nonproxy.json" ;;  # 08-22 freeze-100 order: the 261 arms are pulled, kGh follows base9b directly
   r5lorah)  SB=4b-r5-lora-stock; JOB=eval4br5l; RP=8027; MN=q38Bhqs2t-lora-stock;   GRP=qwen35-4b-sft; PREV=kGh;      PJOB=eval4bnp;  METAF="verified_eval50b_nonproxy.json" ;;
   # t38261: the teacher over the remaining 261 -- the third full-361 line
   # (user order 08-22 via peer). Serve config is the same 38-i sbatch that

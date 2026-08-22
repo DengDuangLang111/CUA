@@ -128,6 +128,20 @@ diff 待用户批;dry-run 验证 focus 块落入 prompt)。
 teacher rollout → 通过率复盘(<15% 的 cell 修任务不加量)→ 五道闸 build
 (`--val-ratio 0.05`)→ 追加成 DS4。**写代码前 diff 给用户过目。**
 
+## 评测策略更新(2026-08-22)与 ship 警告
+
+- **freeze-100 令**:此后所有臂只跑冻结 100(已见 50 + 留出 50);261 类臂
+  (base9b261、t38261)从链上摘除,以后再说。今天下午起四个 img10 训练臂
+  (a1 4B / a2 9B / a3 hermes / a5v 5ep带验证集)出 checkpoint,各带
+  epoch 边界可评点。
+- **⚠️ ship 带验证集语料必须用 `ship_val.sh`**(或等 ship_dataset.sh 合并
+  支持):现行 `ship_dataset.sh` 的 tar 清单写死 train 文件名,
+  `val_swift.jsonl` 会**静默留在本地不上传**——正是本轮 eval loss 设计
+  (`--val-ratio 0.05`)会踩中的坑,同事已踩过并补了脚本。
+- 顺带一条可入报告的硬结论(同事核实):nocapnp ckpt-204(2ep 未退火)与
+  ckpt-303(3ep 退火完)在已见 50 上逐位同分 27.90/50 —— 第三个 epoch +
+  完整余弦退火净收益精确为 0(口径:仅已见 50)。
+
 ## 仓库版本状态(2026-08-20 整理)
 
 - ostg:main == v11.1(a1707aa9,同步✓);datagenv12 工作区干净(c84145a6);
