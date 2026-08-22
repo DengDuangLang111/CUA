@@ -151,6 +151,19 @@
   2 小时 eval 才能发现,有了就是实时可见。
   **旧语料不补建**:重建会把样本数从 6474 压到 ~6150,所有历史臂立刻不可比;
   新语料这条线从一开始就带,自成体系。
+  **它当初是怎么丢的(2026-08-22 考古,重要)**:验证集**不是被谁决定去掉的**,
+  是换语料线时漏掉的。查 41 个训练 run 的 `args.json`,**早期 12 个臂全都有**:
+  ```
+  有 eval_strategy=steps + val_dataset:
+      e1 · e3 · ep5np · ep5pt · fast · more · more3 · more3np
+      pilotL · pilotS · pilotS3 · pilotS3x3      (语料 abs-pilot2/3、v11-legacy-snap)
+      eval_steps 20~40,val_dataset 就是同语料的 val_swift.jsonl
+  无:q38* 全部 · vl* 全部        (语料 B / r5 / nocap / img10 那条主线)
+  ```
+  断点在 build 侧:`q38` 系列建语料时没传 `--val-ratio`,`val_swift.jsonl`
+  变成 0 字节,训练侧自然也就没得可传 —— **工具链一直是通的,是调用漏了**。
+  这本身就是 `DATA_PIPELINE.md` §9 那类静默失效:没有任何报错,只是从某一代
+  语料起,所有人都在盲训。
 - **checkpoint 密度标准(用户 2026-08-17 立规,2026-08-18 升级为硬整除)**:
   此后所有训练 sbatch 用 `--save_strategy steps`,且 **`save_steps` 必须整除
   每 epoch 步数**(steps/epoch = ceil(样本数 / 全局批);取整除数中最接近
