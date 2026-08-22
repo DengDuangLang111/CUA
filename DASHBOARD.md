@@ -131,6 +131,36 @@ sft.json 的 eval50.arms[].facets           ← 页面消费
 评测侧的参数(image_max/fold_size、temperature、task set)来自结果目录自己的
 `args.json`,一直是本地的,不需要缓存。
 
+### `sft_dash.py` 只有一个真源:CTL 那份(2026-08-22 立规,吃过两次亏)
+
+```
+/mnt/d/research/osworld-verified-control/sft_dash.py    ← daemon 实际执行(CTL)
+/home/daniel_yan/cua-dash-sft/control/sft_dash.py       ← git 存档镜像
+/home/daniel_yan/cua-dash-sft/tools/control/sft_dash.py ← git 存档镜像
+```
+
+**规矩:只改 CTL 那份;镜像永远单向从它同步(改完 `cat` 回仓库并提交),
+永不反向。** 镜像保留不删 —— 它有 git 历史价值,2026-08-22 恢复那次要不是有
+它做对照,连"少了什么"都难确认。
+
+**为什么要立这条**:两次改动互相覆盖,都是"在仓库副本上编辑 → 整文件推回
+CTL",于是对方在 CTL 上的改动被整段抹掉。第二次的症状:
+
+```
+ARM_PANEL 里 base261/nocap261 两条消失
+→ 两个臂落到默认的「已见 50」面板,而它们的 261 道题与那 50 道交集为空
+→ base261 scored=0/50 mean=None,而 261 道结果好好躺在磁盘上
+→ sft361 整个键消失,OSWorld 361 那一页变成空白
+```
+
+**`cp` 覆盖没有冲突标记、没有报错、没有痕迹** —— 它是"静默失效"家族在
+**协作层**的成员,判据和 `sft/DATA_PIPELINE.md` §9 里那六个案例完全同型:
+信息在传递链上被丢弃,而丢弃点没有断言。区别只在于那六个的传递链是代码,
+这个的传递链是两个人的工作流。
+
+**如果非要在镜像上编辑**(比如只有 Mac 侧能访问),那就必须先把 CTL 的当前
+版本拉下来做基线,改完用 diff 确认只有自己那几处变化 —— 而不是整文件推。
+
 ### Why two daemons
 
 `sft_dash_daemon.sh` works in a **second clone** (`cua-dash-sft`), sparse-checked
