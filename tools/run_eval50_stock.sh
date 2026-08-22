@@ -159,7 +159,15 @@ case "$ARM" in
   # would have needed a tunnel-forward change (Duo re-auth) for no benefit.
   # 4h walls per the serve-gap incident rule: roll walls, never lengthen them.
   base9b)    SB=9b-base-stock;       JOB=eval9bbo;  RP=8023; MN=q35-9b-stock;               GRP=qwen35-9b-base; PREV=nocap261; PJOB=eval4bnc;  METAF="verified_eval100_nonproxy.json" ;;
-  base9b261) SB=9b-base-stock;       JOB=eval9bbo;  RP=8023; MN=q35-9b-stock;               GRP=qwen35-9b-base; PREV=base9b;   PJOB=eval9bbo;  METAF="verified_eval261_rest.json" ;;  # 08-20 user order: immediately after nocap50b, so the eval100 paired comparison completes back to back instead of straddling another arm
+  base9b261) SB=9b-base-stock;       JOB=eval9bbo;  RP=8023; MN=q35-9b-stock;               GRP=qwen35-9b-base; PREV=base9b;   PJOB=eval9bbo;  METAF="verified_eval261_rest.json" ;;
+  # kGh / r5lorah: the LoRA pair replayed on the HELD-OUT 50 (user order 08-22
+  # via peer). Settles whether the +8pp LoRA prose-strip effect (kG 49.81 vs
+  # r5lora 41.81 on seen-50) is real capacity physics or selection noise --
+  # the full-FT sign flip (-5pp) cited in RESULTS.md hangs on it. Paired or
+  # meaningless. Weights verified against the two arms' own MODEL_BOUNDARY
+  # (the peer's quoted paths were missing /out/).
+  kGh)      SB=4b-loranp-stock;  JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=base9b261; PJOB=eval9bbo;  METAF="verified_eval50b_nonproxy.json" ;;
+  r5lorah)  SB=4b-r5-lora-stock; JOB=eval4br5l; RP=8027; MN=q38Bhqs2t-lora-stock;   GRP=qwen35-4b-sft; PREV=kGh;      PJOB=eval4bnp;  METAF="verified_eval50b_nonproxy.json" ;;  # 08-20 user order: immediately after nocap50b, so the eval100 paired comparison completes back to back instead of straddling another arm
   # t3850b: the 27B teacher on the held-out half, completing the eval100 final
   # as the three-way (champion / base / teacher) pre-registered on the seen
   # half. Same serve as t38 (1 GPU, TP1), same sampling protocol.

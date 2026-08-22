@@ -398,11 +398,13 @@ HELDOUT_META = EVAL50_META.replace("verified_eval50_nonproxy",
 # columns, so the frozen-100 accuracy is readable directly instead of being
 # added up by hand. Keyed child -> parent; the parent is the run on the SEEN
 # half (the untrained base's seen-half run is "basekeep", not "base").
-HELDOUT_PAIRS = {"nocap50b": "nocap", "base50b": "basekeep", "t3850b": "t38"}
+HELDOUT_PAIRS = {"nocap50b": "nocap", "base50b": "basekeep", "t3850b": "t38",
+                 "kGh": "kG", "r5lorah": "r5lora"}
 
 # Arms not scored on the default (seen) panel.
 ARM_PANEL = {"nocap50b": "heldout", "base50b": "heldout", "t3850b": "heldout",
-             "np1e6": "all100", "nocapnp238": "all100", "nocapnp": "all100"}
+             "np1e6": "all100", "nocapnp238": "all100", "nocapnp": "all100",
+             "kGh": "heldout", "r5lorah": "heldout"}
 
 
 def eval50():
