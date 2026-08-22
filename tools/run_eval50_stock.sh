@@ -35,6 +35,12 @@
 set -u
 ARM="${1:?usage: run_eval50_stock.sh <arm>}"
 XARGS=""   # per-arm extra runner flags (e.g. "--image_max 3 --fold_size 1")
+EXPECT_ROOT=""  # per-arm weights-path prefix; asserted against what vLLM says
+                # it actually loaded. Distinct from the served-NAME check: the
+                # name lives in the sbatch while the path can come from
+                # elsewhere (a6v reads its checkpoint from a pick file), so a
+                # wrong path serves the RIGHT name over the WRONG weights and
+                # the name check passes. Name = consistency, path = correctness.
 METAF="verified_eval50_nonproxy.json"  # per-arm task set. The default is the
            # frozen 50 every arm has been scored on. Arms ending in "50b" use
            # verified_eval50b_nonproxy.json instead: the OTHER half of the
@@ -166,7 +172,7 @@ case "$ARM" in
   # the full-FT sign flip (-5pp) cited in RESULTS.md hangs on it. Paired or
   # meaningless. Weights verified against the two arms' own MODEL_BOUNDARY
   # (the peer's quoted paths were missing /out/).
-  kGh)      SB=4b-loranp-stock;  JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=nocapms100; PJOB=eval4bnc; METAF="verified_eval50b_nonproxy.json" ;;  # follows the verdict arm after the 08-22 reprioritization
+  kGh)      SB=4b-loranp-stock;  JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=nocapms100; PJOB=eval4bnc; METAF="verified_eval50b_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/q38Bhqs2t-loranp-merged-300" ;;  # follows the verdict arm after the 08-22 reprioritization
   r5lorah)  SB=4b-r5-lora-stock; JOB=eval4br5l; RP=8027; MN=q38Bhqs2t-lora-stock;   GRP=qwen35-4b-sft; PREV=kGh;      PJOB=eval4bnp;  METAF="verified_eval50b_nonproxy.json" ;;
   # t38261: the teacher over the remaining 261 -- the third full-361 line
   # (user order 08-22 via peer). Serve config is the same 38-i sbatch that
@@ -190,9 +196,9 @@ case "$ARM" in
   # three -- its epoch-3 checkpoint does not exist (save_steps was computed
   # for the unsplit corpus; 97 steps/epoch is prime) -- so it never sits in a
   # same-epoch comparison row with the other three.
-  a3)  SB=img10-a3;  JOB=eval4ba3; RP=8053; MN=img10-hrm-stock;  GRP=qwen35-4b-sft; PREV=kGh;     PJOB=eval4bnp;  METAF="verified_eval100_nonproxy.json" ;;  # 08-22: r5lorah pulled by user order, a3 follows kGh directly
-  a1)  SB=img10-a1;  JOB=eval4ba1; RP=8051; MN=img10-4b-stock;   GRP=qwen35-4b-sft; PREV=a3;      PJOB=eval4ba3;  METAF="verified_eval100_nonproxy.json" ;;
-  a2)  SB=img10-a2;  JOB=eval4ba2; RP=8052; MN=img10-9b-stock;   GRP=qwen35-9b-sft; PREV=a1;      PJOB=eval4ba1;  METAF="verified_eval100_nonproxy.json" ;;
+  a3)  SB=img10-a3;  JOB=eval4ba3; RP=8053; MN=img10-hrm-stock;  GRP=qwen35-4b-sft; PREV=kGh;     PJOB=eval4bnp;  METAF="verified_eval100_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-hrm/" ;;  # 08-22: r5lorah pulled by user order, a3 follows kGh directly
+  a1)  SB=img10-a1;  JOB=eval4ba1; RP=8051; MN=img10-4b-stock;   GRP=qwen35-4b-sft; PREV=a3;      PJOB=eval4ba3;  METAF="verified_eval100_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-4b/" ;;
+  a2)  SB=img10-a2;  JOB=eval4ba2; RP=8052; MN=img10-9b-stock;   GRP=qwen35-9b-sft; PREV=a1;      PJOB=eval4ba1;  METAF="verified_eval100_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-9b/" ;;
   # a6v replaces a5v (user order 08-22): a5v trained five epochs with
   # save_steps computed for the wrong corpus size, so every checkpoint sits
   # just past an epoch-boundary memorization jump and the endpoint is the
@@ -202,7 +208,7 @@ case "$ARM" in
   # serving checkpoint is CHOSEN BY VALIDATION LOSS, read from a6v_pick.txt
   # which gets written when the curve is final; the serve script refuses to
   # start while the pick is missing.
-  a6v) SB=img10-a6v; JOB=eval4ba6; RP=8054; MN=img10-ep2v-stock; GRP=qwen35-4b-sft; PREV=a2;      PJOB=eval4ba2;  METAF="verified_eval100_nonproxy.json" ;;  # 08-20 user order: immediately after nocap50b, so the eval100 paired comparison completes back to back instead of straddling another arm
+  a6v) SB=img10-a6v; JOB=eval4ba6; RP=8054; MN=img10-ep2v-stock; GRP=qwen35-4b-sft; PREV=a2;      PJOB=eval4ba2;  METAF="verified_eval100_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-ep2v/" ;;  # 08-20 user order: immediately after nocap50b, so the eval100 paired comparison completes back to back instead of straddling another arm
   # t3850b: the 27B teacher on the held-out half, completing the eval100 final
   # as the three-way (champion / base / teacher) pre-registered on the seen
   # half. Same serve as t38 (1 GPU, TP1), same sampling protocol.
@@ -383,6 +389,21 @@ case " $SERVED " in
   *) echo "[$(date '+%F %T')] FATAL: port $PORT serves '$SERVED' but arm $ARM expects '$MN' (root=$ROOT) -- refusing to score against the wrong model"
      exit 1 ;;
 esac
+# Second shape: the WEIGHTS, not the label. vLLM's `root` is the path it truly
+# loaded. This catches what the name check structurally cannot -- right label
+# over wrong weights -- which is live risk for any arm whose checkpoint path
+# comes from outside its sbatch (a6v reads a pick file). When an arm declares
+# no expectation the skip is PRINTED, never silent: an unasserted arm should
+# look unasserted in the log, not look checked.
+if [ -n "$EXPECT_ROOT" ]; then
+  case "$ROOT" in
+    "$EXPECT_ROOT"*) echo "[$(date '+%F %T')] weights OK: $ROOT" ;;
+    *) echo "[$(date '+%F %T')] FATAL: port $PORT loaded '$ROOT' but arm $ARM expects weights under '$EXPECT_ROOT' -- right name, wrong weights"
+       exit 1 ;;
+  esac
+else
+  echo "[$(date '+%F %T')] NOTE: arm $ARM declares no EXPECT_ROOT; weights path NOT asserted (loaded $ROOT)"
+fi
 python3 - "$R/MODEL_BOUNDARY.json" "$ARM" "$MN" "$ROOT" "${OSTG_TYPE_NO_SPLIT:-0}" "$XARGS" "$DIALECT" "$METAF" <<'PY'
 import json, sys
 path, arm, served, root, no_split, xargs, dialect, tasks_file = sys.argv[1:9]
