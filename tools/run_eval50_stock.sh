@@ -357,6 +357,23 @@ wait_up 720 || { echo "[$(date '+%F %T')] FATAL: endpoint $PORT never came up in
 ROOT=$(curl -s -H "Authorization: Bearer $OPENAI_API_KEY" http://127.0.0.1:$PORT/v1/models \
        | python3 -c "import json,sys;print(json.load(sys.stdin)['data'][0].get('root',''))")
 echo "[$(date '+%F %T')] endpoint UP; vLLM reports root=$ROOT"
+
+# Identity assertion (2026-08-22). The line above has always RECORDED what
+# vLLM loaded; it never CHECKED it. Ask the server who it is and refuse to
+# score anything if the answer is not this arm's model. This catches a whole
+# class at once -- a copied script renewing into another model, a port
+# collision, a stale serve from a previous arm, a hand-submitted wrong
+# sbatch -- without anyone having to remember to inspect any file. It exists
+# because the $SELF incident showed that two reviewers running the SAME kind
+# of check are not redundant: what caught it was luck, so the second check
+# has to be a different SHAPE, not a second pair of eyes.
+SERVED=$(curl -s -H "Authorization: Bearer $OPENAI_API_KEY" http://127.0.0.1:$PORT/v1/models \
+         | python3 -c "import json,sys;d=json.load(sys.stdin)['data'];print(d[0].get('id','') if d else '')")
+if [ "$SERVED" != "$MN" ]; then
+  echo "[$(date '+%F %T')] FATAL: port $PORT serves '$SERVED' but arm $ARM expects '$MN' (root=$ROOT) -- refusing to score against the wrong model"
+  exit 1
+fi
+echo "[$(date '+%F %T')] identity OK: $PORT serves $SERVED"
 python3 - "$R/MODEL_BOUNDARY.json" "$ARM" "$MN" "$ROOT" "${OSTG_TYPE_NO_SPLIT:-0}" "$XARGS" "$DIALECT" "$METAF" <<'PY'
 import json, sys
 path, arm, served, root, no_split, xargs, dialect, tasks_file = sys.argv[1:9]
