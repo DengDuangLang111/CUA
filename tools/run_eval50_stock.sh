@@ -167,7 +167,13 @@ case "$ARM" in
   # meaningless. Weights verified against the two arms' own MODEL_BOUNDARY
   # (the peer's quoted paths were missing /out/).
   kGh)      SB=4b-loranp-stock;  JOB=eval4bnp;  RP=8031; MN=q38Bhqs2t-loranp-stock; GRP=qwen35-4b-sft; PREV=base9b261; PJOB=eval9bbo;  METAF="verified_eval50b_nonproxy.json" ;;
-  r5lorah)  SB=4b-r5-lora-stock; JOB=eval4br5l; RP=8027; MN=q38Bhqs2t-lora-stock;   GRP=qwen35-4b-sft; PREV=kGh;      PJOB=eval4bnp;  METAF="verified_eval50b_nonproxy.json" ;;  # 08-20 user order: immediately after nocap50b, so the eval100 paired comparison completes back to back instead of straddling another arm
+  r5lorah)  SB=4b-r5-lora-stock; JOB=eval4br5l; RP=8027; MN=q38Bhqs2t-lora-stock;   GRP=qwen35-4b-sft; PREV=kGh;      PJOB=eval4bnp;  METAF="verified_eval50b_nonproxy.json" ;;
+  # t38261: the teacher over the remaining 261 -- the third full-361 line
+  # (user order 08-22 via peer). Serve config is the same 38-i sbatch that
+  # carried both 50-task teacher runs; throughput is VM-bound, measured
+  # 24.5-28.1 tasks/h on the 100, so ~10h. The 49-proxy stratum caveat
+  # applies to this line like the other two.
+  t38261)   SB=38-i;             JOB=eval38;    RP=8000; MN=qwen38-27b-local;         GRP=qwen38-27b-local; PREV=r5lorah; PJOB=eval4br5l; METAF="verified_eval261_rest.json" ;;  # 08-20 user order: immediately after nocap50b, so the eval100 paired comparison completes back to back instead of straddling another arm
   # t3850b: the 27B teacher on the held-out half, completing the eval100 final
   # as the three-way (champion / base / teacher) pre-registered on the seen
   # half. Same serve as t38 (1 GPU, TP1), same sampling protocol.
