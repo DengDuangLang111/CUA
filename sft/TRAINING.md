@@ -134,6 +134,23 @@
   local_rank 推断,不值得。**用 4 节点×2 卡代替**:排队实测 8 卡最长 67 分、
   16 卡最长 571 分(中位都是几分钟,**差别全在尾部**),而 4×2 是 nocapnp
   跑通过的形状,不动启动机制。
+- **验证集:自 2026-08-22 起所有新语料带 `--val-ratio 0.05`(用户立规)**,
+  训练侧必须同时接上,否则验证集只是躺在磁盘上:
+  ```
+  --val_dataset $DS1/val_swift.jsonl $DS2/val_swift.jsonl \
+  --eval_strategy steps --eval_steps <与 save_steps 相同> \
+  --per_device_eval_batch_size 1
+  ```
+  **`eval_steps` 与 `save_steps` 对齐**,这样每个 checkpoint 自带一个验证损失,
+  epoch 边界的 train/val 背离和 checkpoint 一一对应。
+  立规的直接原因:冠军 nocap 的训练损失在 **step 101 跌 16.6%、step 202 跌
+  19.5%**,而 101 正是它的每 epoch 步数 —— 这是记忆化的教科书 signature
+  (fast.ai《Can LLMs learn from a single example?》描述的同一现象)。
+  我们手上有别人没有的旁证:**nocapnp 在 epoch 2.00 和 3.00 的 eval 逐位相同
+  (27.90/50)**,即第二次断层的 eval 增益是 0。没有验证集时这件事要花
+  2 小时 eval 才能发现,有了就是实时可见。
+  **旧语料不补建**:重建会把样本数从 6474 压到 ~6150,所有历史臂立刻不可比;
+  新语料这条线从一开始就带,自成体系。
 - **checkpoint 密度标准(用户 2026-08-17 立规,2026-08-18 升级为硬整除)**:
   此后所有训练 sbatch 用 `--save_strategy steps`,且 **`save_steps` 必须整除
   每 epoch 步数**(steps/epoch = ceil(样本数 / 全局批);取整除数中最接近

@@ -1156,12 +1156,31 @@ $P -m ostg.sft.terminalfix RESULT_DIR --tasks TASKS_DIR \
 $P -m ostg.sft.build RESULT_DIR --tasks TASKS_DIR --out OUT \
    --include ..._rescue.jsonl --exclude ..._drop.jsonl \
    --whole-traj-filter --think-cap 2048 \
-   --terminal-rewrite out/terminal_POOL.jsonl
+   --terminal-rewrite out/terminal_POOL.jsonl \
+   --val-ratio 0.05 \
+   --image-max 10 --fold-size 1
+#    ↑ --val-ratio 0.05 是 2026-08-22 起的默认(用户立规)。没有验证集时,
+#      过拟合只能靠事后 eval 发现,一次 2 小时;有了它,epoch 边界的
+#      train/val 背离在同一张 wandb 图上当场可见。切分按 TASK(slug 的 md5)
+#      而非按样本 —— 一条轨迹会拆成十几个前缀嵌套的样本,按样本切会让验证集
+#      的前缀出现在训练集里,验证损失假性偏低,等于没测。
+#      5% ≈ 19 条轨迹 ≈ 324 样本 ≈ 8.7 万监督 token,对 token 级平均的
+#      验证损失早已饱和;再大只是白扔语料(我们缺数据量,不缺验证精度)。
+#      哈希确定性:同一 slug 每次重建落在同一边,不同语料留出同一批任务,
+#      所以跨臂的验证损失可比 —— 前提是别改 slug。
+#    ↑ --fold-size 1 也要显式传。默认 10 会让可见图数在 image_max-9..image_max
+#      之间锯齿(见 sft/RESULTS.md §5.19);e6b6e034 的提交信息原话是
+#      "fold_size>1 silently trains on fewer images than the window says"。
 #    ↑ 不要加 --image-cache:它会把上一代语料里已被污染的像素原样继承过来
 #      (2026-08-17 事故)。重新编码约多花 40 分钟,换的是像素一定正确。
 
 # ③ 出包前的终止形式硬门(只对规范化过的语料用)
 $P -m ostg.sft.verify OUT --require-terminate
+
+# ③b build 只产出 samples.jsonl;train_swift.jsonl / val_swift.jsonl 是
+#     to_swift 那一步生成的。单独调 build 会得到一个没有 train_swift.jsonl
+#     的目录,ship 时才发现(2026-08-22 踩过)。完整链条见 sft/pipeline.sh。
+$P -m ostg.sft.to_swift OUT
 
 # ④ 语料审计:verify 查不了的那一半 —— 语料描述的还是 checker 验收的那条轨迹吗
 $P -m ostg.sft.corpusaudit --corpus OUT_100 --corpus OUT_500 \
