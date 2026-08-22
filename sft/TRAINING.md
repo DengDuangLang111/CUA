@@ -94,6 +94,46 @@
   分片参数是在小头上省、在大头上赔。**不要再试**。
   同理可推:能省的只有 bs、序列长度、图像 token 预算三样,
   而后两样都会改变实验变量(见上条)。gb 大小与显存无关(见上上条)。
+- **显存杠杆的完整清单与实测(2026-08-22,四条路走完三条)**:
+  上一条说"只剩 bs / 序列长度 / 图像预算",这次把框架侧的两条也走完了,
+  **都不通**;真正有效的是图像预算,而且收益比线性外推大得多。
+
+  | 杠杆 | 结论 | 依据 |
+  |---|---|---|
+  | ZeRO-3 | ❌ 0/2 步 OOM | 作业 249480(已存档) |
+  | `use_liger_kernel` | ❌ 只省 0.5–1 GB | `use_logits_to_keep` 一直是 True(日志 162 次),last_round 监督 token **中位数只有 105 个**,logits 从来不是 `[81920,248320]`;而 `enable_channel_loss` 会摘走 labels 让融合 CE 失效 |
+  | `sequence_parallel_size` | ❌ 上限 4 且净亏 | KV head 只有 4 → Ulysses 封顶;超出降级 ring,而 ring 对 Qwen3.5 三重封死;更糟的是 **SP 会强制 `raise NotImplementedError` 关掉 `use_logits_to_keep`**,logits 从 105×248320 变成 81920/sp×248320 |
+  | **图像窗口 20→10** | ✅ **省 52.96 GiB** | 见下 |
+
+  **图像窗口是唯一有效的那条,而且超线性**(smoke 252357 / 252360,各 2 步、
+  取语料中最长的 128 条以保证吃到峰值):
+
+  ```
+  4B @ 20图  最长样本 74,407 token   峰值 136.7 GiB   97.8%   ← 崩过两次
+  4B @ img10 最长样本 58,047 token   峰值  83.74 GiB   59.9%   41.42 s/it
+  9B @ img10 同上                    峰值 110.30 GiB   78.9%   57.15 s/it
+  ```
+
+  **token 降 22%,显存降 39%** —— 非线性来自那 8 层全注意力的平方项
+  (另 24 层是 GatedDeltaNet 线性注意力)。两个连带结论:
+  **① 9B 比我们跑了一周的 4B 配方还宽裕 26 GiB**,"训不下 9B"这个假设是错的;
+  **② 现行 4B 配方贴着 97.8% 跑本身就是故障源** —— 那两次 cuDNN
+  attention workspace 崩溃(249538 step 226、249689 step ~240)在 img10 下
+  有 56 GiB 余量,不会再发生。
+
+  img10 的另一个白捡好处:最长样本 58,047 < 65536,所以
+  **`max_length` 可以从 81920 降回 65536 且一条样本都不丢**(20 图语料在
+  65536 下要丢 14 条)。语料本身样本数 6474 与 nocap 逐位相同,策展 report
+  逐项相同,**窗口是唯一变量**。
+- **`--gpus-per-task=1` 的灵活分配走不通(2026-08-22,smoke 252370)**:
+  想用 `--nodes=1-4 --ntasks=8 --gpus-per-task=1` 让 Slurm 随意切分 8 张卡以
+  改善排队,8 个 rank 的环境变量都对(`rank 0/8`…`rank 7/8`),但
+  **DeepSpeed 自己按 rank-within-node 重算 local_rank,然后 `set_device(7)`**,
+  而该进程的可见设备只有 0 号 → `CUDA error 101, invalid device ordinal`,
+  日志里同时出现 `world_size: 8` 和 `world_size: 1`。要走通得改 DeepSpeed 的
+  local_rank 推断,不值得。**用 4 节点×2 卡代替**:排队实测 8 卡最长 67 分、
+  16 卡最长 571 分(中位都是几分钟,**差别全在尾部**),而 4×2 是 nocapnp
+  跑通过的形状,不动启动机制。
 - **checkpoint 密度标准(用户 2026-08-17 立规,2026-08-18 升级为硬整除)**:
   此后所有训练 sbatch 用 `--save_strategy steps`,且 **`save_steps` 必须整除
   每 epoch 步数**(steps/epoch = ceil(样本数 / 全局批);取整除数中最接近
