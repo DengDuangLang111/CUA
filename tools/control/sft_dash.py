@@ -254,6 +254,37 @@ EVAL50_ARMS = {
     "vl20":      ("VL 20-img lr1e-5 · stock (no-split)", "sft",
                   "VL backbone x r5vl full-window corpus at lr 1e-5 (kD-recipe"
                   " twin on VL); standard 20-image eval"),
+    # ---- the img10 corpus arms (2026-08-22) ----
+    # Same 6474 samples as nocap, but a 10-screenshot history window held flat
+    # by fold_size=1 instead of 20. Peak memory 136.7 -> 83.74 GiB, and that
+    # headroom is what makes a3 and the 9B affordable at all.
+    "a1":        ("img10 4B e3.00 · stock (no-split)", "sft",
+                  "champion recipe on the 10-image window. Sample count identical"
+                  " to nocap and the curation report matches field for field, so"
+                  " the window is the only variable. Control: nocap"
+                  " (59.81 seen-50 / 47.00 on the official 361)"),
+    "a2":        ("img10 9B e3.00 · stock (no-split)", "sft",
+                  "a1 with the backbone swapped. Qwen3.5-9B shares the 4B's 32"
+                  " layers / 16 heads / 4 KV heads / 248320 vocab; only hidden"
+                  " 2560->4096 and intermediate 9216->12288. READ IT AGAINST THE"
+                  " 9B BASE, never against the 4B arms"),
+    "a3":        ("img10 4B hermes e3.00 · stock (no-split)", "sft",
+                  "a1 with loss_scale last_round+hermes, which in ms-swift is"
+                  " exactly {tool_call: 2.0}: think falls 70.0% -> 59.5% of"
+                  " supervised tokens, tool_call rises 17.8% -> 30.3%. WATCH THE"
+                  " FAILURE MODES, NOT THE SCORE ALONE -- terminate is itself a"
+                  " tool_call and all 362 corpus terminations are status=success,"
+                  " so up-weighting actions may raise the 21% false-DONE rate"),
+    "a5v":       ("img10v 4B 5ep lr2e-6 · stock (no-split)", "sft",
+                  "5 epochs at lr 2e-6 (cumulative LR held near the 3-epoch"
+                  " champion's, 4.6e-4 -> 5.1e-4) and the first arm on this line"
+                  " with a validation split. TWO CAVEATS, both structural: its"
+                  " endpoint is epoch 5, so it is not a same-epoch peer of"
+                  " a1/a2/a3; and the 5% split leaves 6213 training samples,"
+                  " not 6474, so the corpus is a second variable. The split also"
+                  " moved steps/epoch 102 -> 97, which is why its intermediate"
+                  " checkpoints sit at epoch 1.05/2.10/3.15 and its epoch-3"
+                  " model does not exist (97 is prime; see TRAINING.md)"),
     "kF":        ("r5-LoRA lean e3.00 · stock (no-split)", "sft",
                   "lean variant of the r5 LoRA, endpoint merge. Dropped from the"
                   " Klone maintenance plan, restored 2026-08-18; with r5lora"
@@ -428,7 +459,11 @@ ARM_PANEL = {"nocap50b": "heldout", "base50b": "heldout", "t3850b": "heldout",
              # (2026-08-22, an edit from a stale copy) and the symptom was
              # exactly that: base261/nocap261 showing 0/50 with mean None while
              # 261 scored tasks sat on disk.
-             "base261": "rest261", "nocap261": "rest261"}
+             "base261": "rest261", "nocap261": "rest261",
+             # The img10 four (2026-08-22). All eval100; a5v's endpoint is
+             # epoch 5, not 3 -- keep it out of any same-epoch comparison.
+             "a1": "all100", "a2": "all100",
+             "a3": "all100", "a5v": "all100"}
 
 
 def eval50():
