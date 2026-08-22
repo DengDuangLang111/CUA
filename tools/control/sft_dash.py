@@ -216,6 +216,13 @@ EVAL50_ARMS = {
     "base50b":   ("stock 4B @ HELD-OUT 50 · stock (no-split)", "reference",
                   "the untrained base on the same held-out 50, so the"
                   " champion-vs-base margin can be read out of sample"),
+    "base261":   ("stock 4B @ REST 261 · stock (no-split)", "reference",
+                  "the untrained base over the 261 of test_nogdrive the frozen"
+                  " 100 does not cover; with basekeep and base50b this is the"
+                  " base model on the official 361"),
+    "nocap261":  ("champion @ REST 261 · stock (no-split)", "sft",
+                  "the 59.81 champion over the same remaining 261, completing"
+                  " a 361 for the strongest arm"),
     "nocapnp238":("no-prose @ e2.36 (furthest) · ALL 100", "sft",
                   "the furthest checkpoint the no-prose full fine-tune ever"
                   " reached before two hardware failures: epoch 2.356 with the"
@@ -392,6 +399,11 @@ def eval50_tasks(meta_path=None):
 
 HELDOUT_META = EVAL50_META.replace("verified_eval50_nonproxy",
                                    "verified_eval50b_nonproxy")
+# The other 261 of test_nogdrive's 361. Verified disjoint from the frozen 100
+# (100 union 261 == 361 exactly, intersection empty), so a 361 row is a union
+# of three runs and never double-counts a task.
+REST261_META = EVAL50_META.replace("verified_eval50_nonproxy",
+                                   "verified_eval261_rest")
 
 
 # A model that ran both halves gets a third, synthetic row spanning all 100
@@ -401,16 +413,28 @@ HELDOUT_META = EVAL50_META.replace("verified_eval50_nonproxy",
 HELDOUT_PAIRS = {"nocap50b": "nocap", "base50b": "basekeep", "t3850b": "t38",
                  "kGh": "kG", "r5lorah": "r5lora"}
 
+# A model that ALSO ran the remaining 261 gets a fourth synthetic row over the
+# whole official 361. Keyed 261-arm -> (seen-half arm, held-out-half arm).
+REST_TRIPLES = {"base261": ("basekeep", "base50b"),
+                "nocap261": ("nocap", "nocap50b")}
+
 # Arms not scored on the default (seen) panel.
 ARM_PANEL = {"nocap50b": "heldout", "base50b": "heldout", "t3850b": "heldout",
              "np1e6": "all100", "nocapnp238": "all100", "nocapnp": "all100",
              "kGh": "heldout", "r5lorah": "heldout", "base9b": "all100",
-             "nocapms100": "all100"}
+             "nocapms100": "all100",
+             # Without these two the 261 arms intersect the frozen-100 panel to
+             # the empty set and read scored=0 forever. They were lost once
+             # (2026-08-22, an edit from a stale copy) and the symptom was
+             # exactly that: base261/nocap261 showing 0/50 with mean None while
+             # 261 scored tasks sat on disk.
+             "base261": "rest261", "nocap261": "rest261"}
 
 
 def eval50():
     tasks = eval50_tasks()
     heldout = eval50_tasks(HELDOUT_META)
+    rest = eval50_tasks(REST261_META)
     # Columns are the full frozen 100: the seen half first, then the held-out
     # half. Arms that ran one half fill their own columns and show "-" in the
     # other, which is what makes the two halves line up task-by-task on screen.
@@ -429,7 +453,8 @@ def eval50():
         # from the name: np1e6 runs the whole 100 in one pass while the "50b"
         # arms run only the held-out half, and getting this wrong silently
         # discards an arm's entire result set (it read scored=0 on 2026-08-20).
-        panel = {"heldout": heldout, "all100": dict(tasks, **heldout)}.get(
+        panel = {"heldout": heldout, "all100": dict(tasks, **heldout),
+                 "rest261": rest}.get(
             ARM_PANEL.get(key), tasks)
         got = {tid: r for tid, r in read_arm(d).items() if tid in panel}
         arms.append({"key": key, "run": run, "modeldir": modeldir,
@@ -473,7 +498,125 @@ def eval50():
             "missing": 100 - len(merged),
             "panel_n": 100,
             "tasks": merged})
+    # 361 rows: seen 50 + held-out 50 + rest 261 == test_nogdrive's 361.
+    # Denominator is the full 361 from the first task on, so `mean` on a row
+    # still in flight understates by design; read scored/panel_n for progress
+    # and mean_scored for the current hit rate.
+    for child, (seen_k, held_k) in REST_TRIPLES.items():
+        c, sa, ha = by_key.get(child), by_key.get(seen_k), by_key.get(held_k)
+        if not (c and sa and ha):
+            continue
+        merged = dict(sa["tasks"]); merged.update(ha["tasks"])
+        merged.update(c["tasks"])
+        arms.append({
+            "key": seen_k + "361", "run": "", "modeldir": sa["modeldir"],
+            "label": sa["label"].split(" · ")[0] + " · OFFICIAL 361 (test_nogdrive)",
+            "group": sa["group"],
+            "note": "the union of three runs on the same weights: the frozen"
+                    " 100 (seen 50 + held-out 50) plus the remaining 261. Task"
+                    " sets verified disjoint, so no task is counted twice."
+                    " Harness is our MODIFIED OSWorld -- comparable across arms"
+                    " here, NOT to the public leaderboard without disclosure.",
+            "scored": len(merged),
+            "passed": sum(1 for r in merged.values() if r["score"] == 1.0),
+            "mean": round(sum(r["score"] or 0 for r in merged.values()) / 361.0, 4),
+            "mean_scored": (round(sum(r["score"] or 0 for r in merged.values())
+                                  / len(merged), 4) if merged else None),
+            "missing": 361 - len(merged),
+            "panel_n": 361,
+            "tasks": merged})
     return {"panel": order, "n": len(order), "arms": arms}
+
+
+# ---------------------------------------------------------------- 361 view --
+# The official 361 (test_nogdrive) as three runs on the same weights. Kept OUT
+# of the eval-50 matrix on purpose: that table's columns are the frozen 100, so
+# a 361 arm has 261 columns it can never fill. Here the unit is the SLICE, not
+# the task, so nothing has to line up horizontally.
+SFT361 = {
+    "base":  ("stock Qwen3.5-4B · untrained", "reference",
+              ("basekeep", "base50b", "base261")),
+    "nocap": ("champion · r5 lr3e-6 e3.00 no-cap", "sft",
+              ("nocap", "nocap50b", "nocap261")),
+}
+SLICE_N = (("seen50", 50), ("held50", 50), ("rest261", 261))
+
+
+def proxy_ids():
+    """Task ids the official config flags proxy:true.
+
+    These run with enable_proxy=False here, and that is NOT free: the 2026-08-08
+    Proxy-49 experiment scored 11% (5/45) on exactly this subset against ~45%
+    overall, with failures matching datacenter-IP bot-walls (Amazon, Delta,
+    TripAdvisor), not model ability. Reachability is not the test -- a plain
+    HEAD returns 200 for most of these hosts. So the 312 non-proxy tasks are
+    the honest headline and the 49 are reported beside it, never merged in
+    silently.
+    """
+    ids = set()
+    for meta in (EVAL50_META, HELDOUT_META, REST261_META):
+        try:
+            m = json.load(open(meta, encoding="utf-8"))
+        except Exception:
+            continue
+        for dom, tids in m.items():
+            for tid in tids:
+                try:
+                    cfg = json.load(open(os.path.join(EVAL50_EXAMPLES, dom,
+                                                      tid + ".json"),
+                                         encoding="utf-8"))
+                except Exception:
+                    continue
+                if cfg.get("proxy"):
+                    ids.add(tid)
+    return ids
+
+
+def sft361(ev):
+    by = {a["key"]: a for a in ev["arms"]}
+    px = proxy_ids()
+    models = []
+    for key, (label, group, arm_keys) in SFT361.items():
+        got, slices = {}, {}
+        for (name, n), ak in zip(SLICE_N, arm_keys):
+            a = by.get(ak)
+            if a is None:                       # not run yet -- show the gap
+                slices[name] = {"n": n, "scored": 0, "sum": 0.0, "passed": 0,
+                                "arm": ak, "run": "", "modeldir": ""}
+                continue
+            t = a["tasks"]
+            got.update(t)
+            slices[name] = {"n": n, "scored": len(t),
+                            "sum": round(sum(r["score"] or 0 for r in t.values()), 2),
+                            "passed": sum(1 for r in t.values() if r["score"] == 1.0),
+                            "arm": ak, "run": a["run"], "modeldir": a["modeldir"]}
+
+        def agg(keep, n):
+            sub = {k: v for k, v in got.items() if keep(k)}
+            return {"n": n, "scored": len(sub),
+                    "sum": round(sum(r["score"] or 0 for r in sub.values()), 2),
+                    "passed": sum(1 for r in sub.values() if r["score"] == 1.0),
+                    # rate is over the FIXED denominator (unscored == 0, the
+                    # standing accounting policy); rate_now is over what has
+                    # actually finished, which is what to read mid-run.
+                    "rate": (round(sum(r["score"] or 0 for r in sub.values()) / n, 4)
+                             if n else None),
+                    "rate_now": (round(sum(r["score"] or 0 for r in sub.values())
+                                       / len(sub), 4) if sub else None)}
+        doms = {}
+        for r in got.values():
+            d = doms.setdefault(r["dom"], [0.0, 0])
+            d[0] += r["score"] or 0
+            d[1] += 1
+        models.append({
+            "key": key, "label": label, "group": group, "slices": slices,
+            "complete": all(sl["scored"] == sl["n"] for sl in slices.values()),
+            "all361": agg(lambda t: True, 361),
+            "nonproxy": agg(lambda t: t not in px, 361 - len(px)),
+            "proxy": agg(lambda t: t in px, len(px)),
+            "domains": {k: [round(v[0], 2), v[1]] for k, v in sorted(doms.items())},
+        })
+    return {"proxy_n": len(px), "n": 361, "models": models}
 
 
 def status():
@@ -504,9 +647,10 @@ def status():
     # arm measured on 9 tasks is not comparable to one measured on 12. This
     # fingerprint makes any change to the panel show up on the page.
     pid = hashlib.md5(",".join(sorted(pan)).encode()).hexdigest()[:8]
+    ev = eval50()
     out = {"updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M PT"),
            "panel": order, "panel_id": pid, "panel_n": len(pan),
-           "arms": arms, "groups": GROUPS, "eval50": eval50()}
+           "arms": arms, "groups": GROUPS, "eval50": ev, "sft361": sft361(ev)}
     old = None
     try:
         old = json.load(open(OUT))
