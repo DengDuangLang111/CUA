@@ -139,9 +139,19 @@
   尝试史:235364(8卡)→235400(8卡+exclude)→235420(+P2P off,步14 死)
   →235467(4卡 accum32)→235475(2卡 accum64)→235490(+channel_loss off)。
   第七发(zero3_offload + accum64)同点死 137.78 → 泄漏对 ZeRO 阶段免疫,
-  结案:泄漏源 = last_round 外部 loss 路径按微批持有 ~250MB(≈响应 logits
-  尺寸),channel_loss 关闭无效因为 last_round 本身走该路径。可行域收敛为
-  **batch=1(激活顶)且 accum≤8(泄漏顶)**。
+  结案:泄漏源 = **外部 loss 路径**按微批持有 ~250MB(≈响应 logits 尺寸)。
+  可行域收敛为 **batch=1(激活顶)且 accum≤8(泄漏顶)**。
+  **归因更正(2026-08-22,读 ms-swift 4.5.0.dev0 源码)**:上一版本条(及各
+  sbatch 注释)把外部路径归因于 `last_round`,**对象写错了**。真相:
+  `loss_scale/base.py:31` 里 `is_binary = True`,`mapping.py:47` 把
+  `'last_round'` 映射到基类 `LossScale`,`template/base.py:1152` 对二值
+  loss_scale 直接 `loss_scale = None` 并从 inputs 里 pop 掉 —— **`last_round`
+  走的是内部路径**。真正把 labels 摘走、逼出外部路径的是
+  `seq2seq_trainer.py:134` 那个 OR 条件里的 **`enable_channel_loss`**
+  (以及非二值的 `hermes`/`react`/`*+hermes` 一类)。所以当年"channel_loss
+  关闭无效"的观察值得重查:按现在读到的代码,关掉它应当能回到内部路径。
+  实践后果不变(accum≤8 仍是当时的可行域),但**下次要省这块显存,该关的是
+  channel_loss,不是换 loss_scale**;反之要用 hermes 加权就必然付这笔钱。
   **第八发通关(2026-08-17 凌晨,用户拍板):235513 = 16×H200 跨 2 节点
   × accum 8 = 精确全局 128**,srun+NNODES/NODE_RANK/MASTER_ADDR 多机
   首战成功;实测水位 132.6 与泄漏定律内插预测 ~133 吻合(定律双向验证),

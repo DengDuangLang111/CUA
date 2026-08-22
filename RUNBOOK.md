@@ -309,11 +309,26 @@ screenshots**. The modal upstream setting — and the paper baseline — is
 only when the base URL contains `dashscope`; against a local vLLM it is silently
 discarded, and vLLM 0.25 additionally renamed the response field
 `reasoning_content` → `reasoning` so the client read `None` and dropped it.
-Both are patched locally (`main.py`, `client.py`); **without those patches an
-upstream Qwen run has no reasoning at all.** Our own official-361 campaign
-proves it: **7,906 steps, 0 containing `<think>`** — the responses start with
-two blank lines where the discarded reasoning used to be, and that campaign's
-45.2% was scored with no thinking whatsoever.
+Both are patched locally (`main.py`, `client.py`).
+
+**Read the two bugs separately — an earlier version of this passage did not,
+and got the consequence wrong (corrected 2026-08-22).** Bug 1 is on the SEND
+path and costs less than it looks: `--reasoning-parser qwen3` leaves thinking
+on by default, so discarding the flag did not stop the model reasoning. Bug 2
+is on the READ path and is the one that bit: the reasoning was generated and
+billed, then thrown away before it could be saved or replayed. `EXPERIMENTS.md`
+§9 states it plainly — *"thinking was generated, paid for, and thrown away in
+every prior run."*
+
+So **7,906 steps with 0 `<think>` means 0 were RECORDED, not 0 were thought.**
+The model reasoned at every step; what it never had was reasoning in its own
+history, because an empty think block is dropped whole by the chat template
+(`OPS.md` §"reasoning-parser", context silently shrinking ~88%).
+
+The practical reading of that campaign's 45.2%: it is a **lean-history** run,
+not a no-thinking run. Our own measured price for that exact difference is
+lean 23.81 vs rich 28.00, i.e. ~4pp on a 4B — so treat 45.2% as depressed by
+roughly that order, not by the whole value of reasoning.
 
 ### Why the dashboard looks stale (2026-08-14)
 
