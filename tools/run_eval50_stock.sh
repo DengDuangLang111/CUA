@@ -282,6 +282,17 @@ if [ -n "$GATEBAD" ]; then
 fi
 echo "[$(date '+%F %T')] evaluator-func static gate passed for $METAF"
 
+# Stale-VM notice. The 3-VM cap exists because WSL has 22GB; a container that
+# outlives its runner holds ~3GB of that hostage and pushes the next arm
+# toward the OOM that corrupts a run. One such leak was found 39 hours old on
+# 2026-08-22, almost certainly orphaned by one of the day's pkill -9 chain
+# rewires. Not fatal -- a stale VM does not corrupt results, it only starves
+# them -- but it must be VISIBLE, since 39 hours of silence is how it got big.
+_vms=$(docker ps -q 2>/dev/null | wc -l | tr -dc 0-9)
+if [ "${_vms:-0}" -gt 0 ]; then
+  echo "[$(date '+%F %T')] NOTE: $_vms VM container(s) already running before this arm starts (expect 0; >0 means a previous runner leaked one -- docker stop it if this arm reports memory pressure)"
+fi
+
 # Reuse an existing result dir for this arm so a restart resumes instead of
 # starting a second copy under a new date.
 R=$(ls -dt $RES/$GRP/eval50-$ARM-* 2>/dev/null | head -1)
