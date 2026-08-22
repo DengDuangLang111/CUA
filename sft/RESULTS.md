@@ -1583,3 +1583,35 @@ a3 的 hermes(`tool_call` ×2)把它从 16% 抬到约 27.6%。
 3. **补任务**:生成更多真正需要这些动作的任务 —— 唯一不牺牲别的东西的解法。
    `scroll` 只有 90 条而 OSWorld 长页面遍地,`left_click_drag` 11 条而 GIMP/Impress
    的选区拖拽全靠它。
+
+### per-message 字段:端到端实测(2026-08-22,真样本 95 轮 / 33,601 token)
+
+三个字段全部真实可用,陷阱也真实存在。基线 `{0.0: 33077, 1.0: 524}`。
+
+| 改动 | `is_binary_loss_scale` | 编码里有 loss_scale 键 | 结果权重分布 | 判定 |
+|---|---|---|---|---|
+| (无) | None(默认) | 无 | `{0.0: 33077, 1.0: 524}` | 基线 |
+| 末轮 `loss_scale: 2.0` | None(默认) | 无 | `{0.0: 33077, 1.0: 524}` | **★2.0 被静默丢弃★** |
+| 末轮 `loss_scale: 2.0` | **False** | **有** | `{0: 33077, 2.0: 522, 1.0: 2}` | **生效** |
+| 历史轮 `loss: True` | None | 无 | `{0.0: 32805, 1.0: 796}` | **生效(+272)** |
+| 末轮 `loss: False` | None | 无 | `{0.0: 33599, 1.0: 2}` | **生效** |
+
+**丢弃是完全无声的**:权重分布与基线逐字节相同,没有异常、没有告警、没有日志。
+又一个 `DATA_PIPELINE.md` §9 型故障 —— 写了个权重,它就是不生效。
+
+**两个细节**:
+
+- 非二值那行是 `2.0: 522` 而不是 524,余下 `1.0: 2` 是 **SUFFIX(`<|im_end|>\n`)**。
+  **per-message 的 `loss_scale` 只覆盖 response 正文,不覆盖该轮的结束符。**
+  想给 terminate 连同它的结束符一起加权,这条路做不到。
+- `loss: False` 同理只关掉正文,**结束符那 2 个 token 仍然被监督**。
+
+### 成本:零。外部 loss 路径我们已经在走了
+
+`trainers/seq2seq_trainer.py:134-136` —— 决定是否走外部逐 token loss 的条件里
+就有 `enable_channel_loss`,而我们四个臂全部 `enable_channel_loss=True`。
+`:159-165` 里 `per_token_loss_func` 算完逐 token loss 后,
+`if loss_scale is not None: outputs.loss = outputs.loss * loss_scale` 只是多一次逐元素乘。
+
+**所以 `--is_binary_loss_scale false` 对我们不增加任何显存或速度代价** ——
+融合 kernel 那条快路我们本来就没在走。
