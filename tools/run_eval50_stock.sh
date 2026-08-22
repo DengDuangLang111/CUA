@@ -234,6 +234,39 @@ C=/mnt/d/research/OSWorld/evaluation_examples
 META=$C/$METAF
 RES=/mnt/d/research/OSWorld/results_generated
 
+# Pre-launch static gate (2026-08-22): every evaluator.func in this arm's task
+# set must resolve on the RUNNER'S OWN interpreter before anything is
+# submitted. Eight of 361 tasks never ran in ANY arm because the fork's
+# metrics/__init__.py dropped nine upstream exports inside the same diff that
+# added the custom metrics -- env.reset crashed before the agent's first step
+# and the zero was indistinguishable from a weak model. A getattr sweep here
+# surfaces that whole class a campaign earlier than a harness_error.json.
+GATEBAD=$(/mnt/d/research/OSWorld/.venv/bin/python - "$META" <<'PYGATE'
+import json, sys
+sys.path.insert(0, "/mnt/d/research/OSWorld")
+from desktop_env.evaluators import metrics
+meta = json.load(open(sys.argv[1]))
+bad = set()
+for dom, ids in meta.items():
+    for t in ids:
+        try:
+            cfg = json.load(open(
+                "/mnt/d/research/OSWorld/evaluation_examples/examples/%s/%s.json" % (dom, t)))
+        except Exception:
+            continue
+        f = (cfg.get("evaluator") or {}).get("func")
+        for name in (f if isinstance(f, list) else [f]):
+            if isinstance(name, str) and not hasattr(metrics, name):
+                bad.add("%s/%s:%s" % (dom, t[:8], name))
+print(";".join(sorted(bad)))
+PYGATE
+)
+if [ -n "$GATEBAD" ]; then
+  echo "[$(date '+%F %T')] FATAL: evaluator funcs unresolvable on the runner venv: $GATEBAD"
+  exit 1
+fi
+echo "[$(date '+%F %T')] evaluator-func static gate passed for $METAF"
+
 # Reuse an existing result dir for this arm so a restart resumes instead of
 # starting a second copy under a new date.
 R=$(ls -dt $RES/$GRP/eval50-$ARM-* 2>/dev/null | head -1)
