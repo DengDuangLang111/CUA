@@ -74,7 +74,7 @@ train_gate(){  # $1 arm, $2 job, $3 dir glob, $4 min epoch; up to 12h; returns 1
 
 log "chain start (resume-safe)"
 PREV=bsstock
-for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 baseh1 nocapt0 img1 vlnocapnp nocapnp2 nocap50b base50b t3850b np1e6 nocapnp base261 nocap261 base9b nocapms100 kGh a3 a1 a2 a6v r5lorah a1h10; do
+for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 baseh1 nocapt0 img1 vlnocapnp nocapnp2 nocap50b base50b t3850b np1e6 nocapnp base261 nocap261 base9b nocapms100 kGh a3 a1 a1h10 a2 a6v r5lorah; do
   if alive "$arm"; then
     log "adopt $arm: already in flight"
   elif complete "$arm"; then
@@ -112,4 +112,4 @@ for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 ba
   fi
   PREV=$arm
 done
-log "chain done (tail: img10 generation, r5lorah for the LoRA prose pair, then a1h10 serving a1 at its trained ten-image window; scancel eval4ba1 after)"
+log "chain done (tail: a1 then a1h10 back to back on the same weights at twenty then ten images, a2, a6v on its validation pick, r5lorah closing the LoRA prose pair; scancel eval4br5l after)"

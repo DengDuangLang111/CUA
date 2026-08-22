@@ -191,7 +191,7 @@ case "$ARM" in
   # Only ONE matched arm is needed -- a1/a2/a3 share the mismatch, so their
   # comparisons to each other already hold; this one prices img10 against the
   # champion, the single cross-family comparison the mismatch would distort.
-  a1h10) SB=img10-a1; JOB=eval4ba1; RP=8051; MN=img10-4b-stock; GRP=qwen35-4b-sft; PREV=r5lorah; PJOB=eval4br5l; METAF="verified_eval100_nonproxy.json"; XARGS="--image_max 10 --fold_size 1"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-4b/" ;;
+  a1h10) SB=img10-a1; JOB=eval4ba1; RP=8051; MN=img10-4b-stock; GRP=qwen35-4b-sft; PREV=a1;      PJOB=eval4ba1;  METAF="verified_eval100_nonproxy.json"; XARGS="--image_max 10 --fold_size 1"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-4b/" ;;  # 08-22 user order: immediately after a1, same weights back to back, so the serving window is the only thing that moved between the two numbers
   # t38261: the teacher over the remaining 261 -- the third full-361 line
   # (user order 08-22 via peer). Serve config is the same 38-i sbatch that
   # carried both 50-task teacher runs; throughput is VM-bound, measured
@@ -216,7 +216,7 @@ case "$ARM" in
   # same-epoch comparison row with the other three.
   a3)  SB=img10-a3;  JOB=eval4ba3; RP=8053; MN=img10-hrm-stock;  GRP=qwen35-4b-sft; PREV=kGh;     PJOB=eval4bnp;  METAF="verified_eval100_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-hrm/" ;;  # 08-22: r5lorah pulled by user order, a3 follows kGh directly
   a1)  SB=img10-a1;  JOB=eval4ba1; RP=8051; MN=img10-4b-stock;   GRP=qwen35-4b-sft; PREV=a3;      PJOB=eval4ba3;  METAF="verified_eval100_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-4b/" ;;
-  a2)  SB=img10-a2;  JOB=eval4ba2; RP=8052; MN=img10-9b-stock;   GRP=qwen35-9b-sft; PREV=a1;      PJOB=eval4ba1;  METAF="verified_eval100_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-9b/" ;;
+  a2)  SB=img10-a2;  JOB=eval4ba2; RP=8052; MN=img10-9b-stock;   GRP=qwen35-9b-sft; PREV=a1h10;  PJOB=eval4ba1;  METAF="verified_eval100_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-9b/" ;;
   # a6v replaces a5v (user order 08-22): a5v trained five epochs with
   # save_steps computed for the wrong corpus size, so every checkpoint sits
   # just past an epoch-boundary memorization jump and the endpoint is the
