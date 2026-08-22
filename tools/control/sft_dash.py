@@ -404,7 +404,8 @@ HELDOUT_PAIRS = {"nocap50b": "nocap", "base50b": "basekeep", "t3850b": "t38",
 # Arms not scored on the default (seen) panel.
 ARM_PANEL = {"nocap50b": "heldout", "base50b": "heldout", "t3850b": "heldout",
              "np1e6": "all100", "nocapnp238": "all100", "nocapnp": "all100",
-             "kGh": "heldout", "r5lorah": "heldout", "base9b": "all100"}
+             "kGh": "heldout", "r5lorah": "heldout", "base9b": "all100",
+             "nocapms100": "all100"}
 
 
 def eval50():

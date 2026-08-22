@@ -44,7 +44,8 @@ try:
     print(sum(len(v) for v in t.values()))
 except Exception:
     static = {"base261": 261, "nocap261": 261, "base9b261": 261, "t38261": 261,
-              "np1e6": 100, "nocapnp": 100, "nocapnp238": 100, "base9b": 100}
+              "np1e6": 100, "nocapnp": 100, "nocapnp238": 100, "base9b": 100,
+              "nocapms100": 100}
     print(static.get(arm, 50))
 PYNEED
 )
@@ -72,7 +73,7 @@ train_gate(){  # $1 arm, $2 job, $3 dir glob; up to 12h; returns 1 on timeout (c
 
 log "chain start (resume-safe)"
 PREV=bsstock
-for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 baseh1 nocapt0 img1 vlnocapnp nocapnp2 nocap50b base50b t3850b np1e6 nocapnp base261 nocap261 base9b kGh r5lorah; do
+for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 baseh1 nocapt0 img1 vlnocapnp nocapnp2 nocap50b base50b t3850b np1e6 nocapnp base261 nocap261 base9b kGh r5lorah nocapms100; do
   if alive "$arm"; then
     log "adopt $arm: already in flight"
   elif complete "$arm"; then
@@ -105,4 +106,4 @@ for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 ba
   fi
   PREV=$arm
 done
-log "chain done (tail: LoRA pair on the held-out 50; the 261 arms base9b261/t38261 are pulled by the 08-22 freeze-100 order -- every future arm runs the frozen 100 only; scancel eval4br5l after)"
+log "chain done (tail: LoRA pair, then the champion at a doubled step budget over the frozen 100 -- the budget-vs-ability verdict arm; scancel eval4bnc after)"

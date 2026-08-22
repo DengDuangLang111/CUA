@@ -173,7 +173,14 @@ case "$ARM" in
   # carried both 50-task teacher runs; throughput is VM-bound, measured
   # 24.5-28.1 tasks/h on the 100, so ~10h. The 49-proxy stratum caveat
   # applies to this line like the other two.
-  t38261)   SB=38-i;             JOB=eval38;    RP=8000; MN=qwen38-27b-local;         GRP=qwen38-27b-local; PREV=r5lorah; PJOB=eval4br5l; METAF="verified_eval261_rest.json" ;;  # 08-20 user order: immediately after nocap50b, so the eval100 paired comparison completes back to back instead of straddling another arm
+  t38261)   SB=38-i;             JOB=eval38;    RP=8000; MN=qwen38-27b-local;         GRP=qwen38-27b-local; PREV=r5lorah; PJOB=eval4br5l; METAF="verified_eval261_rest.json" ;;
+  # nocapms100: the champion with DOUBLE the step budget (max_steps 100), the
+  # only changed parameter, over the frozen 100 (user order 08-22 via peer).
+  # Verdict arm for RESULTS 5.22: the teacher-student gap grows 17.4->65.2pp
+  # with task length while the teacher stays ~100%, and multi_apps hits the
+  # 50-step cap 47.3% of the time -- this separates "ran out of budget" from
+  # "went wrong". Own result dir; never mixes with the plain nocap runs.
+  nocapms100) SB=4b-nocap-stock;  JOB=eval4bnc;  RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft; PREV=r5lorah; PJOB=eval4br5l; METAF="verified_eval100_nonproxy.json"; XARGS="--max_steps 100" ;;  # 08-20 user order: immediately after nocap50b, so the eval100 paired comparison completes back to back instead of straddling another arm
   # t3850b: the 27B teacher on the held-out half, completing the eval100 final
   # as the three-way (champion / base / teacher) pre-registered on the seen
   # half. Same serve as t38 (1 GPU, TP1), same sampling protocol.
