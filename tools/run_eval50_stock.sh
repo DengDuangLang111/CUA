@@ -367,13 +367,22 @@ echo "[$(date '+%F %T')] endpoint UP; vLLM reports root=$ROOT"
 # because the $SELF incident showed that two reviewers running the SAME kind
 # of check are not redundant: what caught it was luck, so the second check
 # has to be a different SHAPE, not a second pair of eyes.
+# Fail CLOSED at every step: an empty expectation, an empty answer, or a
+# mismatch all stop the arm. The first version compared "$SERVED" != "$MN",
+# which PASSED when both were empty -- a registry typo plus a dead endpoint
+# would have scored 100 tasks against nothing. An assertion with a silent
+# path is the very thing it exists to catch (peer caught this one).
+# Membership, not d[0]: if vLLM ever serves more than one model, position is
+# meaningless but "is my model among them" still holds.
+[ -n "$MN" ] || { echo "[$(date '+%F %T')] FATAL: arm $ARM has no expected served-model name"; exit 1; }
 SERVED=$(curl -s -H "Authorization: Bearer $OPENAI_API_KEY" http://127.0.0.1:$PORT/v1/models \
-         | python3 -c "import json,sys;d=json.load(sys.stdin)['data'];print(d[0].get('id','') if d else '')")
-if [ "$SERVED" != "$MN" ]; then
-  echo "[$(date '+%F %T')] FATAL: port $PORT serves '$SERVED' but arm $ARM expects '$MN' (root=$ROOT) -- refusing to score against the wrong model"
-  exit 1
-fi
-echo "[$(date '+%F %T')] identity OK: $PORT serves $SERVED"
+         | python3 -c "import json,sys;print(' '.join(m.get('id','') for m in json.load(sys.stdin).get('data') or []))")
+[ -n "$SERVED" ] || { echo "[$(date '+%F %T')] FATAL: port $PORT returned no model id at all"; exit 1; }
+case " $SERVED " in
+  *" $MN "*) echo "[$(date '+%F %T')] identity OK: $PORT serves $SERVED" ;;
+  *) echo "[$(date '+%F %T')] FATAL: port $PORT serves '$SERVED' but arm $ARM expects '$MN' (root=$ROOT) -- refusing to score against the wrong model"
+     exit 1 ;;
+esac
 python3 - "$R/MODEL_BOUNDARY.json" "$ARM" "$MN" "$ROOT" "${OSTG_TYPE_NO_SPLIT:-0}" "$XARGS" "$DIALECT" "$METAF" <<'PY'
 import json, sys
 path, arm, served, root, no_split, xargs, dialect, tasks_file = sys.argv[1:9]
