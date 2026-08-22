@@ -149,7 +149,17 @@ case "$ARM" in
   # both existing nocap halves carry MODEL_BOUNDARY.json with the identical
   # checkpoint path (v0-20260818-225915/checkpoint-303), so the 361 union has
   # no inferred-weights caveat; the 49 proxy-true stratum caveat still applies.
-  nocap261)  SB=4b-nocap-stock;      JOB=eval4bnc;  RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft;  PREV=base261;  PJOB=eval4bbo;  METAF="verified_eval261_rest.json" ;;  # 08-20 user order: immediately after nocap50b, so the eval100 paired comparison completes back to back instead of straddling another arm
+  nocap261)  SB=4b-nocap-stock;      JOB=eval4bnc;  RP=8033; MN=q38Bhqs2t-lr3e6nocap-stock; GRP=qwen35-4b-sft;  PREV=base261;  PJOB=eval4bbo;  METAF="verified_eval261_rest.json" ;;
+  # base9b / base9b261: Qwen3.5-9B backbone over the full 361, split 100-then-
+  # 261 so the 100 half lands in ~4h and slots straight into the existing
+  # 100-task scoreboard instead of waiting ~20h for one 361 pass (user order
+  # 08-21 via peer session; weights peer-downloaded, 19G verified complete).
+  # Serve reuses port 8023 -- the chain is serial and the 4B base serve is
+  # gone by then, so the existing tunnel and wait_up wiring hold; a NEW port
+  # would have needed a tunnel-forward change (Duo re-auth) for no benefit.
+  # 4h walls per the serve-gap incident rule: roll walls, never lengthen them.
+  base9b)    SB=9b-base-stock;       JOB=eval9bbo;  RP=8023; MN=q35-9b-stock;               GRP=qwen35-9b-base; PREV=nocap261; PJOB=eval4bnc;  METAF="verified_eval100_nonproxy.json" ;;
+  base9b261) SB=9b-base-stock;       JOB=eval9bbo;  RP=8023; MN=q35-9b-stock;               GRP=qwen35-9b-base; PREV=base9b;   PJOB=eval9bbo;  METAF="verified_eval261_rest.json" ;;  # 08-20 user order: immediately after nocap50b, so the eval100 paired comparison completes back to back instead of straddling another arm
   # t3850b: the 27B teacher on the held-out half, completing the eval100 final
   # as the three-way (champion / base / teacher) pre-registered on the seen
   # half. Same serve as t38 (1 GPU, TP1), same sampling protocol.
