@@ -405,7 +405,7 @@ if [ -n "$EXPECT_ROOT" ]; then
   # matches only what is beneath it, and neither can match a sibling whose
   # name merely starts the same way. (Sibling case found by the peer, who
   # tested the shape I had not: not "a different arm" but "a longer neighbour".)
-  _exp="${EXPECT_ROOT%/}"
+  _exp=$(printf '%s' "$EXPECT_ROOT" | sed 's|/*$||')   # strip ALL trailing slashes: ${x%/} takes one, so a stray "dir//" false-FATALs
   if [ "$ROOT" = "$_exp" ] || case "$ROOT" in "$_exp"/*) true ;; *) false ;; esac; then
     echo "[$(date '+%F %T')] weights OK: $ROOT"
   else
