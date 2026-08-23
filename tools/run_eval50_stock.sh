@@ -170,7 +170,7 @@ case "$ARM" in
   # trained and untrained -- land back to back on the same panel. PJOB is
   # the job to scancel before submitting, so it must name a2261's serve
   # (eval4ba2), not its own; the old self-reference cancelled nothing.
-  base9b261) SB=9b-base-stock;       JOB=eval9bbo;  RP=8023; MN=q35-9b-stock;               GRP=qwen35-9b-base; PREV=a2261;    PJOB=eval4ba2;  METAF="verified_eval261_rest.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/models/Qwen3.5-9B" ;;
+  base9b261) SB=9b-base-261;         JOB=eval9b261; RP=8023; MN=q35-9b-stock;               GRP=qwen35-9b-base; PREV=a2261;    PJOB=eval4ba261; METAF="verified_eval261_rest.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/models/Qwen3.5-9B" ;;
   # kGh / r5lorah: the LoRA pair replayed on the HELD-OUT 50 (user order 08-22
   # via peer). Settles whether the +8pp LoRA prose-strip effect (kG 49.81 vs
   # r5lora 41.81 on seen-50) is real capacity physics or selection noise --
@@ -252,14 +252,21 @@ case "$ARM" in
   # 08-23 user order: a7e3 moved to the TAIL, behind the two 261 arms. Same
   # weights and panel as before, so the a7-vs-a7e3 within-run test is
   # unchanged -- only its slot moved. PJOB now names base9b261's serve.
-  a7e3) SB=img10-a7e3; JOB=eval4ba73; RP=8052; MN=img10-9bh-e3-stock; GRP=qwen35-9b-sft; PREV=base9b261; PJOB=eval9bbo;  METAF="verified_eval100_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-9bh/" ;;
+  a7e3) SB=img10-a7e3; JOB=eval4ba73; RP=8052; MN=img10-9bh-e3-stock; GRP=qwen35-9b-sft; PREV=base9b261; PJOB=eval9b261; METAF="verified_eval100_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-9bh/" ;;
   # a2261: the best 9B student (a2, 62.90 on the frozen 100) over the
   # remaining 261 of test_nogdrive, which completes an OFFICIAL 361 line for
   # the 9B -- the fourth after the 4B base, the 4B champion and the teacher.
   # Same weights, same serve sbatch, same sampling as a2's 100-task run; only
   # METAF moves, so the 100 and the 261 union into a 361 without re-running
   # either half. Queued LAST (user order 08-23) so it cannot delay a7/a7e3.
-  a2261) SB=img10-a2; JOB=eval4ba2; RP=8052; MN=img10-9b-stock; GRP=qwen35-9b-sft; PREV=a7;       PJOB=eval4ba7;  METAF="verified_eval261_rest.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-9b/" ;;
+  # 08-23: a2261/base9b261 get their OWN serve sbatch on --qos=normal with a
+  # 20h wall, so a 261-task run finishes under ONE serve instead of rolling
+  # four. The 08-21 "never lengthen the wall" rule came from a misdiagnosis:
+  # job 251923 (interactive, 09:00:00) had Start=None because interactive's
+  # QOS MaxWall IS 8h -- a hard violation, not a queue. normal allows 24h and
+  # single-GPU jobs on it have never waited more than 2s (n=8, sacct). Weights,
+  # served-model-name, port and sampling are byte-identical to a2's serve.
+  a2261) SB=img10-a2261; JOB=eval4ba261; RP=8052; MN=img10-9b-stock; GRP=qwen35-9b-sft; PREV=a7;       PJOB=eval4ba7;   METAF="verified_eval261_rest.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-9b/" ;;
   # t3850b: the 27B teacher on the held-out half, completing the eval100 final
   # as the three-way (champion / base / teacher) pre-registered on the seen
   # half. Same serve as t38 (1 GPU, TP1), same sampling protocol.
