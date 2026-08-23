@@ -410,9 +410,20 @@ echo "[$(date '+%F %T')] endpoint UP; vLLM reports root=$ROOT"
 # Membership, not d[0]: if vLLM ever serves more than one model, position is
 # meaningless but "is my model among them" still holds.
 [ -n "$MN" ] || { echo "[$(date '+%F %T')] FATAL: arm $ARM has no expected served-model name"; exit 1; }
-SERVED=$(curl -s -H "Authorization: Bearer $OPENAI_API_KEY" http://127.0.0.1:$PORT/v1/models \
-         | python3 -c "import json,sys;print(' '.join(m.get('id','') for m in json.load(sys.stdin).get('data') or []))")
-[ -n "$SERVED" ] || { echo "[$(date '+%F %T')] FATAL: port $PORT returned no model id at all"; exit 1; }
+# Retry, because this driver RESTARTS the tunnel daemon on every launch and the
+# new instance kills the old one -- a2 on 2026-08-23 read `root` successfully
+# and then got an empty model list in the SAME SECOND, killed by that swap, not
+# by a wrong model. Transient blips must not end an arm; a persistent empty
+# answer still must (fail closed after the retries, never open).
+SERVED=""
+for _t in 1 2 3 4 5; do
+  SERVED=$(curl -s -m 10 -H "Authorization: Bearer $OPENAI_API_KEY" http://127.0.0.1:$PORT/v1/models \
+           | python3 -c "import json,sys;print(' '.join(m.get('id','') for m in json.load(sys.stdin).get('data') or []))" 2>/dev/null)
+  [ -n "$SERVED" ] && break
+  echo "[$(date '+%F %T')] model list empty (try $_t/5, tunnel may be respawning); retrying in 15s"
+  sleep 15
+done
+[ -n "$SERVED" ] || { echo "[$(date '+%F %T')] FATAL: port $PORT returned no model id after 5 tries"; exit 1; }
 case " $SERVED " in
   *" $MN "*) echo "[$(date '+%F %T')] identity OK: $PORT serves $SERVED" ;;
   *) echo "[$(date '+%F %T')] FATAL: port $PORT serves '$SERVED' but arm $ARM expects '$MN' (root=$ROOT) -- refusing to score against the wrong model"
