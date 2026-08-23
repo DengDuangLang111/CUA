@@ -101,11 +101,19 @@ def main():
     ap.add_argument("--dump", default=None, help="write per-sample rows as jsonl")
     a = ap.parse_args()
 
+    # Image paths come absolute in the shipped copy and RELATIVE to the corpus
+    # directory in the build-side copy; resolve against the val file's own
+    # directory so either form works without a flag.
     rows = []
     for f in a.val:
+        root = os.path.dirname(os.path.abspath(f))
         for line in open(f, encoding="utf-8"):
-            if line.strip():
-                rows.append(json.loads(line))
+            if not line.strip():
+                continue
+            r = json.loads(line)
+            r["images"] = [p if os.path.isabs(p) else os.path.join(root, p)
+                           for p in (r.get("images") or [])]
+            rows.append(r)
     if a.limit:
         rows = rows[:a.limit]
 
