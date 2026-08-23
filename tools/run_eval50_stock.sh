@@ -389,8 +389,30 @@ wait_up 720 || { echo "[$(date '+%F %T')] FATAL: endpoint $PORT never came up in
 # Record what the server ACTUALLY loaded, not what any script intended to load.
 # vLLM's /v1/models reports `root` = the real weight path. A week of results
 # were mislabelled because nothing ever asked this question (see CUA/OPS.md).
-ROOT=$(curl -s -H "Authorization: Bearer $OPENAI_API_KEY" http://127.0.0.1:$PORT/v1/models \
-       | python3 -c "import json,sys;print(json.load(sys.stdin)['data'][0].get('root',''))")
+# One read, both fields, retried together. Separate reads meant a tunnel
+# respawn between them could leave ROOT empty while SERVED recovered -- and an
+# empty ROOT then failed the weights assertion for no real reason (a2,
+# 2026-08-23). wait_up passing does not mean the tunnel survives the next
+# second: this driver restarts the tunnel daemon at launch and the new
+# instance kills the old one.
+ROOT=""; SERVED=""
+for _t in 1 2 3 4 5 6; do
+  _J=$(curl -s -m 10 -H "Authorization: Bearer $OPENAI_API_KEY" http://127.0.0.1:$PORT/v1/models)
+  ROOT=$(printf '%s' "$_J" | python3 -c "import json,sys
+try:
+    d=json.load(sys.stdin).get('data') or []
+    print(d[0].get('root','') if d else '')
+except Exception:
+    print('')" 2>/dev/null)
+  SERVED=$(printf '%s' "$_J" | python3 -c "import json,sys
+try:
+    print(' '.join(m.get('id','') for m in (json.load(sys.stdin).get('data') or [])))
+except Exception:
+    print('')" 2>/dev/null)
+  [ -n "$SERVED" ] && break
+  echo "[$(date '+%F %T')] model list empty (try $_t/6; the tunnel daemon may be respawning); retrying in 15s"
+  sleep 15
+done
 echo "[$(date '+%F %T')] endpoint UP; vLLM reports root=$ROOT"
 
 # Identity assertion (2026-08-22). The line above has always RECORDED what
@@ -415,15 +437,7 @@ echo "[$(date '+%F %T')] endpoint UP; vLLM reports root=$ROOT"
 # and then got an empty model list in the SAME SECOND, killed by that swap, not
 # by a wrong model. Transient blips must not end an arm; a persistent empty
 # answer still must (fail closed after the retries, never open).
-SERVED=""
-for _t in 1 2 3 4 5; do
-  SERVED=$(curl -s -m 10 -H "Authorization: Bearer $OPENAI_API_KEY" http://127.0.0.1:$PORT/v1/models \
-           | python3 -c "import json,sys;print(' '.join(m.get('id','') for m in json.load(sys.stdin).get('data') or []))" 2>/dev/null)
-  [ -n "$SERVED" ] && break
-  echo "[$(date '+%F %T')] model list empty (try $_t/5, tunnel may be respawning); retrying in 15s"
-  sleep 15
-done
-[ -n "$SERVED" ] || { echo "[$(date '+%F %T')] FATAL: port $PORT returned no model id after 5 tries"; exit 1; }
+[ -n "$SERVED" ] || { echo "[$(date '+%F %T')] FATAL: port $PORT returned no model id after 6 tries"; exit 1; }
 case " $SERVED " in
   *" $MN "*) echo "[$(date '+%F %T')] identity OK: $PORT serves $SERVED" ;;
   *) echo "[$(date '+%F %T')] FATAL: port $PORT serves '$SERVED' but arm $ARM expects '$MN' (root=$ROOT) -- refusing to score against the wrong model"
