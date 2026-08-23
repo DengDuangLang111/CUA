@@ -249,14 +249,17 @@ case "$ARM" in
   # spotting gross overtraining -- and this project has already seen the two
   # signals diverge, with a6v scoring worst while sitting at its own minimum.
   # Pre-registered before either number exists.
-  a7e3) SB=img10-a7e3; JOB=eval4ba73; RP=8052; MN=img10-9bh-e3-stock; GRP=qwen35-9b-sft; PREV=a7;      PJOB=eval4ba7;  METAF="verified_eval100_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-9bh/" ;;
+  # 08-23 user order: a7e3 moved to the TAIL, behind the two 261 arms. Same
+  # weights and panel as before, so the a7-vs-a7e3 within-run test is
+  # unchanged -- only its slot moved. PJOB now names base9b261's serve.
+  a7e3) SB=img10-a7e3; JOB=eval4ba73; RP=8052; MN=img10-9bh-e3-stock; GRP=qwen35-9b-sft; PREV=base9b261; PJOB=eval9bbo;  METAF="verified_eval100_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-9bh/" ;;
   # a2261: the best 9B student (a2, 62.90 on the frozen 100) over the
   # remaining 261 of test_nogdrive, which completes an OFFICIAL 361 line for
   # the 9B -- the fourth after the 4B base, the 4B champion and the teacher.
   # Same weights, same serve sbatch, same sampling as a2's 100-task run; only
   # METAF moves, so the 100 and the 261 union into a 361 without re-running
   # either half. Queued LAST (user order 08-23) so it cannot delay a7/a7e3.
-  a2261) SB=img10-a2; JOB=eval4ba2; RP=8052; MN=img10-9b-stock; GRP=qwen35-9b-sft; PREV=a7e3;    PJOB=eval4ba73; METAF="verified_eval261_rest.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-9b/" ;;
+  a2261) SB=img10-a2; JOB=eval4ba2; RP=8052; MN=img10-9b-stock; GRP=qwen35-9b-sft; PREV=a7;       PJOB=eval4ba7;  METAF="verified_eval261_rest.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-9b/" ;;
   # t3850b: the 27B teacher on the held-out half, completing the eval100 final
   # as the three-way (champion / base / teacher) pre-registered on the seen
   # half. Same serve as t38 (1 GPU, TP1), same sampling protocol.

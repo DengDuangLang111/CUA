@@ -74,7 +74,7 @@ train_gate(){  # $1 arm, $2 job, $3 dir glob, $4 min epoch; up to 12h; returns 1
 
 log "chain start (resume-safe)"
 PREV=bsstock
-for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 baseh1 nocapt0 img1 vlnocapnp nocapnp2 nocap50b base50b t3850b np1e6 nocapnp base261 nocap261 base9b nocapms100 kGh a3 a1 a1h10 a2 a6v a7 a7e3 a2261 base9b261; do
+for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 baseh1 nocapt0 img1 vlnocapnp nocapnp2 nocap50b base50b t3850b np1e6 nocapnp base261 nocap261 base9b nocapms100 kGh a3 a1 a1h10 a2 a6v a7 a2261 base9b261 a7e3; do
   if alive "$arm"; then
     log "adopt $arm: already in flight"
   elif complete "$arm"; then
