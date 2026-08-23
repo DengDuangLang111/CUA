@@ -46,7 +46,7 @@ except Exception:
     static = {"base261": 261, "nocap261": 261, "base9b261": 261, "t38261": 261,
               "np1e6": 100, "nocapnp": 100, "nocapnp238": 100, "base9b": 100,
               "nocapms100": 100, "a1": 100, "a2": 100, "a3": 100, "a6v": 100,
-              "a1h10": 100, "a7": 100}
+              "a1h10": 100, "a7": 100, "a7e3": 100}
     print(static.get(arm, 50))
 PYNEED
 )
@@ -74,7 +74,7 @@ train_gate(){  # $1 arm, $2 job, $3 dir glob, $4 min epoch; up to 12h; returns 1
 
 log "chain start (resume-safe)"
 PREV=bsstock
-for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 baseh1 nocapt0 img1 vlnocapnp nocapnp2 nocap50b base50b t3850b np1e6 nocapnp base261 nocap261 base9b nocapms100 kGh a3 a1 a1h10 a2 a6v a7; do
+for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 baseh1 nocapt0 img1 vlnocapnp nocapnp2 nocap50b base50b t3850b np1e6 nocapnp base261 nocap261 base9b nocapms100 kGh a3 a1 a1h10 a2 a6v a7 a7e3; do
   if alive "$arm"; then
     log "adopt $arm: already in flight"
   elif complete "$arm"; then
@@ -98,7 +98,8 @@ for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 ba
       a2)  GJOB=eval4b-a2;  GDIR="/gpfs/scrubbed/jy050706/sft/out/img10-9b/v*" ;;
       a3)  GJOB=eval4b-a3;  GDIR="/gpfs/scrubbed/jy050706/sft/out/img10-hrm/v*" ;;
       a6v) GJOB=eval4b-a6v; GDIR="/gpfs/scrubbed/jy050706/sft/out/img10-ep2v/v*"; GEPOCH=1.99 ;;
-      a7)  GJOB=eval4b-a7;  GDIR="/gpfs/scrubbed/jy050706/sft/out/img10-9bh/v*"; GEPOCH=1.99 ;;  # trained 3 epochs but SERVES the epoch-2 checkpoint the validation curve picked, so the gate asks 2  # two epochs, dense saves; serving checkpoint chosen by validation loss via a6v_pick.txt  # opaque name per user rule 08-19; GJOB tracks the RESUME job 250344 after the first attempt died at epoch 2.36 on an NVLink fault. pick_ckpt spans v0+v1 by epoch, so the >=2.99 gate can only be satisfied by the resume writing checkpoint-303 into v1
+      a7)  GJOB=eval4b-a7;  GDIR="/gpfs/scrubbed/jy050706/sft/out/img10-9bh/v*"; GEPOCH=1.99 ;;
+      a7e3) GJOB=eval4b-a7; GDIR="/gpfs/scrubbed/jy050706/sft/out/img10-9bh/v*"; GEPOCH=2.99 ;;  # same run, epoch-3 endpoint  # trained 3 epochs but SERVES the epoch-2 checkpoint the validation curve picked, so the gate asks 2  # two epochs, dense saves; serving checkpoint chosen by validation loss via a6v_pick.txt  # opaque name per user rule 08-19; GJOB tracks the RESUME job 250344 after the first attempt died at epoch 2.36 on an NVLink fault. pick_ckpt spans v0+v1 by epoch, so the >=2.99 gate can only be satisfied by the resume writing checkpoint-303 into v1
     esac
     if [ -n "$GJOB" ]; then
       if ! train_gate "$arm" "$GJOB" "$GDIR" "${GEPOCH:-2.99}"; then
@@ -113,4 +114,4 @@ for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 ba
   fi
   PREV=$arm
 done
-log "chain done (tail: a1 then a1h10 back to back on the same weights at twenty then ten images, a2, a6v on its validation pick, then a7, the h128 recipe on 9B serving its validation-picked epoch-2 checkpoint; r5lorah dropped by user order; scancel eval4ba7 after)"
+log "chain done (tail: a1 then a1h10 back to back on the same weights at twenty then ten images, a2, a6v on its validation pick, then a7, the h128 recipe on 9B serving its validation-picked epoch-2 checkpoint; r5lorah dropped by user order; then a7e3, the same run at its epoch-3 endpoint against a7 validation-picked epoch 2; scancel eval4ba73 after)"

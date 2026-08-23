@@ -236,6 +236,15 @@ case "$ARM" in
   # comparison sat inside its spread and the endpoint won. First time the
   # validation split has changed which weights get served.
   a7)  SB=img10-a7;  JOB=eval4ba7; RP=8052; MN=img10-9bh-stock;  GRP=qwen35-9b-sft; PREV=a6v;     PJOB=eval4ba6;  METAF="verified_eval100_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-9bh/" ;;
+  # a7e3: the SAME training run at its epoch-3 endpoint, so a7 vs a7e3 is a
+  # within-run test of the one thing the validation split is supposed to buy.
+  # The val curve says 98 beats 147 by 0.0076 against a 0.0010 tail spread
+  # (7.7x). If eval agrees, validation loss transfers and earns its 5% of the
+  # corpus; if 147 wins or ties, the split's only demonstrated use shrinks to
+  # spotting gross overtraining -- and this project has already seen the two
+  # signals diverge, with a6v scoring worst while sitting at its own minimum.
+  # Pre-registered before either number exists.
+  a7e3) SB=img10-a7e3; JOB=eval4ba73; RP=8052; MN=img10-9bh-e3-stock; GRP=qwen35-9b-sft; PREV=a7;      PJOB=eval4ba7;  METAF="verified_eval100_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-9bh/" ;;
   # t3850b: the 27B teacher on the held-out half, completing the eval100 final
   # as the three-way (champion / base / teacher) pre-registered on the seen
   # half. Same serve as t38 (1 GPU, TP1), same sampling protocol.
