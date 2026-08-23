@@ -60,6 +60,7 @@ img<窗口>[cap][np][v]
 | `4b-full-img20cap@1` | kEh1 | 同一份权重,推理只给 1 张图 |
 | `4b-full-img10` | a1 | 训练窗口砍到 10 |
 | `4b-full-img10@10` | a1h10 | 同一份权重,推理也给 10 张 |
+| `4b-full-img10-hermes` | a3 | 同语料同窗口,动作 token 的 loss 权重 ×2 |
 | `4b-full-img3` | img3 | 训练窗口 3,推理仍是默认 20 |
 | `4b-full-img3@3` | img3h3 | 同一份权重,推理给 3 张 |
 | `4b-full-img1@1` | img1 | 训练和推理都只给 1 张 |
