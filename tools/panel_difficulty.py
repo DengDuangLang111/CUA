@@ -128,6 +128,12 @@ def main():
         h = sum(1 for m in meta.values() if tier(m) == t and m["half"] == "held")
         print(f"  {t}档: 已见 {s:2d} | 留出 {h:2d}")
 
+    def fam(m):
+        f = m["func"]
+        return ("table" if "table" in f else
+                "infeasible" if "infeasible" in f else
+                "pptx/docx" if ("pptx" in f or "docx" in f) else "其他")
+
     for spec in a.arm:
         label, dirs = spec[0], spec[1:]
         run = load_run(dirs)
@@ -147,6 +153,15 @@ def main():
             gh = [x for x in common if meta[x]["half"] == "held" and tier(meta[x]) == t]
             d = (100*sum(run[x][0] for x in gs)/len(gs) - 100*sum(run[x][0] for x in gh)/len(gh)) if gs and gh else None
             print(f"    {t}档: {row[0]} | {row[1]} | 层内差 {d:+.1f}pp" if d is not None else f"    {t}档: {row[0]} | {row[1]}")
+        print("  按判分族分层:")
+        for t in ("table", "infeasible", "pptx/docx", "其他"):
+            gs = [x for x in common if meta[x]["half"] == "seen" and fam(meta[x]) == t]
+            gh = [x for x in common if meta[x]["half"] == "held" and fam(meta[x]) == t]
+            if not gs or not gh:
+                continue
+            ss = 100*sum(run[x][0] for x in gs)/len(gs)
+            hh = 100*sum(run[x][0] for x in gh)/len(gh)
+            print(f"    {t:10s} seen {ss:5.1f}(n={len(gs):2d}) | held {hh:5.1f}(n={len(gh):2d}) | 层内差 {ss-hh:+.1f}pp")
 
 
 if __name__ == "__main__":
