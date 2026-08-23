@@ -227,6 +227,15 @@ case "$ARM" in
   # which gets written when the curve is final; the serve script refuses to
   # start while the pick is missing.
   a6v) SB=img10-a6v; JOB=eval4ba6; RP=8054; MN=img10-ep2v-stock; GRP=qwen35-4b-sft; PREV=a2;      PJOB=eval4ba2;  METAF="verified_eval100_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-ep2v/" ;;  # 08-20 user order: immediately after nocap50b, so the eval100 paired comparison completes back to back instead of straddling another arm
+  # a7: the h128 recipe on the 9B backbone (hermes + global batch 128 +
+  # validation split + max_grad_norm 3 all move together against a2; the
+  # sbatch says so and no single-variable claim is made). Serves
+  # checkpoint-98, NOT the endpoint: the validation curve falls monotonically
+  # to step 98, steps up at 105 and stays up, and 98 beats the endpoint by
+  # 0.0076 against a tail spread of 0.0010 -- 7.7x, where a6v's same
+  # comparison sat inside its spread and the endpoint won. First time the
+  # validation split has changed which weights get served.
+  a7)  SB=img10-a7;  JOB=eval4ba7; RP=8052; MN=img10-9bh-stock;  GRP=qwen35-9b-sft; PREV=a6v;     PJOB=eval4ba6;  METAF="verified_eval100_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-9bh/" ;;
   # t3850b: the 27B teacher on the held-out half, completing the eval100 final
   # as the three-way (champion / base / teacher) pre-registered on the seen
   # half. Same serve as t38 (1 GPU, TP1), same sampling protocol.
