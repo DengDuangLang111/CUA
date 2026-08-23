@@ -482,6 +482,29 @@ for TRY in 1 2 3 4 5; do
   # task length and nothing reads them (build.py's mp4 fallback has fired
   # 0 times across 16 builds); on a sick guest end_recording adds 15s of
   # retries to a task that is already failing. Screenshots are unaffected.
+  # Serve-gap guard (2026-08-23). The driver already loops: if the endpoint is
+  # down at the top of a pass it waits up to 30h, and a re-run skips scored
+  # tasks. What was missing is the runner NOTICING -- on 2026-08-21 a serve
+  # hit its wall, the runner sailed on with every API call failing, and 157
+  # tasks were scored zero before anyone looked. This watchdog kills the
+  # runner after 3 consecutive minutes of a dead endpoint so the loop above
+  # can do its job. Deliberately NOT a longer walltime: the 9-hour attempt
+  # that same day could not be scheduled for 2.5 hours under this account's
+  # fairshare, which is what caused the gap in the first place. Short walls
+  # schedule; the guard makes rolling them safe.
+  ( miss=0
+    while pgrep -f "run_multienv_qwen.*$TAG" >/dev/null 2>&1; do
+      sleep 60
+      if up; then miss=0; else
+        miss=$((miss+1))
+        if [ "$miss" -ge 3 ]; then
+          echo "[$(date '+%F %T')] SERVE GONE for 3min at $(scored "$R")/$T -- killing runner so the wait-and-resume loop takes over"
+          pkill -f "run_multienv_qwen.*$TAG" 2>/dev/null
+          break
+        fi
+      fi
+    done ) &
+  GUARD=$!
   OSWORLD_OPENAI_TIMEOUT=600 OSTG_NO_RECORD=1 OSTG_TYPE_NO_SPLIT=${OSTG_TYPE_NO_SPLIT:-0} OSTG_PARAM_DIALECT=$DIALECT \
   .venv/bin/python scripts/python/run_multienv_qwen.py \
     --provider_name docker --path_to_vm /mnt/d/research/OSWorld/docker_vm_data/Ubuntu.qcow2 \
@@ -491,6 +514,7 @@ for TRY in 1 2 3 4 5; do
     --sleep_after_execution 3 --enable_thinking --preserve_thinking --num_envs 3 --simple_path \
     --screen_width 1920 --screen_height 1080 \
     --test_config_base_dir $C --test_all_meta_path $META --result_dir "$R" $XARGS
+  kill "$GUARD" 2>/dev/null
   stop_eval
 done
 N=$(scored "$R")
