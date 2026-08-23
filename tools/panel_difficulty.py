@@ -64,10 +64,17 @@ def task_meta(tid, dom):
     ev = d.get("evaluator") or {}
     f = ev.get("func")
     fs = f if isinstance(f, list) else [f]
-    rules = (ev.get("options") or {}).get("rules")
+    # options is a dict for single-func evaluators and a LIST for multi-func
+    # ones (one entry per func); count rules across whichever shape it is.
+    opts = ev.get("options")
+    n_rules = 0
+    for o in (opts if isinstance(opts, list) else [opts]):
+        if isinstance(o, dict):
+            r = o.get("rules")
+            n_rules += len(r) if isinstance(r, list) else 1
     return {"func": ",".join(x for x in fs if isinstance(x, str)),
             "instr_len": len(d.get("instruction") or ""),
-            "n_rules": len(rules) if isinstance(rules, list) else 1,
+            "n_rules": max(n_rules, 1),
             "proxy": bool(d.get("proxy"))}
 
 
