@@ -275,6 +275,38 @@ EVAL50_ARMS = {
                   " FAILURE MODES, NOT THE SCORE ALONE -- terminate is itself a"
                   " tool_call and all 362 corpus terminations are status=success,"
                   " so up-weighting actions may raise the 21% false-DONE rate"),
+    "a6v":       ("img10v 4B 2ep lr2e-6 · val-picked endpoint", "sft",
+                  "a5v's replacement: 2 epochs, save_steps 17 so every eval"
+                  " point has a checkpoint. Serves step 194 (the endpoint) --"
+                  " its nominal minimum at 187 beat it by 0.0001 against a tail"
+                  " spread of 0.0003, inside the noise, so the fully-annealed"
+                  " endpoint won. UNDERTRAINED BY DESIGN, not by the pick:"
+                  " cumulative LR 1.94e-4 is 42% of a1's 4.59e-4, and the"
+                  " measured LR curve reads 47.81 at 1.5e-4 against 59.81 at"
+                  " the 4.5e-4 peak. Validation loss cannot see this -- it only"
+                  " ranks checkpoints inside one run."),
+    "a7":        ("img10v 9B 3ep gb128 hermes · val-picked epoch 2", "sft",
+                  "The h128 recipe on the 9B backbone. Serves checkpoint-98,"
+                  " not the endpoint: the validation curve falls to step 98,"
+                  " steps up at 105 and stays up, and 98 beats the endpoint by"
+                  " 0.0076 against a tail spread of 0.0010 -- 7.7x, the first"
+                  " time this validation split has changed which weights get"
+                  " served. NOT single-variable against a2: hermes, batch"
+                  " 64->128, the val split and max_grad_norm 3 all move"
+                  " together. Cumulative LR 2.20e-4 is 48% of a2's 4.59e-4, so"
+                  " it is pre-registered to come in UNDER a2's 62.90; if it"
+                  " does, the gb128 line is undertrained rather than hermes"
+                  " being wrong."),
+    "a2261":     ("img10 9B @ REST 261 · stock (no-split)", "sft",
+                  "the best 9B student (a2, 62.90 on the frozen 100) over the"
+                  " remaining 261 of test_nogdrive. Same weights and sampling as"
+                  " a2's 100-task run; together they make the 9B's OFFICIAL 361."
+                  " 49/261 of these tasks are proxy:true and no proxy is"
+                  " configured, same caveat as base261/nocap261."),
+    "base9b261": ("stock 9B @ REST 261 · stock (no-split)", "sft",
+                  "the UNTRAINED 9B over the same remaining 261, so the 9B's 361"
+                  " has a backbone control on the identical panel. Queued after"
+                  " a2261 (user order 08-23)."),
     "a5v":       ("img10v 4B 5ep lr2e-6 · stock (no-split)", "sft",
                   "5 epochs at lr 2e-6 (cumulative LR held near the 3-epoch"
                   " champion's, 4.6e-4 -> 5.1e-4) and the first arm on this line"
@@ -447,7 +479,14 @@ HELDOUT_PAIRS = {"nocap50b": "nocap", "base50b": "basekeep", "t3850b": "t38",
 # A model that ALSO ran the remaining 261 gets a fourth synthetic row over the
 # whole official 361. Keyed 261-arm -> (seen-half arm, held-out-half arm).
 REST_TRIPLES = {"base261": ("basekeep", "base50b"),
-                "nocap261": ("nocap", "nocap50b")}
+                "nocap261": ("nocap", "nocap50b"),
+                # a2 and base9b each ran the WHOLE frozen 100 in one pass, so
+                # both halves point at the same arm; the merge is
+                # dict(x) | x | x261, which is the 361 union with nothing
+                # double-counted. Pairs here must be (seen, held) for arms that
+                # split the 100, and (arm, arm) for arms that did not.
+                "a2261": ("a2", "a2"),
+                "base9b261": ("base9b", "base9b")}
 
 # Arms not scored on the default (seen) panel.
 ARM_PANEL = {"nocap50b": "heldout", "base50b": "heldout", "t3850b": "heldout",
@@ -463,7 +502,19 @@ ARM_PANEL = {"nocap50b": "heldout", "base50b": "heldout", "t3850b": "heldout",
              # The img10 four (2026-08-22). All eval100; a5v's endpoint is
              # epoch 5, not 3 -- keep it out of any same-epoch comparison.
              "a1": "all100", "a2": "all100",
-             "a3": "all100", "a5v": "all100"}
+             "a3": "all100",
+             # a5v was replaced by a6v (2 epochs, dense saves) and a7 (the h128
+             # recipe on 9B); a6v was showing 19/44 of 50 on the dashboard --
+             # the seen-50 default -- because the rename left the old key here.
+             # A missing key is silent: it scores the arm against half a panel.
+             "a5v": "all100", "a6v": "all100", "a7": "all100",
+             # The two 9B 361 halves (2026-08-23).
+             "a2261": "rest261", "base9b261": "rest261",
+             # a1h10 ran the full eval100 meta -- 100 result.txt on disk summing
+             # to 42.903 -- but was missing here, so its held-out 50 were
+             # dropped and it read 49.81/50 instead of 42.90/100. Third time a
+             # missing key here has silently halved an arm's panel.
+             "a1h10": "all100"}
 
 
 def eval50():
