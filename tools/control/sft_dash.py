@@ -508,8 +508,8 @@ ARM_PANEL = {"nocap50b": "heldout", "base50b": "heldout", "t3850b": "heldout",
              # the seen-50 default -- because the rename left the old key here.
              # A missing key is silent: it scores the arm against half a panel.
              "a5v": "all100", "a6v": "all100", "a7": "all100",
-             # The two 9B 361 halves (2026-08-23).
-             "a2261": "rest261", "base9b261": "rest261",
+             # The three 261 REST slices completing the 9B / teacher 361s.
+             "a2261": "rest261", "base9b261": "rest261", "t38261": "rest261",
              # a1h10 ran the full eval100 meta -- 100 result.txt on disk summing
              # to 42.903 -- but was missing here, so its held-out 50 were
              # dropped and it read 49.81/50 instead of 42.90/100. Third time a
@@ -628,12 +628,18 @@ SFT361 = {
     # same arm key sits in both 50-task slots and the per-slice id filter in
     # sft361() splits it. rest261 is in flight; until it finishes the 361
     # number reads low by the standing unscored==0 policy.
-    # The teacher is deliberately absent: t38261 has never run, so a 27B row
-    # would sit at 100/361 forever and read ~19%, which looks like a result.
     "base9b": ("stock Qwen3.5-9B · untrained", "reference",
                ("base9b", "base9b", "base9b261")),
     "a2":     ("9b-full-img10 · Qwen3.5-9B SFT", "sft",
                ("a2", "a2", "a2261")),
+    # The teacher (2026-08-24). t38261 started running today -- added now that
+    # the "never run" caveat no longer holds. Unlike base9b/a2, its two 50-task
+    # slots come from TWO DIFFERENT runs (t38 = seen, t3850b = held), not one
+    # arm spanning both, so no per-slice id filter is needed for those two.
+    # rest261 is freshly started; the 361 number will read low until it
+    # finishes, same fixed-denominator caveat as every in-flight 261 row.
+    "27b": ("teacher Qwen3.8-27B · untrained", "reference",
+            ("t38", "t3850b", "t38261")),
 }
 SLICE_N = (("seen50", 50), ("held50", 50), ("rest261", 261))
 
