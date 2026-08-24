@@ -624,6 +624,16 @@ SFT361 = {
               ("basekeep", "base50b", "base261")),
     "nocap": ("champion · r5 lr3e-6 e3.00 no-cap", "sft",
               ("nocap", "nocap50b", "nocap261")),
+    # The 9B pair (2026-08-23). Both ran the frozen 100 in ONE pass, so the
+    # same arm key sits in both 50-task slots and the per-slice id filter in
+    # sft361() splits it. rest261 is in flight; until it finishes the 361
+    # number reads low by the standing unscored==0 policy.
+    # The teacher is deliberately absent: t38261 has never run, so a 27B row
+    # would sit at 100/361 forever and read ~19%, which looks like a result.
+    "base9b": ("stock Qwen3.5-9B · untrained", "reference",
+               ("base9b", "base9b", "base9b261")),
+    "a2":     ("9b-full-img10 · Qwen3.5-9B SFT", "sft",
+               ("a2", "a2", "a2261")),
 }
 SLICE_N = (("seen50", 50), ("held50", 50), ("rest261", 261))
 
@@ -661,6 +671,14 @@ def proxy_ids():
 def sft361(ev):
     by = {a["key"]: a for a in ev["arms"]}
     px = proxy_ids()
+    # Which task ids belong to which slice. Needed because an arm may span more
+    # than one slice: a2 and base9b ran the whole frozen 100 in ONE pass, so
+    # the same arm key fills both 50-task slots. Without this filter each of
+    # those slots would report "scored 100 of 50" and the totals would be
+    # nonsense. No-op for arms that already match their slice exactly.
+    slice_ids = {"seen50":  set(eval50_tasks()),
+                 "held50":  set(eval50_tasks(HELDOUT_META)),
+                 "rest261": set(eval50_tasks(REST261_META))}
     models = []
     for key, (label, group, arm_keys) in SFT361.items():
         got, slices = {}, {}
@@ -670,7 +688,7 @@ def sft361(ev):
                 slices[name] = {"n": n, "scored": 0, "sum": 0.0, "passed": 0,
                                 "arm": ak, "run": "", "modeldir": ""}
                 continue
-            t = a["tasks"]
+            t = {k: v for k, v in a["tasks"].items() if k in slice_ids[name]}
             got.update(t)
             slices[name] = {"n": n, "scored": len(t),
                             "sum": round(sum(r["score"] or 0 for r in t.values()), 2),
