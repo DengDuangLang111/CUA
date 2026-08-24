@@ -197,12 +197,18 @@ case "$ARM" in
   # comparisons to each other already hold; this one prices img10 against the
   # champion, the single cross-family comparison the mismatch would distort.
   a1h10) SB=img10-a1; JOB=eval4ba1; RP=8051; MN=img10-4b-stock; GRP=qwen35-4b-sft; PREV=a1;      PJOB=eval4ba1;  METAF="verified_eval100_nonproxy.json"; XARGS="--image_max 10 --fold_size 1"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-4b/" ;;  # 08-22 user order: immediately after a1, same weights back to back, so the serving window is the only thing that moved between the two numbers
-  # t38261: the teacher over the remaining 261 -- the third full-361 line
-  # (user order 08-22 via peer). Serve config is the same 38-i sbatch that
-  # carried both 50-task teacher runs; throughput is VM-bound, measured
-  # 24.5-28.1 tasks/h on the 100, so ~10h. The 49-proxy stratum caveat
-  # applies to this line like the other two.
-  t38261)   SB=38-i;             JOB=eval38;    RP=8000; MN=qwen38-27b-local;         GRP=qwen38-27b-local; PREV=r5lorah; PJOB=eval4br5l; METAF="verified_eval261_rest.json" ;;
+  # t38261: the teacher over the remaining 261, completing the FOURTH official
+  # 361 line (base9b, a2, and now the teacher; 4B base/champion already done).
+  # 08-23 user order: queued after base9b261, before a7e3.
+  # Own serve sbatch (serve-chain-38-i-261.sbatch), not the shared 38-i one --
+  # that one is qos=interactive/4h and would hit the same wall problem a2261
+  # was built to avoid. qos=normal/20h wall, tested with sbatch --test-only
+  # (accepted, no QOS violation). Measured teacher throughput on 3 VMs is
+  # 24.5-28.1 tasks/h (t38, t3850b), so 261 tasks is ~10-11h -- 20h leaves
+  # ample margin. Weights/served-model-name/port are identical to t38/t3850b,
+  # so all three slices union cleanly. The 49-proxy stratum caveat applies to
+  # this line like the other two 261 arms.
+  t38261)   SB=38-i-261;         JOB=eval38261; RP=8000; MN=qwen38-27b-local;         GRP=qwen38-27b-local; PREV=base9b261; PJOB=eval9b261; METAF="verified_eval261_rest.json" ;;
   # nocapms100: the champion with DOUBLE the step budget (max_steps 100), the
   # only changed parameter, over the frozen 100 (user order 08-22 via peer).
   # Verdict arm for RESULTS 5.22: the teacher-student gap grows 17.4->65.2pp
@@ -249,10 +255,11 @@ case "$ARM" in
   # spotting gross overtraining -- and this project has already seen the two
   # signals diverge, with a6v scoring worst while sitting at its own minimum.
   # Pre-registered before either number exists.
-  # 08-23 user order: a7e3 moved to the TAIL, behind the two 261 arms. Same
-  # weights and panel as before, so the a7-vs-a7e3 within-run test is
-  # unchanged -- only its slot moved. PJOB now names base9b261's serve.
-  a7e3) SB=img10-a7e3; JOB=eval4ba73; RP=8052; MN=img10-9bh-e3-stock; GRP=qwen35-9b-sft; PREV=base9b261; PJOB=eval9b261; METAF="verified_eval100_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-9bh/" ;;
+  # 08-23 user order: a7e3 moved to the TAIL, behind all three 261 arms
+  # (a2261, base9b261, t38261). Same weights and panel as before, so the
+  # a7-vs-a7e3 within-run test is unchanged -- only its slot moved again.
+  # PJOB now names t38261's serve.
+  a7e3) SB=img10-a7e3; JOB=eval4ba73; RP=8052; MN=img10-9bh-e3-stock; GRP=qwen35-9b-sft; PREV=t38261;    PJOB=eval38261; METAF="verified_eval100_nonproxy.json"; EXPECT_ROOT="/gpfs/scrubbed/jy050706/sft/out/img10-9bh/" ;;
   # a2261: the best 9B student (a2, 62.90 on the frozen 100) over the
   # remaining 261 of test_nogdrive, which completes an OFFICIAL 361 line for
   # the 9B -- the fourth after the 4B base, the 4B champion and the teacher.

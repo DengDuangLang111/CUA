@@ -74,7 +74,7 @@ train_gate(){  # $1 arm, $2 job, $3 dir glob, $4 min epoch; up to 12h; returns 1
 
 log "chain start (resume-safe)"
 PREV=bsstock
-for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 baseh1 nocapt0 img1 vlnocapnp nocapnp2 nocap50b base50b t3850b np1e6 nocapnp base261 nocap261 base9b nocapms100 kGh a3 a1 a1h10 a2 a6v a7 a2261 base9b261 a7e3; do
+for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 baseh1 nocapt0 img1 vlnocapnp nocapnp2 nocap50b base50b t3850b np1e6 nocapnp base261 nocap261 base9b nocapms100 kGh a3 a1 a1h10 a2 a6v a7 a2261 base9b261 t38261 a7e3; do
   if alive "$arm"; then
     log "adopt $arm: already in flight"
   elif complete "$arm"; then
@@ -101,7 +101,8 @@ for arm in kE kD15 t38 vlbase img3 img3h3 kEh3 nocap vlsft gb128 kG vl20 kEh1 ba
       a7)  GJOB=eval4b-a7;  GDIR="/gpfs/scrubbed/jy050706/sft/out/img10-9bh/v*"; GEPOCH=1.99 ;;
       a7e3) GJOB=eval4b-a7; GDIR="/gpfs/scrubbed/jy050706/sft/out/img10-9bh/v*"; GEPOCH=2.99 ;;
       a2261) GJOB=eval4b-a2; GDIR="/gpfs/scrubbed/jy050706/sft/out/img10-9b/v*" ;;  # same weights as a2 (trained 08-22); the gate re-verifies on a restart instead of assuming
-      # base9b261 needs no gate: untrained backbone, weights already on disk.  # same run, epoch-3 endpoint  # trained 3 epochs but SERVES the epoch-2 checkpoint the validation curve picked, so the gate asks 2  # two epochs, dense saves; serving checkpoint chosen by validation loss via a6v_pick.txt  # opaque name per user rule 08-19; GJOB tracks the RESUME job 250344 after the first attempt died at epoch 2.36 on an NVLink fault. pick_ckpt spans v0+v1 by epoch, so the >=2.99 gate can only be satisfied by the resume writing checkpoint-303 into v1
+      # base9b261 needs no gate: untrained backbone, weights already on disk.
+      # t38261 needs no gate either: the teacher is a fixed local checkpoint, never trained in this project.  # same run, epoch-3 endpoint  # trained 3 epochs but SERVES the epoch-2 checkpoint the validation curve picked, so the gate asks 2  # two epochs, dense saves; serving checkpoint chosen by validation loss via a6v_pick.txt  # opaque name per user rule 08-19; GJOB tracks the RESUME job 250344 after the first attempt died at epoch 2.36 on an NVLink fault. pick_ckpt spans v0+v1 by epoch, so the >=2.99 gate can only be satisfied by the resume writing checkpoint-303 into v1
     esac
     if [ -n "$GJOB" ]; then
       if ! train_gate "$arm" "$GJOB" "$GDIR" "${GEPOCH:-2.99}"; then
