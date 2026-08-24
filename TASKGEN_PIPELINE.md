@@ -48,6 +48,13 @@ difficulty(5) × ambiguity(4)** = 1300 cells, and asks the generator model
   absolute path, over-length) gets one ~200-token instruction rewrite and is
   re-gated. Setup, probe and coordinates are never touched, so repair cannot
   change what is graded. Measured: 7.6 keeps/batch vs 1.9 without it.
+- **The `apps` axis is a closed 10-entry catalog** (`gen.py`'s `APPS` dict:
+  the 8 GUI apps + `files` + `terminal`), enum-constrained in the tool
+  schema — the model cannot emit anything outside it. There is no
+  no-artifact "settings toggle" entry, so a whole task class (bluetooth,
+  font size, default Python version, screen lock — no persistent artifact
+  to grade) is structurally unreachable, not merely under-sampled. Detail
+  and proposed fix: `IDEAS.md`「2026-08-24 批次 §L」.
 
 **Hard gates** (reject or repair, at generation time):
 
@@ -212,6 +219,7 @@ requeued victims in one stroke.
 | layer | blind to | covered by |
 |---|---|---|
 | gen gates | anything semantic | scan, audit |
+| gen's `apps` axis | task types with no artifact to host (OS settings toggles) — not a gate rejection, the schema enum makes them unaskable | nothing yet — see `IDEAS.md` §L |
 | prebuild | non-office environment traps | control, rollout |
 | accept | everything except similarity/quota | scan, control |
 | scan | defects with no textual signature | audit, rollout |

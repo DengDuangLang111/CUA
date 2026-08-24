@@ -296,3 +296,74 @@ base-vs-SFT 那一对无混杂,坐实语料的责任。
 **terminate precision(发了 terminate 后 checker 通过率)**、terminate recall、
 call_user 率、散文率、撞上限率、成功任务平均步数。**precision 必须与 rate
 同看**——只追 terminate 率会训出早停,那比现状更糟。
+
+## 2026-08-24 批次(来源:用户追问 SFT 各域提升差异,查到 datagen 结构性缺口)
+
+### L. taskgen 缺一个"无产物系统设置"任务类,os 域被 files/terminal 冒名 【优先级 1,下一次开 pipeline 分支就该带上】
+
+**发现链路**(9B eval100 各域提升分解 → app 级拆分 multi_apps → 查 pipeline 源码):
+
+1. eval 的 `multi_apps` 拆到具体 app 后,**`os` 是最大的搭档 app(27.5% 命中)**,
+   训练语料里跨应用任务(`difficulty≥3`,204/362 = 56.4%)的 `related_apps`
+   **一次都没出现过 `"os"`**(0/446 次命中)。
+2. 查 `ostg-v11.1/ostg/taskgen/gen.py:39-49`,`APPS` 字典是喂给生成 LLM 的
+   **闭合可选目录**(schema 里 `"apps": {"items": {"enum": list(APPS)}}`):
+
+   ```python
+   APPS = {
+       "libreoffice_calc": "libreoffice_calc", "libreoffice_writer": "libreoffice_writer",
+       "libreoffice_impress": "libreoffice_impress", "chrome": "chrome", "gimp": "gimp",
+       "vlc": "vlc", "thunderbird": "thunderbird", "vscode": "vs_code",
+       "files": "os", "terminal": "os",
+   }
+   ```
+
+   **`"os"` 不是这 10 个 key 之一**——它只作为 `files`/`terminal` 两个 key 的
+   **值**(它们跑在裸桌面快照里)出现。LLM 在语法上**不可能**生成一个
+   `related_apps` 含字面量 `"os"` 的任务,因为这个词根本不在枚举里。
+3. **更深一层坑**:`gen.py:324` `domain = APPS.get(apps[0], "os")`——主 app 是
+   `files`/`terminal` 时,任务被归到 `os` 这个 channel。**这就是训练语料里
+   43 道"os 域"任务的真实身份**——抽查 15 条,清一色是"文件按年份分类"
+   "从文件夹整理 CSV""批量重命名",**没有一条是"开蓝牙""调字体""设默认
+   Python 版本"这种系统设置任务**。对照 eval 的 8 道 `os` 题(开蓝牙、调
+   字体、切用户、自动锁屏、设默认 Python、显示电量……),**只有 1/8 是文件
+   管理风味,其余 7 题训练语料里没有对应物**。
+   ⚠ **两边共用 `os` 这个 channel 名字,内容却几乎不相交**——比 `multi_apps`
+   缺失更隐蔽,因为它不会在任何按 channel 名字做的统计表里露出破绽
+   (§5.20 之前那张训练/eval 占比对照表就被这个假匹配骗过了)。
+4. 再往上查 `taxonomy.py:83-99` 的 `ARTIFACT_HOSTS`,确认这是**范式级**问题:
+   整条 pipeline 建立在"每个任务操作一个**产物**(文档/表格/图片/浏览器标签),
+   产物挂在某个 app 上"这个假设上。连 `desktop_session` 这个产物类的宿主列表
+   `["vlc","thunderbird","vscode","libreoffice_impress","gimp","files"]`
+   也没有系统设置的位置——**因为"开蓝牙""调字体"这类任务没有持久化产物**,
+   操作完就是一次状态切换,这套"产物→宿主 app"的生成范式设计上就没地方
+   安放它们。
+
+**归类**:不是配额没调对、不是抽样运气差,是**当前 schema 结构性地无法生成
+"无产物系统设置切换"这一整个任务类**,无论作为主任务还是作为跨应用副 app。
+这条和 §5.20(RESULTS.md,`multi_apps` 组合风味错配,交集覆盖率 17.6%)是
+同一个根因家族的两层:§5.20 量的是"跨应用组合对不上",这条量的是
+"某个任务类型从 schema 层面就生成不出来"。
+
+**可执行的改进方向**(未评估优先级细节,留给下次开 pipeline 分支时定):
+
+1. **`APPS` 字典加一个 `"settings"` / `"os_settings"` 类**,不映射到任何
+   现有 app,而是映射到裸 `os` 快照,允许 LLM 显式选它作为主 app 或副 app。
+2. **给 `taxonomy.py` 加一个不挂产物的任务生成路径**——现有 `grade` 体系
+   (browser/table/rules)可能已经够用(`rules` 分支就是纯 probe,不依赖
+   `open_path` flush),缺的只是 §1 里的 app 目录准入,不一定要动 evaluator
+   逻辑。
+3. **种子任务来源**:eval-50/100 面板里那 8 道真实 `os` 题就是现成的种子——
+   蓝牙、字体缩放、锁屏、Python 版本切换、终端持久化设置、电量显示,
+   都是"读一个系统偏好项 → probe 检查该项的值"这个模式,评估器复杂度低于
+   文档类任务。
+4. **验证方式**:加完新类后,重新跑一遍本节 §1 的 app-touch 统计
+   (`tools/` 下可以固化成一个复用脚本,见"待办"),`os` 命中次数从 0
+   变为非零即为验证通过;再跑一次 eval-50/100 的 `os` 域配对分数确认
+   是否真的迁移过去了。
+
+**待办**:把"训练语料 app-touch 统计"(见对话记录里的 `lookup_ma.py` 方法:
+image path slug → 任务池 json → `ostg.difficulty`/`related_apps`)固化成
+`tools/corpus_app_touch.py`,和 `coverage_audit.py` 并列进数据质量检验
+流水线,而不是留作一次性脚本(参照 [[quality-checks-ride-the-pipeline]] 的
+教训)。当前证据是手工跑的,没有固化,下次语料改版后这个对照会过期。
