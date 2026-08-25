@@ -1157,17 +1157,15 @@ $P -m ostg.sft.build RESULT_DIR --tasks TASKS_DIR --out OUT \
    --include ..._rescue.jsonl --exclude ..._drop.jsonl \
    --whole-traj-filter --think-cap 2048 \
    --terminal-rewrite out/terminal_POOL.jsonl \
-   --val-ratio 0.05 \
    --image-max 10 --fold-size 1
-#    ↑ --val-ratio 0.05 是 2026-08-22 起的默认(用户立规)。没有验证集时,
-#      过拟合只能靠事后 eval 发现,一次 2 小时;有了它,epoch 边界的
-#      train/val 背离在同一张 wandb 图上当场可见。切分按 TASK(slug 的 md5)
-#      而非按样本 —— 一条轨迹会拆成十几个前缀嵌套的样本,按样本切会让验证集
-#      的前缀出现在训练集里,验证损失假性偏低,等于没测。
-#      5% ≈ 19 条轨迹 ≈ 324 样本 ≈ 8.7 万监督 token,对 token 级平均的
-#      验证损失早已饱和;再大只是白扔语料(我们缺数据量,不缺验证精度)。
-#      哈希确定性:同一 slug 每次重建落在同一边,不同语料留出同一批任务,
-#      所以跨臂的验证损失可比 —— 前提是别改 slug。
+#    ↑ --val-ratio 已于 2026-08-25 退役(用户拍板),不要再传。
+#      退役依据:三次实测,验证损失没有一次挑对 checkpoint。决定性的是
+#      a7 vs a7e3 —— 验证损失说 98 步比终点低 0.0076、相对 0.0010 尾部
+#      波动是 7.7 倍(信号看着极强),eval 上却是 55.90 = 55.90,逐题
+#      24 处不同、12 胜 12 负,与同模型重跑的自比基线(24/100)一模一样。
+#      今后 checkpoint 一律取 epoch-3 终点(pick_ckpt.sh endpoint),
+#      5% 的样本回到训练集。训练侧同时不再传 --val_dataset /
+#      --eval_strategy。完整论证见 PLAN-20260822-datagen-v13.md。
 #    ↑ --fold-size 1 也要显式传。默认 10 会让可见图数在 image_max-9..image_max
 #      之间锯齿(见 sft/RESULTS.md §5.19);e6b6e034 的提交信息原话是
 #      "fold_size>1 silently trains on fewer images than the window says"。

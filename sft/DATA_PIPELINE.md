@@ -327,7 +327,10 @@ harness actually produces it does not"),我没查就自己重推了一遍。
 (与 memory 里"质量检查随流水线走"同一条)。
 
 **`ship_dataset.sh`** —— 建出 `val_swift.jsonl` 就带上,并核对远端行数、抽一张
-val 的图确认路径可解析;**没有 val 时大声说出来**,因为 `--val-ratio 0.05` 已是
+val 的图确认路径可解析。~~**没有 val 时大声说出来**,因为 `--val-ratio 0.05` 已是~~
+> **2026-08-25:`--val-ratio` 已退役(用户拍板),新语料本来就没有 val,
+> 这条告警不再适用。** 退役依据见 `PLAN-20260822-datagen-v13.md`。
+> 下面这句保留为历史记录:
 默认,缺失才是意外。val 不需要单独运图:build 把所有录取任务的截图写进同一个
 `images/`,v11100 的 1358 张图对 1321 条 train 就是这部分盈余,不是泄漏。
 
