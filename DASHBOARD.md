@@ -449,8 +449,28 @@ curl -s https://cua-dashboard-theta.vercel.app/status.json | python3 -c "import 
 `sleep 75`(75 秒)**,每轮都跑 status→push→publish→status;30 分钟指的是
 traj 发布节拍(那才是限制 Vercel 部署配额的东西,见 §3.5)。
 
-### 该做而还没做的
+### watchdog(2026-08-28 已装)
 
-**自启动**。现在 WSL 每重启一次就得记得手动拉起两个 daemon,而唯一的告警是
-人眼。最小的改进是给存活检查加一个定时任务(比对线上 `updated` 与当前时间,
-超过阈值就告警),彻底的做法是让 daemon 随 WSL 启动。
+`dash_watchdog.sh` + cron 每 5 分钟一次:两个 daemon 谁不在就拉起谁。
+真源在 CTL,git 镜像在 `CUA/tools/control/dash_watchdog.sh`。
+
+```bash
+# 已安装的 crontab 行(WSL 的 cron 由 systemd 拉起,随 WSL 启动)
+*/5 * * * * /mnt/d/research/osworld-verified-control/dash_watchdog.sh
+```
+
+**为什么是周期性检查而不是开机自启**:status daemon 那次(08-24 16:15)根本不是
+重启死的 —— WSL 重启是 3 天后的事。只覆盖开机场景的方案救不了它,而周期性
+检查两种死法都覆盖。
+
+**幂等**:daemon 都在时零动作、不写日志。所以 `dash_watchdog.log` 里出现一行
+就等于**真的救过一次** —— 这个文件本身就是故障记录,补上了"死了没人知道"的缺口。
+
+上线时双向验证过,两个方向都要测,只测一个不算数:
+- daemon 活着时跑一次 → 原 PID 原样存活(etime 连续)、`dash_watchdog.log` 不存在;
+- `kill` 掉 sft daemon 再跑 → 新进程起来 + 日志记一行 `restarted sft_dash_daemon.sh`,
+  且 status daemon 不受牵连。
+
+**仍然没做:数据新鲜度告警。** watchdog 只保证**进程活着**,不保证**数据在更新** ——
+daemon 活着但推不出去(push 认证失效、git 状态卡死)依然是静默的。要补的话,
+判据是 GitHub raw 源的 `updated` 字段与当前时间的差值,而不是进程存在与否。
