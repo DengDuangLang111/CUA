@@ -246,6 +246,35 @@ Reading the results:
   catches), the dual-requirement browser class (audit catches), the
   wrong-world-belief class (audit's world_assumptions catches).
 
+## 4.6 v14g gold 流水线(2026-08-28 落地;**生成尚未跑 — 等 API 更换**)
+
+代码全在 worktree `/mnt/d/research/ostg-v14/ostg` 分支 `datagenv14`;设计与
+验收门槛见 `PLAN-20260828-v14g-gold.md`,口径见
+`reference/EVAL_FAMILY_TAXONOMY.md`。四个 gold grade(deck/doc/image/
+table_gold)由 bake 产出标准答案文件,evaluator 用官方 `cloud_file` 从本机
+HTTP 拉取。全链:
+
+```bash
+cd /mnt/d/research/ostg-v14
+# 1 生成(分布策略=配方;--dry-run 只打印抽签)
+PYTHONPATH=. python3 -m ostg.taskgen.gen --recipe ostg/recipes/v14g-pilot40.yaml \
+  --n 40 --out out/runs/v14g-pilot40/specs.jsonl --thinking --stream
+# 2 ship = prebuild -> bake(容器造 seed+gold,host 端不动点 0/1)-> re-emit -> accept
+PYTHONPATH=.:$OW python3 -m ostg.taskgen.ship out/runs/v14g-pilot40 --ref ...
+# 3 serve(评测期间常驻;evaluator 在 host 拉 expected)
+ostg/taskgen/tools/serve_files.sh &
+# 4 注入脚本:baked 任务零 API。Tier-1 直落字节;Tier-2 过一遍 VM 的 soffice
+PYTHONPATH=. python3 -m ostg.taskgen.gold out/runs/v14g-pilot40/specs.jsonl \
+  --files-root out/runs/v14g-pilot40 --out out/runs/gold-pilot40.jsonl [--tier2]
+# 5 control 负向 + --gold 注入(须 0.0 / 1.0),audit 加渲染桥
+PYTHONPATH=. python3 -m ostg.taskgen.audit out/runs/v14g-pilot40/specs.jsonl \
+  --files-root out/runs/v14g-pilot40 --out out/runs/audit-pilot40.jsonl --model <第三方>
+```
+
+坑位:bake/serve 的 URL 约定 `http://127.0.0.1:8021/<set>/files/<slug>/gold/<名>`,
+`<set>` 必须等于 out/runs 下的目录名(task_json 的 batch 参数);bake 失败的
+spec 被 re-emit 丢弃(`ostg.baked` 不为真),不会带着 404 的 expected 出厂。
+
 ## 5 Rollout
 
 ### What the OSWorld AUTHORS run — three declared step tiers, not one config

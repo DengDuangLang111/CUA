@@ -43,7 +43,7 @@ builder's specification. The rules below are the summary.
 | rule | receipt |
 |---|---|
 | **Labels come from `response`, never from `action`.** The model emits relative 0–999 coordinates; `action` holds pyautogui code already scaled to 1920×1080 (`[180,257]` → `doubleClick(345,277)`). Training on `action` shifts the coordinate distribution ~2×. | cross-checked v11 rows |
-| **History must be rendered by the model's own chat template with the same kwargs the campaign sent.** The client does NOT strip thinking (`ensure_empty_think_prefix` only prepends an empty block when missing) and under `nopreserve` it sends `chat_template_kwargs={"enable_thinking": true}` — no `preserve_thinking` key at all. The template (chat_template.jinja, 7764 B) then strips `<think>` from every assistant turn at or before the last user query: `{%- if (preserve_thinking is defined and preserve_thinking is true) or (loop.index0 > ns.last_query_index) %}` keeps thinking, else drops it. So: render history through `apply_chat_template` with the campaign's kwargs — hand-stripping in the builder duplicates template logic and WILL drift. | template read from Tillicum model dir 2026-08-13; client code `mm_agents/qwen/main.py:278-284`, `history.py:90-94` |
+| **History must be rendered by the model's own chat template with the same kwargs the campaign sent.** The client does NOT strip thinking (`ensure_empty_think_prefix` only prepends an empty block when missing) and under `nopreserve` it sends `chat_template_kwargs={"enable_thinking": true}` — no `preserve_thinking` key at all. The template's rule is `{%- if (preserve_thinking is defined and preserve_thinking is true) or (loop.index0 > ns.last_query_index) %}` — keep thinking, else drop. **On this harness it always keeps**: the backward scan computing `last_query_index` skips `<tool_response>`-wrapped user turns, `history.py` wraps every non-first user turn, so the index is pinned at 1 and the keep branch fires for every historical assistant turn. (An earlier revision of this row said the template strips — true on generic chat, false on the shape we actually send.) So: render history through `apply_chat_template` with the campaign's kwargs — hand-stripping in the builder duplicates template logic and WILL drift. | template read from Tillicum model dir 2026-08-13; **corrected 2026-08-18 (`sft/RESULTS.md` §5.7) and re-verified live 2026-08-19 on the running eval server, two independent routes with sensitivity controls (`sft/CONTEXT.md` §4)**; client code `mm_agents/qwen/main.py:278-284`, `history.py:90-94` |
 | The current step's target keeps its full `<think>` block — that is what the model emitted under `enable_thinking` and what generation-time distribution looks like. | — |
 
 ## 4 The builder (test version, 2026-08-13)
@@ -79,9 +79,13 @@ multimodal; inference stays on our harness, so relative-0–999 coordinates
 carry over). `ostg/sft/export.py` reshapes samples.jsonl into swift's
 messages+images JSONL next to the images dir; 43/43 converted, one `<image>`
 marker per path, order-aligned. Qwen3.5-4B's chat template was fetched and
-checked: it strips history `<think>` by the same last-query rule as the
-teacher's serving template and has no preserve_thinking kwarg — the student's
-default rendering equals the teacher's rollout distribution. Train with loss
+checked: it carries the same last-query rule as the teacher's serving template
+and has no preserve_thinking kwarg — the student's default rendering equals the
+teacher's rollout distribution. (This paragraph originally read "it strips
+history `<think>`". The rule exists but never fires here: every non-first user
+turn is `<tool_response>`-wrapped, which pins `last_query_index` at 1 — see
+`sft/CONTEXT.md` §4 and `sft/RESULTS.md` §5.7. History think is present on both
+sides, which is what makes the two distributions equal.) Train with loss
 on the final round only; verify the exact ms-swift flag at install time.
 
 ## 5 Final verification before training

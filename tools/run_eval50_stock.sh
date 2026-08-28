@@ -209,6 +209,22 @@ case "$ARM" in
   # so all three slices union cleanly. The 49-proxy stratum caveat applies to
   # this line like the other two 261 arms.
   t38261)   SB=38-i-261;         JOB=eval38261; RP=8000; MN=qwen38-27b-local;         GRP=qwen38-27b-local; PREV=base9b261; PJOB=eval9b261; METAF="verified_eval261_rest.json" ;;
+  # t38h20: the teacher over the WHOLE official 361 in one pass, at
+  # image_max 20 / fold_size 1 -- the sliding-window cell that
+  # reports/FOLDING_SETUPS.md section 5 flags as never tested. Every other
+  # window arm changed image_max and fold_size TOGETHER, so "sawtooth vs
+  # sliding" has no isolated measurement anywhere in this project.
+  #
+  # Single meta on purpose: test_nogdrive.json is byte-identical to the union
+  # of the three slices (verified 361/361, zero on either side difference), so
+  # one run produces a directly comparable 361 without stitching, and every
+  # task is paired against the existing teacher baseline task-for-task.
+  #
+  # Weights / served-model-name / port / sampling are the same as t38; only the
+  # serve wall and QOS differ (normal + 20h, so 361 tasks finish under ONE
+  # serve instead of rolling four -- the teacher measured 24.5-28.1 tasks/h,
+  # so ~13-15h).
+  t38h20)   SB=38-i-h20;         JOB=eval38h20; RP=8000; MN=qwen38-27b-local;         GRP=qwen38-27b-local; PREV=t38261;     PJOB=eval38261; METAF="test_nogdrive.json"; XARGS="--image_max 20 --fold_size 1" ;;
   # nocapms100: the champion with DOUBLE the step budget (max_steps 100), the
   # only changed parameter, over the frozen 100 (user order 08-22 via peer).
   # Verdict arm for RESULTS 5.22: the teacher-student gap grows 17.4->65.2pp

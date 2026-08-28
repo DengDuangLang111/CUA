@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""taxonomy_tag.py v2 -- three-layer labels (application / semantic action /
+"""DEPRECATED 2026-08-28. Measured against full LLM labeling of the official
+361: precision 0.50 / recall 0.46, 24% untagged. Statistics and quotas use
+evaluator families instead -- tools/family_census.py is the replacement, and
+reference/EVAL_FAMILY_TAXONOMY.md records the decision. Kept only so old
+reports citing its numbers stay reproducible.
+
+taxonomy_tag.py v2 -- three-layer labels (application / semantic action /
 outcome family) over the training corpus, the taskgen candidate pool, and
 OSWorld-Verified, and the gap table between them.
 

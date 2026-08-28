@@ -2,6 +2,12 @@
 
 ## 现状(2026-08-18,过时即改;历史快照看 git log)
 
+- **v14g(08-28)**:datagen 重构 A′–F 全部落码于 `datagenv14` 分支——配方层
+  (分布=YAML,溯源四元组入 spec)、evaluator 族轴、四个 gold grade、bake
+  (容器造 seed+gold+不动点)、serve、Tier-1/2 注入、audit 渲染桥;bake 冒烟
+  3/3 过。**生成未跑:等 API 更换**。口径定稿 `reference/EVAL_FAMILY_TAXONOMY.md`
+  (动作词表废弃,precision 0.50);计划与门槛 `PLAN-20260828-v14g-gold.md`。
+
 - **两大口径更正(08-18,详 `sft/RESULTS.md` §5.2 / §5.7)**:
   ① **keepthink 与 stock 两个评测模板逐字节等价** —— harness 把推理内联进
   `content`,keepthink 的分支永不触发;所有 `·keepthink` / `·stock` 臂吃到的是
