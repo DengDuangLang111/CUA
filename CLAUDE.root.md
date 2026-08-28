@@ -30,6 +30,13 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && <命令>"'
   循环,过滤器必须覆盖失败态。
 - `timeout` 命令在 Mac zsh 不存在,别用。
 - 连通自检:`ssh -o BatchMode=yes osworld-windows 'wsl -e bash -lc "echo OK && whoami"'`
+- **全链路断(`*.ts.net` 解析不了、`tailscale status` 说连不上本地服务)先查 Mac 的
+  临时端口池,别去修 Tailscale** —— 它是受害者不是肇事者。`netstat -an -p tcp |
+  grep -c TIME_WAIT` 逼近 16384 即确诊(ping 通不代表 TCP 通,ICMP 不占端口),
+  `sudo sysctl -w net.inet.ip.portrange.first=16384` 秒恢复(运行时参数,重启失效)。
+  根源是我们自己高频短命 ssh —— **Mac 侧 ControlMaster 已于 2026-08-28 开启**
+  (实测连续 5 次 ssh 新增 0 条连接);换网络后若 ssh 卡住,`ssh -O exit <host>`
+  清掉僵死 master。判别全流程见 `CUA/OPS.md` 末节。
 
 ## 2 仓库地图(哪份代码是真的)
 

@@ -891,3 +891,88 @@ interactive 与 normal 的 QOS 差 (35−25)/10000 × 5000 = **5 分**,都可忽
    SERVE-GAP 告警,连续两拍才响);告警后的正确处置是**杀 runner**,
    driver 会在 serve 就绪后重启它,已计分任务不受影响;
 3. 断档窗口的 0 分是**毒数据**,任何汇总前先查各臂分数按完成时间的分桶。
+
+## Mac 侧临时端口耗尽:会伪装成「Tailscale 挂了」(2026-08-28,一次全链路中断的学费)
+
+**症状**:`tailscale status` 报 `failed to connect to local Tailscale service; is
+Tailscale running?`,`*.ts.net` 全部解析失败,`ssh osworld-windows` 断,整条
+Mac→Windows→WSL 工作链停摆。但进程其实都活着:Tailscale.app 在跑、
+network-extension 在跑、系统扩展 `systemextensionsctl list` 显示
+`[activated enabled]`。**照着表象去修 Tailscale 会全程走错方向。**
+
+**真因**:Mac 的临时端口池被 TIME_WAIT 占满,内核无法为出站 TCP 分配源端口
+(`EADDRNOTAVAIL`)。因果链:
+
+```
+TIME_WAIT 占满端口池 → 出站 TCP 全部失败 → Tailscale 连不上 controlplane
+  → tailscaled 后端初始化不完 → 从不创建 /var/run/tailscaled.socket
+  → CLI 报 "is Tailscale running?" → MagicDNS 死 → *.ts.net 解析不了 → ssh 断
+```
+
+**Tailscale 是受害者不是肇事者**,它只是第一个大声喊出来的。
+
+实测数字:TIME_WAIT **16,483** 对端口池 `49152–65535` = **16,384 个**,100% 占满。
+消退极慢 —— 20 秒只过期 1 个(用条目指纹对比测出来:共同 16506 / 新增 8 /
+消失 1),等自愈要好几天。
+
+**最大来源是我们自己的工作流**:3,035 条打向 `100.113.98.76:2222`,即
+osworld-windows 的 WSL SSH,走 Tailscale 隧道。**大量短命 ssh 把端口抽干,
+反过来掐死了承载这些 ssh 的 Tailscale。** 其余为微信(腾讯云 43.x/101.34/
+203.205 段,约 3k)、Anthropic API、Cloudflare、IMAP 等叠加凑够 16k。
+
+### 判别顺序(别一上来修 Tailscale)
+
+```bash
+# ① ping 通 ≠ 网络好。ICMP 不占用源端口,必须单独测 TCP
+ping -c 2 8.8.8.8
+curl -sS -o /dev/null -w "%{http_code}\n" --max-time 8 https://example.com
+
+# ② TIME_WAIT 数量 vs 端口池容量,两者接近即确诊
+netstat -an -p tcp | grep -c TIME_WAIT
+sysctl net.inet.ip.portrange.first net.inet.ip.portrange.last
+
+# ③ 谁干的:看对端分布
+netstat -an -p tcp | grep TIME_WAIT | awk '{print $5}' | sort | uniq -c | sort -rn | head -20
+
+# ④ Tailscale 的真实报错在统一日志里,CLI 只会说"我连不上自己"
+#    注意 zsh 有同名 log 内建,必须写绝对路径 /usr/bin/log
+/usr/bin/log show --last 10m --predicate 'eventMessage CONTAINS[c] "ailscale"' --style compact | tail -30
+```
+
+**关键判据**:日志里对**所有**目标(十几台 derp + controlplane + logtail)一律报
+`can't assign requested address`(IPv4)或 `no route to host`(IPv6),而不是集中在
+某个地址 —— 全目标失败 = 本地端口问题,不是对端或网络问题。
+
+### 修复(秒级见效)
+
+```bash
+sudo sysctl -w net.inet.ip.portrange.first=16384   # 端口池 16,384 -> 49,152 个
+```
+
+思路是**绕开**卡住的 TIME_WAIT 而不是等它们过期。执行后立刻 `curl` 返回 200,
+Tailscale 自己重新连上,**不需要重新登录**(profile 仍在;期间 `tailscale status`
+会显示 "You are logged out",那是端口耗尽期的历史错误,不用管它)。
+
+不够就再加 `sudo sysctl -w net.inet.tcp.msl=1000`(TIME_WAIT 30s→2s);
+都无效就重启 Mac。
+
+**这两条都是运行时参数,重启后恢复默认(portrange.first=49152)。不是永久修复。**
+
+### 预防(2026-08-28 已落实,不是待办)
+
+- **Mac `~/.ssh/config` 已开启连接复用。** 此前 tillicum1/2、hyak 三段是注释状态,
+  而 `osworld-windows` 段**连注释模板都没有** —— 那正是 3,035 条 TIME_WAIT 的来源:
+  每条 `ssh osworld-windows` 都新建一条 TCP,批量查状态时连接数 = 命令条数。
+  现四段统一为 `ServerAliveInterval 60` + `ControlMaster auto` +
+  `ControlPath ~/.ssh/sockets/%C` + `ControlPersist 86400`。
+- **`ControlPath` 用 `%C`(哈希)而不是 `%r@%h-%p`**:osworld-windows 的
+  `User "Daniel Yan"` 含空格,`%r` 会把空格带进 socket 文件路径;`%C` 是固定 40 位
+  十六进制,也不会撞 macOS unix socket 路径 104 字节上限。
+- **实测**:连续 5 次 `ssh osworld-windows`,到 `100.113.98.76:2222` 的 TIME_WAIT
+  **增加 0 条**(3051→3051),改动前是每次 +1。备份 `~/.ssh/config.bak-20260828`。
+- **代价**:master 连接保持 24h。换网络(校园网↔家里)后旧 master 会僵死、让后续
+  ssh 卡住 —— `ssh -O check <host>` 查健康,`ssh -O exit <host>` 清掉重建。
+- 顺带收益:tillicum 走复用后不必反复过 Duo(与 §4 的 WSL→Tillicum 链路同理)。
+- **「一次 ssh 只查一件事」这条规矩在没有连接复用时会变成放大器** —— 现已配套,
+  两条规矩必须同时成立。
+- 轮询循环必须带 sleep,并确认退出条件覆盖失败态(否则空转刷连接)。
