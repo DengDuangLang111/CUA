@@ -30,6 +30,14 @@ Two rules shape the whole thing:
 
 ---
 
+> **v14g(2026-08-28,分支 `datagenv14`,未合 main)**:分布策略外化为配方
+> (`recipes/*.yaml`,轴权重 + cells 硬钉 + forbid 约束,溯源四元组入 spec);
+> 抽签轴加 evaluator 族(口径 `reference/EVAL_FAMILY_TAXONOMY.md`);新增四个
+> gold grade(deck/doc/image/table_gold),ship 内插 bake 阶段(容器造
+> seed+gold、host 端不动点 0/1),evaluator 用官方 `cloud_file` 从本机 serve
+> 拉取。命令链 RUNBOOK §4.6,设计与验收 `PLAN-20260828-v14g-gold.md`。
+> 下文描述的是 v11–v14 主线行为,对 v14g 仍成立的部分不重复。
+
 ## 1 gen — draw a coordinate, ask for a task
 
 `ostg.taskgen.gen` draws from the taxonomy product **intent(5) × domain(13) ×
