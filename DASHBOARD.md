@@ -388,3 +388,69 @@ bhqskeep/lorakeep**(后三个 2026-08-17 加)。
 已跑题数——未跑完的题按 0 计(政策见 `OPS.md`)。旧口径会**系统性抬高
 缺题的臂**:gb64keep 在 47 题上读作 44.5%,面板分实为 41.8%。生成器同时
 输出 `mean_scored`(÷已跑,备查)与 `missing`(缺题数)。
+
+## daemon 的启动与存活(2026-08-28 补,一次 4 天无人察觉的停更换来的)
+
+**上面那张表只写了 daemon 干什么,从没写怎么把它们启动起来,也没有任何存活
+检查 —— 于是它们死了 4 天没人发现。** 这一节补上。
+
+### 这次发生了什么
+
+| 数据源 | 卡住的时间戳 | 停更 | 死因 |
+|---|---|---|---|
+| `status.json` | 2026-08-24 16:15 PT | **4 天** | 未知;`dash_status.log` 最后写入与之同分,之后再没人拉起来 |
+| `sft.json` | 2026-08-27 16:35 PT | 22 小时 | WSL 于 **08-27 19:22:24** 重启(`uptime -s`),把两个进程一起杀了 |
+
+两个脚本都是 `while true` + `set +e`,**不会自己退出**,所以"进程没了"只可能是
+外力:WSL 重启、机器重启、手动 kill。**没有自启动机制,重启后必须手动拉起。**
+
+发现渠道只有人眼看见"数字不动了" —— status 那次因此拖了 4 天。
+
+### 启动命令(实测有效)
+
+脚本内部全用绝对路径(`REPO=$HOME/cua-dash-sft`、`CTL=/mnt/d/...`),
+**不依赖启动时的 cwd**,所以直接用绝对路径拉起即可:
+
+```bash
+ssh osworld-windows 'wsl -e bash -lc "setsid nohup /mnt/d/research/osworld-verified-control/dash_status_daemon.sh >> /home/daniel_yan/dash_status.log 2>&1 < /dev/null & setsid nohup /mnt/d/research/osworld-verified-control/sft_dash_daemon.sh >> /home/daniel_yan/dash_sft.log 2>&1 < /dev/null & sleep 6; pgrep -af daemon.sh"'
+```
+
+`setsid` + `< /dev/null` 是必须的:否则 ssh 会话结束时进程可能连带被杀。
+**日志靠重定向,脚本自己不写文件** —— 2026-08-24 之后那次启动就没重定向,
+于是那段时间的运行完全没有日志可查,死因也就永远查不到了。
+
+### 存活检查(三层,任何一层不过都要看)
+
+```bash
+# ① 进程在不在(最快)
+ssh osworld-windows 'wsl -e bash -lc "pgrep -af daemon.sh"'
+
+# ② 日志在不在动(比对日志 mtime 与 WSL 当前时间,差值应 < 2 分钟)
+ssh osworld-windows 'wsl -e bash -lc "ls -l --time-style=+%H:%M:%S /home/daniel_yan/dash_*.log; date +%H:%M:%S"'
+
+# ③ 线上时间戳(最终判据,直接看用户看到的东西)
+curl -s https://cua-dashboard-theta.vercel.app/sft.json    | python3 -c "import sys,json; print(json.load(sys.stdin)['updated'])"
+curl -s https://cua-dashboard-theta.vercel.app/status.json | python3 -c "import sys,json; print(json.load(sys.stdin)['updated'])"
+```
+
+### 不要把这两种情况当故障
+
+- **`nothing to commit, working tree clean`**:这是 git 的正常输出。json 重新
+  生成后与仓库里的完全一致 = 没有新的 eval 数据,按设计就不推送
+  (对应 `sft_dash.py` 的**退出码 3 = 无变化**)。**daemon 活着但线上时间戳不动,
+  在没有新结果时是正确行为**,别据此判定 daemon 挂了 —— 要用上面第 ① ② 层去分。
+- **推 md 文档不触发 Vercel 部署**:`vercel.json` 的 `ignoreCommand` 只在
+  `dashboard/index.html` 变化时才部署(省 hobby 额度,见 §3.5)。文档改动推上去
+  页面不动是设计如此,不是部署坏了。
+
+### 循环周期别读错
+
+上一节表格里 `sft_dash_daemon.sh | 30 分钟一轮` 容易误读:**脚本主循环是
+`sleep 75`(75 秒)**,每轮都跑 status→push→publish→status;30 分钟指的是
+traj 发布节拍(那才是限制 Vercel 部署配额的东西,见 §3.5)。
+
+### 该做而还没做的
+
+**自启动**。现在 WSL 每重启一次就得记得手动拉起两个 daemon,而唯一的告警是
+人眼。最小的改进是给存活检查加一个定时任务(比对线上 `updated` 与当前时间,
+超过阈值就告警),彻底的做法是让 daemon 随 WSL 启动。
