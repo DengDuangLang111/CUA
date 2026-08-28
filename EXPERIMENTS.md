@@ -2,11 +2,13 @@
 
 ## 现状(2026-08-18,过时即改;历史快照看 git log)
 
-- **v14g(08-28)**:datagen 重构 A′–F 全部落码于 `datagenv14` 分支——配方层
-  (分布=YAML,溯源四元组入 spec)、evaluator 族轴、四个 gold grade、bake
-  (容器造 seed+gold+不动点)、serve、Tier-1/2 注入、audit 渲染桥;bake 冒烟
-  3/3 过。**生成未跑:等 API 更换**。口径定稿 `reference/EVAL_FAMILY_TAXONOMY.md`
-  (动作词表废弃,precision 0.50);计划与门槛 `PLAN-20260828-v14g-gold.md`。
+- **v14g(08-28)**:datagen 重构 A′–F 落码并实跑。pilot40 全环走通,四道 VM
+  闸全绿(bake 36/40、负向 36/36、Tier-1 36/36、Tier-2 36/36),audit 裁定中;
+  抓获并修复四个系统性缺陷(注入自杀 / ARG_MAX / **round-trip no-op** / pdf
+  gate 误杀)+ 加权抽签的家族饿死(spent_fam 账本 + 可行前沿结论)。wave-2
+  生成 1265 条入库 + 375 钉补差在跑(pdf/音视频机制已落,vlc/tbird 足额)。
+  教师通过率按坐标实测:d1-3 62%/d4 42%/amb2 最难/跨应用递减,加权 ≈56%。
+  执行记录 `PLAN-20260828-v14g-gold.md` §8.5;口径 `reference/EVAL_FAMILY_TAXONOMY.md`。
 
 - **两大口径更正(08-18,详 `sft/RESULTS.md` §5.2 / §5.7)**:
   ① **keepthink 与 stock 两个评测模板逐字节等价** —— harness 把推理内联进
