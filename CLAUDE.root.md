@@ -79,6 +79,7 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && set -a && . 
 | 生成任务:gen→ship→cull→merge→control→rollout 全部命令 | `CUA/RUNBOOK.md`(唯一 runbook;WSL 侧同名文件是指路桩) |
 | 生成流水线的设计与各层职责 | `CUA/TASKGEN_PIPELINE.md` |
 | **SFT 数据流水线:每层职责、五道闸、像素审计、排错** | `CUA/sft/DATA_PIPELINE.md` |
+| **Klone 上训练:容器/账号/占位卡/双 bind/OOM 机理/速度账** | `CUA/sft/KLONE.md` |
 | 实验结果与决策依据(账本) | `CUA/EXPERIMENTS.md` |
 | **eval-50 汇报:每个臂的结果/设置/两两差异** | `CUA/sft/RESULTS.md` |
 | **为什么失败:零解题解剖、操作覆盖缺口、撞上限机制、孤儿根因** | `CUA/sft/FAILURE_ANATOMY.md` |
