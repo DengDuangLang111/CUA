@@ -246,6 +246,10 @@ case "$ARM" in
   # window. B(i10)=81.8 vs C(i20)=73.8 vs anchor(20saw)=69.8 -- how low can it
   # go? i5 either holds (cheaper still) or locates the floor in (5,10).
   t38i5)    SB=38-i-h20; JOB=eval38h20; RP=8000; MN=qwen38-27b-local; GRP=qwen38-27b-local; PREV=t38med; PJOB=none; XARGS="--image_max 5 --fold_size 1" ;;
+  # G-cell (08-29 user order): teacher/ev10i@480 -- completes the 2x2
+  # (count x resolution): B=ev10i@2040, C=ev20i@2040, D=ev20i@480, G=this.
+  # If G holds near B, the full cheap stack (10 img x 480 tok) is validated.
+  t38i10px) SB=38-i-h20; JOB=eval38h20; RP=8000; MN=qwen38-27b-local; GRP=qwen38-27b-local; PREV=t38i5; PJOB=none; XARGS="--image_max 10 --fold_size 1"; PX=491520 ;;
   # nocapms100: the champion with DOUBLE the step budget (max_steps 100), the
   # only changed parameter, over the frozen 100 (user order 08-22 via peer).
   # Verdict arm for RESULTS 5.22: the teacher-student gap grows 17.4->65.2pp
