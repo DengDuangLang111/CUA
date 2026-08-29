@@ -48,7 +48,7 @@ summary{cursor:pointer;color:#5f6368}
 .chips{display:flex;gap:.6em;margin:.6em 0;flex-wrap:wrap}
 .chip{background:#fff;border-radius:2em;padding:.3em 1em;
       box-shadow:0 1px 2px rgba(0,0,0,.08);font-size:.9em}
-</style><div class=wrap><h2>13584542-872b-42d8-b299-866967b5c3ef <span class="badge none">no score</span></h2><div class=chips style="margin:.2em 0 .6em"><span class=chip><b style="color:#5f6368;font-weight:600">apps</b>&nbsp;os</span></div><div class=instr>I click in terminal: terminal-&gt;132x43 to change terminal size but after each reboot terminal size is set to default setting and I have to change it again. Help me set it permanently</div><p class=meta><a href="index.html" onclick="history.back();return false">&larr; back</a></p><details><summary>task config + evaluator</summary><div class=resp>{
+</style><div class=wrap><h2>13584542-872b-42d8-b299-866967b5c3ef <span class="badge pass">PASS 1.0</span></h2><div class=chips style="margin:.2em 0 .6em"><span class=chip><b style="color:#5f6368;font-weight:600">apps</b>&nbsp;os</span></div><div class=instr>I click in terminal: terminal-&gt;132x43 to change terminal size but after each reboot terminal size is set to default setting and I have to change it again. Help me set it permanently</div><p class=meta><a href="index.html" onclick="history.back();return false">&larr; back</a></p><details><summary>task config + evaluator</summary><div class=resp>{
  &quot;config&quot;: [
   {
    &quot;type&quot;: &quot;execute&quot;,
@@ -94,7 +94,7 @@ summary{cursor:pointer;color:#5f6368}
    }
   }
  }
-}</div></details><div class=nav><button id=prev>&#9664; prev</button><span id=pos></span><button id=next>next &#9654;</button><input type=range id=rng min=0 max=25 value=0><button id=all>show all</button></div><div class=frame><h3>step 1 <small>06:48:14</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The user is asking about a Terminal setting (GNOME Terminal) where they set the size to 132x43 but it resets to default after reboot. This is a GNOME Terminal preference. I need to make the terminal size permanent via the terminal&#x27;s preferences/settings, which persist via dconf/gsettings.
+}</div></details><div class=nav><button id=prev>&#9664; prev</button><span id=pos></span><button id=next>next &#9654;</button><input type=range id=rng min=0 max=36 value=0><button id=all>show all</button></div><div class=frame><h3>step 1 <small>06:48:14</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The user is asking about a Terminal setting (GNOME Terminal) where they set the size to 132x43 but it resets to default after reboot. This is a GNOME Terminal preference. I need to make the terminal size permanent via the terminal&#x27;s preferences/settings, which persist via dconf/gsettings.
 
 Let me think about the best approach. GNOME Terminal has a &quot;Preferences&quot; dialog where under &quot;General&quot; &gt; there&#x27;s a &quot;Default terminal size&quot; setting with columns and rows. Setting it there will persist.
 
@@ -431,7 +431,177 @@ echo &quot;cols: $(gsettings get org.gnome.Terminal.Legacy.Profile:/org/gnome/te
 screenshot
 &lt;/parameter&gt;
 &lt;/function&gt;
-&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>WAIT</div></div><script>
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>WAIT</div><img class=shot loading=lazy src="step_26_20260829@065237181759.png"></div><div class=frame><h3>step 27 <small>06:52:50</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The command line ends with &quot;ws)&quot; and a cursor but no output line yet, and no new prompt. The command seems to be on the line but not executed. The type action included a trailing newline, but it seems the terminal hasn&#x27;t shown output. Maybe the shell is waiting or the echo output is below the visible area (the window is short). Let me press Enter to ensure it executes, then maximize the window to read.
+
+Actually, the cursor is right after &quot;ws)&quot; - meaning the command text is there but the newline from my type didn&#x27;t trigger execution? That&#x27;s odd. Let me press Return.</div><div class="blk b-act"><span class=tag>ACTION</span>The command is on the line but hasn&#x27;t executed. Let me press Return to run it.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+key
+&lt;/parameter&gt;
+&lt;parameter=keys&gt;
+[&quot;return&quot;]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.press(&quot;return&quot;)</div><img class=shot loading=lazy src="step_27_20260829@065250009569.png"></div><div class=frame><h3>step 28 <small>06:53:07</small></h3><div class="blk b-think"><span class=tag>THINKING</span>Now I see a gsettings usage error message. This means the echo command with the subshells produced a gsettings usage error. Wait, this is showing &quot;Usage: gsettings [--schemadir SCHEMADIR] set SCHEMA[:PATH] KEY VALUE&quot;. This looks like a &quot;set&quot; command failed.
+
+Wait, but this appeared after I ran the echo command. The echo command should have just printed cols and rows. But instead I see a &quot;set&quot; usage error. 
+
+Hmm, actually I think what happened: The trailing newline in my previous type didn&#x27;t execute the echo. Then I pressed Return, which executed the echo command. But the echo output... Actually the visible output shows a &quot;set&quot; usage error, which is strange for an echo command.
+
+Wait, let me re-read. The output block:
+```
+ws)&quot;
+Usage:
+ gsettings [--schemadir SCHEMADIR] set SCHEMA[:PATH] KEY VALUE
+
+Set the value of KEY to VALUE
+...
+```
+
+This is the output of a `gsettings set` that failed with usage error. But my last command was an echo, not a set. 
+
+Oh! I think I understand now. The echo command&#x27;s command substitution `$(...)` ran gsettings get, which is fine. But wait, the error is about &quot;set&quot; not &quot;get&quot;. 
+
+Actually, maybe the earlier &quot;set&quot; commands I typed didn&#x27;t fully register and got mangled. Let me look: The previous screenshot showed the two set commands and then the echo command. When I pressed Return just now, it ran the echo. But the output shows a set usage error.
+
+This is confusing. Let me just re-run a clean, simple verification command. Let me run a single clear gsettings get for each value on fresh lines. The window is now bigger (resized). Let me run:
+
+gsettings get org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:b1dc9d6d-5262-4d8d-a063-c8976d979b9b/ default-size-columns
+
+Then a second get for rows.
+
+Actually, the usage error suggests something is wrong with how my multi-line commands are being typed/executed. The newlines inside my `type` text may be causing issues where partial commands run. Let me type commands one at a time and verify each.
+
+Let me run just the columns get command alone.</div><div class="blk b-act"><span class=tag>ACTION</span>I see a gsettings usage error, which means my multi-line input got garbled. Let me run a single, clean verification command for the columns value.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+type
+&lt;/parameter&gt;
+&lt;parameter=text&gt;
+gsettings get org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:b1dc9d6d-5262-4d8d-a063-c8976d979b9b/ default-size-columns
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.typewrite(&quot;gsettings get org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:b1dc9d6d-5262-4d8d-a063-c8976d979b9b/ default-size-columns&quot;)</div><img class=shot loading=lazy src="step_28_20260829@065307714911.png"></div><div class=frame><h3>step 29 <small>06:53:20</small></h3><div class="blk b-think"><span class=tag>THINKING</span>Good, now the columns get command is cleanly on one line. Let me press Enter to run it.</div><div class="blk b-act"><span class=tag>ACTION</span>The command is cleanly on one line now. Let me execute it.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+key
+&lt;/parameter&gt;
+&lt;parameter=keys&gt;
+[&quot;return&quot;]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.press(&quot;return&quot;)</div><img class=shot loading=lazy src="step_29_20260829@065320251674.png"></div><div class=frame><h3>step 30 <small>06:53:34</small></h3><div class="blk b-think"><span class=tag>THINKING</span>Now the output shows &quot;132&quot;. So default-size-columns = 132. The set command worked. Now let me verify rows. Let me run the rows get command.</div><div class="blk b-act"><span class=tag>ACTION</span>Columns is confirmed as `132`. Now let me verify the rows value.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+type
+&lt;/parameter&gt;
+&lt;parameter=text&gt;
+gsettings get org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:b1dc9d6d-5262-4d8d-a063-c8976d979b9b/ default-size-rows
+
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.typewrite(&quot;gsettings get org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:b1dc9d6d-5262-4d8d-a063-c8976d979b9b/ default-size-rows&quot;)</div><img class=shot loading=lazy src="step_30_20260829@065334135685.png"></div><div class=frame><h3>step 31 <small>06:53:46</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The rows get command is typed but output not shown yet. Let me take a screenshot to see the result (it may need a moment).</div><div class="blk b-act"><span class=tag>ACTION</span>Let me take a screenshot to read the rows value output.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+screenshot
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>WAIT</div><img class=shot loading=lazy src="step_31_20260829@065346253374.png"></div><div class=frame><h3>step 32 <small>06:53:59</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The rows get command is on the line but hasn&#x27;t executed yet (no output, cursor at end of &quot;rows&quot;). The trailing newline in my type didn&#x27;t trigger it this time. This is the same behavior as before - the type&#x27;s newline sometimes doesn&#x27;t register. Let me press Return.</div><div class="blk b-act"><span class=tag>ACTION</span>The command needs to be executed. Let me press Return.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+key
+&lt;/parameter&gt;
+&lt;parameter=keys&gt;
+[&quot;return&quot;]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.press(&quot;return&quot;)</div><img class=shot loading=lazy src="step_32_20260829@065359668446.png"></div><div class=frame><h3>step 33 <small>06:54:11</small></h3><div class="blk b-think"><span class=tag>THINKING</span>Now the output shows &quot;24&quot; for rows! Wait - default-size-rows returned 24, not 43!
+
+So columns = 132 (correct), but rows = 24 (WRONG, should be 43).
+
+Hmm. So the rows set command didn&#x27;t work? Earlier when I typed the two set commands together with a newline, the columns set worked (132) but the rows set may have been garbled (that&#x27;s the source of the usage error I saw - the rows set command was malformed).
+
+Recall: The first batch was:
+```
+gsettings set ... default-size-columns 132
+gsettings set ... default-size-rows 43
+```
+The columns set worked. But the rows set apparently got mangled (the trailing newline in the multi-line type combined with the earlier incomplete command created a bad &quot;set&quot; that gave usage error). So rows is still 24.
+
+Let me set rows correctly now with a clean single command.</div><div class="blk b-act"><span class=tag>ACTION</span>Columns is correctly `132`, but rows is still `24` — the rows `set` command got garbled earlier. Let me set the rows value with a clean command.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+type
+&lt;/parameter&gt;
+&lt;parameter=text&gt;
+gsettings set org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:b1dc9d6d-5262-4d8d-a063-c8976d979b9b/ default-size-rows 43
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.typewrite(&quot;gsettings set org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:b1dc9d6d-5262-4d8d-a063-c8976d979b9b/ default-size-rows 43&quot;)</div><img class=shot loading=lazy src="step_33_20260829@065411946513.png"></div><div class=frame><h3>step 34 <small>06:54:19</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The rows set command is cleanly typed. Let me press Return to execute it.</div><div class="blk b-act"><span class=tag>ACTION</span>The command is typed. Let me execute it.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+key
+&lt;/parameter&gt;
+&lt;parameter=keys&gt;
+[&quot;return&quot;]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.press(&quot;return&quot;)</div><img class=shot loading=lazy src="step_34_20260829@065419466900.png"></div><div class=frame><h3>step 35 <small>06:54:28</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The set command for rows executed with no error (a new prompt appeared). Now let me verify both values are correct with a final get. Let me run the rows get again to confirm it&#x27;s now 43.</div><div class="blk b-act"><span class=tag>ACTION</span>The rows set command executed successfully. Let me do a final verification of the rows value to confirm it&#x27;s now 43.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+type
+&lt;/parameter&gt;
+&lt;parameter=text&gt;
+gsettings get org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:b1dc9d6d-5262-4d8d-a063-c8976d979b9b/ default-size-rows
+
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.typewrite(&quot;gsettings get org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:b1dc9d6d-5262-4d8d-a063-c8976d979b9b/ default-size-rows&quot;)</div><img class=shot loading=lazy src="step_35_20260829@065428694997.png"></div><div class=frame><h3>step 36 <small>06:54:36</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The rows get command is typed but not yet executed (cursor at end). Let me press Return.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+key
+&lt;/parameter&gt;
+&lt;parameter=keys&gt;
+[&quot;return&quot;]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.press(&quot;return&quot;)</div><img class=shot loading=lazy src="step_36_20260829@065436828965.png"></div><div class=frame><h3>step 37 <small>06:54:55</small></h3><div class="blk b-think"><span class=tag>THINKING</span>Now the final verification shows:
+- default-size-columns = 132
+- default-size-rows = 43
+
+Both values are now correctly set in dconf/gsettings for the &quot;Unnamed&quot; profile, which is the default profile. These values are stored in the user&#x27;s dconf database (~/.config/dconf/user), which persists across reboots. This will make every new terminal window open at 132x43.
+
+The task is complete. Let me summarize for the user.
+
+I should explain:
+1. The root cause: the &quot;Initial terminal size&quot; in the profile preferences didn&#x27;t get persisted (the GUI edit I made didn&#x27;t stick to dconf - it stayed at 80x24 default). 
+2. I set it permanently via gsettings directly, which writes to dconf.
+3. Verified: columns=132, rows=43.
+4. These persist across reboots.
+
+Note: new windows will open at 132x43. The currently open window won&#x27;t resize automatically.</div><div class="blk b-act"><span class=tag>ACTION</span>Both values are now confirmed and persisted:
+- **`default-size-columns` = 132**
+- **`default-size-rows` = 43**
+
+## What was happening and what I did
+
+Your problem was that the terminal&#x27;s &quot;default size&quot; was stored as the 80×24 default, so every new window (including after each reboot) opened at the default instead of your 132×43.
+
+I set the size permanently for your active **&quot;Unnamed&quot;** profile by writing it directly into your user settings (dconf), which is exactly what the GNOME Terminal profile is and what survives reboots:
+
+```
+gsettings set org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:b1dc9d6d-5262-4d8d-a063-c8976d979b9b/ default-size-columns 132
+gsettings set org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:b1dc9d6d-5262-4d8d-a063-c8976d979b9b/ default-size-rows 43
+```
+
+I then verified with `gsettings get` that the stored values are now **132 columns × 43 rows**.
+
+## Notes
+- From now on, **every new terminal window will open at 132×43**, and this will hold after reboots since it&#x27;s saved in your user profile settings.
+- The window that&#x27;s already open won&#x27;t auto-resize — just open a new window (or a new tab) to see the 132×43 size.
+- An equivalent way to do this in the future via the GUI: Terminal → **Preferences → your profile → Text tab → &quot;Initial terminal size&quot;**, and enter 132 columns and 43 rows. (In my session that GUI edit didn&#x27;t actually stick, which is why I set it via `gsettings` to guarantee persistence.)
+
+The terminal size is now set permanently.</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>DONE</div><img class=shot loading=lazy src="step_37_20260829@065455068690.png"></div><script>
 const frames=[...document.querySelectorAll('.frame')];
 let cur=0, all=false;
 const pos=document.getElementById('pos'), rng=document.getElementById('rng');
