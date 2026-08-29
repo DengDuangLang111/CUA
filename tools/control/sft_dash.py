@@ -52,6 +52,12 @@ PY = "/mnt/d/research/OSWorld/.venv/bin/python"
 EVAL50_META = "/mnt/d/research/OSWorld/evaluation_examples/verified_eval50_nonproxy.json"
 EVAL50_EXAMPLES = "/mnt/d/research/OSWorld/evaluation_examples/examples"
 EVAL50_ARMS = {
+    "t38i10":   ("teacher 27B \u00b7 img10 slide", "teacher window pilot",
+                 "image_max 10 fold 1; vs t38i20 isolates image count."),
+    "t38i20":   ("teacher 27B \u00b7 img20 slide", "teacher window pilot",
+                 "image_max 20 fold 1; vs archived t38 (69.8, sawtooth) isolates fold."),
+    "t38px480": ("teacher 27B \u00b7 img20 slide \u00b7 480tok", "teacher window pilot",
+                 "OSTG_MAX_PIXELS=491520 (~960x512, ~480 vis tok/shot); vs t38i20 isolates resolution."),
     "base":      ("stock 4B · stock template", "reference",
                   "no SFT. The number every trained arm has to beat."),
     "basekeep":  ("stock 4B · keepthink (base control)", "reference",
@@ -510,6 +516,11 @@ ARM_PANEL = {"nocap50b": "heldout", "base50b": "heldout", "t3850b": "heldout",
              "a5v": "all100", "a6v": "all100", "a7": "all100",
              # The three 261 REST slices completing the 9B / teacher 361s.
              "a2261": "rest261", "base9b261": "rest261", "t38261": "rest261",
+             # v14 window probe: the teacher over the WHOLE 361 in one pass at
+             # image_max 20 / fold_size 1. Not a slice -- it spans all three,
+             # so it needs its own panel key rather than any of the existing
+             # seen/held/rest buckets.
+             "t38h20": "all361",
              # a1h10 ran the full eval100 meta -- 100 result.txt on disk summing
              # to 42.903 -- but was missing here, so its held-out 50 were
              # dropped and it read 49.81/50 instead of 42.90/100. Third time a
@@ -539,8 +550,12 @@ def eval50():
         # from the name: np1e6 runs the whole 100 in one pass while the "50b"
         # arms run only the held-out half, and getting this wrong silently
         # discards an arm's entire result set (it read scored=0 on 2026-08-20).
+        # "all361" spans every slice: the window-probe arms run the whole
+        # official panel in one pass rather than stitching three runs, so they
+        # need the union as their denominator.
         panel = {"heldout": heldout, "all100": dict(tasks, **heldout),
-                 "rest261": rest}.get(
+                 "rest261": rest,
+                 "all361": dict(tasks, **dict(heldout, **rest))}.get(
             ARM_PANEL.get(key), tasks)
         got = {tid: r for tid, r in read_arm(d).items() if tid in panel}
         arms.append({"key": key, "run": run, "modeldir": modeldir,

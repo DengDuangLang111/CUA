@@ -35,6 +35,7 @@
 set -u
 ARM="${1:?usage: run_eval50_stock.sh <arm>}"
 XARGS=""   # per-arm extra runner flags (e.g. "--image_max 3 --fold_size 1")
+PX=""     # per-arm OSTG_MAX_PIXELS override (image-window pilot D-cell); empty = images.py default 13107200
 EXPECT_ROOT=""  # per-arm weights-path prefix; asserted against what vLLM says
                 # it actually loaded. Distinct from the served-NAME check: the
                 # name lives in the sbatch while the path can come from
@@ -225,6 +226,18 @@ case "$ARM" in
   # serve instead of rolling four -- the teacher measured 24.5-28.1 tasks/h,
   # so ~13-15h).
   t38h20)   SB=38-i-h20;         JOB=eval38h20; RP=8000; MN=qwen38-27b-local;         GRP=qwen38-27b-local; PREV=t38261;     PJOB=eval38261; METAF="test_nogdrive.json"; XARGS="--image_max 20 --fold_size 1" ;;
+  # ---- image-window pilot (2026-08-28 user order, pre-rollout gate) ----
+  # Teacher on the frozen 50 against the ARCHIVED anchor A = eval50-t38-20260819
+  # (h100 / img20 fold10 / ms50 / t1.0 / no-split -- the datagen lineage config,
+  # 69.8%). One variable per pair: A-C = sawtooth-vs-slide, C-B = image count,
+  # C-D = resolution (2040 -> ~480 vis tokens/shot via OSTG_MAX_PIXELS).
+  # All three REUSE one live eval38h20 serve: PJOB=none so nothing gets
+  # scancelled between arms (t38i10 found job 266158 already running).
+  # Launcher tools_pilot_fold.sh gates on the ostg tails chain and exports
+  # OSTG_TYPE_NO_SPLIT=1 to match the anchor.
+  t38i10)   SB=38-i-h20; JOB=eval38h20; RP=8000; MN=qwen38-27b-local; GRP=qwen38-27b-local; PREV=none;   PJOB=none; XARGS="--image_max 10 --fold_size 1" ;;
+  t38i20)   SB=38-i-h20; JOB=eval38h20; RP=8000; MN=qwen38-27b-local; GRP=qwen38-27b-local; PREV=t38i10; PJOB=none; XARGS="--image_max 20 --fold_size 1" ;;
+  t38px480) SB=38-i-h20; JOB=eval38h20; RP=8000; MN=qwen38-27b-local; GRP=qwen38-27b-local; PREV=t38i20; PJOB=none; XARGS="--image_max 20 --fold_size 1"; PX=491520 ;;
   # nocapms100: the champion with DOUBLE the step budget (max_steps 100), the
   # only changed parameter, over the frozen 100 (user order 08-22 via peer).
   # Verdict arm for RESULTS 5.22: the teacher-student gap grows 17.4->65.2pp
@@ -593,7 +606,7 @@ for TRY in 1 2 3 4 5; do
       fi
     done ) &
   GUARD=$!
-  OSWORLD_OPENAI_TIMEOUT=600 OSTG_NO_RECORD=1 OSTG_TYPE_NO_SPLIT=${OSTG_TYPE_NO_SPLIT:-0} OSTG_PARAM_DIALECT=$DIALECT \
+  OSWORLD_OPENAI_TIMEOUT=600 OSTG_NO_RECORD=1 OSTG_TYPE_NO_SPLIT=${OSTG_TYPE_NO_SPLIT:-0} OSTG_PARAM_DIALECT=$DIALECT OSTG_MAX_PIXELS=${PX:-13107200} \
   .venv/bin/python scripts/python/run_multienv_qwen.py \
     --provider_name docker --path_to_vm /mnt/d/research/OSWorld/docker_vm_data/Ubuntu.qcow2 \
     --headless --observation_type screenshot --action_space pyautogui \

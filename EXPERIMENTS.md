@@ -1,7 +1,15 @@
 # Synthetic task generation for OSWorld — design, experiments, results
 
-## 现状(2026-08-18,过时即改;历史快照看 git log)
+## 现状(2026-08-28,过时即改;历史快照看 git log)
 
+- **图窗试点(08-28 深夜,rollout 前置闸,用户令)**:教师 27B 在冻结 eval-50
+  跑三臂 —— `t38i10`(10 图滑窗)/`t38i20`(20 图滑窗,补 t38h20 空目录旧账)/
+  `t38px480`(20 图滑窗 + `OSTG_MAX_PIXELS=491520` ≈480 视觉 token/张);锚点 =
+  08-19 存档 t38(教师谱系配置 h100/20fold10/ms50/t1.0,**69.8%**)。每对只动
+  一轴:锚-i20=fold,i20-i10=张数,i20-px480=分辨率。臂定义
+  `tools/run_eval50_stock.sh`,launcher `tools_pilot_fold.sh` 守着尾扫链自动
+  点火,复用在跑的 eval38h20 serve;结果 dashboard eval-50 区实时可看。
+  **出对照表 → 定 rollout 图窗 → 再点 1796 全量。**
 - **v14g(08-28)**:datagen 重构 A′–F 落码并实跑。pilot40 全环走通,四道 VM
   闸全绿(bake 36/40、负向 36/36、Tier-1 36/36、Tier-2 36/36),audit 裁定中;
   抓获并修复四个系统性缺陷(注入自杀 / ARG_MAX / **round-trip no-op** / pdf

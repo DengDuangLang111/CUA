@@ -25,15 +25,21 @@
 
  M mm_agents/qwen/prompts.py                     **08-28 补记**:apply_tool_dialect —— OSTG_PARAM_DIALECT=json 时把工具调用格式说明改写成 Hermes JSON 方言;**不设则提示词逐字节不变**(它是 actions.py 那条 dialect 机制的配套文件,机制早已记账、文件名漏记)
 
-**共 10 个已跟踪文件 +303/−40**(2026-08-28 复核,HEAD 仍是 `091f5ef1`),另有
+ M mm_agents/qwen/images.py                      **08-28 深夜**:process_image 的 max_pixels 环境变量化(`OSTG_MAX_PIXELS`,不设=13107200,逐字节同旧行为)。图窗试点 D 臂用 491520(≈960×512,~480 视觉 token/张;旧值下 1920×1088=2040 token/张)。坐标回缩 adjust_coordinates 原生按发送尺寸换算,无需配套改动
+
+**共 11 个已跟踪文件**(08-28 深夜加 images.py +2/−1 后;此前 10 个 +303/−40
+复核于同日,HEAD 仍是 `091f5ef1`),另有
 上列未跟踪新增 + 新增未跟踪:`verified_eval261_rest.json`、`eval50b`、`vlsmoke3.json`、
 两个 codex-sync tar、`__init__.py.bak-before-restore-imports`。
 
 > **08-28 复核补记**:`lib_run_single.py` 里存在一段 verifier-拒绝-DONE 逻辑,
 > 但它整个住在独立函数 `run_single_example_vlaa_gui`(verifier_agent 默认 None)
 > 里,`run_multienv_qwen.py` 只调用标准 `run_single_example` —— **对 qwen 线
-> rollout/评测零影响**。runner 的 `--history_n` 默认 100:20/10 窗口必须显式传
-> `--history_n 20 --fold_size 10`,不能靠默认值。
+> rollout/评测零影响**。runner 默认 `history_n=100 / image_max=20 / fold_size=10`,
+> **教师谱系跑的就是这套默认**(v11-500 datagen、eval50-t38、t3850b、t38261 四个
+> args.json 08-28 深夜逐一实测:h100/20fold10/ms50/t1.0)——照谱系 rollout 不需要
+> 显式传窗口参数;只有改窗口的实验臂才传(见 run_eval50_stock.sh 各臂 XARGS)。
+> 旧文此处写"必须显式传 --history_n 20"是把学生评测口径混进了教师谱系,已废。
 
 > 2026-08-13 记的是"8 个文件 +96/−40",漏了 `lib_run_single.py`,行数也已过时。
 > **`git diff` 不是完整清单** —— 未跟踪的新增(包括一整个 evaluator 模块
