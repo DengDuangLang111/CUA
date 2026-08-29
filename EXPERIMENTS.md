@@ -9,7 +9,10 @@
   一轴:锚-i20=fold,i20-i10=张数,i20-px480=分辨率。臂定义
   `tools/run_eval50_stock.sh`,launcher `tools_pilot_fold.sh` 守着尾扫链自动
   点火,复用在跑的 eval38h20 serve;结果 dashboard eval-50 区实时可看。
-  **出对照表 → 定 rollout 图窗 → 再点 1796 全量。**
+  **08-29 深夜追加 E 臂 `t38med`**(用户令):锚点窗口(20fold10 默认)+
+  `OSTG_REASONING_EFFORT=medium`(教师谱系全部是模板默认 xhigh)——对锚点
+  隔离思考力度;接力器 `tools_pilot_fold2.sh` 排在 D 后,收官标记
+  ALL-PILOT2-DONE。**出对照表 → 定 rollout 图窗+思考力度 → 再点 1796 全量。**
 - **v14g(08-28)**:datagen 重构 A′–F 落码并实跑。pilot40 全环走通,四道 VM
   闸全绿(bake 36/40、负向 36/36、Tier-1 36/36、Tier-2 36/36),audit 裁定中;
   抓获并修复四个系统性缺陷(注入自杀 / ARG_MAX / **round-trip no-op** / pdf

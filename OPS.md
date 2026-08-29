@@ -13,7 +13,7 @@
  M desktop_env/evaluators/metrics/__init__.py    导入 20 个自定义 metric;**2026-08-22 补回 9 个被误删的上游导入** —— 加 generated_tasks 块时同一个 diff 里删掉了它们,导致 361 里 8 题在 env.reset() 就崩、全臂强制 0 分(清单与影响面 sft/FAILURE_ANATOMY.md §9)
  M desktop_env/evaluators/metrics/vscode.py      改了官方 check_json_settings 行为
  M mm_agents/qwen/actions.py                     normalize_inline_parameters(环境变量门控,默认关)+ 日志;**空解析 fallback 已于 08-14 恢复上游 DONE**(可比性优先,旧文误记为 WAIT);08-18 起 OSTG_TYPE_NO_SPLIT=1 时多行 type 一条 typewrite 直发(默认 0=上游逐行拆,验收报告 sft/FAILURE_ANATOMY.md;**kD 及之前所有臂 = 拆行语义,kC 起 = 合并语义**);08-18 深夜再加 **OSTG_PARAM_DIALECT=json**:把 Qwen3-VL 原生 Hermes JSON tool_call 归一化成本模块既有的嵌套 XML 形式(与既有 `inline` 方言同构),**默认不设=行为逐字节不变**(闸A 全库 6,385 条回放 100% 一致;闸B JSON 与 XML 产生相同 pyautogui 100%;灵敏度对照能抓错)。目的:VL backbone 对照实验复用全部动作语义,避免重写时丢失 terminate(failure)。闸的 pipeline 命令 `ostg.sft.vlcheck dialect`
- M mm_agents/qwen/main.py                        加 preserve_thinking,透传 chat_template_kwargs
+ M mm_agents/qwen/main.py                        加 preserve_thinking,透传 chat_template_kwargs;**08-29 再加 `OSTG_REASONING_EFFORT`**(设了才注入 chat_template_kwargs.reasoning_effort;不设=模板默认 xhigh,逐字节同旧行为。模板只认 xhigh/medium/low,传 high 会 400——见 RUNBOOK「chat template, read at source」)
  M mm_agents/qwen/client.py                      reasoning_content 取不到时 fallback 到 reasoning
  M mm_agents/agent.py                            ANTHROPIC_BASE_URL 可配 + thinking disabled(只影响 PromptAgent/Claude,跑 Qwen 不走这里)
  M scripts/python/run_multienv_qwen.py           加 --preserve_thinking flag(评测侧空转,见下);08-18 起崩溃题落 result.txt=0.0 + harness_error.json(孤儿题修复,**代价:崩溃题不再被补跑趟自愈**,恢复靠按 harness_error.json 显式删目录重跑)

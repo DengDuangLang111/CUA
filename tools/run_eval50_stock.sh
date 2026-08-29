@@ -36,6 +36,7 @@ set -u
 ARM="${1:?usage: run_eval50_stock.sh <arm>}"
 XARGS=""   # per-arm extra runner flags (e.g. "--image_max 3 --fold_size 1")
 PX=""     # per-arm OSTG_MAX_PIXELS override (image-window pilot D-cell); empty = images.py default 13107200
+EFF=""    # per-arm OSTG_REASONING_EFFORT (E-cell); empty = template default xhigh
 EXPECT_ROOT=""  # per-arm weights-path prefix; asserted against what vLLM says
                 # it actually loaded. Distinct from the served-NAME check: the
                 # name lives in the sbatch while the path can come from
@@ -238,6 +239,9 @@ case "$ARM" in
   t38i10)   SB=38-i-h20; JOB=eval38h20; RP=8000; MN=qwen38-27b-local; GRP=qwen38-27b-local; PREV=none;   PJOB=none; XARGS="--image_max 10 --fold_size 1" ;;
   t38i20)   SB=38-i-h20; JOB=eval38h20; RP=8000; MN=qwen38-27b-local; GRP=qwen38-27b-local; PREV=t38i10; PJOB=none; XARGS="--image_max 20 --fold_size 1" ;;
   t38px480) SB=38-i-h20; JOB=eval38h20; RP=8000; MN=qwen38-27b-local; GRP=qwen38-27b-local; PREV=t38i20; PJOB=none; XARGS="--image_max 20 --fold_size 1"; PX=491520 ;;
+  # E-cell (08-29 user order): anchor window (20fold10 defaults, no XARGS), thinking
+  # effort xhigh -> medium via chat_template_kwargs. vs archived t38 isolates effort.
+  t38med)   SB=38-i-h20; JOB=eval38h20; RP=8000; MN=qwen38-27b-local; GRP=qwen38-27b-local; PREV=t38px480; PJOB=none; EFF=medium ;;
   # nocapms100: the champion with DOUBLE the step budget (max_steps 100), the
   # only changed parameter, over the frozen 100 (user order 08-22 via peer).
   # Verdict arm for RESULTS 5.22: the teacher-student gap grows 17.4->65.2pp
@@ -606,7 +610,7 @@ for TRY in 1 2 3 4 5; do
       fi
     done ) &
   GUARD=$!
-  OSWORLD_OPENAI_TIMEOUT=600 OSTG_NO_RECORD=1 OSTG_TYPE_NO_SPLIT=${OSTG_TYPE_NO_SPLIT:-0} OSTG_PARAM_DIALECT=$DIALECT OSTG_MAX_PIXELS=${PX:-13107200} \
+  OSWORLD_OPENAI_TIMEOUT=600 OSTG_NO_RECORD=1 OSTG_TYPE_NO_SPLIT=${OSTG_TYPE_NO_SPLIT:-0} OSTG_PARAM_DIALECT=$DIALECT OSTG_MAX_PIXELS=${PX:-13107200} OSTG_REASONING_EFFORT=${EFF:-} \
   .venv/bin/python scripts/python/run_multienv_qwen.py \
     --provider_name docker --path_to_vm /mnt/d/research/OSWorld/docker_vm_data/Ubuntu.qcow2 \
     --headless --observation_type screenshot --action_space pyautogui \
