@@ -242,6 +242,10 @@ case "$ARM" in
   # E-cell (08-29 user order): anchor window (20fold10 defaults, no XARGS), thinking
   # effort xhigh -> medium via chat_template_kwargs. vs archived t38 isolates effort.
   t38med)   SB=38-i-h20; JOB=eval38h20; RP=8000; MN=qwen38-27b-local; GRP=qwen38-27b-local; PREV=t38px480; PJOB=none; EFF=medium ;;
+  # F-cell (08-29 morning, user order): probe the LOWER boundary of the image
+  # window. B(i10)=81.8 vs C(i20)=73.8 vs anchor(20saw)=69.8 -- how low can it
+  # go? i5 either holds (cheaper still) or locates the floor in (5,10).
+  t38i5)    SB=38-i-h20; JOB=eval38h20; RP=8000; MN=qwen38-27b-local; GRP=qwen38-27b-local; PREV=t38med; PJOB=none; XARGS="--image_max 5 --fold_size 1" ;;
   # nocapms100: the champion with DOUBLE the step budget (max_steps 100), the
   # only changed parameter, over the frozen 100 (user order 08-22 via peer).
   # Verdict arm for RESULTS 5.22: the teacher-student gap grows 17.4->65.2pp

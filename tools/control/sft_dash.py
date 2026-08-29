@@ -52,6 +52,8 @@ PY = "/mnt/d/research/OSWorld/.venv/bin/python"
 EVAL50_META = "/mnt/d/research/OSWorld/evaluation_examples/verified_eval50_nonproxy.json"
 EVAL50_EXAMPLES = "/mnt/d/research/OSWorld/evaluation_examples/examples"
 EVAL50_ARMS = {
+    "t38i5":    ("teacher 27B \u00b7 img5 slide", "teacher window pilot",
+                 "image_max 5 fold 1; lower-boundary probe after i10=81.8 > i20=73.8 > saw=69.8."),
     "t38med":   ("teacher 27B \u00b7 effort medium", "teacher window pilot",
                  "anchor window (20fold10), reasoning_effort xhigh->medium; vs archived t38 isolates effort."),
     "t38i10":   ("teacher 27B \u00b7 img10 slide", "teacher window pilot",
