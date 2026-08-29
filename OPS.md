@@ -23,8 +23,17 @@
 ?? evaluation_examples/verified_eval50_nonproxy.json · ..._eval100_...
 ```
 
-**共 9 个已跟踪文件 +179/−39**(2026-08-18 `git status --porcelain` + `git diff
---shortstat` 实测,HEAD 仍是 `091f5ef1`),另有上列未跟踪新增。
+ M mm_agents/qwen/prompts.py                     **08-28 补记**:apply_tool_dialect —— OSTG_PARAM_DIALECT=json 时把工具调用格式说明改写成 Hermes JSON 方言;**不设则提示词逐字节不变**(它是 actions.py 那条 dialect 机制的配套文件,机制早已记账、文件名漏记)
+
+**共 10 个已跟踪文件 +303/−40**(2026-08-28 复核,HEAD 仍是 `091f5ef1`),另有
+上列未跟踪新增 + 新增未跟踪:`verified_eval261_rest.json`、`eval50b`、`vlsmoke3.json`、
+两个 codex-sync tar、`__init__.py.bak-before-restore-imports`。
+
+> **08-28 复核补记**:`lib_run_single.py` 里存在一段 verifier-拒绝-DONE 逻辑,
+> 但它整个住在独立函数 `run_single_example_vlaa_gui`(verifier_agent 默认 None)
+> 里,`run_multienv_qwen.py` 只调用标准 `run_single_example` —— **对 qwen 线
+> rollout/评测零影响**。runner 的 `--history_n` 默认 100:20/10 窗口必须显式传
+> `--history_n 20 --fold_size 10`,不能靠默认值。
 
 > 2026-08-13 记的是"8 个文件 +96/−40",漏了 `lib_run_single.py`,行数也已过时。
 > **`git diff` 不是完整清单** —— 未跟踪的新增(包括一整个 evaluator 模块
