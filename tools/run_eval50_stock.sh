@@ -253,6 +253,9 @@ case "$ARM" in
   # H-cell (08-29 user order): i10 x medium -- the B(81.8) x E(79.8) combo cell,
   # measured rather than assumed (G just showed axis stacking can invert).
   t38i10med) SB=38-i-h20; JOB=eval38h20; RP=8000; MN=qwen38-27b-local; GRP=qwen38-27b-local; PREV=t38i10px; PJOB=none; XARGS="--image_max 10 --fold_size 1"; EFF=medium ;;
+  # I-cell (08-29 user order): i20 slide x medium -- completes the effort x window
+  # 2x3 (xhigh: A/C/B = 69.8/73.8/81.8; medium: E/I/H = 79.8/?/?).
+  t38i20med) SB=38-i-h20; JOB=eval38h20; RP=8000; MN=qwen38-27b-local; GRP=qwen38-27b-local; PREV=t38i10med; PJOB=none; XARGS="--image_max 20 --fold_size 1"; EFF=medium ;;
   # nocapms100: the champion with DOUBLE the step budget (max_steps 100), the
   # only changed parameter, over the frozen 100 (user order 08-22 via peer).
   # Verdict arm for RESULTS 5.22: the teacher-student gap grows 17.4->65.2pp
