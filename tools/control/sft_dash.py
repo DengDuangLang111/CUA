@@ -52,6 +52,8 @@ PY = "/mnt/d/research/OSWorld/.venv/bin/python"
 EVAL50_META = "/mnt/d/research/OSWorld/evaluation_examples/verified_eval50_nonproxy.json"
 EVAL50_EXAMPLES = "/mnt/d/research/OSWorld/evaluation_examples/examples"
 EVAL50_ARMS = {
+    "t38i10med": ("teacher 27B \u00b7 i10 \u00b7 effort medium", "teacher window pilot",
+                 "H-cell: B(81.8) x E(79.8) combo, measured after G showed stacking can invert."),
     "t38i10px": ("teacher 27B \u00b7 ev10i@480", "teacher window pilot",
                  "image_max 10 fold 1 + OSTG_MAX_PIXELS=491520; completes the count x resolution 2x2."),
     "t38i5":    ("teacher 27B \u00b7 img5 slide", "teacher window pilot",

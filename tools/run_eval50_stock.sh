@@ -250,6 +250,9 @@ case "$ARM" in
   # (count x resolution): B=ev10i@2040, C=ev20i@2040, D=ev20i@480, G=this.
   # If G holds near B, the full cheap stack (10 img x 480 tok) is validated.
   t38i10px) SB=38-i-h20; JOB=eval38h20; RP=8000; MN=qwen38-27b-local; GRP=qwen38-27b-local; PREV=t38i5; PJOB=none; XARGS="--image_max 10 --fold_size 1"; PX=491520 ;;
+  # H-cell (08-29 user order): i10 x medium -- the B(81.8) x E(79.8) combo cell,
+  # measured rather than assumed (G just showed axis stacking can invert).
+  t38i10med) SB=38-i-h20; JOB=eval38h20; RP=8000; MN=qwen38-27b-local; GRP=qwen38-27b-local; PREV=t38i10px; PJOB=none; XARGS="--image_max 10 --fold_size 1"; EFF=medium ;;
   # nocapms100: the champion with DOUBLE the step budget (max_steps 100), the
   # only changed parameter, over the frozen 100 (user order 08-22 via peer).
   # Verdict arm for RESULTS 5.22: the teacher-student gap grows 17.4->65.2pp
