@@ -591,7 +591,15 @@ gold 任务**,而 Tier-2 闸抓不到这一层(它验的是镜像,不是宿主�
 `score(gold, gold)` 与 `score(seed, gold)`,seed 从任务 JSON 里的 base64 还原。
 脚本 `regress.py`,两个环境各跑一遍,**要求分数向量的 sha256 完全相同**。
 
-**WSL 基线(20 条)= `e85a02b7070bf9fa`**
+**结果(08-29 21:30):WSL 与容器指纹完全一致 = `d32d9bccdb2b964c`** ✅
+20 条覆盖 5 个判据族(pptx / table / docx / pdf / 图像),逐位相同;
+连 `spectro-plate-contrast-log` 的 `ERR:UnidentifiedImageError` 都一样复现 ——
+**连错误都一致,是等价性的更强证据**。候选池 932 条。
+
+⚠ **第一次跑指纹对不上(`e85a02b7070bf9fa` vs `ffd7f215c292ccbf`),是测试脚本的
+bug 不是环境漂移**:`os.walk` 顺序依赖文件系统(WSL 是 9p/NTFS,容器是 overlayfs),
+不排序就取前 20 等于两边比了不同的样本。已改为**按 task id 排序后再取**。
+这类"测量工具自己不确定"的坑,和选择器不打印是同一类。
 10 条 `compare_table` 全为 `1.0 / 0.0`(判据自洽 + 空判防线双双成立)。
 
 ⚠ **图像族 `gold≡gold = 0.0` 是正确的,不是失败**:
@@ -599,7 +607,25 @@ gold 任务**,而 Tier-2 闸抓不到这一层(它验的是镜像,不是宿主�
 有没有变化"),gold 与自己比当然无变化。等值型判据才该是 1.0。
 对 A/B 无影响 —— 要的是两边逐位相同,0.0 也是指纹的一部分。
 
-## 9.9 Docker 镜像
+## 9.9 Docker 镜像(已构建并通过等价性验收)
+
+**`osworld-rollout:20260829` · 12.6 GB · `dbd9e87c68a3` · 构建耗时 4 分钟**
+
+容器内自证:路径 `/mnt/d/research/OSWorld`、系统 python 3.12.3、venv python 3.12.3、
+**265 个包版本与 WSL 逐个相同**、判据指纹 `d32d9bccdb2b964c` 与 WSL 一致。
+
+### ⚠ 从 ssh 会话驱动 WSL Docker 必须带 `DOCKER_CONFIG`
+
+`docker build` 会在 `FROM ubuntu:24.04` 就失败,报
+`error getting credentials — A specified logon session does not exist`。
+**拉的是公开镜像,根本不需要认证** —— 真因是 `~/.docker/config.json` 里的
+`{"credsStore": "desktop.exe"}`:Docker Desktop 的凭据助手要向 Windows 要登录态,
+非交互 ssh 会话拿不到,于是构建在第一行死在一个与真实原因毫不相干的错误上。
+
+**解法**:`DOCKER_CONFIG=/var/tmp/dockercfg`(里面只有 `{}`),
+**不动用户的 `~/.docker/config.json`**,Windows 侧 Docker Desktop 照常使用。
+
+
 
 **构建上下文放 WSL 本地盘**(`/var/tmp/imgctx`),不用 `/mnt/d` —— 9p 慢到 `du` 都超时。
 实测拷 venv 约 **87 MB/分钟**(约 10 万个小文件,每文件系统调用开销主导),
