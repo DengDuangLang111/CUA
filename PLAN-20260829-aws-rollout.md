@@ -542,6 +542,82 @@ i10 冠军 eval 跑于 08-29 02:41 → **当前树 == 产出 eval 的树,零漂�
 v11 时代(20 图/fold10)测的。i10 把图数封顶 10,上下文有硬上界。544 跑 68 分钟
 实测 RSS **不升反降**(657→575 / 594→591 / 567→564)。
 
+## 9.7 已落地的三个补丁(08-29 深夜,全部带测试,均未进主干)
+
+| 仓库 | 分支 | 提交 | 主干 |
+|---|---|---|---|
+| OSWorld | `aws-rollout` | `b80d825` 实例标签 · `3df1ef4` reaper | `main` 干净 |
+| ostg | `awsgate`(新 worktree `/mnt/d/research/ostg-awsgate/`) | `9cc80c09` control 走 aws | `datagenv14` 未动 |
+
+### b80d825 起实例时打标签
+
+`aws/config.py` 新增 `instance_tag_specifications()`,`manager.py::_allocate_vm` 与
+`provider.py::revert_to_snapshot` 各三行接上。**两个环境变量都为空时返回 `[]`,
+请求体里不出现 `TagSpecifications` 键 —— 与上游逐字节一致。**
+volume 也打标签,否则半死实例留下的 EBS 找不回来(那 115 台的卷费就是 $6,268)。
+
+验收:默认 `[]` ✓ / instance+volume 都带 Contact+Name ✓ / IAM DryRun 放行 ✓
+(无标签时是 `UnauthorizedOperation`)。
+
+### 3df1ef4 reaper
+
+选择器 = `Name` 精确值 **AND** 年龄,两个条件缺一不可。
+**永不用 `Contact`**(我们按账号惯例填 `zixianm@allenai.org`,和那 115 台同值);
+**永不用 AMI**(官方镜像公开,别人也在跑)。
+护栏:拒绝空/通用 `--name`;`--max-kill` 默认 50;打印完整匹配清单**外加故意跳过的台数**;
+不加 `--yes` 什么都不做。
+
+验收(真账号,只读):`--name rollout` 匹配 **0**、124 台报为未触碰;
+`--name osworld-macu-qwen` 匹配 **84** —— 所以那个 0 是真排除,不是匹配器坏了。
+**两边都验才算数,只验前者无法区分"正确排除"与"永远返回 0"。**
+
+### 9cc80c09 control 走 aws(比原计划多改了一件)
+
+① `--path_to_vm` 改可选;② aws 时 `snapshot_name` 取 `IMAGE_ID_MAP` 的 AMI;
+③ **`--client_password` 默认从 `"password"` 改成 `""`** ← 写的时候才发现:
+`"password"` 是 **docker 镜像**的密码,**AWS AMI 是 `osworld-public-evaluation`**。
+不改的话,1796 条里 3 条用 sudo 的任务会**静默失败**(判 0 分,看不出是密码问题)。
+`""` 让 `DesktopEnv` 按 provider 自己选,docker 行为一字未变。
+
+验收:用桩替换 `DesktopEnv`,**未启动任何 VM** —— docker 缺参数退出 2 并给出提示 ✓ /
+aws 解析到 `ami-0d23263edb96951d8` 且不传 path_to_vm ✓ / docker 带参数时 kwargs 与改动前相同 ✓
+
+## 9.8 判据回归自检(上线前的硬闸)
+
+**目的**:证明新环境算出的分数与老环境逐位相同。库版本漂移会**静默错判 970 条
+gold 任务**,而 Tier-2 闸抓不到这一层(它验的是镜像,不是宿主库)。
+
+**设计**:不依赖历史缓存,直接用 v14g bake 阶段自己的两条不变量 ——
+`score(gold, gold)` 与 `score(seed, gold)`,seed 从任务 JSON 里的 base64 还原。
+脚本 `regress.py`,两个环境各跑一遍,**要求分数向量的 sha256 完全相同**。
+
+**WSL 基线(20 条)= `e85a02b7070bf9fa`**
+10 条 `compare_table` 全为 `1.0 / 0.0`(判据自洽 + 空判防线双双成立)。
+
+⚠ **图像族 `gold≡gold = 0.0` 是正确的,不是失败**:
+`check_contrast_increase` / `check_image_mirror` 这类是**关系型**判据(问"相对原图
+有没有变化"),gold 与自己比当然无变化。等值型判据才该是 1.0。
+对 A/B 无影响 —— 要的是两边逐位相同,0.0 也是指纹的一部分。
+
+## 9.9 Docker 镜像
+
+**构建上下文放 WSL 本地盘**(`/var/tmp/imgctx`),不用 `/mnt/d` —— 9p 慢到 `du` 都超时。
+实测拷 venv 约 **87 MB/分钟**(约 10 万个小文件,每文件系统调用开销主导),
+7.4 GB 需 **约 85 分钟**。代码 14 MB + 任务包 145 MB 是秒级。
+
+Dockerfile 的三个关键决定:
+
+1. **路径必须是 `/mnt/d/research/OSWorld`** —— venv 里每个 console script 的 shebang
+   写死了它。这正是选 Docker 而非 tar 的理由之一:容器里造同名路径零成本。
+2. **apt 装得很少**(`python3` `ca-certificates` `libgl1` `libglib2.0-0` + ssh/rsync/curl)。
+   `ldd` 查过:**manylinux wheel 自带原生库** —— cv2 带 libpng/libjpeg/libav*/libopenblas,
+   PIL 带 libtiff/libjpeg/libopenjp2,均为带哈希后缀的私有副本。
+3. **`/usr/bin/python3` 必须是 3.12.3** —— `.venv/bin/python` 是指向系统 python 的
+   符号链接,`pyvenv.cfg` 写着 `home=/usr/bin` `version_info=3.12.3`;ubuntu:24.04 正好对上。
+
+三个运行时环境变量写进 `ENV`(它们是配置的一部分,不是偏好):
+`OSTG_TYPE_NO_SPLIT=1` · `OSTG_NO_RECORD=1` · `OSWORLD_OPENAI_TIMEOUT=600`。
+
 ## 10 剩余未知
 
 - **UW 出口 IP `205.175.106.79` 稳不稳定**(路线 ② 的唯一结构性风险)。
