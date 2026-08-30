@@ -75,6 +75,7 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && set -a && . 
 | 要做的事 | 读 |
 |---|---|
 | 项目总览 / 目录结构 | `CUA/README.md`(L1 索引) |
+| **标准术语与禁用黑话** | `CUA/GLOSSARY.md`(新概念先入表再使用) |
 | 现在跑到哪了 / 下一步 | `CUA/EXPERIMENTS.md` 顶部"现状"块 |
 | 生成任务:gen→ship→cull→merge→control→rollout 全部命令 | `CUA/RUNBOOK.md`(唯一 runbook;WSL 侧同名文件是指路桩) |
 | 生成流水线的设计与各层职责 | `CUA/TASKGEN_PIPELINE.md` |
