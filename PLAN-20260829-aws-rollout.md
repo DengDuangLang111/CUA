@@ -832,7 +832,55 @@ sheet_data         296 条   ← 已证实 OK
 check_cell          40 条   ← 已证实 OK
 ```
 
-### ⚠ 一个我还不能断言的地方
+### 根因定案:重复逻辑漏修一处 + 唯一能暴露它的闸从没跑过
+
+**AWS 镜像是清白的。** Tier-2 最终 36/36 判完,**34 通过 / 2 失败**,
+deck 7/7 · image 10/10 · table 非 freeze 的 8/8 —— 失败只有那两条 freeze。
+
+`bake.py` 和 `gold.py::_inject` **各自独立拼了一条
+`soffice --headless --convert-to` 往返命令**。08-28 的修复提交 `62864a21`
+(标题就叫 *freeze-panes survive the round-trip*)改了 `audit.py` / `bake.py` /
+`prompts`,**没碰 `gold.py`**:
+
+```
+bake.py       stash freeze_panes -> convert -> restore    ✅ 修了
+gold.py 的
+tier2 注入     base64 -d -> convert -> mv                  ❌ 没修
+```
+
+于是 gold 里的 `'A2'` 被保住,而 Tier-2 注入时又丢掉 —— 两边不再对称,判据必然拒绝。
+**真实 rollout 不受影响**:agent 走 GUI 保存,那条路径不丢视图属性;
+只有 headless converter 会丢。
+
+### 为什么一直没人发现
+
+**唯一能暴露它的闸从来没跑过**(全部实查):
+
+```
+tools_*.sh 里含 tier2 的步骤   零
+盘上的 gold_report.jsonl       零
+logs/ 里提到 tier2             零
+```
+
+`EXPERIMENTS.md` 的"Tier-2 36/36"说的是 pilot40,**而且报告没留存,无法审计**。
+所以修复之后这条路径再没被真正执行过,直到 08-30 凌晨在 AWS 上第一次跑起来。
+
+**两个独立原因叠加,少任何一个都不会踩到:**
+① 同一个操作在两个文件里各写一遍,修的时候漏了一处;
+② 验证没进自动化、证据没留存,漏掉的那处再没被执行。
+
+### 三条可迁移的教训
+
+1. **对比类判据看不见"两边对称丢失"的属性。** 原始 bug(gold 也丢 freeze →
+   `None==None` 恒真 → 教师白拿分)四道 VM 闸**结构性**抓不住,提交作者原话:
+   *both sides lose it identically*。抓住它的是 **audit 判官**看渲染后的 gold。
+   **凡是"比较 A 和 B"的闸,都对 A、B 共同的系统性缺失免疫。**
+2. **同一个外部命令在两处拼装 = 一定会漏修一处。** 应当抽成共享 helper
+   (`_office_round_trip(target, ext)`),让修复只有一个落点。
+3. **闸不进自动化 + 报告不留存 = 等于没跑。** 一句"36/36"没有 artifact 支撑时,
+   既无法审计,也挡不住回归。
+
+### ⚠ 一个我还不能断言的地方(已被上面推翻,保留原文以存过程)
 
 "docker 上 Tier-2 是 36/36"来自 `EXPERIMENTS.md` 的叙述,**但 docker 侧的
 `gold_report.jsonl` 在盘上找不到**(各分片集只有 `bake_report` / `control_neg_0` /
