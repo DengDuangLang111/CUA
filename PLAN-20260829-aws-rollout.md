@@ -1291,6 +1291,78 @@ LLM 一条都没写。**
 **图表、透视、条件格式、筛选、数据验证几乎为零**。与图像族同源:
 覆盖的是每个应用里最窄的一角。
 
+## 9.26 三层塌缩的机制定性:配方最细的轴比"操作"粗一级
+
+### 现象:同一个形状出现三次
+
+```
+image   官方 15 个判据  →  我们用 4 个,全是方向判据
+table   官方 15 种规则  →  我们用 8 种,头部一种占 58%
+deck    判据最严(16 项默认开)→  88% 的任务都在动标题
+```
+
+**倒挂值得单记**:`compare_pptx_files` 空 options 默认比较 16 项
+(含颜色 RGB 容差 0),是三个域里最严的;而 impress **71%**,
+高于判据最松的 calc(188 条纯 `sheet_data`,只比数据不比格式)的 **66%**。
+→ **判据严度不能单调解释通过率**,记进报数口径备忘。
+
+### 机制:抽签器只称量 5 个轴,"操作"不在其中
+
+`recipe.py` 的契约(原文):
+
+> Schema v1 exposes exactly the knobs the sampler weighs
+> (**difficulty / ambiguity / voice / app / family**) plus infeasible_share…
+> Axes the sampler covers by product-walk (intent, topic) are **NOT weighable keys**
+> — accepting them would promise steering **the mechanism does not do**
+
+配合 `taxonomy.FAMILIES`(**117 funcs → 11 groups**)与 `wave2-main.yaml`(称量 6 族):
+
+```
+官方判据 117 个
+  ↓ 归族                11 组
+  ↓ 配方称量             6 组(table .211 · deck .197 · doc .159
+                              · browser .147 · image .125 · config .161)
+  ↓ 族内选哪个具体判据/规则   ← 【无人称量】
+  ↓ LLM thinking:False,每族提示词一个示例
+产出                    每族塌缩成一个代表
+```
+
+**配方能称量的最细粒度是"家族"(≈10 个判据一组);而决定难度与训练价值的是
+"具体哪个操作",比最细的轴还细一级,因此完全不受控。
+不受控的维度不会均匀分布,它会塌向生成器的众数。**
+
+三层塌缩因此不是三个独立缺陷,是**同一个控制粒度问题的三次显影**。
+
+### 这个取舍是有意做的,不是疏忽
+
+`taxonomy.FAMILIES` 注释:
+
+> **actions stay annotation(measured 25% inter-labeler disagreement)**,
+> families are a string in the task JSON
+
+**因为"动作"的人工标注不一致度实测 25%,当初没把它做成配额轴。**
+
+⚠ **但这个理由挡不住"判据"轴**:判据类型是任务 JSON 里的**机器可读字段**,
+不需要人标注,不存在一致性问题。**当初挡住动作轴的论据,不适用于判据轴。**
+
+### 去向:通用子轴,不是逐族补丁(08-30 与对面议定)
+
+逐族补丁的问题:11 个族要挖 11 次坑。**该预言在对面侧已应验两次**
+(他已写了 `BROWSER_FUNCS` 与 `TABLE_RULE_DRAW` 两张临时表),故止损转通用机制。
+
+落地分两层:
+1. **生成侧通用词汇轴(现在落)**:单一 `VOCAB = {family: {取值: 权重}}`,
+   格子抽完后逐格抽词。**不参与格子间债务记账**(词是格内属性,不跨格竞争),
+   加权随机即可;漂移由体检盯,盯出问题再上债务式。
+2. **配方侧暴露(补波配方时落)**:recipe schema 加**可选 `vocab` 段**,
+   逐族声明合法集 + 权重,验证后透传给生成侧 —— **schema 小改,sampler 零改**。
+
+**两类族要分开处理**:
+- `table` / `browser` / `image` 的"词" = **机读判据/规则** → 门闸可执行验证;
+- `deck` / `doc` 的"词" = **操作焦点**(title/reorder/字体/备注…)→
+  门闸看不见动作,走 prompt 引导(focus 值进坐标行)+ 体检指纹事后验证。
+  **impress 的"88% 动标题"就是这一类的基线读数。**
+
 ## 10 剩余未知
 
 - **UW 出口 IP `205.175.106.79` 稳不稳定**(路线 ② 的唯一结构性风险)。
