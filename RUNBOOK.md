@@ -1247,3 +1247,36 @@ eval-50 上 **100% 显式终止,SFT 后 0%**,撞上限 28%→34%。**停止是�
 清单/分域)。**权限铁律:判官提名、仲裁定罪**——只有仲裁裁决能让轨迹越过
 checker 划的线;`checker_right_judge_fooled` 会清掉它审过的 judge_low 标记
 (至今 6/6 该方向都是判官错)。名单是候选,建语料仍走 stage+swap+snapshot。
+
+---
+
+## 12 v16 (judge-era) pipeline
+
+Repo: `/mnt/d/research/ostg-v16` (branch `datagenv16`). No verifiers are
+generated — the strong judge owns the verdict (double-judge until the
+arbitration follow-ups land). Always run `python3 -B` and clear
+`__pycache__` after pushing code to /mnt/d (stale-bytecode trap, measured).
+
+```bash
+V=/mnt/d/research/ostg-v16
+cd $V
+# 1 generate: two 780-cell batches; the seeds ARE the provenance
+python3 -B -m ostg.taskgen.gen16 --n 1500 --seed 1661 --workers 6 --seed-rate 0 \
+  --out $V/out/v16-prod-a.jsonl
+python3 -B -m ostg.taskgen.gen16 --n 1500 --seed 1662 --workers 6 --seed-rate 0 \
+  --out $V/out/v16-prod-b.jsonl
+
+# 2 ship: merge+dedup -> collision refs -> prebuild -> setup smoke -> task JSON
+python3 -B -m ostg.taskgen.emit16 $V/out/v16-prod-a.jsonl $V/out/v16-prod-b.jsonl \
+  --set $V/out/runs/v16-main-1 --smoke \
+  --ref osworld=/mnt/d/research/OSWorld/evaluation_examples/examples \
+  --ref cuagym=/mnt/d/research/cua-gym/tasks.jsonl
+
+# 3 rollout runs on AWS (peer session owns the runner); results rsync back
+
+# 4 judge every trajectory twice, keep the agreement (double-judge rule)
+python3 -B -m ostg.sft.strongjudge RESULT_DIR --tasks $V/out/runs/v16-main-1 \
+  --truth all --out judge-pass1.jsonl --workers 6
+python3 -B -m ostg.sft.strongjudge RESULT_DIR --tasks $V/out/runs/v16-main-1 \
+  --truth all --out judge-pass2.jsonl --workers 6
+```

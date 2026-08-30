@@ -11,6 +11,15 @@ actually read); 🔎 = from memory, verify before citing.
 - ✅ **ANCHOR** (2602.07153) — branch-point task generation from human trajs.
 - 🔎 **AgentTrek / Synatra / NNetNav** — tutorials / text / exploration as
   task sources.
+- ✅ **AUTO PLAY** (ICLR26, 苹果) — 探索后出题:探索模型带记忆铺满环境 →
+  按四型指引出题(功能使用/信息检索/功能组合/批量重复),CRUD 参数写死、改删
+  只碰真实条目;执行与验收全用 MLLM 判官(无特权信息)→ SFT +10.9%,判官当
+  奖励再 RL +5.7%。v16 的两条铁律与判官制与其同构;"类别少而宽+素材源供多样性"
+  的结论直接影响了 19 族设计。
+- ✅ **AgentSynth** (ICLR26, 2506.14205, Berkeley) — 人设(PersonaHub 抽样)+
+  链式子任务:逐步生成-执行-验收,总结代理把链缩写成长任务,难度=折叠子任务数,
+  $0.60/轨迹。信息不对称(正向逐步易、整题倒解难)。二期候选:d3 链式拼装
+  (IDEAS J4)。
 
 ## B. Training recipes & consistency (today's vein)
 - ✅ **OpenWebRL** (2606.02031) — the −14.6…−23.7 history-reasoning ablation is

@@ -23,7 +23,11 @@
 | 判据 | 官方判分函数+它的参数(查什么、期望什么) | evaluator.func | func、判分器 |
 | 复合判据 | 一道题挂多个判据(主产物+副产物各查各的) | evaluator.func 列表 | multi-func |
 | 副产物 | 题面要求的第二产出(台账/日志),难题必须连它一起判 | — | side-artifact |
-| 单轴合同(级) | 级=应用数(官方词表 9 词,os 家族整体算 1 个),1/2/3 均分;组合由抽签发牌、门闸照牌验收;d2 内 app+os:GUI互跨≈6:4、d3 以 2GUI+os 为主(抄官方 42:29 与 19:1);os 要计数必须干实活(装/配/批量转/找/归档/权限/定时),搬运不算(2026-08-30 用户裁定) | gen16.py draw_combo+gate | 判据数=难度(旧)、os不计数(旧) |
+| 单轴合同(级) | 级=应用数(官方词表 9 词,os 家族整体算 1 个),1/2/3 均分;组合由抽签发牌、门闸照牌验收;含 os 比例 d2 59%(官方)/d3 50%(用户压缩,常数在 draw_combo);os 要计数必须干实活,搬运不算(2026-08-30 用户裁定) | gen16.py draw_combo+gate | 判据数=难度(旧)、os不计数(旧) |
+| 意图族 | 任务性质轴,19 族(用户全谱裁剪,交易/远控/监控/远程协作弃);族名+动词串进输入行,示例永不进提示词;创意制作限 impress/gimp/writer | gen16.INTENTS+draw_intent | intent、目的 |
+| os 工种 | os 主应用三分:设置 45/终端 45/文件管理 10(照官方 24 道) | gen16.draw_oskind | os-trade |
+| 预打开数 | warm=K:开局已打开的应用数,0..GUI 应用数均匀,指代型(a3)≥1;K<应用数即逼中途开应用 | gen16.draw_warm+open_paths | warm start(旧布尔) |
+| 装箱16 | v16 装箱一条命令:合并查重→撞题(官方+CUA-Gym,3-gram)→prebuild→容器冒烟(setup 实跑 rc==0)→官方格式任务 JSON | taskgen/emit16.py | emit、ship16 |
 | 定点自检 | 烤箱出炉检查:种子必须判0分、答案必须判满分 | bake.py `_FP` | fixed point |
 | 负向检验 | VM 里不做题就判分,必须0分(防白送分) | control | negative |
 | 注入检验 | 把答案文件塞进 VM 再判分,必须满分(防判据永不可满足) | control --gold | tier1、Tier-1 |
