@@ -644,6 +644,46 @@ Dockerfile 的三个关键决定:
 三个运行时环境变量写进 `ENV`(它们是配置的一部分,不是偏好):
 `OSTG_TYPE_NO_SPLIT=1` · `OSTG_NO_RECORD=1` · `OSWORLD_OPENAI_TIMEOUT=600`。
 
+## 9.10 AWS 侧已创建的资源(08-29 21:40 起,全部带 Contact/Name 标签)
+
+```
+sg-0387d7986e67da5d6  osworld-rollout-host   入 22   <- 205.175.106.79/32
+sg-0c0808fc290f5d551  osworld-rollout-vm     入 5000 <- [SG] host
+                                             入 9222 <- [SG] host
+                                             入 8080 <- [SG] host
+i-05acb92a607c7228f   m5.2xlarge  100GB gp3  公网 44.214.93.217 / 私网 172.31.12.250
+key pair              osworld-rollout        私钥只在 WSL(~/.ssh/id_ed25519_awsrollout,600)
+```
+
+**VM 那三条入站的来源是安全组引用而不是 CIDR** —— 5000(无认证任意代码执行)
+因此永远出不了 VPC,而且 harness 主机 IP 变了也不用改规则。
+**完全没碰 `osworld-macu-sg`**;跑完两个组都删,对 Zixian 零副作用。
+
+建规则前重新量了一次出口 IP(`205.175.106.79`,与先前一致)——
+UW 是 NAT 出口,这个值每次用前都该现查。
+
+harness 主机实测:docker 29.1.3 · 根盘 95 GB 可用 · 出网 HTTP 200 ·
+**`tillicum-login02:22` 从 AWS 可达**(隧道那条路提前验过,不必等搭的时候才发现不通)。
+
+⚠ **更正**:这台起的是 **Ubuntu 22.04**(`ami-040dc3b259ece28c6`,名字里是
+`ubuntu-jammy-22.04`),我早先在消息里写成 24.04 是看错了。**不影响结果** ——
+我们的东西全在容器里跑,容器是 `FROM ubuntu:24.04` 且自带 Python 3.12.3 与整个
+venv;指纹 `d32d9bccdb2b964c` 就是在容器内量的。宿主机只负责 docker/隧道/rsync。
+
+## 9.11 三层引号嵌套:同一个坑今天栽了两次
+
+CLAUDE.md 写着"外层单引号,内层双引号,**不嵌第三层**"。今天两次违反两次静默失败:
+
+1. `ssh → ssh(login) → ssh(g022) '…'` 跑压测 —— 请求一条都没到 serve,
+   日志里查不出任何痕迹。改用 `srun --jobid=… --overlap` 少一层才成。
+2. `ssh → wsl → ssh(EC2) <<'REMOTE'` 装 docker —— 输出全空。
+   改成"脚本先落文件,再 `bash -s < file` 喂 stdin"才成。
+
+**可靠写法**:把远端脚本写成本地文件,逐跳用 `cat > 文件` 推送并核 md5,
+最后 `bash -s < 文件`。另注意 **`ssh -n` 与 `< 文件` 互斥** ——
+`-n` 会把 stdin 接到 `/dev/null`,盖掉重定向(今天推 sbatch 时因此推空文件,
+靠"推完必对 md5"抓住)。
+
 ## 10 剩余未知
 
 - **UW 出口 IP `205.175.106.79` 稳不稳定**(路线 ② 的唯一结构性风险)。
