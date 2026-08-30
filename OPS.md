@@ -17,7 +17,8 @@
  M mm_agents/qwen/client.py                      reasoning_content 取不到时 fallback 到 reasoning
  M mm_agents/agent.py                            ANTHROPIC_BASE_URL 可配 + thinking disabled(只影响 PromptAgent/Claude,跑 Qwen 不走这里)
  M scripts/python/run_multienv_qwen.py           加 --preserve_thinking flag(评测侧空转,见下);08-18 起崩溃题落 result.txt=0.0 + harness_error.json(孤儿题修复,**代价:崩溃题不再被补跑趟自愈**,恢复靠按 harness_error.json 显式删目录重跑)
- M lib_run_single.py                             存 initial_state.png(第 1 步观测原本不落盘);OSTG_WAIT_BREAK / OSTG_LOOP_LOG 两个环境变量(不设则完全惰性)
+ M lib_run_single.py                             存 initial_state.png(第 1 步观测原本不落盘);OSTG_WAIT_BREAK / OSTG_LOOP_LOG 两个环境变量(不设则完全惰性);**08-31 加 J2 磁盘状态收割**(`OSTG_FINAL_STATE=1` 才启用,不设完全惰性):setup 后采一次 VM 内文件普查作基线,判分前再采一次做差集,把 agent 改动的文件转录成文字存 `final_state.json` 给强判官。两个插入点:`obs = env._get_obs()` 之后(基线)、`env.evaluate()` 之前(收割)。安装器 `ostg-v16/patches/apply_j2.py`(幂等,只改 run_single_example)
+?? mm_agents/qwen/final_state.py                 **08-31 新增**:J2 收割+转录模块。转录**按容器格式分派**(ODF 的 .odp/.odt/.ods 读 content.xml;OOXML 各用各的库——python-pptx 读不了 .odp、openpyxl 读不了 .ods),图片只做魔数检测(抓 `cp x.png y.jpg` 这类名实不符)。宿主侧转录,VM 不需要任何库
 ?? desktop_env/evaluators/metrics/generated_tasks.py    整个自定义 evaluator 模块(08-18 起含 check_pptx_props / check_image_props,fmt-w1 的规则式格式判据)
 ?? synthetic_tasks/ · taskgen_tasks*/ · taskgen_out/ · eval_valpanel_tasks/
 ?? evaluation_examples/verified_eval50_nonproxy.json · ..._eval100_...
