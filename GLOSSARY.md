@@ -68,7 +68,6 @@
 | 规则闸 | 判官前的零成本确定性拦截:自报 FAIL/空轨迹直接记败,不花判官钱(承 OpenWebRL) | strongjudge.py 门 | protocol gate |
 | 双判官 | **已废(08-31)**:2×2+3臂对照证明错放是系统性盲区不是手抖,四种证据配置在同一批硬负样本上一起栽,冗余无效、只翻倍成本 | — | double judge |
 | 哑判据 | v16 可行题的占位判据(恒 0),程序分作废、判官唯一裁判;infeasible 题仍挂真 `infeasible` 判据白捡信号 | emit16.py ZERO_EVAL | dummy evaluator |
-
 | 完成度/证据度 | 要求项拆成两个独立字段:`done`(yes/partial/no/cannot_tell,做到了吗)与 `evidence`(seen/inferred,看见的还是推断的);旧的六值枚举把两者混在一起,`mostly_satisfied` 实为"按了保存但没拍到确认" | strongjudge REQ_PROPS16 | status、satisfied 六值(旧) |
 | 磁盘证据 | rollout 判分前把 VM 里 /home/user 最终状态转录成文字给判官(`OSTG_FINAL_STATE=1`);治"像素里看不见"的那类错放 | final_state.py + J2 | J2、final_state |
 
