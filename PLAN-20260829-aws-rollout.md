@@ -997,6 +997,87 @@ rsync 读取不受影响,容器内 runner 也是 root 所以恢复机制不受�
 ⚠ **实例数不能当判据** —— runner 在取任务前就为每个 worker 各起一台 VM,
 8 路配置永远先起 8 台,与队列长度无关。正确判据是**哪些任务目录被重写**。
 
+## 9.23 主跑中的发现:图像族 92% 通过 —— 判据只问方向,且族内构成与官方不符
+
+### 现象(前 444 条实时判分)
+
+```
+按域    chrome  224/298  75%      gimp  134/146  92%
+按判据  is_expected_url_pattern_match   135/181  75%   ← 要落到特定 URL
+        check_include_exclude            58/77   75%
+        check_brightness_decrease_and_…  37/40   92%
+        check_contrast_increase_and_…    34/37   92%
+        check_saturation_increase_and_…  31/33   94%
+        check_image_mirror               30/34   88%
+```
+
+### 原因:严格不等式,无幅度要求
+
+`desktop_env/evaluators/metrics/gimp.py:301`
+```python
+brightness_reduced = brightness_tgt > brightness_src
+```
+**降低 1/255 即通过**(外加 structure-sim 0.03 防止毁图)。四个判据都可以用
+`Colors → Brightness-Contrast → 拖滑块 → 导出` 或 `Image → Transform → Flip` 完成。
+`gimp.py` 是上游原版文件(evaluators 里只有 `file.py`/`__init__.py`/`vscode.py` 被改过)。
+
+### 这批数据"是不是更简单"——量化对照
+
+```
+                    wave2-all(1782)  v11-500(444)  v11-all(100)
+难度 >=3(multi-app)     62%             60%           61%
+app_count >= 2          62%             60%           61%
+ambiguity 分布          几乎重合         —             —
+图像单向判据            8.8%(156)       0%            0%
+```
+
+**设计维度没有变简单** —— 难度/多应用/歧义三条曲线与 v11 重合。
+**变的是新增了 v11 完全没有的族**,而该族判据宽松,把表观通过率抬高了。
+
+### 对面给的立项背景(v14g 为何加这一族)
+
+1. 补的是**官方评分家族形状**:08-28 家族普查显示官方 369 里 image_property 占 7.3%,
+   而 ostg 旧 5694 条该族**整列为零**(五个零族之一);8.8% 是照 7.3% 配平的。
+2. 判据"只问方向"是**有意沿用官方语义**(纲领:彻底和官方统一标准),
+   audit 的 judge 提示词里写过 `magnitude-not-threshold`,松紧被看见并接受过。
+
+### ⚠ 但我核官方那一族后,发现配平只做了一半
+
+官方 gimp 26 条的判据构成(实查 `OSWorld-upstream`):
+
+```
+infeasible 9 · check_config_status 4 · check_include_exclude 2
+四个方向判据合计 4  ← 仅 15%
+另外 11 种各 1 条:check_palette_and_structure_sim · check_structure_sim ·
+  check_green_background · check_file_exists_and_structure_sim · check_image_size ·
+  check_structure_sim_resized · check_textbox_on_leftside · check_triangle_position …
+```
+
+| | 官方 | 我们 |
+|---|---|---|
+| 族规模 | 26/369 = **7.0%** | 156/1782 = **8.8%** ✅ |
+| 族内判据种类 | **15 种** | **4 种(同一类)** |
+| 方向判据占比 | **15%** | **100%** ❌ |
+
+**我们把官方这一族里最浅的 15% 拿来铺满了整个族。** 官方另外 85% 要求真操作
+(文本框摆位、三角形位置、调色板匹配、精确尺寸、缩放后结构相似、绿背景替换),
+我们一条都没有 —— **这是一个伪装成覆盖的覆盖缺口:格子填上了,填的是最薄的一层。**
+
+### 对语料的后果
+
+```
+图像族占任务池   8.8%
+按 92% 通过率    约 143 条成功轨迹
+整体若 ~60%      成功语料约 1069 条
+占成功语料       ≈ 13.4%      ← 超配约 1.5 倍,且轨迹最短、动作最单一
+```
+
+对面的 curate 方案(按池占比封顶 ~90-95 条 + 子模式去重,而非整族降权)方向正确,
+**但子模式多样性的天花板本身就很低** —— 封顶之后仍然只有四种滑块动作。
+
+**结论:这是下一轮 gen 的输入,不是这一轮的问题。** 若目标是"和官方统一标准",
+配平对象应是**族内判据分布**而不只是族规模;`IMAGE_FUNCS` 白名单该扩到官方那 15 种。
+
 ## 10 剩余未知
 
 - **UW 出口 IP `205.175.106.79` 稳不稳定**(路线 ② 的唯一结构性风险)。
