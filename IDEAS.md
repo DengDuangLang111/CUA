@@ -367,3 +367,27 @@ image path slug → 任务池 json → `ostg.difficulty`/`related_apps`)固化�
 `tools/corpus_app_touch.py`,和 `coverage_audit.py` 并列进数据质量检验
 流水线,而不是留作一次性脚本(参照 [[quality-checks-ride-the-pipeline]] 的
 教训)。当前证据是手工跑的,没有固化,下次语料改版后这个对照会过期。
+
+## 2026-08-30 批次(来源:AWS 主跑首日,image 族 92% 通过率溯源)
+
+### image 族内判据分布配平(4 种 → 官方 15 种)
+
+**发现**(AWS session 实查官方 26 条 gimp 任务;数字详 PLAN-20260829-aws-rollout):
+官方 image 族用 15 种判据,方向判据(亮度/对比/饱和/镜像)只占 15%;v14g 的
+`IMAGE_FUNCS` 白名单只取了这 4 个方向函数铺满全族 —— **族规模配平了(8.8% vs
+官方 7.0%),族内构成没有**。后果:92% 通过率(方向严格不等式,幅度不设限,
+1/255 也算过)+ 成功语料里超配 1.5 倍 + 轨迹全是"拖滑块"最窄操作面。
+
+**为什么当初只取 4 个**:机器层约束,不是失察 —— v14g image 族走"seedful 方向
+判据"gold 机型(expected=种子图,无需生成 gold 文件)。官方其余 11 种各要
+不同机器:gold 参照物类(palette / green_background / structure_sim_resized)、
+参数化规则类(image_size / triangle_position / textbox_on_leftside)。
+
+**修法**(下一轮 gen 立项时做):给 image 族扩 2-3 个 gold 机型
+(规则类最便宜,先做 image_size/triangle_position/textbox 三个;参照物类
+沿用现有"执行后收割"机器,transform 脚本产出参照图),`IMAGE_FUNCS`
+白名单随机型扩容,配方里按官方族内比例配权。验证:family_census 加
+族内 func 直方图一列,对官方逐 func 对照。
+
+**当下处置**(已定,不等下一轮):curate 阶段 image 族成功轨迹按池占比 8.8%
+封顶 + 子模式去重,并在 SFT_DATA 注明"子模式天花板=4 种滑块动作"。
