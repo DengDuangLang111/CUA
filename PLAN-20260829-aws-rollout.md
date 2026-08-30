@@ -1075,8 +1075,33 @@ infeasible 9 · check_config_status 4 · check_include_exclude 2
 对面的 curate 方案(按池占比封顶 ~90-95 条 + 子模式去重,而非整族降权)方向正确,
 **但子模式多样性的天花板本身就很低** —— 封顶之后仍然只有四种滑块动作。
 
-**结论:这是下一轮 gen 的输入,不是这一轮的问题。** 若目标是"和官方统一标准",
-配平对象应是**族内判据分布**而不只是族规模;`IMAGE_FUNCS` 白名单该扩到官方那 15 种。
+### 为什么当初只取 4 个 —— 机器层原因(对面补充,免得下一轮的人以为是随手挑的)
+
+v14g 的 image 族走的是**"seedful 方向判据"gold 机型**:`expected` = 种子图本身,
+判据只比方向,**不需要生成任何 gold 文件**。官方另外 11 种做不到这一点:
+
+```
+要 gold 参照物   check_palette_and_structure_sim · check_green_background ·
+                 check_structure_sim_resized
+参数化规则       check_image_size · check_triangle_position · check_textbox_on_leftside
+```
+
+每一种都要不同的 gold/规则机器,08-28 当天为了落地砍了范围。
+
+**所以修法不是改 `IMAGE_FUNCS` 白名单一行,是给 image 族扩 2–3 个 gold 机型 ——
+工作量在 build/bake 侧。**
+
+### 结论与去向
+
+**这是下一轮 gen 的输入,不是这一轮的问题。** 若目标是"和官方统一标准",
+配平对象应是**族内判据分布**而不只是族规模。
+
+分工(08-30 与对面议定):
+- 数字与对照表 → 本文(已写);
+- **下一轮 gen:image 族内判据分布配平(4→15 种,需扩 gold 机型)** → `IDEAS.md` 候选实验队列;
+- `SFT_DATA.md` curation 节:image 族按池占比封顶 ~8.8%(90–95 条)+ 子模式去重,
+  **并注明子模式天花板 = 4 种滑块动作**。封顶数字不因此收紧 ——
+  训练价值 ≠ 评测镜像,滑块 grounding 仍是净增量,但要把它的浅记录清楚。
 
 ## 10 剩余未知
 
