@@ -793,6 +793,56 @@ JSON 和 manifest。**8021 的 cwd 必须是 `out/runs` 根(整棵树 14 个分�
 **可靠写法只有一条:脚本落文件 → 逐跳 `cat >` 推送并核 md5 → `bash -s < 文件`,
 远端路径一律写绝对路径。**
 
+## 9.18 ⚠ Tier-2 抓到真东西:`freeze` 规则在 AWS AMI 上判不过
+
+**这是 Tier-2 被设计出来要抓的那一类,它抓到了。**
+
+26/36 时出现 2 条失败,两条都是 `table_gold`,而且诊断字段全绿:
+
+```
+setup_rc=[0]  gold_rc=0  open_rc=200  windows=1   →  机器全对
+score=0.0                                          →  comparator 拒绝
+```
+
+按族拆开:**deck(pptx)7/7 · image 10/10 · table_gold 8/10**,分歧只在 xlsx。
+
+### 归因:完全分离,没有余地
+
+pilot40 的 10 条 table_gold 里,**恰好 2 条用 `freeze` 规则,这 2 条全败;
+另外 8 条不用 freeze,全过。**
+
+```
+course-waitlist-fill-crosscheck   ['freeze','sheet_data']   ✗
+hr-headcount-freeze-cols          ['freeze','sheet_data']   ✗
+其余 8 条                          sheet_data / +check_cell  ✓ 全过
+```
+
+`freeze` 比的是 openpyxl 的 `sheet.freeze_panes`(`table.py:574`),即冻结点单元格
+(`"B2"` 之类,未冻结为 `None`)。冻结窗格是 **sheet 的视图属性**(存在 `sheetView`
+的 `pane` 元素里),LibreOffice 版本之间的序列化差异会直接反映在这里。
+
+### 暴露面:1782 条里 74 条踩雷(4.2%)
+
+```
+freeze              74 条   ← 已证实会失败
+col_props.width     18 条   ┐ 同为视图属性,同类风险,
+col_props.hidden    15 条   │ Tier-2 样本里没覆盖到,未知
+row_props           2 条    ┘
+sheet_data         296 条   ← 已证实 OK
+check_cell          40 条   ← 已证实 OK
+```
+
+### ⚠ 一个我还不能断言的地方
+
+"docker 上 Tier-2 是 36/36"来自 `EXPERIMENTS.md` 的叙述,**但 docker 侧的
+`gold_report.jsonl` 在盘上找不到**(各分片集只有 `bake_report` / `control_neg_0` /
+部分 `control_t1`)。所以严格说,我现在证明的是"**AWS 上 freeze 判不过**",
+而不是"**AWS 与 docker 不同**"。
+
+另一种可能是:`soffice --convert-to` 这个往返**本来就会丢掉冻结窗格**,与版本无关,
+而 docker 侧的 Tier-2 从未真正覆盖过这两条。**下一步的定性诊断要把这个分清楚**——
+取回 AMI 重存后的实际 `freeze_panes` 值与 gold 对比,再决定修法。
+
 ## 10 剩余未知
 
 - **UW 出口 IP `205.175.106.79` 稳不稳定**(路线 ② 的唯一结构性风险)。
