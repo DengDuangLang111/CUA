@@ -731,6 +731,68 @@ Tillicum bearer token。镜像没推到任何 registry,只在 WSL 和我们的 h
 但这是坏习惯。**改法:运行时 `-v` 挂载 `.env`,不用镜像里那份**;
 下次重建镜像要把 `.env` 排除出上下文。
 
+## 9.14 凭据:从静态密钥切到 SSO(08-29 深夜)
+
+静态凭据 05:20Z 到期(今晚所有 AWS 操作都在此之前完成,无一失败)。
+Zixian 点了 device-code 链接后切到 SSO:
+
+```
+~/.aws/config       [sso-session ai2] sso_start_url=https://d-926772e319.awsapps.com/start
+                    sso_region=us-west-2  ← 注意与账号 region(us-east-1)不同
+~/.aws/sso/cache/   access token 1 小时一刷(带 refreshToken);client 注册 90 天
+会话总时长          ~1 天(Zixian 原话,Slack 截图),够 8 小时主跑
+```
+
+**三个必须做对的细节**:
+
+1. **死掉的静态密钥必须从 `.env` 里删干净** —— 环境变量优先级高于 profile,
+   留着它们 botocore 会拿死凭据去调,报出来的错看不出真因。
+2. **`~/.aws` 在 WSL 上是指向 Windows 的符号链接** —— `tar` 不加 `-h` 只会打包链接本身,
+   到目标机变成断链(`chmod: cannot operate on dangling symlink`)。
+3. **SSO 缓存要送到 harness 主机**并挂进容器(`-v ~/.aws:/root/.aws:ro` +
+   `AWS_PROFILE=allennlp`),否则容器里没有会话,取不到凭据。
+
+## 9.15 Tier-2 闸在 AWS 上的形状
+
+```
+WSL          遥控台,不跑任何东西
+harness EC2  容器里跑 ostg.taskgen.control --gold ...t2.jsonl --provider_name aws
+             起 8021 喂自己 gold · 下结果文件 · 跑 comparator
+任务 VM      每条一台,官方 AMI:注入 gold → soffice 原格式重存 → 判分 → 销毁
+Tillicum     不参与 —— Tier-2 把 agent 整个摘掉,只测判据链
+```
+
+**永远只有 2 台实例在飞**(大脑常驻 + 一台任务 VM)。实例开销约 $0.10/全场。
+
+`gold-pilot40-t2.jsonl` 覆盖 36 条(40 条里 4 条未 bake),
+**docker 上的历史基准是 36/36**,AWS 上要的是同一个数。
+
+## 9.16 任务池上机
+
+合并集由对面产出,我独立复核过(不只信对方结论):
+**manifest 1782 / examples 文件 1782 / distinct id 1782 / distinct slug 1782(重复 0)/
+cloud_file 961 条 gold URL 全部解析成功 0 失败** —— 四数一致。
+
+⚠ **gold URL 指向的是原分片路径**(`/<原set>/files/...`),`wave2-all` 本体只有任务
+JSON 和 manifest。**8021 的 cwd 必须是 `out/runs` 根(整棵树 14 个分片集)**,
+只挂 `wave2-all` 会让 961 条判据全部取不到 gold。
+
+## 9.17 今晚抓到的五个会误事的坑
+
+1. **reaper 会杀掉大脑自己** —— harness 主机和任务 VM 都叫 `Name=rollout`。
+   dry-run 默认值救的。已改 `rollout-host` / `rollout` 并复验(0 匹配 / 1 匹配双向验)。
+2. **容器结果随 `--rm` 蒸发** —— 冒烟的 9 张截图和判分全没了。
+   不修的话主跑 8 小时产出同样消失。已 bind mount 到宿主机 `~/results`。
+3. **`client_password` 硬写 docker 的 `password`** —— AWS AMI 是
+   `osworld-public-evaluation`,不改则 3 条 sudo 任务静默判 0。
+4. **死掉的静态密钥压过 SSO profile**(见 §9.14)。
+5. **`generated_tasks.py` 未跟踪但硬 import** —— 漏搬则整个 evaluator 包起不来。
+
+另有三次**引号嵌套三层**导致的静默失败(压测 / 装 docker / 跑脚本),
+以及一次 `~` 被 WSL 提前展开成 `/home/daniel_yan` 送到 EC2。
+**可靠写法只有一条:脚本落文件 → 逐跳 `cat >` 推送并核 md5 → `bash -s < 文件`,
+远端路径一律写绝对路径。**
+
 ## 10 剩余未知
 
 - **UW 出口 IP `205.175.106.79` 稳不稳定**(路线 ② 的唯一结构性风险)。
