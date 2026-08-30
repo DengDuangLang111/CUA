@@ -62,6 +62,8 @@
 | 仲裁 | 分歧轨迹的定罪环节:亮判据代码,Opus5+思考 | sft/arb.py | arb |
 | 强判官 | v16 门卫候选:规则闸拦掉后,每条轨迹一次"开思考"判官调用,给二元判定(成/败/存疑)+拆解的要求清单;若录用,替代"程序判分选训练数据"及其冤案-仲裁-辩护链 | sft/strongjudge.py | strong judge、llm judge |
 | 规则闸 | 判官前的零成本确定性拦截:自报 FAIL/空轨迹直接记败,不花判官钱(承 OpenWebRL) | strongjudge.py 门 | protocol gate |
+| 双判官 | 同一轨迹两次独立强判官调用,均判 success 才进语料;治单判官手抖,错放约平方衰减,代价×2 | strongjudge 二审 | double judge |
+| 哑判据 | v16 可行题的占位判据(恒 0),程序分作废、判官唯一裁判;infeasible 题仍挂真 `infeasible` 判据白捡信号 | emit16.py ZERO_EVAL | dummy evaluator |
 
 ## 防臃肿立法(08-30 用户批准)
 
