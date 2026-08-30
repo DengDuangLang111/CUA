@@ -684,6 +684,53 @@ CLAUDE.md 写着"外层单引号,内层双引号,**不嵌第三层**"。今天�
 `-n` 会把 stdin 接到 `/dev/null`,盖掉重定向(今天推 sbatch 时因此推空文件,
 靠"推完必对 md5"抓住)。
 
+## 9.12 Tillicum 隧道:必须有人在终端前(实测,与我先前的判断不同)
+
+**Tillicum 登录节点不接受密钥登录。** 从 EC2 和从 WSL 直连都是同一个拒绝:
+
+```
+Permission denied (gssapi-keyex,gssapi-with-mic,keyboard-interactive)
+                   ^ 提供的方式里没有 publickey
+```
+
+所以 WSL 那条一直在用的连接是**人工建立的**(socket `qwen36-tillicum-login` 建于
+08-29 01:05,有人敲了密码点了 Duo),脚本里的 `-i ~/.ssh/id_ed25519_tillicum`
+**对登录节点是摆设** —— 真正在认证的是 ControlMaster socket。
+
+⚠ **更正**:我先前告诉对面 session"从 AWS 正向 ssh -L,Duo 过一次,成本 0"——
+方向对,但漏了一句:**这一步没法自动化,必须有人在终端前敲密码**。
+
+**但那把新生成的公钥不是白装的**(我一度以为白装,收回):login02 不认 publickey,
+**第二跳到计算节点 g022 认**(走共享 home 的 `authorized_keys`)。隧道正是靠它建的。
+
+### 落地形状
+
+```
+EC2 上生成密钥 -> 公钥进 Tillicum ~/.ssh/authorized_keys(经 WSL 的 ControlMaster,免 Duo)
+用户在终端跑一次:  ssh -t ubuntu@<harness> 'bash ~/tillicum_login.sh'
+   -> 输密码 + Duo -> ControlPersist=yes 主连接常驻
+隧道:  ssh -N -f -L 127.0.0.1:18030:127.0.0.1:8030 \
+         -i id_ed25519_tillicum -o ProxyCommand='ssh -S <sock> -W %h:%p <login>' jy050706@g022
+```
+实测 `curl http://127.0.0.1:18030/v1/models` → **HTTP 200**。
+`ControlPersist` 用 `yes` 而非 48h:主跑 8 小时加验证阶段,常驻才不会跑到一半再麻烦人。
+
+## 9.13 镜像落地与三处指纹一致
+
+`docker save | gzip -1 | ssh | docker load`,12.6 GB 传了 **6.7 分钟**,
+目标机镜像 ID **`dbd9e87c68a3` 与源端逐位相同**。
+
+> 传输中途 `docker images` 会显示一个偏小的尺寸(看到过 4.03 GB),那是 load 未完成的
+> 中间态,**不能拿它当传完的证据**。以指纹为准。
+
+**三处环境,同一个指纹 `d32d9bccdb2b964c`**:WSL 原生 / WSL 容器 / **AWS 容器**。
+265 个包、判据库版本全对得上。"新机器算出的分数和老机器一样"是证明过的,不是假设。
+
+⚠ **`.env` 被烤进了镜像**(它在 `COPY OSWorld/` 的范围内),里面有 AWS 临时凭据和
+Tillicum bearer token。镜像没推到任何 registry,只在 WSL 和我们的 harness 主机上,
+但这是坏习惯。**改法:运行时 `-v` 挂载 `.env`,不用镜像里那份**;
+下次重建镜像要把 `.env` 排除出上下文。
+
 ## 10 剩余未知
 
 - **UW 出口 IP `205.175.106.79` 稳不稳定**(路线 ② 的唯一结构性风险)。
