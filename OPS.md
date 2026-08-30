@@ -991,3 +991,79 @@ Tailscale 自己重新连上,**不需要重新登录**(profile 仍在;期间 `ta
 - **「一次 ssh 只查一件事」这条规矩在没有连接复用时会变成放大器** —— 现已配套,
   两条规矩必须同时成立。
 - 轮询循环必须带 sleep,并确认退出条件覆盖失败态(否则空转刷连接)。
+
+### 2026-08-30 复发:同病不同阶段,`portrange` 那一招已经用完了
+
+**症状**:用户手动 `ssh osworld-windows` 报 `Can't assign requested address`,
+`git push` 同样失败;而 **Claude 这边一切正常**。
+
+**判别的关键在这个不对称**:能用的那一方是**骑在已建立的 ControlMaster 上**,
+不需要新端口;要新建连接的一方直接撞墙。所以"我这儿好好的"不能作为"没坏"的证据。
+
+```
+TIME_WAIT                    49,803
+portrange.first–last         16384–65535 = 49,152 个
+→ 49,803 > 49,152,溢出,不是"逼近"
+```
+
+**⚠ 上一节那条救命命令这次没得用**:`portrange.first` **已经是 16384**
+(08-28 那次设的,一直没重启所以还在),范围已经开到最大。下一级杠杆只剩
+`net.inet.tcp.msl`(15000 → TIME_WAIT 活 2×MSL = 30 秒)。
+
+**这次的主因不是我们**。按对端归类 49,796 条:
+
+| 条数 | 对端 |
+|---:|---|
+| 6944 | 43.130.30.247 |
+| 4746 | Cloudflare 172.64.155.209 |
+| **3788** | **Tailscale 100.113.98.76 —— 我们的 ssh** |
+| 3469 | Cloudflare 104.18.32.47 |
+| 3163 | Microsoft 13.107.5.93 |
+| 2636 | Anthropic 160.79.104.10 —— Claude 自己 |
+
+我们占约 7.6%。浏览器 / Slack / ChatGPT / VS Code 加上 Claude 本体是大头,
+这台机器已开机 30 天。**所以"少 ssh"治不了本,得从容量和寿命两头下手。**
+
+### 但我们确实贡献了一个可根治的 bug:僵死 socket 让复用静默失效
+
+08-28 那节写了"换网络后旧 master 会僵死,`ssh -O exit` 清掉"——**只有手动处置**。
+实际发生的是:socket 文件留着但主连接已死,此后每次 ssh 打印
+
+```
+ControlSocket <path> already exists, disabling multiplexing
+```
+
+**这是警告不是错误**,退出码 0,脚本照跑,于是整个 session 的每一次 ssh 都在
+新建连接。2026-08-30 这一整天(数百次 ssh)都是这么跑的,没人发现。
+
+**已落实的自动化(用户级,不需要 sudo)**:
+
+- `~/bin/ssh-clean-stale-sockets.sh` —— 遍历 `~/.ssh/config` 里的 Host,
+  `ssh -O check` 失败且 socket 文件存在则删除。`ssh -O check` 只和本地 socket
+  说话、不产生网络连接,所以脚本本身不加重端口压力。
+- `~/Library/LaunchAgents/local.ssh-clean-stale-sockets.plist` —— 每 300 秒跑一次,
+  日志 `~/Library/Logs/ssh-clean-stale-sockets.log`。
+- **双向实测过**:人为造一个僵死 socket(bind 后不 listen)→ 被清掉;
+  同时两个活着的 master(tillicum2 pid 11765 / osworld-windows pid 87088)**没被误删**。
+
+### 内核参数持久化(要 sudo,文件已备好在 `~/bin/local.netport-tuning.plist`)
+
+**两个参数都是运行时的,重启即失效** —— 08-28 设的 `portrange.first=16384`
+只是因为这台机器一直没重启才还在。重启后端口池会从 49,152 掉回 16,384 个,
+比这次爆得更早。
+
+```bash
+sudo cp ~/bin/local.netport-tuning.plist /Library/LaunchDaemons/
+sudo chown root:wheel /Library/LaunchDaemons/local.netport-tuning.plist
+sudo chmod 644 /Library/LaunchDaemons/local.netport-tuning.plist
+sudo launchctl bootstrap system /Library/LaunchDaemons/local.netport-tuning.plist
+sysctl net.inet.ip.portrange.first net.inet.tcp.msl   # 应为 16384 / 5000
+```
+
+它开机设两条:`portrange.first=16384`(端口池 16,384 → 49,152 个)、
+`msl=5000`(TIME_WAIT 30 秒 → 10 秒,等效容量再乘三)。
+
+**msl 的取舍**:RFC 建议 MSL=2 分钟,macOS 默认已经激进到 15 秒;降到 5 秒的
+理论风险是旧连接的重复报文被投递给复用同一四元组的新连接,现代 TCP 有
+timestamps/PAWS 兜底,实践中 10 秒 TIME_WAIT 是常见调优。**如果这台机器
+将来要跑对乱序极敏感的长连接,把这一条去掉只留 portrange。**
