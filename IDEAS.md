@@ -391,3 +391,23 @@ image path slug → 任务池 json → `ostg.difficulty`/`related_apps`)固化�
 
 **当下处置**(已定,不等下一轮):curate 阶段 image 族成功轨迹按池占比 8.8%
 封顶 + 子模式去重,并在 SFT_DATA 注明"子模式天花板=4 种滑块动作"。
+
+### 高难度任务的"旅程绕过"漏洞与复合判据(同批次追加,2026-08-30 凌晨实锤)
+
+**实锤样本**(wave2-all 抽 d4/d5 image 任务):`spectro-plate-contrast-log`(d5,
+app_count=3)指令 = GIMP 调对比度 **+ 在校准表追加 plate id/字节数行**,判据 =
+`check_contrast_increase_and_structure_sim` 单函数 —— **旅程后半段(表格)零验证**。
+d4 两条同型(QC 笔记/SHA-256 证据日志均不验)。
+
+**机理**:ostg 的 difficulty 语义 = 旅程复杂度(d>=3 即 multi-app 约定),判据强度
+是独立维度。table_gold 等族的终点(整簿字节)自带旅程背书;image 族方向判据只有
+1 bit,d5 的复杂度在判分时蒸发,教师可只拖滑块跳过旅程照样得分 —— "d5 标签 +
+6 步滑块轨迹"会污染语料的难度语义。
+
+**修法(下一轮 gen,优先级高于扩 15 种 func)**:d>=3 的任务判据一律**复合**
+(官方 evaluator.func 本就支持列表):终点判据 + 旅程副产物判据(表格行/日志文
+件/侧产物,gold 机型现成)。image 族最急;config/browser 等窄终点族次之排查。
+
+**本轮处置**:build 时对 image 族 d4/d5 成功轨迹抽检旅程完成度(第二应用的文件
+被碰过没),跳过旅程的样本剔除或按 d1 口径记账,不让假 d5 进语料。AWS 轨迹
+rsync 回来后先量一版跳过率。
