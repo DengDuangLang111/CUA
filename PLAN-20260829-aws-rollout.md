@@ -1588,6 +1588,145 @@ gold 与 seed **除了画布尺寸没有任何其他差异**。于是:
 3. **重跑**:12 条 harness 崩溃的。
 4. **回问生成侧**:os 域 53.9% 不可行是不是配方设计值。
 
+## 9.29 收尾与 v16 起跑:SSO 会话到期、25 台泄漏、`_open_setup` 根因、4×4 卡 + 反代
+
+### SSO 会话到期(2026-08-30 08:40 PDT)
+
+时间轴(太平洋时间,harness 时钟是 UTC,已换算):
+
+| 时刻 | 事件 |
+|---|---|
+| 08-29 21:59 | harness 建好 |
+| 08-29 **23:16** | Zixian 批准设备码登录 —— **这次会话的起点** |
+| 08-30 00:09 | token 最后一次成功刷新,`expiresAt` 写着 01:09 |
+| 08-30 00:50 | 主跑开跑 |
+| 08-30 **08:40** | 第一条 `TokenRetrievalError`,**距登录 9h19m** |
+| 08-30 08:45 | 剩余队列(vlc 43 + vs_code 28)5 分钟内空转报错 |
+| 08-30 08:59 | 最后一条正常判分(在飞任务收尾) |
+
+机制分两层,别混:
+
+- **access token 生命期 1 小时**(缓存 `expiresAt` 减写入时间正好 60 分钟),靠 refresh token 自动续,正常无感;
+- **上限是 SSO 会话时长**,AI2 管理员在 IAM Identity Center 里设,我们看不到也改不了。
+
+注意 01:09 到 08:40 这 7.5 小时调用一直正常 —— 说明中间在用的是 SSO 换出来的角色临时凭证,
+等它也到期、回头找 token 续时才发现 token 早死了。**具体每层设了多久,没有证据,不猜。**
+
+配置是标准 `[sso-session ai2]` + `sso_registration_scopes = sso:account:access`,无静态密钥。
+`registrationExpiresAt` 是 11-28,坏的不是客户端注册。
+
+**操作规矩:按登录时间算,不是按开跑时间算 —— 登录后 9 小时内必须再续一次。**
+好消息是不用停跑:容器挂载的就是 `~/.aws`,中途续一次新 token 写进同一个文件,
+容器下次刷新直接读到。这次栽在 23:16 登录、00:50 才开跑,所以跑到第 7h45m 就断了。
+
+### 25 台实例泄漏 —— 根因不是 SSO,是没有 TTL 兜底
+
+日志里 **24 次 `Stopping AWS VM i-...` 每一次后面都跟着 `TokenRetrievalError`**,
+`has been terminated` 只在 08:40 之前出现过。销毁调用也要凭证。
+
+但更根本的是这条,每创建一台实例都会打印一次:
+
+```
+Failed to auto-create scheduler role 'osworld-scheduler-ec2-terminate':
+AccessDenied ... not authorized to perform: iam:CreateRole
+Scheduler role ARN not available; skipping TTL schedule creation.
+```
+
+harness 本来要给每台实例挂到时自动销毁的调度,因为没有 `iam:CreateRole` 建不出来,
+直接跳过。**所以凭证一死就没有任何东西会去收实例。**
+
+处置:凭证刷新后 reaper dry-run 匹配 **25 台**(不是 24)、125 台别人的一台没碰,
+反向对照 `--name rollout-host` 只匹配 harness 那 1 台。`--yes` 执行,复验 running=0。
+
+**下次根治(按优先级)**:① 给 harness 挂 instance profile,凭证由 EC2 metadata 自动轮转,
+永不过期;② 让 Zixian 建好 `osworld-scheduler-ec2-terminate` 角色,实例带 TTL 自毁;
+③ 人工每 8 小时续 —— 最差。**用户已选 ③(人工)**,所以第 1 条那条规矩必须执行。
+
+### ⚠ 撤回一个判断:`_open_setup 404` 不是瞬时故障
+
+我早先记的"13 条 `_open_setup 404` 是瞬时的、可重跑捡回"**是错的**。重跑后
+**10 条一模一样地又崩**,域分布分毫不差(writer 5 / os 2 / thunderbird 3)。
+
+根因:把每条任务 `config` 里 `execute` 步的所有重定向目标收集成"实际写出集合" W,
+和 `open` 步的 `path` 集合 O 对账 —— **10 条全部 O ⊄ W**:
+
+| 花样 | 例子 |
+|---|---|
+| 扩展名不符 | 写 `channel_brief.docx` / 开 `channel_brief.odt`;写 `depot_rota.odt` / 开 `depot_rota.txt` |
+| 文件名不符(open 的是模型该产出的东西)| 写 `arrears_ledger.csv` / 开 `arrears_summary.odt`;写 `funding_log.csv` / 开 `grant_brief.odt` |
+| setup 一个文件都没写 | thunderbird 3 条开 profile 目录、os 1 条开 Desktop 文件 |
+
+**排除了 payload 过长这个可能**:崩溃的 writer 任务 setup 只有约 6KB,
+同域正常任务中位 **19682**、p90 **49496**、最大 **98227**,全跑通了。崩的反而是短的。
+
+**该加的静态闸(不用跑任何东西)**:收集 `execute` 步的 `> '<path>'` / `tee` / `cp` / `mv`
+目标成 W,收集 `type: open` 的 `path` 成 O,**要求 O ⊆ W**,否则拒收。
+补充两条:`open` 的路径若同时出现在 `evaluator.result.path`,那是"模型该创建的产物",更不该 open;
+setup 完全没有写文件却有 `open` 的任务直接可疑。
+
+**关键:"setup 在容器里实跑 rc==0" 这道闸抓不到这一类** —— 出问题的是 `open` 步不是
+`execute` 步,而 `execute` 的 rc 就是 0(它老实写了文件,只是名字不对);`open` 要 GUI +
+VM 里的 Flask `/setup/open_file`,构建容器根本不执行它。已把这条告知 v16 生成侧。
+
+### 86 条重跑
+
+崩溃任务的 `result.txt` 值是 0,而恢复机制是"有 `result.txt` 就跳过",所以必须先把
+86 个目录挪走(`results_crashed_20260830/`,**move 不是 delete**)再跑。
+注意目录是容器里 root 写的,`shutil.move` 要 `sudo`。
+
+清单 `rerun86.json` 走额外 bind mount 传进容器,`rerun_inner.sh` 把
+`--test_config_base_dir`(仍是 wave2-all,要 `examples/` 和 `files/`)和
+`--test_all_meta_path`(指新清单)拆开。
+
+### v16 起跑的服务端:4 个 4 卡 serve + 隧道 + 反代
+
+| 作业 | JobID | 节点 | 节点端口 | harness 本地端口 |
+|---|---|---|---|---|
+| srv-4a | 268322 | g005 | 8041 | 18041 |
+| srv-4b | 268323 | g011 | 8042 | 18042 |
+| srv-4c | 268324 | g012 | 8043 | 18043 |
+| srv-4d | 268325 | g013 | 8044 | 18044 |
+
+脚本 `/gpfs/scrubbed/jy050706/qwen-serve/srv-q4.sbatch`,由 `srv-dx8-v2` 派生,24h(QoS `normal`
+的 `MaxWall` 正好 `1-00:00:00`)。**4 卡比 8 卡容易插队**:整节点难等,4 张卡的缝随处都是 ——
+提交时 g005/g011/g013/g014 各空 4 张,四个作业全部**立刻 RUNNING,零排队**。
+
+与 `srv-dx8-v2` 逐项一致:BF16 / `kv-cache-dtype fp8` / `max-model-len 262144` /
+`reasoning-parser qwen3` / 同一份 override-generation-config / `limit-mm-per-prompt image:20` /
+`served-model-name qwen38-27b-local`。三处有意差异:TP4 无 DP;`--mem` 1600G→250G
+(主机内存不影响输出,1600G 会让作业在"有卡没内存"的节点上排队);JIT 缓存按端口分家。
+
+**反代**(`/etc/nginx/conf.d/teacher-lb.conf`):`127.0.0.1:18040` → `least_conn` 到四个端点。
+runner 只认一个 `--base_url`,有了它就能保持**单进程 `--num_envs 48` + 单 result_dir**,
+恢复机制不用改,4 个端点自动均衡(预切 manifest 会让先跑完的端点闲着)。三个非默认值:
+
+| 项 | 默认 | 设为 | 理由 |
+|---|---|---|---|
+| `client_max_body_size` | 1m | **256m** | 每请求带 10 张 1080p 截图的 base64,几 MB 起步,不改必 413 |
+| `proxy_read_timeout` | 60s | **900s** | 81920 token 生成含 prefill 约 510s,runner 侧超时 600s,反代必须更长 |
+| `proxy_buffering` | on | **off** | 流式响应不缓冲,否则首 token 延迟被拉长 |
+
+### 两个瓶颈都实测排除了
+
+- **AWS 配额**:`L-1216C47A` 上限 **9705 vCPU**,全账号在跑约 686(108 台 t3.xlarge +
+  31 台 t3.medium + 零散)。48 台 t3.xlarge 只占 192,挤不着任何人。
+- **harness**:m5.2xlarge(8 vCPU / 30G),**25 路时 load average 0.95**(12% 利用率),
+  内存用 8G 剩 21G。48 路外推约 1.8。**不用换机型。**
+
+### `snapshot` 字段是惰性的(v16 不用改 1560 个 JSON)
+
+- `run_multienv_qwen.py:181-192`:`snapshot_name` 由 runner 自己定,aws 路径下取
+  `IMAGE_ID_MAP[region][screen_size]` = **AMI id**,和任务 JSON 无关;
+- `IMAGE_ID_MAP` 的键是 `(region, screen_size)`,不是应用名;
+- 全链路 grep `["snapshot"]` / `get("snapshot")` 扫 runner + `lib_run_single.py` +
+  `desktop_env.py` → **零命中**。
+
+实证:v14 跑通的 1782 条,snapshot 取值就是应用名(calc 344 / chrome 298 / impress 265 /
+writer 251 / os 219 / gimp 164 / thunderbird 131 / vlc 82 / vs_code 28)。
+
+⚠ 但 `revert_to_snapshot(path_to_vm, snapshot_name)` 确实把 `snapshot_name` 当 `ImageId`
+直接塞进 `RunInstances` —— 哪天有人把任务 JSON 的 snapshot 接进这条路,那才会炸。现在没接。
+
 ## 10 剩余未知
 
 - **UW 出口 IP `205.175.106.79` 稳不稳定**(路线 ② 的唯一结构性风险)。
