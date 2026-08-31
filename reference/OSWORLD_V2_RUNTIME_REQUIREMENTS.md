@@ -195,22 +195,57 @@ OSWORLD_FILE_BASE_URL=/mnt/d/research/OSWorld-V2-0808/cache/osworld_v2_assets
 OSWORLD_DOCKER_UBUNTU_VM_PATH=/mnt/d/research/OSWorld-V2/docker_vm_data/releases/v2026.06.24/osworld-v2-ubuntu-x86-v2026.06.24-official-fonts.qcow2
 OSWORLD_CLIENT_PASSWORD=osworld-public-evaluation
 VLLM_API_KEY=EMPTY
+
+# 判官(19 个任务)+ 用户模拟(7 个任务)—— 2026-08-31 定
+ANTHROPIC_API_KEY=<ostg-v14/.env 里那把 sk-ant- key>
+OSWORLD_EVAL_MODEL_PROVIDER=anthropic
+OSWORLD_EVAL_MODEL_NAME=claude-sonnet-4-6
+OSWORLD_EVAL_MODEL_API_KEY_ENV=ANTHROPIC_API_KEY
+OSWORLD_USER_SIM_PROVIDER=anthropic
+OSWORLD_USER_SIM_MODEL=claude-sonnet-4-6
+OSWORLD_USER_SIM_API_KEY_ENV=ANTHROPIC_API_KEY
 ```
+
+**⚠️ 老的 ppapi 网关 key 已失效。** 项目里有两把 Claude 类 key:
+
+| 指纹 | 长度/前缀 | 位置 | 状态 |
+|---|---|---|---|
+| `2a0afb8c` | 51 / `sk-STQ…` | `os-simple-taskgen/.env`、`os-simple-taskgen-v8/.env`、`ostg-datagenv12/.env`、`osworld-taskgen/.env` | **HTTP 401 Invalid token**(网关 `app-us.ppapi.ai`,对 opus-5 / opus-4-6 / sonnet-4-6 全挂) |
+| `22cb0526` | 108 / `sk-ant…` | **`ostg-v14/.env`** | ✓ 可用,`https://api.anthropic.com` |
+
+v14 那代流水线已从网关迁到官方端点,但**变量名仍叫 `PPAPI_API_KEY`** —— 找 key 时别被名字误导。
+凡是还在读前四个 .env 的脚本,现在都是坏的。
+
+**任务里硬编码的 `"model": "gpt-4o"` 会被环境变量覆盖**(`user_simulator.py:153-170` 的
+`_pick_first(env, config, "gpt-4o")`,源码注释明说这是设计意图)。实测 `sim.model` 解析为
+`claude-sonnet-4-6`。
 
 三条需要解释的:
 
 - **镜像指向老 checkout 那份,不必拷 26G** —— `providers/docker/provider.py:172` 是 `"mode": "ro"`,
   base qcow2 只读挂载,多 VM 共享同一份文件安全。
 - **`OPENAI_BASE_URL` / `OPENAI_API_KEY` 故意不设。** 照搬 V1 的那份会指向 `127.0.0.1:18001`,
-  于是 **19 个 LLM 判分任务会用被测模型给自己打分**(18% 的 benchmark)。宁可缺 key 显式报错,
-  也不要静默自判。判分/用户模拟的模型是**未决项**,默认走 OpenAI `gpt-4o`
-  (`evaluators/model_client.py:326`、`user_simulator.py:164`),要换端点用
-  `OSWORLD_EVAL_MODEL_*` / `OSWORLD_USER_SIM_*` 两组变量。
+  于是 **19 个 LLM 判分任务会用被测模型给自己打分**(18% 的 benchmark)。判官已改用
+  Claude Sonnet 4.6(与被测的 Qwen3.8 无关),`OPENAI_*` 保持不设,免得哪条路径回退到自判。
 - **`OSWORLD_FILE_CACHE_BASE_URL` 不用设** —— 魔改已把它固定到 commit `711e0811…`。
 
 **自检脚本覆盖的 12 项**(全过):环境变量 6 项 · `website.py` import 并拼出
 `https://insurance-claim.site.hku.icu` · 素材 `asset()` 命中本地(不联网) · qcow2 存在且
 `manager.get_vm_path()` 选中的就是它 · 108 个 `task_*.py` · `test_v2.json` · 站点 HTTP 200。
+
+**判官/用户模拟已端到端验证**(走 V2 自己的代码路径,非裸 HTTP):
+
+| 检查 | 结果 |
+|---|---|
+| `model_client.generate_text()` 纯文本 | ✓ `'JUDGE_OK'` |
+| `generate_text(..., image_paths=[...])` 读图 | ✓ `'**Blue**'`(参数名是 `image_paths`,要文件路径不是 bytes) |
+| `LLMUserSimulator` 解析出的 provider/model | ✓ `anthropic` / `claude-sonnet-4-6` |
+| 用户模拟入戏应答 | ✓ `'Up to 300 EUR per night.'` |
+| `.env` 是否被 git 忽略(里面有真 key) | ✓ `.gitignore:112`,`git status` 里不出现 |
+
+用户模拟必须先 `reset(instruction)` 才会把 `knowledge`/`persona` 灌进 system prompt
+(`_build_system_prompt()`);只调 `respond()` 会只发问题本身。真实流程在
+`desktop_env.py:519` 自动调 reset,单测时容易漏。
 
 **仍未验证**:客机里有没有 `pyperclip`(非 ASCII 输入走剪贴板那条魔改依赖它),要开 VM 才能查。
 
