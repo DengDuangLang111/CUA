@@ -28,16 +28,18 @@ echo "=========== [$(date '+%F %T')] eval 链启动 ==========="
 
 # arm|远端端口|本地端口|serve节点|结果组|题面板|权重(- = 等 READY 标记)|语料说明|配方说明
 #
-# mixb4b50b 排在最前:它复用 mixb4b 已经在跑的 serve(g3084:8041,占位作业
-# 39187993 还有 3 天多),不用传权重不用起服务;而 mixb9b 要等训练结束
-# (还有 6 小时),中间正好空出来。题面板换成 verified_eval50b_nonproxy.json ——
-# 冻结 100 的**另一半**,2026-08-15 起封存,从没有任何模型跑过、也没进过
-# 任何决策,是预注册的样本外集。与 eval50 交集为 0(已核)。
+# 顺序(用户 2026-08-31 定):
+#   1 mixb4b50b  冻结 100 的**另一半**(2026-08-15 封存至今没跑过、没进过任何
+#                决策的预注册样本外集)。同一份权重、同一个 serve(g3084:8041,
+#                占位作业 39187993),不传权重不起服务 —— 所以排最前,它能立刻跑。
+#   2..5         **全部改跑 eval100**(= eval50 ∪ eval50b,已逐题核验相等)。
+#                代价:每臂题数翻倍,9B 一臂约 5-6 小时。
 ARMS="
 mixb4b50b|8041|18041|g3084|qwen35-4b-sft|verified_eval50b_nonproxy.json|/gscratch/cse/jy050706/sft/models/mixB-4b-e873|v16-main + v16-pilot + v11new-500 + v11new-all (866 traj / 18,576 samples)|Qwen3.5-4B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1 -- SAME weights as mixb4b, HELD-OUT half of the frozen 100
-mixb9b|8043|18043|g3085|qwen35-9b-sft|verified_eval50_nonproxy.json|-|v16-main + v16-pilot + v11new-500 + v11new-all (866 traj / 18,576 samples)|Qwen3.5-9B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1
-mixa9b|8045|18045|g3082|qwen35-9b-sft|verified_eval50_nonproxy.json|-|v16-main + v16-pilot + q38-Bhqs2t-r5nocapimg10-v11100/-v11500 (914 traj / 19,846 samples)|Qwen3.5-9B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1 (resumed from ckpt-311 after a g012 GPU fault)
-mixa4b|8044|18044|g3087|qwen35-4b-sft|verified_eval50_nonproxy.json|-|v16-main + v16-pilot + q38-Bhqs2t-r5nocapimg10-v11100/-v11500 (914 traj / 19,846 samples)|Qwen3.5-4B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1
+mixc9b|8042|18042|g3083|qwen35-9b-sft|verified_eval100_nonproxy.json|/gscratch/cse/jy050706/sft/models/mixC-9b-e627|v16-main + v16-pilot ONLY (554 traj / 13,372 samples) -- NO v11 at all|Qwen3.5-9B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1, checkpoint-627
+mixb9b|8043|18043|g3085|qwen35-9b-sft|verified_eval100_nonproxy.json|-|v16-main + v16-pilot + v11new-500 + v11new-all (866 traj / 18,576 samples)|Qwen3.5-9B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1
+mixa9b|8045|18045|g3082|qwen35-9b-sft|verified_eval100_nonproxy.json|-|v16-main + v16-pilot + q38-Bhqs2t-r5nocapimg10-v11100/-v11500 (914 traj / 19,846 samples)|Qwen3.5-9B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1 (resumed from ckpt-311 after a g012 GPU fault)
+mixa4b|8044|18044|g3087|qwen35-4b-sft|verified_eval100_nonproxy.json|-|v16-main + v16-pilot + q38-Bhqs2t-r5nocapimg10-v11100/-v11500 (914 traj / 19,846 samples)|Qwen3.5-4B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1
 "
 
 for row in $ARMS; do
@@ -72,7 +74,6 @@ for row in $ARMS; do
   for i in $(seq 1 2880); do
     ps -eo args | grep -q "[r]un_multienv_qwen"   && { sleep 30; continue; }
     ps -eo args | grep -q "[r]un_eval50_mixb4b"   && { sleep 30; continue; }
-    ps -eo args | grep -q "[r]un_eval50_mixc9b"   && { sleep 30; continue; }
     break
   done
   echo "[$(date '+%F %T')] $ARM VM 空出来了"; sleep 20
