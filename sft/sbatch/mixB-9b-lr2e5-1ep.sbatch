@@ -12,9 +12,18 @@
 #SBATCH --output=/gpfs/scrubbed/jy050706/sft/mixB_9b_lr2e5_%j.out
 # 臂 B 的高学习率单轮变体 —— lr 2e-5 / 1 epoch(2026-08-31 加,用户点名)
 #
-# 与 mixB-9b.sbatch 的唯一两处差别:learning_rate 3e-6 -> 2e-5(6.7x),
-# num_train_epochs 3 -> 1。语料、拓扑、图窗、loss_scale、accum 全部不动,
+# 与 mixB-9b.sbatch 的四处差别(全部由用户点名):
+#   learning_rate   3e-6  -> 2e-5   (6.7x)
+#   num_train_epochs   3  -> 1
+#   adam_beta2     0.999  -> 0.95
+#   weight_decay     0.0  -> 0.1
+# 语料、拓扑、图窗、loss_scale、accum、max_length 全部不动,
 # 所以它跟原臂 B 是同一份数据上的**配方对照**,不是新语料。
+#
+# 这四处是自洽的一套:大 lr 配短二阶动量窗口(beta2 0.95 的有效窗口约 20 步,
+# 0.999 约 1000 步)让二阶矩跟得上快速变化的梯度尺度;wd 0.1 压住大步长下的
+# 权重漂移。GPT-3 / LLaMA 系列用的就是 beta2 0.95 + wd 0.1 这一组。
+# 注意 HF Trainer 的 weight_decay 不施加在 bias 和 LayerNorm 权重上(默认分组)。
 #
 # 参照点:OpenWebRL 发布配方是 lr 1e-5 / 3 epoch,本变体是它的 2 倍学习率、
 # 三分之一轮数。梯度裁剪走 HF 默认 max_grad_norm=1.0(deepspeed 配置里
@@ -111,7 +120,7 @@ echo ">>> 样本 $SAMPLES | steps/epoch $STEPS_PER_EPOCH | save_steps $SAVE_STEP
 REPORT=none; RUN_NAME=mixB-9b-lr2e5-1ep-${SLURM_JOB_ID}
 if [ -f "$B/wandb.env" ]; then set +x; source "$B/wandb.env"; set -x
   export WANDB_PROJECT="${WANDB_PROJECT:-cua-sft}"; REPORT=wandb; fi
-export WANDB_NOTES="臂 B 的高学习率单轮变体:lr 2e-5 / 1 epoch。语料同原臂 B(v16 554 + v11 新 rollout 312 = 866 条),img10/fold1,4x2/accum8,global batch 64。与原臂 B 的唯一差别就是 lr 和轮数。"
+export WANDB_NOTES="臂 B 的高学习率单轮变体:lr 2e-5 / 1 epoch。语料同原臂 B(v16 554 + v11 新 rollout 312 = 866 条),img10/fold1,4x2/accum8,global batch 64。与原臂 B 的差别:lr 3e-6->2e-5,epochs 3->1,beta2 0.999->0.95,wd 0.0->0.1。"
 export B DSLIST REPORT RUN_NAME OUT SAVE_STEPS
 export MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n1)
 export MASTER_PORT=$((20000 + SLURM_JOB_ID % 9000))   # 写死端口在共享节点必撞
@@ -131,7 +140,7 @@ srun --ntasks=4 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
     --torch_dtype bfloat16 \
     --num_train_epochs 1 --per_device_train_batch_size 1 \
     --learning_rate 2e-5 --warmup_ratio 0.1 \
-    --weight_decay 0.0 --adam_beta2 0.999 \
+    --weight_decay 0.1 --adam_beta2 0.95 \
     --max_length 81920 --gradient_checkpointing true \
     --save_strategy steps --save_steps $SAVE_STEPS --save_total_limit 12 \
     --logging_steps 1 \
