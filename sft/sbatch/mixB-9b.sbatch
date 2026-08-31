@@ -3,11 +3,11 @@
 #SBATCH --account=video
 #SBATCH --partition=gpu-h200
 #SBATCH --qos=normal
-#SBATCH --nodes=4
-#SBATCH --gpus-per-node=2
+#SBATCH --nodes=2
+#SBATCH --gpus-per-node=8
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=400G
+#SBATCH --cpus-per-task=64
+#SBATCH --mem=600G
 #SBATCH --time=20:00:00
 #SBATCH --output=/gpfs/scrubbed/jy050706/sft/mixB_9b_%j.out
 # 臂 B —— v16 新数据 + v11 新 rollout(08-29 i10x 重跑)
@@ -16,10 +16,13 @@
 # 图窗 img10 / fold_size 1 —— 这是**建语料时**定死的(build.py --image-max 10
 # --fold-size 1),sbatch 里没有对应参数,只有 IMAGE_MAX_TOKEN_NUM=2048 是训练侧。
 #
-# 拓扑 4 节点 × 2 卡 × accum 8 = 全局 batch 64。这是 a1/a2/a3 实测过的形状:
-#   4B @ img10 峰值  89.66 GiB (64.1%)
-#   9B @ img10 峰值 115.80 GiB (82.8%)   ← 余 24 GiB
-# 不要改成 2 节点 × 8 卡:那是 smoke 的形状,显存数字与上面不可比。
+# 拓扑 2 节点 × 8 卡 × accum 4 = 全局 batch 64(与臂 A 的 4x2/accum8 同一个
+# global batch,训练数学一致;只有分片粒度和显存不同)。该形状实测:
+#   4B @ img10 峰值  83.74 GiB
+#   9B @ img10 峰值 110.30 GiB
+# 比 4x2 更省(rank 多、分片细、驻留少),且卡多一倍、墙钟约减半。
+# ⚠ 臂 A 跑的是 4x2/accum8,两臂拓扑不同 —— global batch 相同故可比,
+#   但显存/吞吐数字不可跨臂相减。
 #
 # 两臂的唯一变量是 v11 用哪一批 rollout;v16 那 554 条两臂共用。
 umask 077
@@ -77,7 +80,7 @@ import sys
 n = 0
 for ds in sys.argv[1:]:
     n += sum(1 for line in open(ds + "/train_swift_abs.jsonl", encoding="utf-8") if line.strip())
-GB = 64                      # 8 rank x accum 8
+GB = 64                      # 16 rank x accum 4
 spe = -(-n // GB)            # steps per epoch, 向上取整
 for d in (3, 2, 1):          # 尽量一个 epoch 存 3 次,退而求其次
     if spe % d == 0:
@@ -99,9 +102,9 @@ export WANDB_NOTES="臂 B —— v16 新数据 + v11 新 rollout(08-29 i10x 重�
 export B DSLIST REPORT RUN_NAME OUT SAVE_STEPS
 export MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n1)
 export MASTER_PORT=$((20000 + SLURM_JOB_ID % 9000))   # 写死端口在共享节点必撞
-export NNODES=4 NPROC_PER_NODE=2
+export NNODES=2 NPROC_PER_NODE=8
 echo ">>> multinode: nodes=$SLURM_JOB_NODELIST master=$MASTER_ADDR port=$MASTER_PORT"
-srun --ntasks=4 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
+srun --ntasks=2 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
   export NODE_RANK=$SLURM_NODEID
   echo ">>> node $SLURM_NODEID ($(hostname)) launching NPROC=$NPROC_PER_NODE"
   DS_ARGS=""; for d in $DSLIST; do DS_ARGS="$DS_ARGS $d/train_swift_abs.jsonl"; done
@@ -109,7 +112,7 @@ srun --ntasks=4 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
     --model $B/models/Qwen3.5-9B \
     --dataset $DS_ARGS \
     --enable_channel_loss true \
-    --tuner_type full --loss_scale last_round --gradient_accumulation_steps 8 \
+    --tuner_type full --loss_scale last_round --gradient_accumulation_steps 4 \
     --preserve_thinking true \
     --attn_impl sdpa --deepspeed zero2_offload \
     --torch_dtype bfloat16 \
