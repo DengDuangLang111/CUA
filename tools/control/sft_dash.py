@@ -274,6 +274,15 @@ EVAL50_ARMS = {
     # Same 6474 samples as nocap, but a 10-screenshot history window held flat
     # by fold_size=1 instead of 20. Peak memory 136.7 -> 83.74 GiB, and that
     # headroom is what makes a3 and the 9B affordable at all.
+    "mixb4b":    ("mixB 4B e3.00 · v16+v11new · stock (no-split)", "sft",
+                  "arm B: v16 judge-admitted 554 + v11 new rollout 312 = 866 traj"
+                  " / 18,576 samples. Qwen3.5-4B full FT, lr 3e-6, gb 64, 3 ep,"
+                  " img10/fold1, checkpoint-873 (epoch 3.0). Evaluated at"
+                  " --image_max 10 --fold_size 1 to MATCH the training window;"
+                  " eval-50 defaults to 20 and a mismatch measures the window,"
+                  " not the model. Served from Klone A100 (sm_80, so kv-cache is"
+                  " auto not fp8) inside placeholder job 39187993. Control: the"
+                  " arm-A 4B twin, same v16 half but the OLD v11 corpus"),
     "a1":        ("img10 4B e3.00 · stock (no-split)", "sft",
                   "champion recipe on the 10-image window. Sample count identical"
                   " to nocap and the curation report matches field for field, so"
