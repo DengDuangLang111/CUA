@@ -65,6 +65,10 @@
   上游会提前判死 episode;方向上分数不降)。引用官方分数时披露这一条即可,
   精确口径:"评分函数与上游等价,唯一行为差异是空响应不再提前终止 episode"。
 
+> **OSWorld-V2 的魔改不记在这里** —— 它是另一个 benchmark。魔改清单、0624→0808 迁移、
+> 本地分叉(worktree `/mnt/d/research/OSWorld-V2-0808`,分支 `v2-0808-qwen`)与"让模型看到
+> 历史 think"的三处改动,全部在 `CUA/reference/OSWORLD_V2_RUNTIME_REQUIREMENTS.md` §0.5。
+
 ### 1.1 `mm_agents/qwen/` 的改动与「未知 action 被静默吞掉」(2026-08-13 查证)
 
 本地 patch(`actions.py:314`,`parse_internal_response` 末尾):

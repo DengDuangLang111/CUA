@@ -1,4 +1,5 @@
-> 冻结参考(OSWorld-V2 是另一个 benchmark,非当前主线),2026-08-15 从顶层收编入库。
+> OSWorld-V2 是另一个 benchmark(非 OSWorld 的分支),2026-08-15 从顶层收编入库。
+> **2026-08-30 解冻**:开始用它跑 Qwen3.8-27B 官方 bench,版本升到 `osworld-v2-2026.08.08`,见 §0.5。
 
 # OSWorld 2.0（OSWorld-V2）任务运行条件详解
 
@@ -9,7 +10,9 @@
 > - 任务实现：**gated HF 数据集** `xlangai/osworld_v2_tasks` @ `v2026.06.24`，本地已下载到 WSL 的 `/mnt/d/research/OSWorld-V2/cache/osworld_v2_tasks_v2026.06.24/`（108 个 `task_*.py`）
 > - 本文所有统计都是对这 108 个 `task_*.py` 做 AST/文本解析得到的，不是抄文档。
 >
-> 最后更新 2026-08-08。V1 的对应文档见 [OSWORLD_VERIFIED_RUNTIME_REQUIREMENTS.md](OSWORLD_VERIFIED_RUNTIME_REQUIREMENTS.md)，操作手册见 [CLAUDE.md](CLAUDE.md)。
+> 最后更新 **2026-08-30**(0624 → 0808 迁移 + 本地 harness 分叉;正文其余部分的统计仍基于 0624 的 108 个 `task_*.py`,
+> 0808 任务哈希已变但官方未公布改了哪几个,重下后需复核 —— 见 §0.5)。
+> V1 的对应文档见 [OSWORLD_VERIFIED_RUNTIME_REQUIREMENTS.md](OSWORLD_VERIFIED_RUNTIME_REQUIREMENTS.md)，操作手册见 [CLAUDE.md](CLAUDE.md)。
 >
 > ⚠️ **`OSWorld-V2` 不是 OSWorld 的一个分支，是另一个 benchmark**（`xlang-ai/OSWorld-V2`，论文 arXiv 2606.29537）。它顺带把 V1 的 361 个 JSON 任务也放在 `evaluation_examples/examples/` 里，可以用 `--eval_version` 切换，但**分数不可与 V1 直接比较**。
 
@@ -44,6 +47,130 @@
 3. **重型桌面应用**（十几个新应用）——镜像变大、任务要现装、机型要加大。
 4. **GitLab 实例**（2 个任务）。
 5. **`WEBSITE_HOST_SUFFIX` 是全局硬前置**——不是"某些任务需要"，而是"没设就加载不了任务"。
+
+---
+
+## 0.5 版本与本地分叉(2026-08-30)
+
+### 0.5.1 官方 release:0624 → 0808
+
+| release | 状态 | 网站后缀 | provider 镜像 |
+|---|---|---|---|
+| `osworld-v2-2026.08.08` | **Active (recommended)** | `site.hku.icu` | 沿用 0624 pin 的镜像 |
+| `osworld-v2-2026.06.24` | Active(未废弃,但不再推荐) | `web.hku.icu` | — |
+
+**任务数没变,任务内容变了:**
+
+| | 0624 | 0808 |
+|---|---|---|
+| `task_count` | 108 | **108(不变)** |
+| `task_hashes.json` sha256 | `3312a7df40dbd004…` | **`42f8f6f8939b8712…`(变了)** |
+
+哈希变了说明 108 个任务的实现被改过,**官方没公布改了哪几个**(任务类是 gated 的,不在公开 GitHub 里)。
+本文正文 §5–§10 与附录 A 的逐条统计都是对 **0624** 的 `task_*.py` 做的解析,重下 0808 后需要复核。
+
+**四处实际差异(`git diff v2026.06.24 v2026.08.08`,26 文件 +839/−87):**
+
+1. **网站后缀** `web.hku.icu` → `site.hku.icu`(39 个依赖模拟网站的任务受影响)
+2. **素材必须走 gated 快照** —— 新增 317 行的 `scripts/tools/download_osworld_v2_assets.py`,详见 §6.1
+3. **素材解析健壮性** —— `file_source.resolve_local_source()` 加 percent-decode 回退;`setup.py` 本地源缺失时 fail closed
+4. **依赖** `imageio-ffmpeg>=0.6.0`
+
+**没变的(重要):**
+
+- **provider 镜像一行没动** —— 0808 manifest 里 docker 镜像仍 pin 在 `v2026.06.24` 的
+  `osworld-v2-ubuntu-x86.qcow2.zip`(sha `eb737ae70b49849e…`)。**本地那份 qcow2 不用重下。**
+- **qwen 的 harness 一行没动** —— 0808 在 `mm_agents/` 和 `scripts/python/` 下只改了 4 个文件
+  (`anthropic/main.py` +148、`anthropic/utils.py` +20、`manual_examine.py`、`run_multienv_gpt_response_api.py`),
+  `mm_agents/qwen*` 与 `run_multienv_qwen*` 的 diff 为空。
+
+**迁移命令**(在 0808 checkout 里跑):
+
+```bash
+uv run scripts/tools/download_osworld_v2_tasks.py  --benchmark-release osworld-v2-2026.08.08
+uv run scripts/tools/download_osworld_v2_assets.py --benchmark-release osworld-v2-2026.08.08 \
+    --target-dir cache/osworld_v2_assets --clean
+export OSWORLD_FILE_BASE_URL="$(pwd)/cache/osworld_v2_assets"
+export WEBSITE_HOST_SUFFIX="site.hku.icu"
+```
+
+### 0.5.2 本地分叉:`OSWorld-V2-0808` / 分支 `v2-0808-qwen`
+
+老的 `/mnt/d/research/OSWorld-V2`(0624 + 魔改)**不要再拿来跑新实验** —— 它工作区有 999 个
+"已修改"文件,其中 **993 个是 CRLF 行尾噪音**(`git diff --shortstat` 20.5 万行,`git diff -w` 只剩 173 行)。
+真实魔改只有 6 个文件。
+
+新工作区:
+
+```bash
+git worktree add /mnt/d/research/OSWorld-V2-0808 v2026.08.08
+# 分支 v2-0808-qwen,首个提交 b98e006
+```
+
+已把 6 处魔改移植过去并顺手清了 CRLF,所以**它对 `v2026.08.08` 的 diff 就是完整、干净的魔改清单,
+报官方分数时直接拿它披露**:
+
+| 文件 | 改动 | 干什么 |
+|---|---|---|
+| `providers/docker/manager.py` | +15 −1 | 默认镜像强制指向**打了官方字体包的** qcow2,找不到直接 `FileNotFoundError`(不再偷偷联网下载)。可用 `OSWORLD_DOCKER_UBUNTU_VM_PATH` 覆盖 |
+| `providers/docker/provider.py` | +29 | 开机后进客机跑 `fc-match Calibri` 并核对 `/etc/osworld-font-bundle.sha256`,对不上 `RuntimeError` |
+| `desktop_env.py` | +39 | 开机后 `xrandr` 强制 1920×1080 并轮询 20 次确认生效(官方 docker 客机分辨率是随缘的) |
+| `controllers/setup.py` | +9 −2 | 浏览历史 sqlite 的下载源从 `resolve/main` 固定到 commit `711e0811…`,可用 `OSWORLD_FILE_CACHE_BASE_URL` 覆盖 |
+| `mm_agents/qwen35vl_agent.py` | +13 −2 | **见下,改动①** |
+| `mm_agents/qwen_internal_agent.py` | +124 −16 | agent 行为修正 + **改动②③** |
+| `scripts/python/run_multienv_qwen_internal_agent.py` | 新文件 809 行 | 我们自己的 runner |
+
+**agent 行为修正(移植自 0624,非本次新增):**
+
+| 改动 | 官方原版 | 我们 | 为什么 |
+|---|---|---|---|
+| `call_user` | 直接判 `DONE`/`FAIL` | 走官方的 user simulator | 官方 `lib_run_single.py:743-765 / 901-916` **自己就有** `user_simulator` + `ASK_USER` + `obs["user_response"]` 协议(该文件我们一行没改),是官方的 qwen adapter 没接上自家协议 |
+| 空回复 | 判 `DONE` | 判为向用户提问 | 原版等于白送一次"成功" |
+| infeasible 判定 | 在整段回复里搜子串 `"infeasible"` 就判 FAIL | 删掉,改为必须 `terminate(status=failure)` | 子串匹配会被推理正文误触发;**保留历史 think 后误触发概率随之上升,所以这条不能改回去** |
+| `wait` | `"WAIT"` 固定时长 | `time.sleep(n)`,模型指定 0–60 秒 | — |
+| 非 ASCII 输入 | `pyautogui.typewrite` | `pyperclip.copy` + `Ctrl+V` | typewrite 打不出中文。**依赖客机装了 `pyperclip`** |
+
+### 0.5.3 让模型看到历史 think / action / tool_call(2026-08-30 新增)
+
+**V2 原版会丢掉推理**,而且是**三处独立缺失**,不是一个开关:
+
+| | V1(OSWorld-Verified) | V2 原版 | 我们在 0808 上的改动 |
+|---|---|---|---|
+| ① 取值 | `client.py` 把 `reasoning_content` 缝回 `<think>` | 只取 `.content`,推理在第一步就丢了 | `qwen35vl_agent.py` `call_llm` 同样缝合 |
+| ② 回放 | `ensure_empty_think_prefix`:有 think 原样留,没有就补空块 | assistant 消息原始字符串直接塞进去 | 新增 `_normalize_think()`,回放走它 |
+| ③ 模板 | `chat_template_kwargs.preserve_thinking = True` | 只发 `enable_thinking` | 加 `--preserve_thinking` 开关并透传 |
+
+补空 think 块不是可选项 —— **Qwen 的 chat template 在 thinking 模式下要求每个历史 assistant 轮都带 think 结构**,缺了模板会崩。
+
+这个写法不是自创:仓库里 **GLM 的 agent 已经在用同一套**
+(`glm_eval_agent.py:474-487` 缝 `<think>{reasoning}</think>{content}`;`:921` 预填 `<think></think>` 空块)。
+横向看,**qwen 是这个仓库里唯一丢推理的 agent**:GLM / OpenCUA / UI-TARS / GPT-Responses / Claude 全都保留。
+
+**改动①在服务端开不开 `--reasoning-parser` 两种情况下都正确**(开了→从 `reasoning_content` 取;
+没开→`<think>` 本来就在 `content` 里,原样保留;`reasoning` 为空→不塞空块)。四种情况已 mock 实测。
+
+**实测两步回放**,历史 assistant 轮里三样都在:
+
+```
+'<think>\nstep-1 reasoning here\n</think>\n\nAction: click\n<tool_call>{"name":"computer_use","a…'
+```
+
+### 0.5.4 磁盘:qcow2 的两条血缘(2026-08-30 清理)
+
+`docker_vm_data/` 下曾有两条独立的镜像线,不是重复拷贝:
+
+```
+线一(旧,非官方 pin): osworld-v2-ubuntu-x86.qcow2.zip  sha f53ac2da…  13.0G
+  └─ [已删] osworld-v2-ubuntu-x86.qcow2                             25.4G
+       └─ osworld-v2-ubuntu-x86-official-fonts.qcow2                25.4G  ← manager.py 的默认镜像
+线二(官方 release pin): releases/…/osworld-v2-ubuntu-x86.qcow2.zip  sha eb737ae7…  13.2G  ← 与 0808 manifest 一致
+  └─ [已删] releases/…/osworld-v2-ubuntu-x86.qcow2                  25.5G
+       └─ …-v2026.06.24-official-fonts.qcow2                        25.6G  ← 30 次实跑全用它
+```
+
+- 两个中间 base(合计 51G)已删,可从各自的 zip 解回,**没有任何运行配置引用它们**(核对了全部 `args.json`)
+- `official-fonts.qcow2`(线一那个)**不能随便删** —— 它是 `manager.py` 的默认镜像,
+  有两个跑批脚本没显式传 `--path_to_vm`,删了直接 `FileNotFoundError`。要删得先设 `OSWORLD_DOCKER_UBUNTU_VM_PATH`
 
 ---
 
@@ -195,7 +322,10 @@ HOST_SUFFIX = os.getenv('WEBSITE_HOST_SUFFIX')     # 模块级，没有就 raise
 def build_website_url(path): return f"{scheme}{path}.{HOST_SUFFIX}"
 ```
 
-- 官方托管：`export WEBSITE_HOST_SUFFIX="web.hku.icu"`
+- 官方托管:**后缀随 release 变**,两套是各自独立的部署(IP 不同,都还活着):
+  - `osworld-v2-2026.06.24` → `export WEBSITE_HOST_SUFFIX="web.hku.icu"`(实测 `insurance-claim.web.hku.icu` HTTP 200,`18.209.93.223`)
+  - `osworld-v2-2026.08.08` → `export WEBSITE_HOST_SUFFIX="site.hku.icu"`(实测 HTTP 200,`52.204.8.195`)
+  - 注意 `gitlab.*` 两边都不通 —— GitLab 是要自建的服务(§8),不属于团队托管的模拟站
 - 自建：按 `Task-Web/OSWorld-web` 部署，把 suffix 指向自己的域名
 
 `_select_website_scheme()` 会先探 `https://`，失败退 `http://`，结果按 host 缓存（`lru_cache`）。
@@ -385,8 +515,18 @@ asset("task_001/gold_calendar.ics")   # → <base>/task_001/gold_calendar.ics
 ```
 
 `OSWORLD_FILE_BASE_URL` 可以换成：`http(s)://` 镜像、`file://` URI、或纯本地目录路径。
-`_download_setup` 和 `resolve_local_source()` 都支持本地路径，所以**指向本地目录就能完全离线跑素材**
-（本项目 WSL 上已有 `/mnt/d/research/osworld-v2-assets-local`）。
+`_download_setup` 和 `resolve_local_source()` 都支持本地路径，所以**指向本地目录就能完全离线跑素材**。
+
+> ⚠️ **0808 起这不再是可选项。** README 明确写了公开的 `xlangai/osworld_v2_assets` **不是完整素材源**
+> ——它只含浏览器必须匿名访问的那部分。完整素材在**另一个 gated 数据集** `xlangai/osworld_v2_assets_gated`
+> (与 `osworld_v2_tasks` 是两个独立的授权,要分别 accept;本项目账号 `arknights20xx` 两个都已通过)。
+> 下载脚本 `scripts/tools/download_osworld_v2_assets.py` 是 0808 新增的,0624 的 checkout 里没有。
+>
+> 配套的代码改动(0808):`resolve_local_source()` 对纯路径多做一次 percent-decode 回退,让 URL 编码过的
+> 素材文件名也能命中本地快照;`setup.py` 改成本地路径找不到时**直接 FileNotFoundError**,不再掉头联网下载。
+
+本项目 WSL 上现有的本地快照是 **0624 版**:`/mnt/d/research/osworld-v2-assets-local/v2026.06.24-7bfb2d8-be2ffbb`(5.9 G)。
+跑 0808 要另下一份。
 
 ### 6.2 分布
 

@@ -8,7 +8,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=400G
-#SBATCH --time=20:00:00
+#SBATCH --time=1-00:00:00
 #SBATCH --output=/gpfs/scrubbed/jy050706/sft/mixC_9b_%j.out
 # 臂 C —— 只用 v16(554 条判官准入),不掺任何 v11
 #

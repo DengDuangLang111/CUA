@@ -48,7 +48,8 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && <命令>"'
 | **ostg**(taskgen) | WSL `/mnt/d/research/ostg-v11.1/ostg`(.git 在 ostg/ 子目录) | 生成流水线代码;**工作分支 v11.1,每次流程级提交后 `git fetch . v11.1:main`** |
 | ostg 各时代 worktree | os-simple-taskgen*(v6/v8.4)、ostg-v9/-v10/-v11 | 历史标记,别从它们跑东西;task 产物在 `os-simple-taskgen-v8/out/runs/` |
 | **CUA**(本项目文档+dashboard) | Mac `CUA/`,github DengDuangLang111/CUA,push=Vercel 生产 | **所有文档定都于此**;含 ostg 代码副本(canonical 代码在 WSL) |
-| OSWorld-V2 | Mac | 另一个 benchmark,与 OSWorld 无关 |
+| OSWorld-V2(0624+魔改) | WSL `/mnt/d/research/OSWorld-V2` | 另一个 benchmark,与 OSWorld 无关。**别拿它跑新实验**:工作区 999 个"已修改"里 993 个是 CRLF 噪音,真实魔改只有 6 个文件 |
+| **OSWorld-V2-0808** | WSL worktree,分支 `v2-0808-qwen` | **跑 V2 用这个**。魔改已移植且 diff 干净(可直接当披露清单)。版本口径/分叉明细/起跑条件 → `CUA/reference/OSWORLD_V2_RUNTIME_REQUIREMENTS.md` §0.5 |
 
 数据与权重不进任何仓库:SFT 数据+checkpoint 在 Tillicum `/gpfs/scrubbed/jy050706/sft/`,
 轨迹在 WSL `results_generated/`。

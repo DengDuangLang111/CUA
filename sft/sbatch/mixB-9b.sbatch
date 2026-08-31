@@ -8,7 +8,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=400G
-#SBATCH --time=20:00:00
+#SBATCH --time=1-00:00:00
 #SBATCH --output=/gpfs/scrubbed/jy050706/sft/mixB_9b_%j.out
 # 臂 B —— v16 新数据 + v11 新 rollout(08-29 i10x 重跑)
 #

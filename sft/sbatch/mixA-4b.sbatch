@@ -8,7 +8,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=400G
-#SBATCH --time=12:00:00
+#SBATCH --time=1-00:00:00
 #SBATCH --output=/gpfs/scrubbed/jy050706/sft/mixA_4b_%j.out
 # 臂 A —— v16 新数据 + v11 旧语料(已训过、效果已知的那 360 条)
 #
