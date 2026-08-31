@@ -116,7 +116,7 @@ srun --ntasks=4 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
     --num_train_epochs 3 --per_device_train_batch_size 1 \
     --learning_rate 3e-6 --warmup_ratio 0.1 \
     --weight_decay 0.0 --adam_beta2 0.999 \
-    --max_length 65536 --gradient_checkpointing true \
+    --max_length 70000 --gradient_checkpointing true \
     --save_strategy steps --save_steps $SAVE_STEPS --save_total_limit 12 \
     --logging_steps 2 \
     --report_to $REPORT --run_name $RUN_NAME \
