@@ -274,6 +274,18 @@ EVAL50_ARMS = {
     # Same 6474 samples as nocap, but a 10-screenshot history window held flat
     # by fold_size=1 instead of 20. Peak memory 136.7 -> 83.74 GiB, and that
     # headroom is what makes a3 and the 9B affordable at all.
+    "mixc9b":    ("mixC 9B e3.00 · v16 ONLY · stock (no-split)", "sft",
+                  "arm C: v16-main + v16-pilot ONLY, 554 traj / 13,372 samples --"
+                  " NO v11 at all. The no-legacy-data control for arms A and B."
+                  " Qwen3.5-9B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1,"
+                  " checkpoint-627. 9B -- READ AGAINST THE 9B BASE, never"
+                  " against the 4B arms"),
+    "mixb4b50b": ("mixB 4B e3.00 · HELD-OUT 50 · stock (no-split)", "sft",
+                  "the SAME weights as mixb4b, on the OTHER half of the frozen"
+                  " 100 (verified_eval50b_nonproxy.json). Held out since"
+                  " 2026-08-15, never run by any model and never looked at by"
+                  " any decision -- the pre-registered out-of-sample read."
+                  " Same window (img10/fold1), same serve, same sampling."),
     "mixb4b":    ("mixB 4B e3.00 · v16+v11new · stock (no-split)", "sft",
                   "arm B: v16 judge-admitted 554 + v11 new rollout 312 = 866 traj"
                   " / 18,576 samples. Qwen3.5-4B full FT, lr 3e-6, gb 64, 3 ep,"
@@ -499,6 +511,7 @@ REST261_META = EVAL50_META.replace("verified_eval50_nonproxy",
 # added up by hand. Keyed child -> parent; the parent is the run on the SEEN
 # half (the untrained base's seen-half run is "basekeep", not "base").
 HELDOUT_PAIRS = {"nocap50b": "nocap", "base50b": "basekeep", "t3850b": "t38",
+                 "mixb4b50b": "mixb4b",
                  "kGh": "kG", "r5lorah": "r5lora"}
 
 # A model that ALSO ran the remaining 261 gets a fourth synthetic row over the
@@ -515,6 +528,7 @@ REST_TRIPLES = {"base261": ("basekeep", "base50b"),
 
 # Arms not scored on the default (seen) panel.
 ARM_PANEL = {"nocap50b": "heldout", "base50b": "heldout", "t3850b": "heldout",
+             "mixb4b50b": "heldout",
              "np1e6": "all100", "nocapnp238": "all100", "nocapnp": "all100",
              "kGh": "heldout", "r5lorah": "heldout", "base9b": "all100",
              "nocapms100": "all100",
