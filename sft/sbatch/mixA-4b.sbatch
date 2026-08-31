@@ -26,18 +26,18 @@ umask 077
 set -x
 B=/gpfs/scrubbed/jy050706/sft
 
-# ---- 语料(按 ship 时的目录名填;每份都要有 train_swift.jsonl) --------------
+# ---- 语料(按 ship 时的目录名填;每份都要有 train_swift_abs.jsonl(图片是 /gpfs 绝对路径)) --------------
 DS_V16MAIN=$B/data/v16-main
 DS_V16PILOT=$B/data/v16-pilot
-DS_V11OLD100=$B/data/v11old-100
-DS_V11OLD500=$B/data/v11old-500
+DS_V11OLD100=$B/data/q38-Bhqs2t-r5nocapimg10-v11100
+DS_V11OLD500=$B/data/q38-Bhqs2t-r5nocapimg10-v11500
 DSLIST="$DS_V16MAIN $DS_V16PILOT $DS_V11OLD100 $DS_V11OLD500"
 
 # ---- 防撞自检:同一 OUT 里不许混进别的语料训出的产物 -----------------------
 OUT=$B/out/mixA-4b
 for _a in "$OUT"/*/args.json; do
   [ -e "$_a" ] || continue
-  grep -q "v11old-500" "$_a" || {
+  grep -q "r5nocapimg10-v11500" "$_a" || {
     echo "FATAL: $OUT 里已有别的语料训出的产物: $_a" >&2
     echo "       换 OUT,或把旧产物移走。拒绝启动以免口径混淆。" >&2
     exit 1; }
@@ -58,7 +58,7 @@ for DS in $DSLIST; do
 python - "$DS" <<'PY' || { echo "PREFLIGHT FAILED — aborting"; exit 1; }
 import json, os, sys
 ds = sys.argv[1]; bad = tot = 0
-for line in open(os.path.join(ds, "train_swift.jsonl"), encoding="utf-8"):
+for line in open(os.path.join(ds, "train_swift_abs.jsonl"), encoding="utf-8"):
     if not line.strip(): continue
     for p in json.loads(line).get("images", []):
         tot += 1
@@ -76,7 +76,7 @@ eval "$(python - $DSLIST <<'PY'
 import sys
 n = 0
 for ds in sys.argv[1:]:
-    n += sum(1 for line in open(ds + "/train_swift.jsonl", encoding="utf-8") if line.strip())
+    n += sum(1 for line in open(ds + "/train_swift_abs.jsonl", encoding="utf-8") if line.strip())
 GB = 64                      # 8 rank x accum 8
 spe = -(-n // GB)            # steps per epoch, 向上取整
 for d in (3, 2, 1):          # 尽量一个 epoch 存 3 次,退而求其次
@@ -104,7 +104,7 @@ echo ">>> multinode: nodes=$SLURM_JOB_NODELIST master=$MASTER_ADDR port=$MASTER_
 srun --ntasks=4 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
   export NODE_RANK=$SLURM_NODEID
   echo ">>> node $SLURM_NODEID ($(hostname)) launching NPROC=$NPROC_PER_NODE"
-  DS_ARGS=""; for d in $DSLIST; do DS_ARGS="$DS_ARGS $d/train_swift.jsonl"; done
+  DS_ARGS=""; for d in $DSLIST; do DS_ARGS="$DS_ARGS $d/train_swift_abs.jsonl"; done
   swift sft \
     --model $B/models/Qwen3.5-4B \
     --dataset $DS_ARGS \
