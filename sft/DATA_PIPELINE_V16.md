@@ -20,6 +20,7 @@ v16:  rollout → traj → strongjudge(判官,边跑边判)→ curate16(一张�
                                           → build → verify → corpusaudit
                                           → to_swift → ship → preflight
                      ↑ 少了 arb 和 terminalfix,原因见 §2、§3
+                       另:v11 的 stepaudit 与五张名单也不再需要 —— curate16 只出一张
 ```
 
 | 层 | v11 | v16 | 说明 |
@@ -29,7 +30,7 @@ v16:  rollout → traj → strongjudge(判官,边跑边判)→ curate16(一张�
 | ③ 判官 | `trajaudit` | `strongjudge` + `tools_judge_loop.sh` | **边跑边判**,见 §1 |
 | ④ 仲裁 `arb` | 需要 | **不适用** | 没有 checker 就没有分歧可裁,见 §2 |
 | ⑤ 筛选 | `curate`(五张名单) | **`curate16`**(一张 admitted) | 口径全新,见 §4 |
-| ⑥ `terminalfix` | 必需 | **可跳过** | 病根消失了,见 §3 |
+| ⑥ `terminalfix` | 必需 | **整层删除** | 病根消失了,见 §3 |
 | ⑦-⑪ build/verify/corpusaudit/to_swift/preflight | 同 | 同 | 未改 |
 
 ---
@@ -79,7 +80,7 @@ v11 体系里判官错了还有 checker 兜;现在没有。
 
 ---
 
-## 3 为什么可以跳过 terminalfix(实测,不是省事)
+## 3 为什么删掉 terminalfix(实测,不是省事)
 
 **terminalfix 存在的原因**(`build.py` 注释记的实测):v11 语料里
 **72% 的轨迹靠"不调工具"结束**,harness 把它算作 DONE ——
@@ -97,21 +98,23 @@ v11 体系里判官错了还有 checker 兜;现在没有。
 ① 教师带 `--enable_thinking --preserve_thinking`,本就倾向显式宣告;
 ② **收录规则要求每条 requirement 都 done** —— "跑到一半没声了"的轨迹进不来。
 
-**处置**:跳过 terminalfix,用 `build.py --exclude` 加一条硬过滤代替:
+**处置(2026-08-31 用户裁定):整层删除,不加替代过滤。**
 
-```
-排除末步非显式 DONE/FAIL 的     25 条(4.3%)
-排除撞 50 步上限的              29 条(5.0%)
-```
+`build.py` 不传 `--terminal-rewrite` 即为不启用,**不需要改代码**。
 
-最多损失约 9%,换掉一整层(判官重写结尾 + md5 画面硬门)。
-**保留 terminalfix 的唯一理由是救回那 25 条,不值得为此维护一层。**
+代价说清楚:收录集里 22 条(3.8%)末步是普通动作、3 条(0.5%)以 WAIT 结尾,
+这 25 条会教模型"靠沉默结束";29 条(5.0%)撞 50 步上限,结尾是被截断的。
+**合计约 9% 的样本结尾不理想** —— 用户判断这个代价小于维护一整层的成本,
+而且 95.7% 的显式 DONE 会主导训练信号。
 
 ⚠ **这个结论绑在"结尾形态"这个实测上,不是永久豁免。**
-换教师、换采样配置、换 max_steps 之后,**必须重量一次隐式结束占比**;
-超过 10% 就把 terminalfix 加回来。
+换教师、换采样配置、换 `max_steps` 之后,**必须重量一次隐式结束占比**;
+超过 10% 就把 terminalfix 加回来。量法:读每条 `traj.jsonl` 的末行,
+看 action 里有没有 `DONE`/`FAIL`。
 
----
+⚠ 另外要盯一个下游指标:**SFT 后学生在 eval-50 上的显式终止率**。
+v11 那次是 100% → 0%,是靠这个指标发现的。这轮跳过 terminalfix 之后,
+**第一次 eval 就要看这个数**,掉了就说明 9% 也嫌多。
 
 ## 4 收录口径(`curate16`,2026-08-31 用户裁定)
 
