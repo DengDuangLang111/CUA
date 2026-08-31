@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=vt-b9b
+#SBATCH --job-name=vt-c9b
 #SBATCH --account=video
 #SBATCH --partition=gpu-h200
 #SBATCH --qos=normal
@@ -9,10 +9,10 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=400G
 #SBATCH --time=20:00:00
-#SBATCH --output=/gpfs/scrubbed/jy050706/sft/mixB_9b_%j.out
-# 臂 B —— v16 新数据 + v11 新 rollout(08-29 i10x 重跑)
+#SBATCH --output=/gpfs/scrubbed/jy050706/sft/mixC_9b_%j.out
+# 臂 C —— 只用 v16(554 条判官准入),不掺任何 v11
 #
-# 语料 = v16 判官准入 554 条 + v11 新批(i10x 重跑) 312 条 = 866 条轨迹
+# 语料 = v16 判官准入 554 条 = 13,372 样本(steps/epoch 209,总步 627)
 # 图窗 img10 / fold_size 1 —— 这是**建语料时**定死的(build.py --image-max 10
 # --fold-size 1),sbatch 里没有对应参数,只有 IMAGE_MAX_TOKEN_NUM=2048 是训练侧。
 #
@@ -23,7 +23,7 @@
 # 集群里同时满足的节点常常只有一个,反而排不上队 —— 2026-08-30 实测排在
 # Resources/Priority 上不动。4x2 只要每节点 2 张空即可,秒上。
 #
-# 两臂的唯一变量是 v11 用哪一批 rollout;v16 那 554 条两臂共用。
+# 与臂 A/B 的唯一差别是不掺 v11 —— 用来看 v16 单独能到什么水平。
 umask 077
 set -x
 B=/gpfs/scrubbed/jy050706/sft
@@ -31,15 +31,13 @@ B=/gpfs/scrubbed/jy050706/sft
 # ---- 语料(按 ship 时的目录名填;每份都要有 train_swift_abs.jsonl(图片是 /gpfs 绝对路径)) --------------
 DS_V16MAIN=$B/data/v16-main
 DS_V16PILOT=$B/data/v16-pilot
-DS_V11NEW500=$B/data/v11new-500
-DS_V11NEWALL=$B/data/v11new-all
-DSLIST="$DS_V16MAIN $DS_V16PILOT $DS_V11NEW500 $DS_V11NEWALL"
+DSLIST="$DS_V16MAIN $DS_V16PILOT"
 
 # ---- 防撞自检:同一 OUT 里不许混进别的语料训出的产物 -----------------------
-OUT=$B/out/mixB-9b
+OUT=$B/out/mixC-9b
 for _a in "$OUT"/*/args.json; do
   [ -e "$_a" ] || continue
-  grep -q "v11new-500" "$_a" || {
+  grep -q "v16-pilot" "$_a" || {
     echo "FATAL: $OUT 里已有别的语料训出的产物: $_a" >&2
     echo "       换 OUT,或把旧产物移走。拒绝启动以免口径混淆。" >&2
     exit 1; }
@@ -94,10 +92,10 @@ PY
 echo ">>> 样本 $SAMPLES | steps/epoch $STEPS_PER_EPOCH | save_steps $SAVE_STEPS | 总步 $TOTAL_STEPS"
 [ -n "$SAVE_STEPS" ] || { echo "FATAL: 步数算术失败"; exit 1; }
 
-REPORT=none; RUN_NAME=mixB-9b-${SLURM_JOB_ID}
+REPORT=none; RUN_NAME=mixC-9b-${SLURM_JOB_ID}
 if [ -f "$B/wandb.env" ]; then set +x; source "$B/wandb.env"; set -x
   export WANDB_PROJECT="${WANDB_PROJECT:-cua-sft}"; REPORT=wandb; fi
-export WANDB_NOTES="臂 B —— v16 新数据 + v11 新 rollout(08-29 i10x 重跑)。img10/fold1,4x2/accum8,global batch 64,3ep。"
+export WANDB_NOTES="臂 C —— 只用 v16 554 条,不掺 v11。img10/fold1,4x2/accum8,global batch 64,3ep。"
 export B DSLIST REPORT RUN_NAME OUT SAVE_STEPS
 export MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n1)
 export MASTER_PORT=$((20000 + SLURM_JOB_ID % 9000))   # 写死端口在共享节点必撞
@@ -124,4 +122,4 @@ srun --ntasks=4 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
     --report_to $REPORT --run_name $RUN_NAME \
     --output_dir $OUT
 '
-echo "EXIT_mixB_9b $?"
+echo "EXIT_mixC_9b $?"
