@@ -187,6 +187,35 @@ git worktree add /mnt/d/research/OSWorld-V2-0808 v2026.08.08
 '<think>\nstep-1 reasoning here\n</think>\n\nAction: click\n<tool_call>{"name":"computer_use","a…'
 ```
 
+### 0.5.5 起跑配置:`OSWorld-V2-0808/.env`(2026-08-31 落定,12 项自检全过)
+
+```bash
+WEBSITE_HOST_SUFFIX=site.hku.icu
+OSWORLD_FILE_BASE_URL=/mnt/d/research/OSWorld-V2-0808/cache/osworld_v2_assets
+OSWORLD_DOCKER_UBUNTU_VM_PATH=/mnt/d/research/OSWorld-V2/docker_vm_data/releases/v2026.06.24/osworld-v2-ubuntu-x86-v2026.06.24-official-fonts.qcow2
+OSWORLD_CLIENT_PASSWORD=osworld-public-evaluation
+VLLM_API_KEY=EMPTY
+```
+
+三条需要解释的:
+
+- **镜像指向老 checkout 那份,不必拷 26G** —— `providers/docker/provider.py:172` 是 `"mode": "ro"`,
+  base qcow2 只读挂载,多 VM 共享同一份文件安全。
+- **`OPENAI_BASE_URL` / `OPENAI_API_KEY` 故意不设。** 照搬 V1 的那份会指向 `127.0.0.1:18001`,
+  于是 **19 个 LLM 判分任务会用被测模型给自己打分**(18% 的 benchmark)。宁可缺 key 显式报错,
+  也不要静默自判。判分/用户模拟的模型是**未决项**,默认走 OpenAI `gpt-4o`
+  (`evaluators/model_client.py:326`、`user_simulator.py:164`),要换端点用
+  `OSWORLD_EVAL_MODEL_*` / `OSWORLD_USER_SIM_*` 两组变量。
+- **`OSWORLD_FILE_CACHE_BASE_URL` 不用设** —— 魔改已把它固定到 commit `711e0811…`。
+
+**自检脚本覆盖的 12 项**(全过):环境变量 6 项 · `website.py` import 并拼出
+`https://insurance-claim.site.hku.icu` · 素材 `asset()` 命中本地(不联网) · qcow2 存在且
+`manager.get_vm_path()` 选中的就是它 · 108 个 `task_*.py` · `test_v2.json` · 站点 HTTP 200。
+
+**仍未验证**:客机里有没有 `pyperclip`(非 ASCII 输入走剪贴板那条魔改依赖它),要开 VM 才能查。
+
+---
+
 ### 0.5.4 磁盘:qcow2 的两条血缘(2026-08-30 清理)
 
 `docker_vm_data/` 下曾有两条独立的镜像线,不是重复拷贝:
