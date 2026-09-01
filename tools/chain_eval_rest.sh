@@ -42,8 +42,12 @@ mixa9b|8045|18045|g3082|qwen35-9b-sft|verified_eval100_nonproxy.json|-|v16-main 
 mixa4b|8044|18044|g3087|qwen35-4b-sft|verified_eval100_nonproxy.json|-|v16-main + v16-pilot + q38-Bhqs2t-r5nocapimg10-v11100/-v11500 (914 traj / 19,846 samples)|Qwen3.5-4B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1
 "
 
-for row in $ARMS; do
+# 必须按**行**读。`for row in $ARMS` 是按任意空白分词的,而表格里的语料说明
+# 含空格(v16-main + v16-pilot ...),于是第一行之后每个空格碎片都被当成一行,
+# 臂名变成 "+" —— 2026-09-01 01:48 实测到这个症状。
+while IFS= read -r row; do
   [ -z "$row" ] && continue
+  case "$row" in *"|"*) : ;; *) continue;; esac
   ARM=$(echo  $row | cut -d'|' -f1); RPORT=$(echo $row | cut -d'|' -f2)
   PORT=$(echo $row | cut -d'|' -f3); NODE=$(echo  $row | cut -d'|' -f4)
   GRP=$(echo  $row | cut -d'|' -f5); METAF=$(echo $row | cut -d'|' -f6)
@@ -139,5 +143,7 @@ PY
   done
   N=$(find "$R" -name result.txt 2>/dev/null | wc -l)
   echo "[$(date '+%F %T')] === $ARM RESULT $N/$T: $(find "$R" -name result.txt -exec cat {} \; 2>/dev/null | sort | uniq -c | tr '\n' ' ')"
-done
-echo "=========== [$(date '+%F %T')] eval 链结束 ==========="
+done <<EOF
+$ARMS
+EOF
+echo "=========== $(date '+%F %T')] eval 链结束 ==========="

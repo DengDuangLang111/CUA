@@ -48,8 +48,12 @@ lr1e5b999|v16 + v11new (866 traj / 18,576 samples)|Qwen3.5-9B full FT, lr 1e-5, 
 up(){ [ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $KEY" \
         http://127.0.0.1:$PORT/v1/models)" = "200" ]; }
 
-for row in $ARMS; do
+# 必须按**行**读。`for row in $ARMS` 是按任意空白分词的,而表格里的语料说明
+# 含空格(v16-main + v16-pilot ...),于是第一行之后每个空格碎片都被当成一行,
+# 臂名变成 "+" —— 2026-09-01 01:48 实测到这个症状。
+while IFS= read -r row; do
   [ -z "$row" ] && continue
+  case "$row" in *"|"*) : ;; *) continue;; esac
   ARM=$(echo $row|cut -d'|' -f1); CORP=$(echo $row|cut -d'|' -f2); RECIPE=$(echo $row|cut -d'|' -f3)
   MN=$ARM-stock
   echo "--- [$(date '+%F %T')] $ARM ---"
@@ -147,5 +151,7 @@ PY
   done
   N=$(find "$R" -name result.txt 2>/dev/null | wc -l)
   echo "[$(date '+%F %T')] === $ARM RESULT $N/$T: $(find "$R" -name result.txt -exec cat {} \; 2>/dev/null | sort | uniq -c | tr '\n' ' ')"
-done
-echo "=========== [$(date '+%F %T')] lr 变体 eval 链结束 ==========="
+done <<EOF
+$ARMS
+EOF
+echo "=========== $(date '+%F %T')] lr 变体 eval 链结束 ==========="
