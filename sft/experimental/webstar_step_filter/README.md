@@ -370,9 +370,72 @@ steps scored:
 paper threshold: drop 6, keep 2
 ```
 
-This proves the complete official prompt can run on the local desktop data. It
-does not establish a new overall retention rate; the old 307-row run used a
-different prompt hash.
+This proves the complete official prompt can run on the local desktop data;
+the full rerun below establishes its local single-pass retention rate. The old
+307-row result used a different prompt hash and remains superseded.
+
+The full local 307-row pilot was subsequently rerun with this exact official
+adapter and Luna. The run stopped once at 193 completed rows because six PPAPI
+connections remained in a long timeout; the append-only manifest was resumed
+with the same pass id and completed the remaining 114 rows without duplication.
+
+Integrity checks:
+
+```text
+rows: 307
+unique step keys: 307
+prompt profile: official-revised-adapted-d5c2a34 (307/307)
+prompt sha256: 3cd1d4350f1f6b59f69f0b9fc44ad220b8b72beb34ec711eae5293d40768ee69 (307/307)
+grader model: gpt-5.6-luna (307/307)
+API/image/path/score failures: 0
+```
+
+Raw official threshold result:
+
+```text
+score > 5:  241 keep
+score <= 5:  66 drop
+single-pass retention: 78.50%
+```
+
+By domain:
+
+```text
+Chrome: 213 / 270 keep = 78.89%
+GIMP:    28 /  37 keep = 75.68%
+```
+
+Score distribution:
+
+```text
+0: 0   1: 13   2: 10   3: 7   4: 14   5: 22
+6: 47  7: 35   8: 123  9: 30  10: 6
+```
+
+Applying the terminal safety policy to the same single pass gives:
+
+```text
+keep:    239 / 307 = 77.85%
+drop:     66 / 307 = 21.50%
+review:    2 / 307 =  0.65%
+```
+
+All twelve terminal rows scored above 5. Ten explicit terminate/DONE targets
+are auto-kept; the two implicit endings become review. Three of the fifteen
+source trajectories have no terminal target row at all, an existing corpus
+defect outside step scoring. Per-trajectory raw retention ranges from 58.5% to
+100%, with a median of 77.8%.
+
+Temporary artifact hashes:
+
+```text
+scores:    ed2ba8570a595ce3bd057f4e626739460fa6e9f396bf106f7b1d2761fc355aab
+decisions: 86546fcdfb4d27188b3cc6faf62679df6f4153b64c1564edd590e69ab27bb818
+```
+
+This 78.50% replaces the superseded 80.46% only for this old, imbalanced local
+pilot. It is still a single-pass engineering estimate, not the expected MixB
+retention rate or the final two-pass keep rate.
 
 ### Historical paper-four-stage prompt v2
 
