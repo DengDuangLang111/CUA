@@ -1,370 +1,200 @@
-# WebSTAR-style step-filtered SFT: experiment protocol
+# WebSTAR filter v1 for CUA SFT
 
-**Protocol version:** `webstar-step-filter-v1.0-draft`
+**Policy:** `webstar-filter-v1`
 
-**Status:** `DESIGN REVIEW` — documentation only; no production code, source
-dataset, shipped dataset, checkpoint, or sbatch has been changed.
+**Status:** `IMPLEMENTED / CALIBRATION PENDING`
 
-**Git branch:** `exp/webstar-step-filter-v1`
+**Branch:** `exp/webstar-step-filter-v1`
 
-**Base commit:** `5d1cfe25bcf2ac26f29f0a332eeda7b054ab562f`
+**Base corpus:** MixB, 866 trajectories and 18,576 current target rows
 
-## 1. The question this experiment answers
+## Scope
 
-The current MixB corpus admits successful trajectories, expands each retained
-trajectory into one target row per step-prefix, and trains the final assistant
-turn of every retained row. The experiment asks one narrow question:
-
-> Does preventing low-quality intermediate steps from contributing SFT loss
-> improve closed-loop CUA performance, while keeping their actions and
-> observations available in later prefixes as recovery context?
-
-This is a step-quality experiment. It is **not** a learning-rate, optimizer,
-batch-size, epoch, trajectory-length-normalization, prefix-cap, image-window,
-thought-length, or teacher-mixture experiment.
-
-The direct literature precedent is WebSTAR (ACL 2026): it retains complete
-trajectory context but computes SFT loss only on high-scoring steps. WebSTAR
-reported 39.6 average performance from 46K correct steps versus 29.9 from 97K
-all steps inside successful trajectories. We reproduce only that selective
-supervision principle. We do not claim to reproduce its data generator,
-post-hoc thought augmentation, StepRM, or web-only benchmark.
-
-Primary source:
-<https://aclanthology.org/2026.acl-long.21/>
-
-## 2. Frozen baseline
-
-The source corpus is the exact current MixB data used by `mixB-4b.sbatch` and
-`mixB-9b.sbatch`:
-
-| Source family | Trajectories | Current target rows |
-|---|---:|---:|
-| v16 (`v16-main` + `v16-pilot`) | 554 | 13,372 |
-| v11 new (`v11new-500` + `v11new-all`) | 312 | 5,204 |
-| **MixB total** | **866** | **18,576** |
-
-These counts are preflight invariants, not numbers to approximate. A build
-must abort if the source snapshot does not reproduce them.
-
-For the first model experiment, the recommended baseline is the existing 4B
-MixB recipe because it is cheaper and is the model whose weak closed-loop
-result motivated this investigation. Freeze the following against the actual
-baseline `args.json`, not merely the current sbatch text:
-
-- base model revision;
-- `global_batch=64`;
-- `learning_rate=3e-6`;
-- `num_train_epochs=3`;
-- `weight_decay=0.0`;
-- `adam_beta2=0.999`;
-- warmup, precision, DeepSpeed, seed, max length, image-token budget,
-  `last_round` loss mask, and trainer/ms-swift revisions;
-- the existing img10/fold1 message representation.
-
-The existing 4B run can be used as an early-screen baseline only if its
-`args.json`, code commit, source hashes, and evaluation configuration match.
-Otherwise rerun the all-step baseline before making a causal claim.
-
-## 3. Representation: keep context, suppress only the target
-
-The corpus already stores one row for the prefix ending at step `k`, with loss
-on that row's final assistant response. Therefore the WebSTAR behavior maps to
-the current representation without rewriting conversation history:
+This arm tests one variable: whether a current SFT target is retained according
+to a WebSTAR-style step score.
 
 ```text
-trajectory: step1 -> step2_bad -> step3_recovery -> step4_DONE
-
-drop step2_bad as a target row
-keep step3_recovery as a target row
-step3_recovery's prefix still contains step2_bad in its history
+score > 5  -> keep the current target row
+score <= 5 -> drop the current target row
 ```
 
-The implementation must filter a **copy** of the current rows. It must not
-remove the bad step from later prefixes, regenerate images, rewrite teacher
-responses, or modify `sft/build.py` in the first experiment.
+It preserves the original teacher `<think>`, target response, later history,
+images, model, optimizer, learning rate, batch, epoch count, and prefix
+construction. It does not use thought augmentation, trajectory normalization,
+exposure matching, or post-action grading.
 
-This gives the desired distinction:
+Dropping step 2 as a target does not remove it from step 3's context:
 
-- bad action as a label: suppressed;
-- bad action as part of the state that a recovery step must handle: retained.
+```text
+step1 -> step2_bad -> step3_recovery -> step4_DONE
+          no loss       keep; history still contains step2_bad
+```
 
-## 4. Two-stage, versioned pipeline
+## Paper and code provenance
 
-### Stage A — grade raw steps into an immutable manifest
+- Paper: <https://aclanthology.org/2026.acl-long.21/>
+- Official repository: <https://github.com/yifei-he/WebSTAR>
+- Pinned reference commit:
+  `d5c2a34cb7ff193a85c144fdd91f48a0e716da86`
+- Relevant reference files:
+  - `step_eval/gpt_prompts.py`
+  - `step_eval/data_visualization_full.py`
+  - `step_eval/generate_thought_and_process_no_ss.py`
 
-Grade the target steps corresponding to the 18,576 current MixB rows. The
-grader must use the raw trajectory because the current target row contains the
-pre-action observation but not the post-action evidence.
+The pinned repository did not contain `LICENSE`, `COPYING`, or `NOTICE`.
+Therefore this directory is an attributed clean-room adaptation of the
+published procedure, not a verbatim vendor copy. The prompt structure, visual
+interface, o4-mini grader, 0-10 score, and `score > 5` threshold follow the
+reference. Local I/O, action parsing, manifest handling, and failure gates are
+new code.
 
-For each step, provide:
+## What is faithful to WebSTAR
 
-1. task instruction;
-2. stable identity: source build, run, domain, task id, and step number;
-3. recent action history;
-4. screenshot immediately before the action;
-5. the teacher's current reasoning and executed action;
-6. screenshot immediately after the action;
-7. whether this is the built trajectory's final step.
+The grader receives:
 
-The post-action screenshot is privileged curation evidence, not a policy input.
-It is allowed here because this is offline data selection.
+1. the user task;
+2. recent executed actions;
+3. up to three chronological **pre-action** screenshots;
+4. action annotations on those screenshots;
+5. a 200x200 crop around the current coordinate target when available;
+6. the current proposed action;
+7. an instruction to compare viable alternatives and assign expected value
+   from 0 through 10.
 
-The teacher reasoning is shown only so the grader can detect unsupported or
-contradictory claims. Fluent prose is not evidence that an action is correct.
+The current action has not executed in the judge input. The grader does not see
+the post-action screenshot. The original teacher think is excluded from the
+judge input and preserved unchanged in training. This keeps thought
+augmentation out of v1.
 
-### Stage B — filter exact source copies
+## Necessary desktop adaptations
 
-Join the frozen manifest to each neutral `samples.jsonl` row by the complete
-key below. Copy only accepted rows into a new dataset directory, then perform
-the normal mechanical Swift conversion and absolute-path ship.
+| Official WebSTAR | This arm |
+|---|---|
+| Browser-only actions | Hermes desktop `computer_use` actions |
+| One action per step | One ordered action bundle per model step |
+| Web-only restrictions | Removed |
+| `final_answer` | Explicit `terminate` / DONE |
+| Folder-local result JSON | Collision-proof global step manifest |
+| Loose path/action assumptions | Fail-closed source hashes and identity |
 
-Never join by `task_id` alone. The same task id can exist under multiple runs.
+The unique identity of every target is:
 
 ```text
 (source_build, run, domain, task_id, step)
 ```
 
-Kept Swift rows must be byte-equivalent in messages, target response, image
-order, and channel to the source row after the expected path absolutization.
+Joining on `task_id` alone is forbidden because the same id can occur under
+multiple runs.
 
-## 5. Grading schema
+## Implemented modules
 
-One JSONL row per source target step:
+| File | Responsibility |
+|---|---|
+| `policy_v1.json` | Frozen method and reference provenance |
+| `prompt.py` | Attributed desktop adaptation of the step-value procedure |
+| `common.py` | Stable identity, source indexing, action/terminal parsing, hashes |
+| `visuals.py` | Green action label, red coordinate markers/arrows, 200px crop |
+| `sample_calibration.py` | Deterministic 200-step calibration panel |
+| `grade_steps.py` | Resumable o4-mini grading and append-only raw scores |
+| `decide_steps.py` | Score manifests to keep/drop/review decisions |
+| `audit_report.py` | Before/after source, domain, action, length, terminal, recovery and token tables |
+| `filter_copy.py` | Filtered Swift JSONL copies with existing remote image roots |
+| `test_webstar_filter.py` | Offline unit and integration tests; no API calls |
 
-```json
-{
-  "schema_version": 1,
-  "policy_version": "webstar-step-filter-v1",
-  "source_build": "v16-main",
-  "run": "<run id from sample meta>",
-  "domain": "multi_apps",
-  "task_id": "<uuid>",
-  "step": 12,
-  "n_steps": 27,
-  "scores": {
-    "action_quality": 8,
-    "reasoning_grounded": 2,
-    "outcome_progress": 2
-  },
-  "flags": {
-    "redundant": false,
-    "invalid_or_hallucinated_action": false,
-    "unsupported_state_claim": false,
-    "recovery": true,
-    "terminal": false,
-    "terminal_valid": null
-  },
-  "decision": "keep",
-  "decision_source": "judge",
-  "reason": "The action corrects the prior misclick and advances the task.",
-  "grader_model": "<exact model and revision>",
-  "prompt_sha256": "<sha256>",
-  "source_response_sha256": "<sha256>"
-}
-```
+Production `sft/build.py`, `sft/traj.py`, `sft/to_swift.py`, source datasets,
+and existing sbatches are untouched.
 
-Rubric:
+## Pipeline
 
-- `action_quality` (`0..10`): WebSTAR-style correctness and usefulness of the
-  proposed action; `5` is partially correct or suboptimal.
-- `reasoning_grounded` (`0..2`): whether the target reasoning is supported by
-  the task and visible state. This is separate because the current loss target
-  includes both `<think>` and action tokens.
-- `outcome_progress` (`0..2`): whether post-action evidence shows the intended
-  effect or meaningful progress.
-- `recovery`: the step repairs an earlier error or unproductive state. Recovery
-  is valuable supervision and must not be confused with the bad step that made
-  it necessary.
-- `redundant`: repetition, no-op exploration, or verification with no new
-  information.
-- `unsupported_state_claim`: reasoning asserts a file, app state, citation,
-  save result, or completion state that the available evidence does not support.
+### 1. Index the exact MixB source snapshot
 
-The grader response is append-only. Manual overrides must create a new row or
-separate override manifest with reviewer, timestamp, and reason; never edit a
-judge row in place.
+The neutral `samples.jsonl` files, not the shipped Swift files, are the
+canonical join source because the latter no longer contain run/task/step meta.
+The grader prefers the latest model-visible processed images from each neutral
+sample; raw trajectory screenshots are a strict fallback. This keeps grading
+on the pixels the student context actually contains while retaining raw action
+bundles and collision-proof provenance.
 
-## 6. Proposed v1 decision policy
+Required source invariants:
 
-This policy is a recommendation to review, not yet a frozen implementation.
+| Source family | Trajectories | Rows |
+|---|---:|---:|
+| v16 (`v16-main` + `v16-pilot`) | 554 | 13,372 |
+| v11 new (`v11new-500` + `v11new-all`) | 312 | 5,204 |
+| **Total** | **866** | **18,576** |
 
-### Hard decisions
+### 2. Generate the calibration panel
 
-- hard drop a target that names an undeclared/hallucinated action;
-- hard drop repeated members already identified as pathological loop targets;
-- hard drop a target with a critical unsupported state/completion claim;
-- hard keep a valid explicit final `DONE` target;
-- never synthesize or rewrite a target in this arm.
+`sample_calibration.py` selects 200 unique targets with a recorded seed:
 
-### Judge decision
-
-Recommended automatic keep condition:
-
-```text
-action_quality > 5
-and reasoning_grounded >= 1
-and not invalid_or_hallucinated_action
-and not unsupported_state_claim
-```
-
-`outcome_progress` is evidence and an audit dimension, not a strict gate:
-opening a menu, changing focus, waiting for a real load, and other setup steps
-can be correct without visible task completion in that single frame.
-
-Send to manual review instead of auto-dropping when any of these hold:
-
-- `action_quality == 5`;
-- the step is a recovery;
-- the step is terminal;
-- two deterministic judge passes disagree on keep/drop;
-- screenshots cannot establish whether the action took effect;
-- a file-system or application-internal state is required but unavailable.
-
-### Terminal invariant
-
-The final built step of every included trajectory must:
-
-1. remain present as a target;
-2. contain the explicit executed `DONE` signal expected by the harness;
-3. have a valid terminal decision in the manifest.
-
-If the current 866-trajectory snapshot violates this invariant, dataset build
-must stop and print the exact trajectories. Do not silently delete the terminal
-row, silently delete the whole trajectory, or manufacture a replacement.
-Resolve each exception explicitly before freezing v1.
-
-## 7. Calibration before full grading
-
-Do not spend a full pass on 18,576 steps before testing the rubric.
-
-Build a deterministic 200-step calibration panel, stratified across both v16
-and v11 and across domains:
-
-- 100 uniform random retained targets;
+- 100 balanced random targets;
 - 25 terminal targets;
-- 25 recovery targets;
-- 25 long-reasoning targets;
-- 25 repeated, low-progress, or otherwise risky targets.
+- 25 recovery-like targets;
+- 25 longest-think targets;
+- 25 repeated or otherwise risky targets.
 
-Strata may overlap, but the final panel must contain 200 unique keys. Record
-the sampling seed and source hashes.
+Source builds are round-robin balanced within each stratum when candidates are
+available. The output records source hashes and the reason each key was chosen.
 
-Run the grader twice at temperature zero and manually inspect at least 100
-examples, deliberately including disagreements and every auto-drop category.
-Before freezing the policy, report:
+### 3. Grade calibration twice
 
-- keep/drop agreement between the two judge passes;
-- manual false-keep rate and false-drop rate;
-- confusion by v11/v16, domain, terminal/recovery, and score band;
-- concrete examples for every rejection reason.
+`grade_steps.py` requires `--targets` unless the operator explicitly supplies
+`--all`. This prevents an accidental 18,576-call launch.
 
-False keeps are the more damaging error for this experiment, but excessive
-false drops can erase rare applications and recovery behavior. Thresholds are
-frozen only after this panel; they are not tuned against downstream eval.
+Each raw score row records:
 
-## 8. Coverage and sparsity guardrails
+- the full step key;
+- integer score;
+- full judge analysis;
+- model and pass id;
+- adapted prompt SHA-256;
+- source response SHA-256;
+- raw trajectory path and action bundle;
+- hashes of judge input images.
 
-The user's existing concern is that broader trajectories may make each app's
-operations sparse. Step filtering can worsen that, so every filtered build must
-publish before/after tables for:
+The output is append-only and resumable. Failed calls do not create a completed
+row, so the next invocation retries them. API keys are read from
+`OPENAI_API_KEY` and are never written to output.
 
-- v11 versus v16;
-- domain and application combination;
-- primitive action and normalized semantic operation;
-- task difficulty;
-- terminal targets;
-- recovery targets;
-- trajectory-length decile;
-- target-token and reasoning-token mass.
+### 4. Produce decisions
 
-Required hard invariants:
-
-- all four source builds are represented;
-- every input target has exactly one final decision;
-- no duplicate manifest keys;
-- no unresolved `review` rows at build time;
-- every included trajectory retains its terminal target;
-- every referenced image still exists;
-- no source file is modified;
-- the output report accounts for every one of the 18,576 source rows as
-  `keep`, `drop`, or explicitly resolved exception.
-
-Domain/action retention changes are reported, not silently corrected through
-oversampling. If a rare operation is erased, revise the grading policy or data
-collection; do not hide it by changing sampling in the same arm.
-
-## 9. Experimental arms and fair comparison
-
-### Primary arm
-
-| Field | All-step baseline | Step-filtered v1 |
-|---|---|---|
-| Source trajectories | MixB 866 | Same MixB snapshot |
-| Prefix construction | Current | Unchanged |
-| History context | Current | Unchanged, including rejected past steps |
-| Target supervision | All current rows | Manifest-kept rows only |
-| Length normalization | No | No |
-| Model/optimizer/LR/batch | Frozen | Identical |
-| Epochs | 3 | 3 |
-
-Using the same epoch count is the primary, practical WebSTAR-style comparison.
-It intentionally gives the filtered arm fewer optimizer updates. A performance
-gain despite fewer updates is strong evidence for data quality. A loss is
-ambiguous because it could reflect either useful removed supervision or lower
-training exposure.
-
-### Conditional secondary arm
-
-Only if the primary result is negative or within evaluation noise, add a
-separately named exposure-matched arm that resamples **kept** targets to match
-the baseline's optimizer updates or supervised target-token mass. Do not fold
-this into v1: resampling changes target weights and answers a different
-question.
-
-Trajectory-length normalization and fixed-K prefix sampling remain separate
-future ablations. They must not be combined with step filtering in the first
-run.
-
-## 10. Evaluation contract
-
-Evaluate the 4B step-filtered arm with the exact same harness, template,
-image/history policy, task list, seed policy, max steps, and evaluator used for
-the existing MixB-4B result.
-
-Primary outcome:
-
-- closed-loop task success, overall and by domain, with `multi_apps` called out.
-
-Required behavioral diagnostics:
-
-- explicit valid `DONE` rate;
-- 50-step cap-hit rate;
-- average/median interaction steps on successful tasks;
-- invalid action rate;
-- repeated/no-op action rate;
-- recovery after an observable mistake;
-- hallucinated state/completion claims from a fixed manual failure sample;
-- per-epoch checkpoints, not training loss alone.
-
-Do not select the grading threshold or checkpoint on the same eval-50 used to
-report the result. The 200-step calibration panel selects the data policy;
-held-out closed-loop evaluation measures it.
-
-## 11. Output layout and provenance
-
-Large datasets and screenshots stay outside Git. The output directory must be
-self-describing:
+`decide_steps.py` applies only the paper threshold:
 
 ```text
-mixB-stepfilter-v1/
+all passes score > 5   -> keep
+all passes score <= 5  -> drop
+passes disagree        -> review
+```
+
+Terminal exceptions are stricter:
+
+- a terminal target without an explicit tool action `terminate`/DONE becomes
+  `review`;
+- a terminal target scoring 5 or lower becomes `review`, not a silently
+  missing ending;
+- manual resolution is append-only in a separate override manifest with
+  reviewer and reason.
+
+### 5. Create filtered copies
+
+`filter_copy.py` requires one final decision for every source row and rejects
+all unresolved `review` entries. It converts kept neutral samples through the
+existing mechanical Swift converter and remaps images to the supplied existing
+GPFS source roots. It neither copies nor re-encodes images.
+
+The output directory must be new and empty. Swift files are first written under
+temporary names and atomically renamed only after all source, path, hash, and
+terminal checks pass; a failed build cannot masquerade as a trainable partial
+dataset.
+
+The output contains:
+
+```text
+mixB-webstar-filter-v1/
   DATA_VERSION.json
   SOURCE_FILES.sha256
-  GRADER_CONFIG.json
   FILTER_POLICY.json
-  step_scores.raw.jsonl
   step_decisions.final.jsonl
-  manual_overrides.jsonl
   retention_report.json
   v16-main_train_swift_abs.jsonl
   v16-pilot_train_swift_abs.jsonl
@@ -372,61 +202,89 @@ mixB-stepfilter-v1/
   v11new-all_train_swift_abs.jsonl
 ```
 
-`DATA_VERSION.json` records:
+`DATA_VERSION.json` stores the code commit, policy hash, decision-manifest
+hash, source hashes, output hashes, and before/after counts.
 
-- experiment and schema version;
-- code commit;
-- all source path labels, row counts, and SHA-256 hashes;
-- grader model/revision, generation parameters, prompt hash, and run dates;
-- filter-policy hash;
-- counts before/after by source;
-- exact output-file hashes.
+## Hard failure gates
 
-The training sbatch copies `DATA_VERSION.json`, `FILTER_POLICY.json`, and the
-retention report into its independent output directory before launching.
-Preflight aborts on a hash mismatch or unexpected row count.
+The pipeline stops before ship when any of the following occurs:
 
-## 12. Git and rollback plan
+- source rows are not the expected 18,576;
+- a source or decision key is missing or duplicated;
+- source response changed after grading;
+- score is absent or outside 0-10;
+- grader output lacks its final expected-value line after retries;
+- a `review` remains unresolved;
+- a retained trajectory loses its terminal target;
+- the terminal target lacks an explicit tool-call stop signal;
+- a source image is missing;
+- an absolute image path cannot be safely mapped under its declared source;
+- source, prompt, policy, decision, or output hashes disagree.
 
-Work is isolated in a separate worktree and branch:
+## Retention audit
 
-```text
-branch:   exp/webstar-step-filter-v1
-worktree: /Users/knight/uw/computeragent/.worktrees/cua-webstar-step-filter-v1
+The generated report compares before/keep/drop/review and estimated target and
+think token mass by:
+
+- source build;
+- domain;
+- target action signature;
+- trajectory-length bucket;
+- terminal versus nonterminal;
+- recovery-like versus ordinary.
+
+This exposes whether filtering disproportionately removes v16, `multi_apps`,
+rare actions, terminal supervision, or recovery behavior. The first arm does
+not correct imbalances through resampling because that would add another
+experimental variable.
+
+## Tests
+
+Run from the repository root:
+
+```bash
+python3 -m compileall -q sft/experimental/webstar_step_filter
+python3 -W error::ResourceWarning -m unittest -v \
+  sft.experimental.webstar_step_filter.test_webstar_filter
 ```
 
-The dirty sbatch edits in the original `main` worktree are not part of this
-branch. Proposed commit sequence:
+The current test suite verifies:
 
-1. `docs: freeze WebSTAR-style step-filter experiment protocol`
-2. `feat: add immutable step grading manifest`
-3. `feat: filter copied SFT rows from a frozen manifest`
-4. `test: enforce provenance, terminal, coverage, and byte-identity gates`
-5. `sbatch: add isolated MixB-4B step-filter arm`
+- deterministic, unique calibration sampling;
+- exact WebSTAR threshold behavior;
+- low-scoring terminal steps become review;
+- dropping an intermediate target does not remove it from later context;
+- teacher think is absent from judge input;
+- judge receives only pre-action screenshots;
+- action annotation and crop dimensions;
+- missing decisions, unresolved terminal loss, path errors, and response-hash
+  drift fail closed;
+- filtered output hashes and counts are recorded.
 
-Production `sft/build.py`, existing data directories, and existing sbatches
-remain untouched. Rollback is deleting the experimental output directory and
-stopping use of this branch; source data and prior checkpoints require no
-restoration.
+## Current execution boundary
 
-## 13. Decisions to confirm before implementation
+Completed:
 
-Recommended defaults are shown first:
+- official paper/code inspection and pinned provenance;
+- filter-only prompt and policy adaptation;
+- calibration sampler;
+- visual annotations;
+- o4-mini client and resumable raw manifest;
+- decision and manual-override layer;
+- filtered-copy builder and retention audit;
+- offline tests.
 
-1. **Run 4B first**, then promote to 9B only if the behavioral result is
-   positive or diagnostic evidence is compelling.
-2. **Grade both v16 and v11**, rather than filtering only the new data; otherwise
-   source family and filtering policy become confounded.
-3. **Use `action_quality > 5` plus a reasoning-grounding gate**, calibrated on
-   the 200-step panel; do not judge only the action because the target includes
-   teacher reasoning tokens.
-4. **Require and retain an explicit valid final `DONE`** for every trajectory;
-   stop for manual resolution on any exception.
-5. **Use the same three epochs for the primary arm**; add exposure matching only
-   as a named secondary experiment if needed.
-6. **Do not combine length normalization, prefix caps, thought rewriting, or
-   teacher balancing with v1.**
+Not yet executed:
 
-Once these six choices are accepted or edited, change status from
-`DESIGN REVIEW` to `FROZEN`, commit the protocol, and implement only what the
-frozen document specifies.
+- resolving the four real neutral-build, raw-result, and task-set paths on the
+  data host;
+- generating the real 200-step panel;
+- any o4-mini call;
+- manual calibration review;
+- full 18,576-step grading;
+- filtered dataset ship;
+- new 4B sbatch or GPU training.
+
+The next allowed operation is the 200-step calibration. Full grading remains
+blocked until its judge agreement, false-keep behavior, terminal cases, and
+per-domain retention have been inspected.
