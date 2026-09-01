@@ -831,6 +831,41 @@ CPython 发行自带组件,4590 个文件的变更是自己的 reinstall。**先
 `STALL_MIN=35` 是刻意大于 `OSWORLD_OPENAI_TIMEOUT` 的 30 分钟再加余量 ——
 **不能误杀一次合法的长生成**。
 
+### 杀 runner 会写出假 0 分(2026-09-01 追记,连带翻出两个已发布分数的旧账)
+
+上面那个看门狗、以及任何手工 `kill` runner 的操作,都有一个**必须一起处理的
+副作用**:在飞的题会以
+
+```
+"error": "can only test a child process"
+run_multienv_qwen.py line 250, in run_env_tasks
+```
+
+崩掉,而 **harness 会给它写 `result.txt = 0.0`**。于是:
+
+1. 那道题被记假 0;
+2. **`skip-scored` 从此永远跳过它** —— 再也不会重跑;
+3. 臂的分数被永久低估。
+
+这是 §X「serve 断档灌 0」的同族:**失败被写成 0 分,而不是留空**。
+
+**全盘扫下来,历史上已经中过三次:**
+
+| 臂 | 题 | 时间 |
+|---|---|---|
+| `eval50-a6v` | thunderbird/9b7bc335、thunderbird/dd84e895 | 2026-08-23 |
+| `eval50-a7` | multi_apps/c7c1e4c3 | 2026-08-23 |
+| `eval50-mixa9b` | libreoffice_writer/88fe4b2d、adf5e2c3 | 2026-09-01(本次) |
+
+**`a6v`(33.9%)与 `a7`(55.9%)这两个已发布的分数各含 1–2 个假 0**,重算前不要
+直接引用。同一次扫描还看到两道 `a bytes-like object is required, not 'NoneType'`
+和一道 `VM failed to become ready within timeout period` —— 同样是 harness 失败
+被写成 0 分,同样会被 skip-scored 永久跳过。
+
+**处置**:`result.txt` 与 `harness_error.json` 一起改名加 `.poisoned-by-*` 后缀
+(**改名不删,证据留着**),下一趟 `skip-scored` 就会重跑它。看门狗现在杀完 runner
+会 `sleep 15` 再自动做这件事;手工杀的话要自己做。
+
 ### 人工处置(看门狗装上之前那次)
 
 1. 杀 runner(链的 `for TRY in 1 2 3 4 5` 会重起,`skip-scored` 跳过已出分的)
