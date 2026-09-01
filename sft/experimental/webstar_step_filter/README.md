@@ -437,6 +437,30 @@ This 78.50% replaces the superseded 80.46% only for this old, imbalanced local
 pilot. It is still a single-pass engineering estimate, not the expected MixB
 retention rate or the final two-pass keep rate.
 
+Paired by the complete step key, 38/307 rows (12.38%) cross the `score > 5`
+threshold between the old simplified prompt and the official-adapted prompt:
+
+```text
+keep -> drop: 22
+drop -> keep: 16
+same keep:    225
+same drop:     44
+```
+
+The net keep change is only `-6`, so comparing 80.46% with 78.50% hides much
+larger bidirectional churn. The two terminal rows that were below threshold
+under the old prompt move above it under the official prompt; no terminal moves
+from keep to drop. Because these are two independent Luna calls as well as two
+different prompts, the 38 flips cannot all be causally attributed to the
+prompt. A prompt-effect estimate would require repeated paired calls under both
+profiles.
+
+The complete flip CSV is a temporary audit artifact with SHA-256:
+
+```text
+c951620247dec4c2056cf28447a8cfc80e049d69b9af9dfc1dbee3b93c49b070
+```
+
 ### Historical paper-four-stage prompt v2
 
 The historical paper-prose-aligned comparison profile is:
