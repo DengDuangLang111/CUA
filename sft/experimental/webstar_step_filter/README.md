@@ -273,13 +273,15 @@ Completed:
 - decision and manual-override layer;
 - filtered-copy builder and retention audit;
 - offline tests.
+- a local PPAPI `gpt-4o` compatibility smoke on an older 307-row / 15-trajectory
+  pilot, including raw-trajectory and task-JSON joins.
 
 Not yet executed:
 
 - resolving the four real neutral-build, raw-result, and task-set paths on the
   data host;
 - generating the real 200-step panel;
-- any o4-mini call;
+- any o4-mini call (`o4-mini` is not offered by the tested PPAPI model list);
 - manual calibration review;
 - full 18,576-step grading;
 - filtered dataset ship;
@@ -288,3 +290,49 @@ Not yet executed:
 The next allowed operation is the 200-step calibration. Full grading remains
 blocked until its judge agreement, false-keep behavior, terminal cases, and
 per-domain retention have been inspected.
+
+## Local PPAPI compatibility smoke (2026-08-31)
+
+This smoke is an engineering check, not MixB evidence. It used the local
+`v11-500-partial-snap-pilot2` snapshot:
+
+```text
+source rows: 307
+trajectories: 15
+samples.jsonl sha256: c8c56690e3bcf3632b1dbcec34d0c8c45e4bd6c05d90c324378e4a0942176486
+grader: PPAPI gpt-4o
+```
+
+The PPAPI endpoint authenticated and listed 132 models. It did not offer
+`o4-mini`; `gpt-4o`, which the WebSTAR reference script also accepts, was used
+only for compatibility testing. The credential remained in the ignored local
+environment file and was not written to any manifest, prompt, report, or Git
+file.
+
+Offline construction joined the neutral rows to the exact raw run and task
+set. Three initial requests completed without API, parsing, image, or path
+failures, but all scored 10. A deliberately harder set of eight repeated WAIT
+or repeated-click targets then produced:
+
+```text
+scores: 2, 2, 2, 3, 4, 8, 10, 10
+paper threshold: drop 5, keep 3
+```
+
+Four of those targets were independently rescored. Two remained on the same
+side of the threshold (`2->2`, `4->4`); two crossed it (`3->6`, `8->2`) and
+were correctly converted by `decide_steps.py` to `review`. Because this was a
+small, intentionally risky subset, the observed 2/4 disagreement is not a
+population estimate. It is sufficient evidence that one PPAPI `gpt-4o` pass
+must not be treated as a final data decision.
+
+Consequences:
+
+- the input, multimodal API, score parser, append-only manifest, and two-pass
+  decision path work end to end;
+- PPAPI `gpt-4o` has useful separation on obvious bad steps but material
+  threshold instability on some cases;
+- the real calibration must keep two independent passes and manual review of
+  all threshold disagreements;
+- these results do not replace the planned MixB calibration and do not justify
+  full-corpus grading or training.
