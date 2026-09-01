@@ -461,6 +461,22 @@ The complete flip CSV is a temporary audit artifact with SHA-256:
 c951620247dec4c2056cf28447a8cfc80e049d69b9af9dfc1dbee3b93c49b070
 ```
 
+`make_flip_review.py` turns those paired flips into a static human-review site.
+Each card shows the task, actual action bundle, the judge's three annotated
+pre-action screenshots and current crop, old/new scores and reasoning, and the
+original teacher target. The page supports transition filters, free-text
+search, delta sorting, anchors, and a full reset.
+
+The current local report contains 38 cards and 128 compressed image assets:
+
+```text
+http://127.0.0.1:8765/reports/webstar-step-flips/
+```
+
+Browser QA verified the 22/16 transition counts, GIMP search, absolute-delta
+sorting, and reset behavior. Generated HTML/JPEG reports stay outside Git;
+only the deterministic generator is versioned.
+
 ### Historical paper-four-stage prompt v2
 
 The historical paper-prose-aligned comparison profile is:
