@@ -53,14 +53,21 @@ new code.
 The grader receives:
 
 1. the user task;
-2. recent executed actions;
+2. the complete previous executed-action text history;
 3. up to three chronological **pre-action** screenshots;
 4. action annotations on those screenshots;
 5. a 200x200 crop around the current coordinate target when available;
 6. the actual ordered action bundle executed by the harness, in screenshot
    pixel coordinates;
-7. an instruction to compare viable alternatives and assign expected value
-   from 0 through 10.
+7. the paper's four grading stages in order: screenshot analysis, proposed
+   action review, alternative analysis, and 0-10 evaluation;
+8. an enforced requirement to propose exactly three feasible alternatives,
+   simulate each outcome, and compare each against the proposed action.
+
+The official code accumulates `previous_actions` without truncation. Only its
+visual `sliding_window` is capped at three screenshots. This adapter mirrors
+that behavior: full previous action text, three latest annotated screenshots,
+and the current action separately.
 
 The current action has not executed in the judge input. The grader does not see
 the post-action screenshot. The original teacher think is excluded from the
@@ -103,7 +110,7 @@ multiple runs.
 | `common.py` | Stable identity, source indexing, action/terminal parsing, hashes |
 | `visuals.py` | Green action label, red coordinate markers/arrows, 200px crop |
 | `sample_calibration.py` | Deterministic 200-step calibration panel |
-| `grade_steps.py` | Resumable o4-mini grading and append-only raw scores |
+| `grade_steps.py` | Resumable multimodal grading, strict four-stage validation, and append-only raw scores |
 | `decide_steps.py` | Score manifests to keep/drop/review decisions |
 | `audit_report.py` | Before/after source, domain, action, length, terminal, recovery and token tables |
 | `filter_copy.py` | Filtered Swift JSONL copies with existing remote image roots |
@@ -302,6 +309,12 @@ per-domain retention have been inspected.
 
 ## Local PPAPI compatibility smoke (2026-08-31)
 
+> **Version boundary:** The corrected model comparisons and the 307-row
+> retention result below used prompt hash
+> `46a359cca3c14a65f792f2d2f5f1c3226c43ca7ecc140b41580cf274a391af4c`.
+> They remain an audit trail but are superseded by the stricter paper-four-stage
+> prompt v2 and must not be reported as the current retention estimate.
+
 This smoke is an engineering check, not MixB evidence. It used the local
 `v11-500-partial-snap-pilot2` snapshot:
 
@@ -316,6 +329,50 @@ The PPAPI endpoint authenticated and listed 132 models. It did not offer
 `o4-mini`; it offered `gpt-4o`, `gpt-4o-mini`, and `gpt-5.6-luna`. The
 credential remained in the ignored local environment file and was not written
 to any manifest, prompt, report, or Git file.
+
+### Paper-four-stage prompt v2
+
+The current prompt version is:
+
+```text
+version: webstar-paper-four-stage-v2
+sha256: 406e2e8b6a9193a176eadbf7b3e6167850346f7aeaca6c9561a7ee92b8fdf152
+```
+
+It enforces, in code rather than by instruction alone:
+
+1. `Screenshot analysis`;
+2. `Proposed action review`;
+3. `Alternative analysis` containing exactly numbered alternatives `1/2/3`,
+   each with feasibility, simulated outcome, and comparison;
+4. `Evaluation` with the paper's 0/5/10 anchors and final expected value.
+
+It also mirrors the official implementation's history behavior: all previous
+executed actions are provided as text, while annotated screenshots remain a
+three-image sliding window. Missing/reordered sections or any alternative
+count other than exactly three fail parsing and trigger a retry.
+
+An initial Luna smoke under v2 completed with no format failures. The three
+positive controls received:
+
+```text
+ordinary first step: 5
+navigation to required ~/documents folder: 10
+terminal completion: 4 -> terminal review
+```
+
+The eight deliberately risky controls received:
+
+```text
+scores: 1, 1, 1, 2, 2, 2, 4, 6
+paper threshold: drop 7, keep 1
+```
+
+The only kept risky case was the ambiguous extra WAIT on a blank GIMP
+Preferences dialog. These 11 calls prove strict prompt compliance and show
+that the history/alternative changes materially affect scores. They do not
+provide a new overall retention estimate; the old 80.46% must be rerun before
+use.
 
 Offline construction joined the neutral rows to the exact raw run and task
 set. Initial `gpt-4o` and `gpt-4o-mini` requests proved API, image, parsing,
@@ -481,7 +538,7 @@ registered 200-step calibration should therefore start with Luna; Sol can
 audit recovery disagreements, while 4o-mini should remain out of the main
 filter unless a different context/prompt design is tested as a separate arm.
 
-### Full 307-row local pilot retention estimate
+### Superseded 307-row local pilot retention estimate (old prompt)
 
 After the coordinate correction and model smoke, Luna scored all 307 target
 rows in `v11-500-partial-snap-pilot2` once. All calls completed; there were no

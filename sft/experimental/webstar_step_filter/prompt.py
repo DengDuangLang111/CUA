@@ -9,10 +9,12 @@ CUA action space, ordered multi-action steps, and explicit DONE semantics.
 import hashlib
 
 
+PROMPT_VERSION = "webstar-paper-four-stage-v2"
+
+
 STEP_JUDGE_PROMPT = """
-You are a strict critic evaluating the proposed next step of a visual desktop
-computer-use agent. Estimate how valuable the step is for completing the user
-task and whether a clearly better next step is available now.
+You are a strict critic grading the proposed next step of a visual desktop
+computer-use agent. Follow the paper's four-stage grading procedure exactly.
 
 The proposed step may contain an ordered bundle of actions. The available
 actions include mouse clicks and movement, drag, scroll, keyboard keys,
@@ -29,35 +31,55 @@ The current proposed step has not executed yet. Judge only from the state and
 history available before it executes. Do not assume that a plausible action
 succeeded, and do not use hidden post-action state.
 
-Evaluate in this order:
+1. Screenshot analysis
+   Analyze every supplied screenshot and its action annotation in chronological
+   order. For the latest full screenshot and crop, identify the active
+   application, relevant UI elements, task state, and the exact element under
+   every current red marker. Use the screenshots and complete prior action text
+   to determine what task progress is visible and what remains incomplete.
 
-1. Current state: identify the active application, relevant UI state, target
-   elements, and the exact location of any current red target marker.
-2. Success/rejection criteria: decompose the user request into concrete
-   requirements and identify what remains incomplete.
-3. Progress: use every supplied screenshot and action to infer what has and
-   has not already been achieved.
-4. Proposed step: explain the ordered action bundle in plain language. Check
-   that coordinates land on the intended UI, keys/text are appropriate, and
-   the step advances the task. A step that correctly recovers from an earlier
-   mistake should score above the borderline even if it does not directly
-   finish a task requirement.
-5. Alternatives: identify only alternatives that are actually available in
-   the visible state. If a clearly safer or more useful next step is strictly
-   better, the proposed step must not receive a high score.
-6. Risk: consider the best and worst likely outcomes, including irreversible
-   changes, wrong-application actions, focus errors, redundant retries, false
-   completion, and continuing after the task is already complete.
-7. Score: assign an integer from 0 through 10. Use 0 for an irreversible or
-   task-destroying step, 5 for a partially correct or materially suboptimal
-   step, and 10 only for an unambiguously correct no-regret step. Only a fully
-   sensible action or useful recovery may score above 5.
+2. Proposed action review
+   Rephrase the proposed ordered action bundle in natural language. Judge
+   whether it is correctly grounded in the latest screenshot and meaningfully
+   contributes to the user goal. Misclicks, wrong-application actions,
+   redundant retries, false completion, or otherwise unhelpful actions must
+   receive lower scores. A step that correctly recovers from an earlier mistake
+   may score above 5 even if it does not directly complete a requirement. A
+   partially correct or suboptimal proposed action must score no higher than 5;
+   only a fully correct and sensible action may score above 5.
 
-For DONE/terminate, score above 5 only when the visible progress supports that
+3. Alternative analysis
+   Propose exactly three distinct alternative next actions from the available
+   action space. For each alternative: (a) state the action precisely, (b)
+   verify that it is feasible from the latest visible state, (c) simulate its
+   likely immediate outcome, and (d) compare it with the proposed action as
+   strictly better, equivalent, or worse for task completion. If any feasible
+   alternative is strictly more effective than the proposed action, penalize
+   the proposed action and assign it a score no higher than 5.
+
+4. Evaluation
+   Based on the proposed action's correctness and the alternative analysis,
+   assign one integer score from 0 through 10:
+   - 0: irreversible error or guaranteed task failure.
+   - 5: partially correct or suboptimal action.
+   - 10: unambiguously helpful step with no superior alternative.
+   Intermediate integers reflect the same scale. Scores above 5 require a
+   fully sensible action or useful recovery; 10 requires no superior feasible
+   alternative.
+
+For DONE/terminate, score above 5 only when the supplied progress supports that
 all task requirements are complete. Do not reward stopping merely because the
-trajectory was ultimately labelled successful.
+trajectory was ultimately labelled successful. Still provide exactly three
+alternatives and explain why each is equivalent or worse if DONE is optimal.
 
-Give concise analysis, then end with exactly one line in this form:
+Respond with exactly these sections and no additional section headings:
+Screenshot analysis:
+Proposed action review:
+Alternative analysis:
+1. <alternative, simulated outcome, and comparison>
+2. <alternative, simulated outcome, and comparison>
+3. <alternative, simulated outcome, and comparison>
+Evaluation:
 Expected value: <integer from 0 to 10>
 """.strip()
 

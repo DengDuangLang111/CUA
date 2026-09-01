@@ -12,8 +12,22 @@ from .common import StepKey, load_source_rows, sha256_text
 from .decide_steps import decide
 from .filter_copy import build_filtered_copy, validate_coverage
 from .grade_steps import build_judge_messages, parse_score
+from .prompt import PROMPT_VERSION, STEP_JUDGE_PROMPT
 from .sample_calibration import select_calibration
 from .visuals import annotate_action
+
+
+def judge_response(score=7, alternatives=3):
+    items = "\n".join(
+        f"{index}. action {index}; feasible; likely outcome; worse"
+        for index in range(1, alternatives + 1))
+    return (
+        "Screenshot analysis:\nstate\n"
+        "Proposed action review:\ncorrect\n"
+        f"Alternative analysis:\n{items}\n"
+        "Evaluation:\ncorrect and optimal\n"
+        f"Expected value: {score}"
+    )
 
 
 def response(action="left_click", think="grounded", coordinate="[100, 120]"):
@@ -59,11 +73,27 @@ def write_source(root, name, rows):
 
 
 class WebStarFilterTests(unittest.TestCase):
+    def test_prompt_follows_paper_four_stage_contract(self):
+        self.assertEqual(PROMPT_VERSION, "webstar-paper-four-stage-v2")
+        for heading in ("1. Screenshot analysis", "2. Proposed action review",
+                        "3. Alternative analysis", "4. Evaluation"):
+            self.assertIn(heading, STEP_JUDGE_PROMPT)
+        self.assertIn("exactly three distinct alternative", STEP_JUDGE_PROMPT)
+        self.assertIn("0: irreversible error or guaranteed task failure",
+                      STEP_JUDGE_PROMPT)
+        self.assertIn("5: partially correct or suboptimal action",
+                      STEP_JUDGE_PROMPT)
+        self.assertIn("10: unambiguously helpful step with no superior alternative",
+                      STEP_JUDGE_PROMPT)
+
     def test_score_parser_uses_final_expected_value(self):
-        self.assertEqual(parse_score("analysis 5\nExpected value: 7"), 7)
-        self.assertEqual(parse_score("Expected value: 4\nExpected value: 6"), 6)
+        self.assertEqual(parse_score(judge_response(7)), 7)
         with self.assertRaises(ValueError):
             parse_score("score is probably seven")
+        with self.assertRaisesRegex(ValueError, "exactly alternatives"):
+            parse_score(judge_response(7, alternatives=2))
+        with self.assertRaisesRegex(ValueError, "exactly alternatives"):
+            parse_score(judge_response(7, alternatives=4))
 
     def test_visual_annotation_and_crop(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -245,8 +275,8 @@ class WebStarFilterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = write_source(root, "source", [
-                sample("run", "calc", "task", 2, 2,
-                       response("key", "SECRET TEACHER THINK", None), "img2.png")])
+                sample("run", "calc", "task", 4, 4,
+                       response("key", "SECRET TEACHER THINK", None), "img4.png")])
             index, _ = load_source_rows({"source": source})
             key = next(iter(index))
 
@@ -255,11 +285,17 @@ class WebStarFilterTests(unittest.TestCase):
             Image.new("RGB", (320, 240), "white").save(result / "initial_state.png")
             Image.new("RGB", (320, 240), "white").save(result / "step1.png")
             Image.new("RGB", (320, 240), "white").save(result / "step2.png")
+            Image.new("RGB", (320, 240), "white").save(result / "step3.png")
+            Image.new("RGB", (320, 240), "white").save(result / "step4.png")
             raw = [
                 {"step_num": 1, "action": "pyautogui.click(10, 20)",
                  "response": response("left_click"), "screenshot_file": "step1.png"},
-                {"step_num": 2, "action": "pyautogui.hotkey('ctrl', 's')",
-                 "response": response("key", "raw", None), "screenshot_file": "step2.png"},
+                {"step_num": 2, "action": "pyautogui.click(30, 40)",
+                 "response": response("left_click"), "screenshot_file": "step2.png"},
+                {"step_num": 3, "action": "pyautogui.click(50, 60)",
+                 "response": response("left_click"), "screenshot_file": "step3.png"},
+                {"step_num": 4, "action": "pyautogui.hotkey('ctrl', 's')",
+                 "response": response("key", "raw", None), "screenshot_file": "step4.png"},
             ]
             with (result / "traj.jsonl").open("w") as handle:
                 for row in raw:
@@ -272,12 +308,15 @@ class WebStarFilterTests(unittest.TestCase):
                 key, index[key], root / "results", root / "tasks")
             text_parts = [part["text"] for part in messages[1]["content"]
                           if part["type"] == "text"]
-            self.assertNotIn("SECRET TEACHER THINK", "\n".join(text_parts))
-            self.assertIn("pyautogui.hotkey('ctrl', 's')", "\n".join(text_parts))
-            self.assertNotIn("<parameter=coordinate>", "\n".join(text_parts))
+            judge_text = "\n".join(text_parts)
+            self.assertNotIn("SECRET TEACHER THINK", judge_text)
+            self.assertIn("step 1: pyautogui.click(10, 20)", judge_text)
+            self.assertIn("step 3: pyautogui.click(50, 60)", judge_text)
+            self.assertIn("pyautogui.hotkey('ctrl', 's')", judge_text)
+            self.assertNotIn("<parameter=coordinate>", judge_text)
             images = [part for part in messages[1]["content"]
                       if part["type"] == "image_url"]
-            self.assertEqual(len(images), 2)  # two pre-action screens, no post screen/crop
+            self.assertEqual(len(images), 3)  # image window remains capped at three
             self.assertEqual(evidence["raw_actions"], ["pyautogui.hotkey('ctrl', 's')"])
 
 

@@ -26,14 +26,34 @@ except ModuleNotFoundError:  # pragma: no cover - environment-dependent import
 
 from .common import (StepKey, iter_jsonl, load_source_rows,
                      parse_named_paths, sha256_bytes, sha256_text)
-from .prompt import STEP_JUDGE_PROMPT, prompt_sha256
+from .prompt import PROMPT_VERSION, STEP_JUDGE_PROMPT, prompt_sha256
 from .visuals import annotate_action
 
 
 SCORE_RE = re.compile(r"Expected\s+value\s*:\s*(10|[0-9])\b", re.IGNORECASE)
+SECTION_RE = {
+    name: re.compile(rf"(?im)^\s*{re.escape(name)}\s*:\s*")
+    for name in ("Screenshot analysis", "Proposed action review",
+                 "Alternative analysis", "Evaluation")
+}
 
 
 def parse_score(text):
+    positions = {}
+    for name, pattern in SECTION_RE.items():
+        match = pattern.search(text or "")
+        if not match:
+            raise ValueError(f"judge response missing section: {name}")
+        positions[name] = match
+    ordered = [positions[name].start() for name in SECTION_RE]
+    if ordered != sorted(ordered):
+        raise ValueError("judge response sections are out of paper order")
+    alternative_block = (text or "")[
+        positions["Alternative analysis"].end():positions["Evaluation"].start()]
+    alternatives = re.findall(r"(?m)^\s*([1-9])\.\s+", alternative_block)
+    if alternatives != ["1", "2", "3"]:
+        raise ValueError(
+            f"judge response must contain exactly alternatives 1/2/3; got {alternatives}")
     matches = SCORE_RE.findall(text or "")
     if not matches:
         raise ValueError("judge response has no final 'Expected value: N'")
@@ -130,9 +150,11 @@ def build_judge_messages(key, source_row, result_base, tasks_base,
                           crop_png if step_index == index else None))
 
     instruction = load_instruction(tasks_base, key)
+    # The reference implementation keeps the full previous-action text even
+    # though its image window is capped at three screenshots.
     previous = [
         f"step {step.num}: " + " | ".join(step.actions)
-        for step in steps[max(0, index - max_screenshots + 1):index]
+        for step in steps[:index]
     ]
     proposed = "\n".join(
         f"{position}. {action}"
@@ -300,6 +322,7 @@ def main(argv=None):
             "judge_text": judge_text,
             "grader_model": args.model,
             "pass_id": args.pass_id,
+            "prompt_version": PROMPT_VERSION,
             "prompt_sha256": prompt_sha256(),
             "source_response_sha256": sha256_text(
                 source_row.sample.get("response", "")),
@@ -326,6 +349,7 @@ def main(argv=None):
     report = {
         "pass_id": args.pass_id,
         "model": args.model,
+        "prompt_version": PROMPT_VERSION,
         "prompt_sha256": prompt_sha256(),
         "source_reports": source_reports,
         "requested": len(target_keys),
