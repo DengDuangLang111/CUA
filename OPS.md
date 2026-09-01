@@ -785,6 +785,65 @@ scrubbed 上,同款炸弹未拆;.venv 的 site-packages 也在 scrubbed(日常�
 CPython 发行自带组件,4590 个文件的变更是自己的 reinstall。**先问"我自己刚做了
 什么",再指控环境。**
 
+## §Y 单题卡死:请求进了 ssh 隧道黑洞(2026-09-01,31 分钟换来的)
+
+### 症状
+
+`mixa9b` 的 eval100 跑到 47/100 时,dashboard 亮起 `STALLED?`。查下来:
+
+| 查了什么 | 结果 |
+|---|---|
+| 三个 Docker VM 的 `/screenshot` | 全部 HTTP 200,<0.08 秒 |
+| 隧道端点 `/v1/models` | HTTP 200 |
+| runner 进程 | 全部活着,`poll_schedule_timeout`(等网络) |
+| 另外两道题 | **正常推进**,traj 每分钟都在写 |
+| **卡住那道** | traj 停在 09:47:57,31 分钟没动,无 result.txt |
+| vLLM 侧 | 一直只报 `Running: 2 reqs`,**而有 3 个 env** |
+
+### 机制
+
+**请求发出去了,vLLM 从没收到。** 客户端那侧 socket 是 ESTAB(所以不是"连接断了"
+那种能被察觉的失败),但 ssh 转发 channel 已经不通 —— 监听口还在、别的 channel
+也正常,**只有这一条进了黑洞**。客户端不停重试、不停被对端关闭,`ss` 上堆到
+**10 个 CLOSE-WAIT + 1 个 ESTAB**。
+
+放大它的是我们自己设的 `OSWORLD_OPENAI_TIMEOUT=1800`(为 A100 的长生成设的,
+见 `run_eval50_klone.sh` 里 600 秒导致整步重试的旧账)。每次重试都要空等 30 分钟。
+
+### 为什么已有的看门狗防不住
+
+`run_eval50_stock.sh` 的守卫只查**端点是否可达**(连续 3 分钟不通就杀 runner)。
+这次端点一直 200。它也不查进度。
+
+**全局静默同样防不住** —— 另外两道题一直在写 traj,任何"整体多久没动"的判据
+都不会触发。
+
+### 判据必须是「单题卡死」
+
+装进 `chain_eval_rest.sh` / `chain_eval_lr.sh` 的看门狗,每 2 分钟:
+
+```
+全局最新 traj.jsonl 在 5 分钟内   （别的题还在动,排除整体停摆/serve 挂了）
+且 某个"有 traj、无 result"的题 traj 超过 35 分钟没写
+  -> 判为隧道黑洞:重建隧道 + 杀 runner,外层 for TRY 循环重起,skip-scored 续跑
+```
+
+`STALL_MIN=35` 是刻意大于 `OSWORLD_OPENAI_TIMEOUT` 的 30 分钟再加余量 ——
+**不能误杀一次合法的长生成**。
+
+### 人工处置(看门狗装上之前那次)
+
+1. 杀 runner(链的 `for TRY in 1 2 3 4 5` 会重起,`skip-scored` 跳过已出分的)
+2. `ssh -S <sock> -O cancel -L <本地>:<节点>:<远端>` 再 `-O forward` 重建隧道
+3. 探活 `/v1/models` 确认 200
+
+### 排查时我自己犯的两个错,一并记下
+
+- **`ls -l /proc/PID/fd | head -2` 把结果截断**,得出"没有任何进程持有这道题"的
+  假结论,进而误判为"任务被遗弃"。实际是 `pid 75349` 持有它。**查 fd 不要截断。**
+- **拿 `ss` 的一次快照下结论**:第一次看到目标进程 0 个 ESTAB,断言"连接全死";
+  下一次它有 1 个 ESTAB。**socket 状态要连着看几次再判。**
+
 ## §X serve 断档灌 0 事故(2026-08-21,nocap261)
 
 **机制**:serve 撞墙退出后,**runner 不会死** —— agent 的 API 调用失败被吞,

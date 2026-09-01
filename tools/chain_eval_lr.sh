@@ -147,6 +147,44 @@ PY
             for i in $(seq 1 120); do up && break; sleep 20; done; }
     up || { echo "[$(date '+%F %T')] $ARM FATAL: 端点没了"; break; }
     echo "[$(date '+%F %T')] $ARM pass $TRY at $N/$T"
+
+  # ---- 卡死看门狗(2026-09-01,一次 31 分钟的单题黑洞换来的) ----
+  # 生产脚本 run_eval50_stock.sh 的看门狗只防"serve 死了"(端点连续 3 分钟不通)。
+  # 它防不住这次的形态:端点 HTTP 200、runner 活着、另外两道题正常推进,**只有
+  # 一道题的请求在 ssh 隧道里进了黑洞** —— 客户端那侧 socket 是 ESTAB,vLLM 那侧
+  # 从没收到(serve 一直只报 Running: 2 reqs,而有 3 个 env)。客户端不停重试、
+  # 不停被对端关闭,堆到 10 个 CLOSE-WAIT,而 OSWORLD_OPENAI_TIMEOUT=1800 让它
+  # 每次都要空等 30 分钟。
+  #
+  # 所以判据必须是**单题卡死**而不是全局静默:全局最新 traj 很新(别的题在动),
+  # 但某一道有 traj 无 result 的题超过 STALL_MIN 分钟没写过 —— 那道就是楔死了。
+  # 杀掉 runner,外层 for TRY 循环会重起,skip-scored 跳过已出分的。
+  STALL_MIN=35     # > OSWORLD_OPENAI_TIMEOUT(1800s=30min) + 余量,不误杀长生成
+  ( while ps -eo args | grep -q "[r]un_multienv_qwen.*$TAG"; do
+      sleep 120
+      now=$(date +%s)
+      newest=$(find "$R" -name traj.jsonl -printf "%T@
+" 2>/dev/null | sort -rn | head -1 | cut -d. -f1)
+      [ -z "$newest" ] && continue
+      # 别的题还在动吗(全局最新 5 分钟内)
+      [ $(( now - newest )) -gt 300 ] && continue
+      wedged=""
+      for t in $(find "$R" -mindepth 2 -maxdepth 2 -type d 2>/dev/null); do
+        [ -f "$t/traj.jsonl" ] || continue
+        [ -f "$t/result.txt" ] && continue
+        m=$(stat -c %Y "$t/traj.jsonl" 2>/dev/null) || continue
+        age=$(( (now - m) / 60 ))
+        [ "$age" -ge "$STALL_MIN" ] && wedged="$wedged $(basename $t | cut -c1-8)($age min)"
+      done
+      if [ -n "$wedged" ]; then
+        echo "[$(date '+%F %T')] $ARM 单题卡死:$wedged —— 别的题仍在动,判为隧道黑洞。杀 runner 让重试循环接管"
+        ssh -S "$KS" -O cancel -L $PORT:$NODE:$RPORT "$KH" 2>/dev/null
+        ssh -S "$KS" -O forward -L $PORT:$NODE:$RPORT "$KH" 2>/dev/null
+        for p in $(ps -eo pid,args | grep "run_multienv_qwen" | grep "$TAG" | grep -v grep | awk '{print $1}'); do kill $p 2>/dev/null; done
+        break
+      fi
+    done ) &
+  GUARD=$!
     OSWORLD_OPENAI_TIMEOUT=1800 OSTG_NO_RECORD=1 OSTG_TYPE_NO_SPLIT=1 OPENAI_API_KEY="$KEY" \
     .venv/bin/python scripts/python/run_multienv_qwen.py \
       --provider_name docker --path_to_vm /mnt/d/research/OSWorld/docker_vm_data/Ubuntu.qcow2 \
@@ -157,6 +195,7 @@ PY
       --screen_width 1920 --screen_height 1080 \
       --image_max 10 --fold_size 1 \
       --test_config_base_dir $C --test_all_meta_path $META --result_dir "$R"
+    kill $GUARD 2>/dev/null
     for p in $(ps -eo pid,args | grep "run_multienv_qwen" | grep "$TAG" | grep -v grep | awk '{print $1}'); do kill $p 2>/dev/null; done
     sleep 10
   done
