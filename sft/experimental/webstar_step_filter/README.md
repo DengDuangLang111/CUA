@@ -628,6 +628,71 @@ scores:    e7a58e6caa6147d64f39e2d4d7d702e62e162778236382a9a059688528896a09
 decisions: f761d0cb3ca8e8e37a2ecb13a42da841106857596a529dc7f2bd0ec2a8591a64
 ```
 
+#### Equal-budget `gpt-4o-mini` risk-panel check
+
+`gpt-4o-mini` was then tested under the identical equal-budget prompt on a
+49-step targeted panel:
+
+```text
+31 Luna threshold flips
+union all 24 Luna score-5/6 rows
+union 3 known positive controls
+= 49 unique targets
+```
+
+All 49 calls completed without API, image, path, or parse failures. The score
+distribution was highly polarized:
+
+```text
+2: 5   3: 6   4: 6   5: 1   6: 2
+7: 4   8: 8   9: 1  10: 16
+
+score > 5: 31 / 49
+score >= 7: 29 / 49
+```
+
+The three positive controls received `3, 6, 10`: two pass the paper threshold,
+but only the terminal control passes the proposed `>=7` automatic-keep gate.
+The equal-budget prompt therefore improves the old `gpt-4o-mini` result of
+zero positive controls kept, but does not repair its strong false-negative
+bias on ordinary setup and navigation steps.
+
+Paired with equal-budget Luna on the same 49 targets:
+
+```text
+same threshold side: 24 / 49
+Luna keep -> 4o-mini drop: 13
+Luna drop -> 4o-mini keep: 12
+```
+
+On the 31 original official-vs-equal-budget flips, `gpt-4o-mini` agrees with
+equal-budget Luna on 18 and with the original official-adapted Luna decision on
+13. A preliminary evidence audit provides 22 high-confidence keep/drop labels
+from the task, action, screenshots, both rationales, and subsequent recorded
+trajectory step. On that non-independent diagnostic subset, equal-budget Luna
+matches 16/22 while `gpt-4o-mini` matches 10/22. These are diagnostic labels,
+not an independently annotated benchmark.
+
+The model correctly resolves some visual cases that Luna misses—for example,
+the pop-up dropdown target receives `10` rather than Luna's erroneous `2`—and
+scores the two intermediate Save actions `10/8`. However, it rejects numerous
+known-valid setup actions: application-launch waits, Activities search input,
+exact case-query typing, editor-caret positioning, clearing a blocking popup,
+scroll navigation, and opening Additional permissions. It also passes three of
+the five score-6 leakage cases at `7/10/7`, so changing the judge does not solve
+the prompt-cap/decision-threshold mismatch.
+
+Conclusion: `gpt-4o-mini` remains useful as a visual disagreement signal, not
+as the primary automatic step filter. Luna remains the better current primary
+candidate, with score 6 routed to review and visually disputed decisions
+requiring a second pass or human adjudication.
+
+Temporary score-manifest SHA-256:
+
+```text
+1aa338ea5f238283508b29a528fe43318ad578bf43a5e98c70c8ff0ae0e50a07
+```
+
 ### Historical paper-four-stage prompt v2
 
 The historical paper-prose-aligned comparison profile is:
