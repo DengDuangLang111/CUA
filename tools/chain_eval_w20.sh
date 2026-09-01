@@ -36,12 +36,13 @@ echo "=========== [$(date '+%F %T')] eval 链启动 ==========="
 # arm|远端端口|本地端口|serve节点|结果组|题面板|权重(- = 等 READY 标记)|语料说明|配方说明|[XWIN 推理窗口,可选]
 #
 # 顺序(用户 2026-09-01 定):
-#   1 mixa9b     原链被接管时正跑到第 2 趟;这里让它走完自己的 5 趟循环,
-#                把两道隔离题(writer e246f6d8 / multi_apps 1f18aa87)补齐到 100。
+#   0 mixb9b     只补 1 道隔离题(os b3d4a89c),99 -> 100。原链臂表里有它,接管不能丢。
+#   1 mixa9b     补两道隔离题(writer e246f6d8 / multi_apps 1f18aa87),98 -> 100。
 #   2 mixb9bw20  **同一份权重、同一个 serve(g3085:8043)**,只把推理窗口换成
 #                a2 的 20/10。结果目录 eval50-mixb9bw20-*,与 eval50-mixb9b-* 并列。
 #   3 mixc9b / 4 mixa4b  原链的剩余两臂,不变。
 ARMS="
+mixb9b|8043|18043|g3085|qwen35-9b-sft|verified_eval100_nonproxy.json|/gscratch/cse/jy050706/sft/models/mixB-9b-e873|v16-main + v16-pilot + v11new-500 + v11new-all (866 traj / 18,576 samples)|Qwen3.5-9B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1 -- gap-fill only: 1 quarantined task (os b3d4a89c) to reach 100/100
 mixa9b|8045|18045|g3082|qwen35-9b-sft|verified_eval100_nonproxy.json|/gscratch/cse/jy050706/sft/models/mixA-9b-e930|v16-main + v16-pilot + q38-Bhqs2t-r5nocapimg10-v11100/-v11500 (914 traj / 19,846 samples)|Qwen3.5-9B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1 (resumed from ckpt-311 after a g012 GPU fault)
 mixb9bw20|8043|18043|g3085|qwen35-9b-sft|verified_eval100_nonproxy.json|/gscratch/cse/jy050706/sft/models/mixB-9b-e873|v16-main + v16-pilot + v11new-500 + v11new-all (866 traj / 18,576 samples)|Qwen3.5-9B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1 -- SAME weights as mixb9b, served window 20/10 to match a2|--image_max 20 --fold_size 10
 mixc9b|8042|18042|g3083|qwen35-9b-sft|verified_eval100_nonproxy.json|/gscratch/cse/jy050706/sft/models/mixC-9b-e627|v16-main + v16-pilot ONLY (554 traj / 13,372 samples) -- NO v11 at all|Qwen3.5-9B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1, checkpoint-627
