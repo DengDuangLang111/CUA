@@ -668,6 +668,11 @@ WSL `[Errno 12] Cannot allocate memory` → 15:20:22 Windows 系统日志 `Tcpip
 3. WSL 打嗝时 `wsl -e` 返回 `Wsl/Service/E_UNEXPECTED`(UTF-16 乱码),几十秒后自愈;
    `wsl -l -v` 在 Windows shell 里照常可用,可用它判断发行版状态。
 
+4. **"日志几分钟没动"不等于卡死**:恢复后 3 个 env 在 16:33:59 拿到首帧截图后静默
+   两分多钟,是第一步的长 think 在算(9B 在 A100 上约 35 token/s)。判卡死的唯一硬证据是
+   vLLM `/metrics` 的 `generation_tokens_total` 在 20 秒内**不增长**且 `num_requests_running=0`
+   而 runner 仍有在飞的连接;看到这三条同时成立再动手,否则就是又一次看门狗误杀。
+
 **恢复顺序**:Docker Desktop(桌面点开)→ 用户重过 Duo 建 Klone/Tillicum 主连接(§4)→
 重起 `chain_eval_w20.sh`(它会从 mixb9bw20 29/100 续跑,再 mixc9b、mixa4b)→
 另一会话再拉 WebSTAR(≤48 并发,与 eval 错开)。
