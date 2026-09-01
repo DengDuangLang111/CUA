@@ -640,6 +640,38 @@ TypeError → 10:41 写 `result.txt=0.0`;链脚本 10:41:25 起下一趟,runner 
 或 `harness_error.json`,再看链日志的 `pass N at X/T` 行——"—" 只表示没有
 `result.txt`,不区分"没轮到"和"被隔离等重跑"。
 
+## 事故:WebSTAR 128 并发打爆 WSL,Docker 引擎与所有 ssh 主连接同时死(2026-09-01 15:20)
+
+**时序**(两个会话交叉核对):15:0x 另一会话把 `grade_steps` 并发从 48 拉到 128 →
+WSL `[Errno 12] Cannot allocate memory` → 15:20:22 Windows 系统日志 `Tcpip 4266`
+(UDP 临时端口耗尽)→ docker-desktop 发行版的 shared-sockets 与 Ubuntu 里的
+`/var/run/docker.sock` 消失、`~/.ssh/cm/klone-login` 主连接消失、隧道 18001/18020/1804x
+全断 → 15:32–15:50 eval runner 连续 6 题 "VM failed to become ready"/"broken PNG" 写假 0
+(已隔离 `.poisoned`)→ 15:55 runner 收 SIGTERM 退出,链结束。WSL 本身没重启
+(uptime 连续),Windows 上 Docker backend 进程也还在 —— 死的是引擎发行版和集成层。
+
+**规矩**(责任会话已认领并另记):`grade_steps` 并发 ≤48;**不得与 3 台 eval VM 同时跑**
+(WSL 21GB,3 VM 占 ~11GB);同一 jsonl 只许一个写进程。
+
+**恢复过程中学到的三件事,以后直接照做,别再摸索**:
+
+1. **从 WSL 的 `bash -s` heredoc 里调任何 Windows .exe 必须加 `</dev/null`**,否则 .exe
+   继承 stdin 把 heredoc 里后面的脚本行当输入吃掉,表现为"脚本从某行起再无输出"。
+   与"heredoc 里内层 ssh 必须 `-n`"是同一机制。.exe 的输出先落文件再 `tr -d '\r'` 读。
+2. **Docker Desktop 不能从 ssh 会话里拉起**:`docker desktop start/restart` 在 ssh 里
+   执行会打印 "✓ Starting Docker Desktop",backend 走到
+   "start wsl integration for distro Ubuntu-24.04" 后随 ssh 会话结束一起被杀,日志无报错
+   戛然而止,进程列表为空。**`docker desktop restart` 还会把 WSL 整个重启**(Ubuntu 发行版
+   uptime 归零,等于 `wsl --shutdown`)。正确做法:用户在 Windows 桌面上点开 Docker
+   Desktop,等托盘显示 Engine running;之后 Ubuntu 里 `/var/run/docker.sock` 自动回来
+   (`settings-store.json` 的 `IntegratedWslDistros` 已含 Ubuntu-24.04)。
+3. WSL 打嗝时 `wsl -e` 返回 `Wsl/Service/E_UNEXPECTED`(UTF-16 乱码),几十秒后自愈;
+   `wsl -l -v` 在 Windows shell 里照常可用,可用它判断发行版状态。
+
+**恢复顺序**:Docker Desktop(桌面点开)→ 用户重过 Duo 建 Klone/Tillicum 主连接(§4)→
+重起 `chain_eval_w20.sh`(它会从 mixb9bw20 29/100 续跑,再 mixc9b、mixa4b)→
+另一会话再拉 WebSTAR(≤48 并发,与 eval 错开)。
+
 ## 作业编排的两条硬规矩(2026-08-17,各犯一次换来的)
 
 ### 一、先占再放:新作业排上之后,才取消旧作业
