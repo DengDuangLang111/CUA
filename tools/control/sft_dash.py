@@ -293,6 +293,12 @@ EVAL50_ARMS = {
                   " Qwen3.5-9B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1,"
                   " checkpoint-627. 9B -- READ AGAINST THE 9B BASE, never"
                   " against the 4B arms"),
+    "mixb9bw20": ("mixB 9B e3.00 · ALL 100 · served 20/10 (a2 protocol)", "sft",
+                  "the SAME weights as mixb9b (mixB-9b-e873), re-served with"
+                  " image_max 20 / fold_size 10 -- the window a2/a7 were scored"
+                  " under -- so the a2-vs-mixB gap can be read net of the"
+                  " inference window. Pair with mixb9b (10/1). 9B -- READ"
+                  " AGAINST THE 9B BASE, never against the 4B arms"),
     "mixb4b50b": ("mixB 4B e3.00 · HELD-OUT 50 · stock (no-split)", "sft",
                   "the SAME weights as mixb4b, on the OTHER half of the frozen"
                   " 100 (verified_eval50b_nonproxy.json). Held out since"
@@ -579,7 +585,42 @@ ARM_PANEL = {"nocap50b": "heldout", "base50b": "heldout", "t3850b": "heldout",
              # to 42.903 -- but was missing here, so its held-out 50 were
              # dropped and it read 49.81/50 instead of 42.90/100. Third time a
              # missing key here has silently halved an arm's panel.
-             "a1h10": "all100"}
+             "a1h10": "all100",
+             # 2026-09-01: mixb9b re-served at 20/10. Fourth time a new arm
+             # landed here after its first cells were already on screen as
+             # "n of 50" -- see panel_from_boundary() below for the fallback
+             # that finally makes a missing key loud instead of silent.
+             "mixb9bw20": "all100"}
+
+# The chain drivers write MODEL_BOUNDARY.json into every result dir with a
+# "tasks" field naming the meta file the arm was run on. When an arm has no
+# ARM_PANEL entry, read that instead of silently defaulting to the seen 50,
+# and say so on stderr so the daemon log records the choice.
+_BOUNDARY_PANEL = {"verified_eval100_nonproxy.json": "all100",
+                   "verified_eval50b_nonproxy.json": "heldout",
+                   "verified_eval261_rest.json": "rest261",
+                   "test_nogdrive.json": "all361",
+                   "verified_eval50_nonproxy.json": None}   # None = seen 50, the default
+
+
+def panel_from_boundary(result_dir, key):
+    p = os.path.join(result_dir, "MODEL_BOUNDARY.json")
+    try:
+        with open(p, encoding="utf-8") as f:
+            meta = str(json.load(f).get("tasks", ""))
+    except Exception:
+        return None
+    # "tasks" is sometimes the bare meta filename and sometimes the filename
+    # followed by a description ("... (frozen stratified sample, ...)"), so
+    # match by containment, longest name first.
+    choice = None
+    for name, val in sorted(_BOUNDARY_PANEL.items(), key=lambda kv: -len(kv[0])):
+        if name in meta:
+            choice = val
+            break
+    print(f"[sft_dash] {key}: no ARM_PANEL entry; MODEL_BOUNDARY.tasks={meta[:60]}"
+          f" -> panel {choice or 'seen50'}", file=sys.stderr)
+    return choice
 
 
 def eval50():
@@ -607,10 +648,13 @@ def eval50():
         # "all361" spans every slice: the window-probe arms run the whole
         # official panel in one pass rather than stitching three runs, so they
         # need the union as their denominator.
+        panel_key = ARM_PANEL.get(key)
+        if key not in ARM_PANEL:
+            panel_key = panel_from_boundary(d, key)
         panel = {"heldout": heldout, "all100": dict(tasks, **heldout),
                  "rest261": rest,
                  "all361": dict(tasks, **dict(heldout, **rest))}.get(
-            ARM_PANEL.get(key), tasks)
+            panel_key, tasks)
         got = {tid: r for tid, r in read_arm(d).items() if tid in panel}
         arms.append({"key": key, "run": run, "modeldir": modeldir,
                      "label": label, "group": group, "note": note,
