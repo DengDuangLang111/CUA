@@ -273,7 +273,8 @@ class WebStarFilterTests(unittest.TestCase):
             text_parts = [part["text"] for part in messages[1]["content"]
                           if part["type"] == "text"]
             self.assertNotIn("SECRET TEACHER THINK", "\n".join(text_parts))
-            self.assertIn("<parameter=action>\nkey", "\n".join(text_parts))
+            self.assertIn("pyautogui.hotkey('ctrl', 's')", "\n".join(text_parts))
+            self.assertNotIn("<parameter=coordinate>", "\n".join(text_parts))
             images = [part for part in messages[1]["content"]
                       if part["type"] == "image_url"]
             self.assertEqual(len(images), 2)  # two pre-action screens, no post screen/crop

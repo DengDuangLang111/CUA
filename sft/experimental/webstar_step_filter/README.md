@@ -57,7 +57,8 @@ The grader receives:
 3. up to three chronological **pre-action** screenshots;
 4. action annotations on those screenshots;
 5. a 200x200 crop around the current coordinate target when available;
-6. the current proposed action;
+6. the actual ordered action bundle executed by the harness, in screenshot
+   pixel coordinates;
 7. an instruction to compare viable alternatives and assign expected value
    from 0 through 10.
 
@@ -76,6 +77,13 @@ augmentation out of v1.
 | `final_answer` | Explicit `terminate` / DONE |
 | Folder-local result JSON | Collision-proof global step manifest |
 | Loose path/action assumptions | Fail-closed source hashes and identity |
+
+The teacher target expresses pointer coordinates on a relative 0-999 grid,
+while screenshots and executed pyautogui actions use screen pixels. The judge
+receives the executed pixel-coordinate action bundle so its textual action,
+red marker, and screenshot share one coordinate frame. The original relative
+target remains unchanged in the SFT data and its hash remains the provenance
+anchor.
 
 The unique identity of every target is:
 
@@ -273,8 +281,8 @@ Completed:
 - decision and manual-override layer;
 - filtered-copy builder and retention audit;
 - offline tests.
-- local PPAPI `gpt-4o` and `gpt-4o-mini` compatibility smokes on an older
-  307-row / 15-trajectory pilot, including raw-trajectory and task-JSON joins.
+- local PPAPI multimodal compatibility smokes on an older 307-row /
+  15-trajectory pilot, including a corrected `gpt-5.6-luna` judge run.
 
 Not yet executed:
 
@@ -300,66 +308,73 @@ This smoke is an engineering check, not MixB evidence. It used the local
 source rows: 307
 trajectories: 15
 samples.jsonl sha256: c8c56690e3bcf3632b1dbcec34d0c8c45e4bd6c05d90c324378e4a0942176486
-grader: PPAPI gpt-4o
+corrected grader: PPAPI gpt-5.6-luna
 ```
 
 The PPAPI endpoint authenticated and listed 132 models. It did not offer
-`o4-mini`; `gpt-4o`, which the WebSTAR reference script also accepts, was used
-only for compatibility testing. The credential remained in the ignored local
-environment file and was not written to any manifest, prompt, report, or Git
-file.
+`o4-mini`; it offered `gpt-4o`, `gpt-4o-mini`, and `gpt-5.6-luna`. The
+credential remained in the ignored local environment file and was not written
+to any manifest, prompt, report, or Git file.
 
 Offline construction joined the neutral rows to the exact raw run and task
-set. Three initial requests completed without API, parsing, image, or path
-failures, but all scored 10. A deliberately harder set of eight repeated WAIT
-or repeated-click targets then produced:
+set. Initial `gpt-4o` and `gpt-4o-mini` requests proved API, image, parsing,
+resume, and decision compatibility. Their quality scores are superseded: the
+judge text contained the teacher's relative 0-999 coordinate while the red
+marker and screenshot used 1920x1088 pixels. Some judges compared those values
+directly and penalized or rewarded a mismatched location.
+
+The implementation was corrected to give the judge the actual ordered
+pyautogui action bundle in screenshot pixel coordinates. The original target
+remains unchanged in training and remains the hashed provenance anchor. Tests
+now require the executed pixel action in the judge input and reject leakage of
+the relative target coordinate.
+
+With the corrected input, `gpt-5.6-luna` scored three ordinary/positive
+controls as:
 
 ```text
-scores: 2, 2, 2, 3, 4, 8, 10, 10
-paper threshold: drop 5, keep 3
+ordinary first step: 6
+useful navigation/recovery: 9
+terminal completion: 10
 ```
 
-Four of those targets were independently rescored. Two remained on the same
-side of the threshold (`2->2`, `4->4`); two crossed it (`3->6`, `8->2`) and
-were correctly converted by `decide_steps.py` to `review`. Because this was a
-small, intentionally risky subset, the observed 2/4 disagreement is not a
-population estimate. It is sufficient evidence that one PPAPI `gpt-4o` pass
-must not be treated as a final data decision.
+The same corrected grader scored eight deliberately risky repeated-WAIT,
+repeated-click, off-target, or redundant-action steps as:
+
+```text
+scores: 1, 1, 1, 1, 2, 3, 3, 4
+paper threshold: drop 8, keep 0
+```
+
+The explanations were grounded in the screenshots and executed pixels: for
+example, already-focused fields were clicked again, loading links were clicked
+twice, empty-state waits were repeated, and some actions targeted blank space.
+The three positive controls rule out a model that simply assigns low scores to
+everything.
+
+Four risky targets were independently rescored:
+
+```text
+3 -> 4  drop
+2 -> 2  drop
+1 -> 0  drop
+1 -> 1  drop
+```
+
+All 4/4 remained on the same side of `score > 5`, and `decide_steps.py`
+produced four drops with no review. This is a small, risk-enriched smoke, not a
+population accuracy estimate.
 
 Consequences:
 
 - the input, multimodal API, score parser, append-only manifest, and two-pass
   decision path work end to end;
-- PPAPI `gpt-4o` has useful separation on obvious bad steps but material
-  threshold instability on some cases;
+- the judge must receive one coordinate frame; earlier `gpt-4o` and
+  `gpt-4o-mini` scores are compatibility evidence only and cannot be compared
+  with the corrected Luna scores;
+- corrected PPAPI `gpt-5.6-luna` showed useful positive/negative separation and
+  stable threshold decisions on the four repeated risky cases;
 - the real calibration must keep two independent passes and manual review of
   all threshold disagreements;
 - these results do not replace the planned MixB calibration and do not justify
   full-corpus grading or training.
-
-### PPAPI `gpt-4o-mini` comparison
-
-The PPAPI documentation page names `gpt-4o-mini`. This is a different model id
-from the paper's `o4-mini`; the distinction is preserved in every report.
-Running the same eight risky targets with `gpt-4o-mini` produced:
-
-```text
-scores: 2, 2, 3, 4, 5, 6, 9, 10
-paper threshold: drop 5, keep 3
-```
-
-The same four-target repeat panel produced:
-
-```text
-9 -> 9  keep
-5 -> 4  drop
-2 -> 4  drop
-6 -> 3  review (threshold disagreement)
-```
-
-Thus 3/4 deliberately selected repeat cases stayed on the same threshold side
-for `gpt-4o-mini`, compared with 2/4 for `gpt-4o`. On the shared eight-target
-first pass, the two models agreed on the threshold side for 6/8 targets. These
-small, risk-enriched samples are not accuracy or population estimates. They
-show that `gpt-4o-mini` is faster and has usable separation, but still requires
-the registered two-pass/review procedure and the real 200-step calibration.

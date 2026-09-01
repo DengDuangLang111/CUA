@@ -25,8 +25,7 @@ except ModuleNotFoundError:  # pragma: no cover - environment-dependent import
     from sft import traj
 
 from .common import (StepKey, iter_jsonl, load_source_rows,
-                     parse_named_paths, sha256_bytes, sha256_text,
-                     target_action_text)
+                     parse_named_paths, sha256_bytes, sha256_text)
 from .prompt import STEP_JUDGE_PROMPT, prompt_sha256
 from .visuals import annotate_action
 
@@ -135,7 +134,10 @@ def build_judge_messages(key, source_row, result_base, tasks_base,
         f"step {step.num}: " + " | ".join(step.actions)
         for step in steps[max(0, index - max_screenshots + 1):index]
     ]
-    proposed = target_action_text(source_row.sample.get("response", ""))
+    proposed = "\n".join(
+        f"{position}. {action}"
+        for position, action in enumerate(current.actions, 1)
+    ) or "[No executed action]"
     intro = (
         f"USER_TASK:\n{instruction}\n\n"
         f"PREVIOUS_EXECUTED_ACTIONS:\n"
