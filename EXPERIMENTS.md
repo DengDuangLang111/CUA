@@ -8,6 +8,9 @@
 > (`chain_eval_rest.sh`)与链 B(`chain_eval_lr.sh`,lr2e5/lr2e5gb128/lr1e5/lr1e5b999,
 > READY 已在)已按用户令停掉;lr 四臂**未排**,要跑需重起链 B。切换时 mixb4b50b 的
 > 补题 runner(PID 132493)未受影响。为什么插 mixb9bw20:见下文 a2 条目的 09-01 注记。
+> 进度:mixb4b50b 50/50、mixb9b 100/100、mixa9b 100/100(57.0%;去 infeasible 58.6%,
+> 与 mixb9b 逐分相等,RESULTS §5.30);mixb9bw20 14:21 起跑(runner 命令行与 args.json 均
+> 已核 `--image_max 20 --fold_size 10`)。
 
 - **动作普查:v16 成功轨迹 vs v11 成功轨迹(08-30 夜,用户令"看下动作区别")**:
   ⚠**先修一个计数错误(本轮我自己犯的):`traj.jsonl` 一行 = 一个 pyautogui 动作,
