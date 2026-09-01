@@ -916,11 +916,31 @@ logger.error("Failed to get screenshot. Status code: %d", response.status_code)
 观测输入,置空后续步等于让模型盲走,未必比崩掉好。而"崩溃写 0 分"是
 `run_multienv_qwen.py:250` 注释里记录的**用户既定取舍**,不在本方案内翻案。
 
+### 10.11 全部 harness 崩溃的逐类修法(2026-09-01,按可挽回价值排序)
+
+| 类 | 次数 | 根因(实证) | 修法 | 状态 |
+|---|---|---|---|---|
+| 客机服务死(截图 None + 其他端点) | 213 | systemd `StartLimitBurst=4/60s` 永久判死(§10.0) | 第一层 drop-in,开关 `OSTG_GUEST_RESTART_UNLIMITED=1` | diff 已备,待批 |
+| Setup `_open_setup` 失败 | 15 | **同上**,只是死在 setup 期 | 同上,不需额外改动 | 随第一层 |
+| `mixc9b-stock` 404 | 100 | 服务名与请求名不一致(本会话事故) | 链脚本已改为从端点读服务名 | **已修** |
+| AWS SSO token 过期 | 71 | `providers/aws/provider.py:108` 快照回滚时 botocore 刷新失败;**一旦过期后续每题必死**,却逐题写了 71 个 0 | (1) RUNBOOK:AWS 长跑前 `aws sso login` 并确认会话时长覆盖全程;(2) 可选:runner 按异常类名 `TokenRetrievalError` 鸭子判定,SIGTERM 父进程中止全跑、本题不写分 | 仅 AWS provider;当前 docker 不涉及 |
+| evaluator 缺函数 | 32 | fork 删了 `metrics/__init__.py` 的上游导入(§9) | 08-22 已恢复 8 个导入;源码与 pycache 同秒,此后零复发 | **已修**;08-22 前评过的臂仍带 8 题赤字,引用时须注记 |
+| 被外部 kill:`can only test a child process` | 10 | `signal_handler` 注册于 fork 前(`:487`),子进程继承后对父进程的 `processes` 调 `is_alive()` 触发断言,断言落进任务的 except 写成 0 | 模块级 `_MAIN_PID`,子进程直接 `sys.exit(0)`;`SystemExit` 不是 `Exception`,不写 result.txt,任务留空待重跑 | diff 已备,待批 |
+| 被外部 kill:`has no attribute 'fileno'` | 2 | 08-30 14:41:20 两臂同秒——外部关闭 stdout 后 logging 取 fd | 同上一族;根治是后台进程 `setsid` + `</dev/null`(已入 memory) | 流程性 |
+| 超上下文 262144 | 5 | 模型 think 失控(§8),prompt 已超 18 万 token | **不改代码**:这是模型失败,0 分正确;分析侧把含 `maximum context length` 的 `harness_error.json` 计入模型失败而非基础设施 | 口径规则 |
+| Chrome CDP `socket hang up` | 5 | 调试端口未就绪/Chrome 已死,瞬时 | 不修;量小且已有 `_wait_for_chrome_ws_ready` | 观察 |
+| HF 下载失败 | 1 | 网络瞬断 | 不修;已有 MAX_RETRIES | 观察 |
+
+**真正要改代码的只有两处:systemd drop-in 与 signal handler 的父子判别**;SSO 守卫可选。
+其余要么已修,要么是口径/流程问题,写代码反而是冗余。
+
+> 分类器教训:按 `has no attribute` 字面串归类把 `'fileno'` 混进了 evaluator 一类,
+> 差点得出"修复后仍复发"的假结论。归类必须看完整异常文本,不能只看子串。
+
 ### 10.10 待办
 
 - [ ] 第一层/第二层 diff 已备,待批准后在 worktree 上落地(不入 main)
 - [ ] vlc 域 15.72% 崩溃率:开关生效后复测,验证是否收敛
-- [ ] 32 次 evaluator 缺函数(`compare_pptx_files_robust` 等)是确定性 checker
-      自身 bug,与客机无关,单独修
+- [x] 32 次 evaluator 缺函数:08-22 已修(§9),本次复核零复发;仅历史臂带赤字
 - [ ] 173/213 基础设施死集中在 `qwen35-4b-sft` 单臂(6.8%,其余臂 0.4–1.4%),
       需查该臂当时的并发/时段配置差异
