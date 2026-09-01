@@ -273,8 +273,8 @@ Completed:
 - decision and manual-override layer;
 - filtered-copy builder and retention audit;
 - offline tests.
-- a local PPAPI `gpt-4o` compatibility smoke on an older 307-row / 15-trajectory
-  pilot, including raw-trajectory and task-JSON joins.
+- local PPAPI `gpt-4o` and `gpt-4o-mini` compatibility smokes on an older
+  307-row / 15-trajectory pilot, including raw-trajectory and task-JSON joins.
 
 Not yet executed:
 
@@ -336,3 +336,30 @@ Consequences:
   all threshold disagreements;
 - these results do not replace the planned MixB calibration and do not justify
   full-corpus grading or training.
+
+### PPAPI `gpt-4o-mini` comparison
+
+The PPAPI documentation page names `gpt-4o-mini`. This is a different model id
+from the paper's `o4-mini`; the distinction is preserved in every report.
+Running the same eight risky targets with `gpt-4o-mini` produced:
+
+```text
+scores: 2, 2, 3, 4, 5, 6, 9, 10
+paper threshold: drop 5, keep 3
+```
+
+The same four-target repeat panel produced:
+
+```text
+9 -> 9  keep
+5 -> 4  drop
+2 -> 4  drop
+6 -> 3  review (threshold disagreement)
+```
+
+Thus 3/4 deliberately selected repeat cases stayed on the same threshold side
+for `gpt-4o-mini`, compared with 2/4 for `gpt-4o`. On the shared eight-target
+first pass, the two models agreed on the threshold side for 6/8 targets. These
+small, risk-enriched samples are not accuracy or population estimates. They
+show that `gpt-4o-mini` is faster and has usable separation, but still requires
+the registered two-pass/review procedure and the real 200-step calibration.
