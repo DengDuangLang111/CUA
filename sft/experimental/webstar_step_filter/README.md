@@ -282,7 +282,8 @@ Completed:
 - filtered-copy builder and retention audit;
 - offline tests.
 - local PPAPI multimodal compatibility smokes on an older 307-row /
-  15-trajectory pilot, including a corrected `gpt-5.6-luna` judge run.
+  15-trajectory pilot, including corrected `gpt-5.6-luna` and `gpt-5.6-sol`
+  judge runs.
 
 Not yet executed:
 
@@ -378,3 +379,53 @@ Consequences:
   all threshold disagreements;
 - these results do not replace the planned MixB calibration and do not justify
   full-corpus grading or training.
+
+### Corrected `gpt-5.6-sol` comparison
+
+With the same pixel-coordinate input, `gpt-5.6-sol` scored the eight risky
+targets as:
+
+```text
+scores: 1, 1, 1, 2, 3, 4, 5, 7
+paper threshold: drop 7, keep 1
+```
+
+The only kept risky target was a second WAIT on a blank GIMP Preferences
+dialog. Sol considered one more low-risk wait a reasonable recovery; Luna
+considered it a redundant retry (`7` versus `3`). This case is genuinely
+ambiguous and belongs in a recovery-focused manual audit.
+
+The three positive controls received:
+
+```text
+ordinary first step: 10
+navigation to the required lowercase ~/documents folder: 3
+terminal completion: 9
+```
+
+The navigation score is a concrete Sol false negative in this sample. Sol
+mistook the visible lowercase `documents` folder for the wrong location and
+preferred the desktop's standard `Documents` folder, while the task trajectory
+and successful completion specifically use `~/documents/induction_pack`.
+Luna correctly scored that step `9`.
+
+The four-target Sol repeat panel produced:
+
+```text
+5 -> 6  review
+3 -> 3  drop
+1 -> 2  drop
+1 -> 2  drop
+```
+
+Thus 3/4 repeat cases stayed on the same threshold side and one became review.
+Across the shared eleven corrected first-pass targets, Luna and Sol agreed on
+the threshold side for 9/11. The two disagreements were the lowercase-folder
+false negative above and the ambiguous recovery WAIT.
+
+On this tiny smoke, Luna better matches the known task evidence and separates
+all three positive controls from all eight selected risky steps. Sol is more
+permissive about recovery but introduces one clear false negative. This does
+not establish model-wide superiority; it makes Luna the better current
+candidate for the registered 200-step calibration, with Sol useful as an
+independent disagreement judge on recovery and borderline cases.
