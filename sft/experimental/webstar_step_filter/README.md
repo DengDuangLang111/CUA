@@ -480,3 +480,59 @@ candidate that clears all three local sanity conditions simultaneously. The
 registered 200-step calibration should therefore start with Luna; Sol can
 audit recovery disagreements, while 4o-mini should remain out of the main
 filter unless a different context/prompt design is tested as a separate arm.
+
+### Full 307-row local pilot retention estimate
+
+After the coordinate correction and model smoke, Luna scored all 307 target
+rows in `v11-500-partial-snap-pilot2` once. All calls completed; there were no
+API, image, path, or score-parsing failures.
+
+Raw WebSTAR threshold result:
+
+```text
+score > 5:  247 keep
+score <= 5:  60 drop
+single-pass retention: 80.46%
+```
+
+By domain:
+
+```text
+Chrome: 217 / 270 keep = 80.37%
+GIMP:    30 /  37 keep = 81.08%
+```
+
+Score distribution:
+
+```text
+0:  0   1: 20   2: 15   3: 4   4: 12   5: 9
+6: 32   7: 31   8: 85   9: 84  10: 15
+```
+
+Applying the terminal safety policy to that single pass changes the operational
+decisions to:
+
+```text
+keep:    245 / 307 = 79.80%
+drop:     58 / 307 = 18.89%
+review:    4 / 307 =  1.30%
+```
+
+The pilot contains 15 trajectories but only 12 terminal target rows. Ten of
+those twelve carry an explicit tool-call stop. Among the twelve scored terminal
+rows, eight are auto-kept and four become review because of low score or
+implicit ending. Separately, three trajectories have no terminal target row at
+all; step scoring does not repair that existing corpus defect.
+
+Per-trajectory raw retention ranges from 33.3% to 100%, with a median of 81.1%.
+This is an old, highly imbalanced pilot (270 Chrome rows and 37 GIMP rows), so
+80.46% is a local engineering estimate, not the expected MixB retention rate.
+The final policy still requires the representative calibration and two-pass
+disagreement review.
+
+Temporary artifact hashes:
+
+```text
+scores:    0ed01be8cbb6d96063eb18f8192562cad844b1b24aefdd602bea7cb114c851db
+decisions: 7825d6498b1f4e4c0229bad0aed388722c3cafb997a8ac2581e397696f629daf
+```
