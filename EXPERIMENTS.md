@@ -2,6 +2,13 @@
 
 ## 现状(2026-08-30,过时即改;历史快照看 git log)
 
+> **eval 队列(2026-09-01 13:56 起,WSL 3 VM 串行)**:链 `chain_eval_w20.sh`(PID 135573,
+> 日志 `$CTL/logs/chain_eval_w20.log`)接管:`mixb9b 补1 → mixa9b 补2 → **mixb9bw20**
+> (mixB-9b-e873 同权重,推理窗口 20/10 对齐 a2)→ mixc9b → mixa4b`。原链 A
+> (`chain_eval_rest.sh`)与链 B(`chain_eval_lr.sh`,lr2e5/lr2e5gb128/lr1e5/lr1e5b999,
+> READY 已在)已按用户令停掉;lr 四臂**未排**,要跑需重起链 B。切换时 mixb4b50b 的
+> 补题 runner(PID 132493)未受影响。为什么插 mixb9bw20:见下文 a2 条目的 09-01 注记。
+
 - **动作普查:v16 成功轨迹 vs v11 成功轨迹(08-30 夜,用户令"看下动作区别")**:
   ⚠**先修一个计数错误(本轮我自己犯的):`traj.jsonl` 一行 = 一个 pyautogui 动作,
   不是一步;步是 `step_num` 字段。** 按行数数会把"50 步打出 142 个动作"报成 142 步,
