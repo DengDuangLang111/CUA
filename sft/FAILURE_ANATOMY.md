@@ -964,7 +964,7 @@ signal 判别是纯 bug 修;SSO 守卫只在 `TokenRetrievalError` 触发;截图
 | systemd drop-in 语义 | WSL `systemctl --user` 单元复刻镜像配置(`Burst=4/60s`,`RestartSec=1s` 加速),12 秒后看状态;再加 drop-in 重测 | 原配置:`failed`,`NRestarts=4` 冻结(**复现 bug**);drop-in 后:`StartLimitIntervalUSec=0`,`activating/auto-restart`,`NRestarts=9` 持续增长 |
 | signal handler | fork 实测,真实 `signal_handler`,fork 前注册,**先启动一个兄弟 worker 放进 `processes` 再 fork 被测 worker**;对照组用未打补丁的在跑树模块 | 对照组写假零、补丁组不写(退出码均 0) |
 | SSO 守卫 | 仅编译 | AWS 专属路径,无 AWS 环境可集成测 |
-| **客机真机 drop-in** | 需一个空 VM 槽位:`reset()` 开开关走真实路径 → 客机内 `systemctl show` 验 `StartLimitIntervalUSec=0` → 60 秒内 kill 服务 6 次 → 验 `/screenshot` 回 200 | **待做**,eval 占满 3 槽 |
+| **客机真机 drop-in** | 脚本已备 `/mnt/d/research/patches/t4_guest_dropin.py`(md5 `b21124e1…`,已过编译):`reset()` 开开关走真实路径 → 客机内 `systemctl show` → 60 秒内 `systemctl kill -s KILL` 6 次(SIGTERM 不触发 on-failure,必须 KILL)→ 每次验 `/screenshot` 200;**阶段 B 同 VM 移除 drop-in 再杀 6 次作对照,预期第 5 次后死** | **待跑**,eval 占满 3 槽(mixa9b 59/100 → mixc9b → mixa4b);跑法见脚本头 |
 
 **测试过程中的新发现**:signal handler 的断言只在**后启动的 worker** 上触发。
 `process.start()` 在 `processes.append()` 之前,第一个 worker fork 时继承的列表为空,
