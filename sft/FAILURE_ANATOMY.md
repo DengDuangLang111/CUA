@@ -886,7 +886,7 @@ logger.error("Failed to get screenshot. Status code: %d", response.status_code)
 - **步数**:中位 34,无偏。
 - **全局事件**:100 次 giveup 中 75 次只涉及单个 env。
 
-### 10.9 修复方案(2026-09-01 提出,**未落地,待批准**)
+### 10.9 修复方案(2026-09-01 提出;**同日批准并落地**,见 §10.12)
 
 分三层,只有第一层动根因。全部按 §7 修法 B 的先例用环境变量显式开关,默认关闭,
 行为逐字节不变;开关由驱动脚本每次运行决定,启用即入 OPS.md 披露清单。
@@ -937,9 +937,45 @@ logger.error("Failed to get screenshot. Status code: %d", response.status_code)
 > 分类器教训:按 `has no attribute` 字面串归类把 `'fileno'` 混进了 evaluator 一类,
 > 差点得出"修复后仍复发"的假结论。归类必须看完整异常文本,不能只看子串。
 
+### 10.12 落地与测试记录(2026-09-01)
+
+**版本**:WSL `OSWorld` 分支 `fix-harness-crashes` @ `0a6d674`(worktree
+`/mnt/d/research/OSWorld-fix`,基于 `aws-rollout@3df1ef4` + 复刻的 11 M + 2 未跟踪);
+净补丁 `/mnt/d/research/patches/fix.5files.patch`(79+/8-)。在跑的树同步后 5 文件
+md5 与分支逐字节一致:
+
+| 文件 | md5 |
+|---|---|
+| `desktop_env/controllers/setup.py` | `2847a501d0c55c71b2a311e59235a6aa` |
+| `desktop_env/desktop_env.py` | `b82f56d8658ba6f2e486ef69102289a3` |
+| `desktop_env/controllers/python.py` | `978cd03ed9bf5872e3fb7afbb5f73606` |
+| `desktop_env/server/osworld_server.service` | `154ca42cfec84922839ebc35033424f2` |
+| `scripts/python/run_multienv_qwen.py` | `fddfadb896e8300cd60fd04805777cdb` |
+
+在跑的 eval 进程模块已在内存,不受影响;**下一个臂的新进程起即生效**。四项改动对
+打分/模型的影响:systemd 部分默认关(`OSTG_GUEST_RESTART_UNLIMITED=1` 才开);
+signal 判别是纯 bug 修;SSO 守卫只在 `TokenRetrievalError` 触发;截图只多记 body。
+
+**测试**:
+
+| 项 | 方法 | 结果 |
+|---|---|---|
+| 语法 | `py_compile` 4 个 .py,worktree 与在跑树各一遍 | 8/8 通过 |
+| systemd drop-in 语义 | WSL `systemctl --user` 单元复刻镜像配置(`Burst=4/60s`,`RestartSec=1s` 加速),12 秒后看状态;再加 drop-in 重测 | 原配置:`failed`,`NRestarts=4` 冻结(**复现 bug**);drop-in 后:`StartLimitIntervalUSec=0`,`activating/auto-restart`,`NRestarts=9` 持续增长 |
+| signal handler | fork 实测,真实 `signal_handler`,fork 前注册,**先启动一个兄弟 worker 放进 `processes` 再 fork 被测 worker**;对照组用未打补丁的在跑树模块 | 对照组写假零、补丁组不写(退出码均 0) |
+| SSO 守卫 | 仅编译 | AWS 专属路径,无 AWS 环境可集成测 |
+| **客机真机 drop-in** | 需一个空 VM 槽位:`reset()` 开开关走真实路径 → 客机内 `systemctl show` 验 `StartLimitIntervalUSec=0` → 60 秒内 kill 服务 6 次 → 验 `/screenshot` 回 200 | **待做**,eval 占满 3 槽 |
+
+**测试过程中的新发现**:signal handler 的断言只在**后启动的 worker** 上触发。
+`process.start()` 在 `processes.append()` 之前,第一个 worker fork 时继承的列表为空,
+循环不执行、干净退出;第二个起继承到 `[worker1]`,`is_alive()` 才断言。第一版测试
+没放兄弟进程,对照组也"通过"了——**没有灵敏度对照的测试会把不触发当成修好**。
+
 ### 10.10 待办
 
-- [ ] 第一层/第二层 diff 已备,待批准后在 worktree 上落地(不入 main)
+- [x] 第一层/第二层/signal/SSO 四处改动已落地(§10.12)
+- [ ] **客机真机 drop-in 测试**:等一个 VM 槽位
+- [ ] **下一轮 campaign 是否开 `OSTG_GUEST_RESTART_UNLIMITED=1`**:用户决定;开了与 12 个历史臂不同口径,须注记
 - [ ] vlc 域 15.72% 崩溃率:开关生效后复测,验证是否收敛
 - [x] 32 次 evaluator 缺函数:08-22 已修(§9),本次复核零复发;仅历史臂带赤字
 - [ ] 173/213 基础设施死集中在 `qwen35-4b-sft` 单臂(6.8%,其余臂 0.4–1.4%),
