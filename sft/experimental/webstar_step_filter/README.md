@@ -282,8 +282,8 @@ Completed:
 - filtered-copy builder and retention audit;
 - offline tests.
 - local PPAPI multimodal compatibility smokes on an older 307-row /
-  15-trajectory pilot, including corrected `gpt-5.6-luna` and `gpt-5.6-sol`
-  judge runs.
+  15-trajectory pilot, including corrected `gpt-5.6-luna`, `gpt-5.6-sol`, and
+  `gpt-4o-mini` judge runs.
 
 Not yet executed:
 
@@ -429,3 +429,54 @@ permissive about recovery but introduces one clear false negative. This does
 not establish model-wide superiority; it makes Luna the better current
 candidate for the registered 200-step calibration, with Sol useful as an
 independent disagreement judge on recovery and borderline cases.
+
+### Corrected `gpt-4o-mini` comparison
+
+The same pixel-coordinate input was also rerun with `gpt-4o-mini`; none of its
+pre-fix scores were reused. The eight risky targets received:
+
+```text
+scores: 1, 1, 1, 2, 2, 3, 3, 4
+paper threshold: drop 8, keep 0
+```
+
+However, all three positive controls were also rejected:
+
+```text
+ordinary first step: 3
+navigation to the required lowercase ~/documents folder: 3
+terminal completion: 2
+```
+
+Its terminal explanation claimed that the merge had not occurred and that the
+agent was ending prematurely, despite the successful trajectory and final
+completion evidence. In this three-frame prompt regime, `gpt-4o-mini` is too
+conservative and does not reliably reconstruct accumulated task progress.
+
+The four-target repeat panel produced:
+
+```text
+2 -> 2  drop
+3 -> 8  review
+1 -> 2  drop
+3 -> 2  drop
+```
+
+Thus 3/4 remained on the same threshold side and one became review. The model
+is useful for rejecting obvious bad actions but fails the minimum positive
+control requirement, so it is not a viable primary judge for the 200-step
+calibration under the current WebSTAR-compatible input.
+
+Corrected smoke summary:
+
+| Judge | Positive kept | Risky dropped | Repeat threshold-stable |
+|---|---:|---:|---:|
+| `gpt-5.6-luna` | **3/3** | **8/8** | **4/4** |
+| `gpt-5.6-sol` | 2/3 | 7/8 | 3/4 |
+| `gpt-4o-mini` | 0/3 | **8/8** | 3/4 |
+
+This tiny, selected smoke is not a performance benchmark, but Luna is the only
+candidate that clears all three local sanity conditions simultaneously. The
+registered 200-step calibration should therefore start with Luna; Sol can
+audit recovery disagreements, while 4o-mini should remain out of the main
+filter unless a different context/prompt design is tested as a separate arm.
