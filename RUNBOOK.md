@@ -869,6 +869,47 @@ So **v11's 39% and v11-500's 24% are numbers from a patched harness** and are
 not comparable to published OSWorld results. Every campaign from 2026-08-14
 onward is.
 
+### Guest systemd restart limit — opt-in switch (2026-09-01)
+
+The prebuilt guest image's `osworld_server.service` carries
+`StartLimitIntervalSec=60 / StartLimitBurst=4 / RestartSec=5s`: five crashes of
+the in-VM HTTP server inside one minute and systemd stops restarting it
+**permanently** — every later request gets `Connection refused` until the
+container is recycled, and the harness scores the task 0. This is the single
+largest harness-crash cause on record (213 of 453, 47%; vlc domain 15.7%).
+Root cause, measurements, and the disproof of "just retry more" are in
+`sft/FAILURE_ANATOMY.md` §10.
+
+```bash
+export OSTG_GUEST_RESTART_UNLIMITED=1   # per-task drop-in: StartLimitIntervalSec=0
+```
+
+Unset (the default) the harness is byte-for-byte the old behaviour. Set, every
+`reset()` writes a systemd drop-in into the guest via the same
+`echo password | sudo -S` channel `_proxy_setup` already uses (4 commands,
+re-applied per task because snapshot revert wipes it).
+
+**Comparability**: all 12 arms before 2026-09-01 ran under the start limit.
+An arm run with the switch on is not strictly comparable to them on the
+crash-prone domains (vlc, vs_code, multi_apps); note it in the arm's args line.
+It is prevention, not rescue — a task already dead when the switch was off
+stays dead.
+
+**Status**: semantics verified on WSL's own systemd (drop-in overrides the
+baked value; unit keeps restarting, §10.12). **Not yet exercised on a real
+guest VM** — needs one free VM slot; until then treat the switch as untested
+end-to-end.
+
+**AWS provider pre-flight** (only when `--provider_name aws`): an expired SSO
+token fails every remaining task identically. Before a long run:
+
+```bash
+aws sso login && aws sts get-caller-identity
+```
+
+and confirm the session lifetime covers the run. The runner now aborts the
+whole run on `TokenRetrievalError` instead of writing one 0 per task.
+
 ### How far the run parameters sit from upstream defaults
 
 `run_multienv_qwen.py` is upstream's own Qwen runner, not something we wrote.

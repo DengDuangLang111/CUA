@@ -16,7 +16,11 @@
  M mm_agents/qwen/main.py                        加 preserve_thinking,透传 chat_template_kwargs;**08-29 再加 `OSTG_REASONING_EFFORT`**(设了才注入 chat_template_kwargs.reasoning_effort;不设=模板默认 xhigh,逐字节同旧行为。模板只认 xhigh/medium/low,传 high 会 400——见 RUNBOOK「chat template, read at source」)
  M mm_agents/qwen/client.py                      reasoning_content 取不到时 fallback 到 reasoning
  M mm_agents/agent.py                            ANTHROPIC_BASE_URL 可配 + thinking disabled(只影响 PromptAgent/Claude,跑 Qwen 不走这里)
- M scripts/python/run_multienv_qwen.py           加 --preserve_thinking flag(评测侧空转,见下);08-18 起崩溃题落 result.txt=0.0 + harness_error.json(孤儿题修复,**代价:崩溃题不再被补跑趟自愈**,恢复靠按 harness_error.json 显式删目录重跑)
+ M scripts/python/run_multienv_qwen.py           加 --preserve_thinking flag(评测侧空转,见下);08-18 起崩溃题落 result.txt=0.0 + harness_error.json(孤儿题修复,**代价:崩溃题不再被补跑趟自愈**,恢复靠按 harness_error.json 显式删目录重跑);**09-01 加 signal handler 父子判别**(worker 继承父进程 handler 后对 `processes` 调 `is_alive()` 断言,断言落进任务 except 写假零,10 例;现子进程直接 `sys.exit(0)`,不写 result.txt)**+ AWS SSO 快速失败**(按类名 `TokenRetrievalError` 判定,SIGTERM 父进程中止全跑;71 例逐题假零的教训)
+ M desktop_env/controllers/setup.py              **09-01 新增** `_server_restart_policy_setup`:给客机 `osworld_server.service` 打 systemd drop-in(`StartLimitIntervalSec=0`),去掉"60 秒内崩 5 次即永久判死"的限速。**只在 `OSTG_GUEST_RESTART_UNLIMITED=1` 时调用,不设=逐字节同旧行为**。根因与实测 sft/FAILURE_ANATOMY.md §10.0,语义验证 §10.12
+ M desktop_env/desktop_env.py                    **09-01**:`reset()` 里按上述开关调用(快照回滚会抹掉 drop-in,故每任务重打;+4 行)
+ M desktop_env/controllers/python.py             **09-01**:截图非 200 时把 response body 前 500 字记进日志(此前只记状态码,68 次 HTTP 500 无从分辨"handler 抛异常"与"进程已死");纯日志
+ M desktop_env/server/osworld_server.service     **09-01**:仓库副本同步改 `StartLimitIntervalSec=0`。**对预制镜像 `happysixd/osworld-docker` 无作用**(单元烤在镜像里),仅保证未来自建镜像不再带此限速
  M lib_run_single.py                             存 initial_state.png(第 1 步观测原本不落盘);OSTG_WAIT_BREAK / OSTG_LOOP_LOG 两个环境变量(不设则完全惰性);**08-31 加 J2 磁盘状态收割**(`OSTG_FINAL_STATE=1` 才启用,不设完全惰性):setup 后采一次 VM 内文件普查作基线,判分前再采一次做差集,把 agent 改动的文件转录成文字存 `final_state.json` 给强判官。两个插入点:`obs = env._get_obs()` 之后(基线)、`env.evaluate()` 之前(收割)。安装器 `ostg-v16/patches/apply_j2.py`(幂等,只改 run_single_example)
 ?? mm_agents/qwen/final_state.py                 **08-31 新增**:J2 收割+转录模块。转录**按容器格式分派**(ODF 的 .odp/.odt/.ods 读 content.xml;OOXML 各用各的库——python-pptx 读不了 .odp、openpyxl 读不了 .ods),图片只做魔数检测(抓 `cp x.png y.jpg` 这类名实不符)。宿主侧转录,VM 不需要任何库
 ?? desktop_env/evaluators/metrics/generated_tasks.py    整个自定义 evaluator 模块(08-18 起含 check_pptx_props / check_image_props,fmt-w1 的规则式格式判据)
@@ -28,7 +32,7 @@
 
  M mm_agents/qwen/images.py                      **08-28 深夜**:process_image 的 max_pixels 环境变量化(`OSTG_MAX_PIXELS`,不设=13107200,逐字节同旧行为)。图窗试点 D 臂用 491520(≈960×512,~480 视觉 token/张;旧值下 1920×1088=2040 token/张)。坐标回缩 adjust_coordinates 原生按发送尺寸换算,无需配套改动
 
-**共 11 个已跟踪文件**(08-28 深夜加 images.py +2/−1 后;此前 10 个 +303/−40
+**09-01 起共 15 个已跟踪文件**(09-01 加 setup.py/desktop_env.py/controllers/python.py/osworld_server.service 四个,净 +79/−8,分支 `fix-harness-crashes@0a6d674`,净补丁 `/mnt/d/research/patches/fix.5files.patch`,在跑树 5 文件 md5 见 sft/FAILURE_ANATOMY.md §10.12;此前 11 个:08-28 深夜加 images.py +2/−1 后;此前 10 个 +303/−40
 复核于同日,HEAD 仍是 `091f5ef1`),另有
 上列未跟踪新增 + 新增未跟踪:`verified_eval261_rest.json`、`eval50b`、`vlsmoke3.json`、
 两个 codex-sync tar、`__init__.py.bak-before-restore-imports`。
