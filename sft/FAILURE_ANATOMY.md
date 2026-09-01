@@ -704,12 +704,47 @@ diff 里,于是"少了什么"被"多了什么"盖住**。断言该放在哪很�
 
 ## 10 截图返回 None 的真因:客机 HTTP 服务进程死亡,截图只是最先撞上的端点(2026-09-01)
 
-**结论先行:三条,都推翻了此前的说法。**
+**结论先行:根因是客机 systemd 的启动限速,四条,全部推翻此前说法。**
 
-1. **不是"重试次数不够"。** 失败是双峰的,中间地带不存在,加重试次数无效。
-2. **不是"命令风暴"为主通道**(§7 的 n=8 结论在 n=96 下不成立)。
-3. **不是"截图问题"。** 截图 None 只占全部 harness 崩溃的 5.1%;同一死因撞在
-   别的端点上的有 41.9%。**病在客机 HTTP 服务进程会死,截图只是症状。**
+1. **根因**:客机 `osworld_server.service` 配了 `StartLimitIntervalSec=60` +
+   `StartLimitBurst=4` + `RestartSec=5s`。**60 秒内崩 5 次,systemd 永久放弃拉起**,
+   此后端口上再无进程 → 所有请求 ECONNREFUSED,直到容器被回收。
+2. **不是"重试次数不够"。** 失败是双峰的(systemd 的限速是阶跃函数),中间地带
+   不存在,加重试次数无效。
+3. **不是"命令风暴"为主通道**(§7 的 n=8 结论在 n=96 下不成立)。
+4. **不是"截图问题"。** 截图 None 只占全部 harness 崩溃的 5.1%;同一死因撞在
+   别的端点上的有 41.9%。**截图是症状,不是病。**
+
+### 10.0 根因:systemd 启动限速(实证吻合,非推断)
+
+`desktop_env/server/osworld_server.service`:
+
+```ini
+[Unit]
+StartLimitIntervalSec=60
+StartLimitBurst=4
+[Service]
+Restart=on-failure
+RestartSec=5s
+```
+
+systemd 语义:单位在 `StartLimitIntervalSec` 窗口内被启动超过 `StartLimitBurst`
+次,进入 failed 状态并**永久停止重启**(`start request repeated too quickly`)。
+配 `RestartSec=5s`,崩溃循环在 t=0/5/10/15 秒用完 4 次配额,**第 5 次崩溃即判死**。
+
+四项观测与该模型逐一吻合:
+
+| 观测(实测) | systemd 参数 |
+|---|---|
+| 恢复耗时中位 **5 秒**,97% ≤11s | `RestartSec=5s` |
+| 恢复的 317 段中 99% 只失败 1 次 | 单次崩溃 → 5 秒后拉起,正好被第 1 次重试接住 |
+| **双峰、无过渡样本** | `StartLimitBurst` 是阶跃函数,不是连续量 |
+| Connection refused **0/79 从未在窗口内恢复** | systemd 已永久放弃,端口后面没有进程 |
+
+**镜像是 `happysixd/osworld-docker` 预制下载**(`providers/docker/provider.py:110`),
+单元烤在镜像里 —— 改仓库里的 `.service` 对已有 VM 无效,必须运行时打补丁。
+客机 `user` 有 sudo、密码 `password` 已知,`setup.py:628 _proxy_setup` 就是现成的
+带密码提权通道(`echo '{pw}' | sudo -S bash -c "..."` + `_execute_setup(shell=True)`)。
 
 ### 10.1 全量口径(所有 `logs/qwen-direct-*.log`)
 
@@ -810,7 +845,18 @@ vs 该 env 平常速率**:
 | 1.1% | 5 | CDP 连接失败 |
 | 1.1% | 5 | 超上下文 262144 |
 
-**客机服务死亡合计 213 次 = 47%,是第一大死因。** 截图 None 的 23 次里 21 次在
+**客机服务死亡合计 213 次 = 47%,是第一大死因。** 且高度集中:
+
+| 臂 | 基础设施死 | 该臂总数 | 占比 |
+|---|---|---|---|
+| **qwen35-4b-sft** | **173** | 2,539 | **6.8%** |
+| qwen38-27b-local | 24 | 5,457 | 0.4% |
+| qwen35-9b-sft | 8 | 809 | 1.0% |
+| qwen35-4b-base | 6 | 419 | 1.4% |
+| qwen3vl-4b-sft | 2 | 250 | 0.8% |
+
+**81% 落在单个臂上**,其余臂 0.4–1.4%——不是均匀背景率,该臂当时的运行条件
+(并发数/时段)有待复核。 截图 None 的 23 次里 21 次在
 教师采集臂 `qwen38-27b-local`,只有 2 次落在 eval 臂 `qwen3vl-4b-sft` 上——
 **对 eval 分数的实际污染极小**。
 
@@ -840,11 +886,41 @@ logger.error("Failed to get screenshot. Status code: %d", response.status_code)
 - **步数**:中位 34,无偏。
 - **全局事件**:100 次 giveup 中 75 次只涉及单个 env。
 
-### 10.9 待办
+### 10.9 修复方案(2026-09-01 提出,**未落地,待批准**)
 
-- [ ] `python.py:119` 记 response body(需先给 diff 征求同意)
-- [ ] `lib_run_single.py:84` 的 None 保护——但注意:obs['screenshot'] 同时是模型的
-      观测输入,置空后续步等于让模型盲走,**未必比崩掉好**;真正的选择是
-      "干净中止且不写 result.txt"还是"维持现状写 0"
-- [ ] vlc 域 15.72% 崩溃率:是否给 vlc 类任务单独放宽 `timeout=10`
-- [ ] 32 次 evaluator 缺函数是确定性 checker 的自身 bug,与客机无关,单独修
+分三层,只有第一层动根因。全部按 §7 修法 B 的先例用环境变量显式开关,默认关闭,
+行为逐字节不变;开关由驱动脚本每次运行决定,启用即入 OPS.md 披露清单。
+
+**第一层(根因):运行时给客机单元打 drop-in,去掉启动限速。**
+新增 `SetupController._server_restart_policy_setup()`,写
+`/etc/systemd/system/osworld_server.service.d/override.conf` 内容
+`[Unit]` + `StartLimitIntervalSec=0`,再 `systemctl daemon-reload`。
+`StartLimitIntervalSec=0` 关闭限速,systemd 将无限次按 `RestartSec=5s` 重启。
+**快照回滚会抹掉该文件,故必须每个任务重打**(成本:3 条命令)。
+开关 `OSTG_GUEST_RESTART_UNLIMITED=1`。
+
+- 有效性边界(如实注记):若崩溃诱因是持续性的(例如 X session 已死),无限重启
+  也救不回来,只是把 `refused` 变成反复的 `reset` —— **但这本身是诊断信息**,
+  能把"限速判死"与"真·不可恢复"两个子机制在日志里分开。
+- 不是救援:补丁在下一个任务的 setup 期生效,救不了当前已死的任务。
+  中途救援需要绕开已死的服务(docker exec),是更大的改动,不在本方案内。
+
+**第二层(观测):`python.py:119` 记下 response body。** 68 次 HTTP 500 至今不知道
+服务端说了什么;500 = 进程活着但 handler 抛异常,与 refused/reset 是不同子机制。
+同文件 `:277` bash 分支本就这么记,有先例。纯日志,不改控制流,建议无条件启用。
+
+**第三层(源头一致性):把仓库里的 `.service` 也改掉**,使未来自建镜像不再带这个
+地雷。对现有预制镜像无作用,属文档一致性。
+
+**明确不做**:`lib_run_single.py:84` 的 None 保护。`obs['screenshot']` 同时是模型的
+观测输入,置空后续步等于让模型盲走,未必比崩掉好。而"崩溃写 0 分"是
+`run_multienv_qwen.py:250` 注释里记录的**用户既定取舍**,不在本方案内翻案。
+
+### 10.10 待办
+
+- [ ] 第一层/第二层 diff 已备,待批准后在 worktree 上落地(不入 main)
+- [ ] vlc 域 15.72% 崩溃率:开关生效后复测,验证是否收敛
+- [ ] 32 次 evaluator 缺函数(`compare_pptx_files_robust` 等)是确定性 checker
+      自身 bug,与客机无关,单独修
+- [ ] 173/213 基础设施死集中在 `qwen35-4b-sft` 单臂(6.8%,其余臂 0.4–1.4%),
+      需查该臂当时的并发/时段配置差异
