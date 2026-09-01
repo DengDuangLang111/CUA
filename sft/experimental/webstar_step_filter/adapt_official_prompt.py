@@ -20,6 +20,7 @@ OFFICIAL_COMMIT = "d5c2a34cb7ff193a85c144fdd91f48a0e716da86"
 OFFICIAL_CONSTANT = "GPT_STEP_JUDGE_REVISED"
 OFFICIAL_SHA256 = "240c77aca3c08b4f862c48d91f35a8a3a22303554eb5f3d584a2df39cb2f7906"
 PROFILE = "official-revised-adapted-d5c2a34"
+EQUAL_BUDGET_PROFILE = "official-revised-equal-budget-v1"
 
 
 def sha256(text):
@@ -49,7 +50,51 @@ def _replace_once(text, old, new, label, changes):
     return text.replace(old, new, 1)
 
 
-def adapt_prompt(official):
+def _add_equal_budget_contract(text, changes):
+    marker = (
+        "IMPORTANT: The assistant has **not yet executed** the proposed action. "
+        "You must judge its value **before it runs**, based on what is visible "
+        "on screen.\n\n------------------------"
+    )
+    contract = """IMPORTANT: The assistant has **not yet executed** the proposed action. You must judge its value **before it runs**, based on what is visible on screen.
+
+STEP-GRANULARITY CONTRACT FOR THIS DESKTOP ADAPTATION:
+- The user input supplies `CURRENT_ACTION_BUDGET: N primitive action(s)`, where N is the number of primitive actions in the proposed action bundle.
+- Every alternative must be one immediately executable next-action bundle containing at most N primitive actions from the defined action space.
+- An alternative may use only the same visible information available to the proposed action. It must not depend on an intermediate screenshot, observation, branch, or later policy step.
+- A natural-language plan spanning multiple future steps is not a valid alternative. Do not penalize a correct and necessary intermediate action merely because later steps remain or because a longer future plan could complete more of the task.
+- An alternative is strictly better only if an admissible bundle with at most N primitive actions clearly dominates the proposed bundle in immediate correctness, task progress, reliability, safety, or action cost. If an alternative exceeds the budget or needs an intermediate observation, mark it invalid and do not use it to impose the score cap.
+
+------------------------"""
+    text = _replace_once(
+        text, marker, contract, "add equal-action-budget contract", changes)
+    text = _replace_once(
+        text,
+        "   b. Judge whether this makes sense given the current context and progress.",
+        "   b. Judge whether this makes sense given the current context and "
+        "progress at the granularity of one next-action bundle. Do not compare "
+        "it with a longer future plan.",
+        "apply next-step granularity in proposed-action review", changes)
+    text = _replace_once(
+        text,
+        "   a. Propose one or more better actions the assistant could take **now**, choosing only from the defined action space.",
+        "   a. Propose one or more alternative action bundles the assistant "
+        "could take **now**, choosing only from the defined action space. Each "
+        "alternative must contain at most the supplied CURRENT_ACTION_BUDGET "
+        "and must be executable without an intermediate observation.",
+        "constrain alternatives to equal or smaller action budget", changes)
+    text = _replace_once(
+        text,
+        "   e. If **any alternative** is strictly better, then the proposed action’s score must be ≤6. Otherwise, score may be >6.",
+        "   e. If **any admissible alternative within the supplied action "
+        "budget** is strictly better, then the proposed action’s score must be "
+        "≤6. Otherwise, score may be >6. Never apply this cap for an invalid "
+        "multi-step plan or an alternative that exceeds the budget.",
+        "limit score cap to admissible alternatives", changes)
+    return text
+
+
+def adapt_prompt(official, equal_budget=False):
     if sha256(official) != OFFICIAL_SHA256:
         raise ValueError(
             "official prompt hash mismatch; use the pinned WebSTAR commit")
@@ -102,6 +147,8 @@ as the screenshots and red action markers."""
         "adapt final answer to explicit DONE", changes)
     text = _replace_once(text, "web element", "UI element",
                          "rename web element to UI element", changes)
+    if equal_budget:
+        text = _add_equal_budget_contract(text, changes)
     if text == official:
         raise AssertionError("adapter made no changes")
     return text, changes
@@ -114,20 +161,25 @@ def main(argv=None):
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--diff", type=Path, default=None)
+    parser.add_argument(
+        "--equal-budget", action="store_true",
+        help="add the experimental same-or-lower primitive-action budget contract")
     args = parser.parse_args(argv)
 
     official, line_start, line_end = extract_constant(args.official_prompts)
-    adapted, changes = adapt_prompt(official)
+    adapted, changes = adapt_prompt(official, equal_budget=args.equal_budget)
     artifact = adapted.strip()
+    profile = EQUAL_BUDGET_PROFILE if args.equal_budget else PROFILE
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(artifact + "\n", encoding="utf-8")
     report = {
-        "profile": PROFILE,
+        "profile": profile,
         "official_commit": OFFICIAL_COMMIT,
         "official_source": str(args.official_prompts.resolve()),
         "official_source_lines": [line_start, line_end],
         "official_prompt_sha256": sha256(official),
         "adapted_prompt_sha256": sha256(artifact),
+        "equal_action_budget": args.equal_budget,
         "changes": changes,
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
@@ -137,7 +189,7 @@ def main(argv=None):
             (official.rstrip() + "\n").splitlines(keepends=True),
             (artifact + "\n").splitlines(keepends=True),
             fromfile=f"WebSTAR@{OFFICIAL_COMMIT[:8]}:{OFFICIAL_CONSTANT}",
-            tofile=PROFILE,
+            tofile=profile,
             n=3)
         args.diff.parent.mkdir(parents=True, exist_ok=True)
         args.diff.write_text("".join(diff), encoding="utf-8")

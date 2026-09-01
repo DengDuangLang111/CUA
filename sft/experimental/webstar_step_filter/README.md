@@ -105,7 +105,8 @@ multiple runs.
 | File | Responsibility |
 |---|---|
 | `policy_official_revised.json` | Primary official-code-aligned method and hashes |
-| `adapt_official_prompt.py` | Hash-verified extraction and five minimal desktop substitutions |
+| `policy_official_equal_budget.json` | Experimental same-or-lower action-budget variant |
+| `adapt_official_prompt.py` | Hash-verified official extraction, base adapter, and opt-in equal-budget adapter |
 | `policy_v1.json` | Historical paper-four-stage profile |
 | `prompt.py` | Historical paper-four-stage prompt used only for comparison |
 | `common.py` | Stable identity, source indexing, action/terminal parsing, hashes |
@@ -476,6 +477,81 @@ http://127.0.0.1:8765/reports/webstar-step-flips/
 Browser QA verified the 22/16 transition counts, GIMP search, absolute-delta
 sorting, and reset behavior. Generated HTML/JPEG reports stay outside Git;
 only the deterministic generator is versioned.
+
+### Experimental equal-action-budget variant
+
+The official-adapted profile above remains byte-for-byte unchanged. A separate
+opt-in profile, `official-revised-equal-budget-v1`, tests the observed failure
+mode where the judge compares one correct atomic step with a longer future
+plan. It is an experimental desktop correction, not a claim of exact WebSTAR
+reproduction.
+
+For each target, `grade_steps.py --equal-action-budget` adds:
+
+```text
+CURRENT_ACTION_BUDGET: N primitive action(s)
+```
+
+Here `N` is the exact number of executed pyautogui actions in the current
+bundle. The prompt requires every proposed alternative to:
+
+1. contain at most `N` primitive actions;
+2. execute immediately from the current visible state;
+3. use no intermediate screenshot, observation, branch, or later policy step;
+4. count as strictly better only when it dominates at that same step
+   granularity.
+
+A correct necessary intermediate action cannot be penalized merely because
+future work remains. Invalid longer plans do not trigger the official `<=6`
+cap. All other official stages, score anchors, output parsing, and the
+`score > 5` keep threshold remain unchanged.
+
+Generation and grading are both explicit opt-ins:
+
+```text
+adapt_official_prompt.py --equal-budget ...
+grade_steps.py --equal-action-budget \
+  --prompt-profile official-revised-equal-budget-v1 \
+  --response-contract official-revised ...
+```
+
+The grader fails closed if the runtime prompt contains this contract but the
+action-budget flag is absent, or if the flag is present with a different
+prompt.
+
+The generated runtime prompt hash is:
+
+```text
+5590a47a9d6fe057dfa1a0077f844f0bd545cd4cc69fdae10dc7607b84b6d454
+```
+
+The unmodified official-adapted artifact regenerated to its prior hash and was
+byte-identical to the earlier artifact. A targeted Luna smoke then compared
+independent calls under the original official adapter and the equal-budget
+variant:
+
+| Check | Original official adapter | Equal-budget variant |
+|---|---:|---:|
+| Click visible Save button, intermediate export | 5 | 8 |
+| Press Enter to commit docket cell | 5 | 8 |
+| Press Enter to commit first `DONE` cell | 5 | 8 |
+| Three positive controls | 8, 8, 8 | 9, 8, 9 |
+| Eight risky controls, sorted | 0, 1, 1, 2, 2, 3, 6, 6 | 2, 2, 2, 2, 2, 3, 7, 9 |
+
+All three targeted responses explicitly enforced the one-action comparison
+budget and rejected longer alternatives. Six of eight risky controls still
+scored at or below 5; the same two ambiguous risky controls that the original
+adapter kept also remained above threshold. Because these are stochastic,
+independent judge calls and the controls are not human gold labels, this smoke
+checks mechanism and regressions only. It is not a new retention estimate.
+
+Temporary smoke manifest hashes:
+
+```text
+targeted intermediate cases: f51efdc9d3d685bd77e9f6cbeabf181e84044a99dc9c60c9113b640e173a1b41
+positive controls:           9491a2db97c840c0231a2b256ab73b29a3a8c106d4a2605dd9d4149ebddef076
+risky controls:              467315300e177c38b39482900bc96f1613d6cb0f24c6cd079321249bd06e8cf1
+```
 
 ### Historical paper-four-stage prompt v2
 

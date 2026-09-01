@@ -294,6 +294,7 @@ class WebStarFilterTests(unittest.TestCase):
             Image.new("RGB", (320, 240), "white").save(result / "step2.png")
             Image.new("RGB", (320, 240), "white").save(result / "step3.png")
             Image.new("RGB", (320, 240), "white").save(result / "step4.png")
+            current_response = response("key", "raw", None)
             raw = [
                 {"step_num": 1, "action": "pyautogui.click(10, 20)",
                  "response": response("left_click"), "screenshot_file": "step1.png"},
@@ -302,7 +303,9 @@ class WebStarFilterTests(unittest.TestCase):
                 {"step_num": 3, "action": "pyautogui.click(50, 60)",
                  "response": response("left_click"), "screenshot_file": "step3.png"},
                 {"step_num": 4, "action": "pyautogui.hotkey('ctrl', 's')",
-                 "response": response("key", "raw", None), "screenshot_file": "step4.png"},
+                 "response": current_response, "screenshot_file": "step4.png"},
+                {"step_num": 4, "action": "pyautogui.press('enter')",
+                 "response": current_response, "screenshot_file": "step4.png"},
             ]
             with (result / "traj.jsonl").open("w") as handle:
                 for row in raw:
@@ -321,10 +324,26 @@ class WebStarFilterTests(unittest.TestCase):
             self.assertIn("step 3: pyautogui.click(50, 60)", judge_text)
             self.assertIn("pyautogui.hotkey('ctrl', 's')", judge_text)
             self.assertNotIn("<parameter=coordinate>", judge_text)
+            self.assertNotIn("CURRENT_ACTION_BUDGET", judge_text)
             images = [part for part in messages[1]["content"]
                       if part["type"] == "image_url"]
             self.assertEqual(len(images), 3)  # image window remains capped at three
-            self.assertEqual(evidence["raw_actions"], ["pyautogui.hotkey('ctrl', 's')"])
+            self.assertEqual(
+                evidence["raw_actions"],
+                ["pyautogui.hotkey('ctrl', 's')", "pyautogui.press('enter')"])
+            self.assertEqual(evidence["action_budget"], 2)
+            self.assertFalse(evidence["equal_action_budget"])
+
+            messages, evidence = build_judge_messages(
+                key, index[key], root / "results", root / "tasks",
+                include_action_budget=True)
+            text_parts = [part["text"] for part in messages[1]["content"]
+                          if part["type"] == "text"]
+            judge_text = "\n".join(text_parts)
+            self.assertIn(
+                "CURRENT_ACTION_BUDGET: 2 primitive action(s)", judge_text)
+            self.assertEqual(evidence["action_budget"], 2)
+            self.assertTrue(evidence["equal_action_budget"])
 
 
 if __name__ == "__main__":

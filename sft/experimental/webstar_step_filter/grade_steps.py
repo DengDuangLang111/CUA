@@ -126,7 +126,8 @@ def data_url(png_bytes):
 
 def build_judge_messages(key, source_row, result_base, tasks_base,
                          max_screenshots=3, crop_size=200,
-                         save_annotated=None, judge_prompt=STEP_JUDGE_PROMPT):
+                         save_annotated=None, judge_prompt=STEP_JUDGE_PROMPT,
+                         include_action_budget=False):
     task_dir = resolve_task_dir(result_base, key)
     steps = traj.load_steps(task_dir)
     by_num = {step.num: (idx, step) for idx, step in enumerate(steps)}
@@ -163,10 +164,16 @@ def build_judge_messages(key, source_row, result_base, tasks_base,
         f"{position}. {action}"
         for position, action in enumerate(current.actions, 1)
     ) or "[No executed action]"
+    action_budget = len(current.actions)
+    budget_block = (
+        f"CURRENT_ACTION_BUDGET: {action_budget} primitive action(s)\n\n"
+        if include_action_budget else ""
+    )
     intro = (
         f"USER_TASK:\n{instruction}\n\n"
         f"PREVIOUS_EXECUTED_ACTIONS:\n"
         f"{chr(10).join(previous) if previous else '[none]'}\n\n"
+        f"{budget_block}"
         f"PROPOSED_NEXT_ACTION_BUNDLE:\n{proposed}\n\n"
         "The images below are chronological. Each full screenshot is the "
         "state before its annotated action; the last full screenshot is the "
@@ -198,6 +205,8 @@ def build_judge_messages(key, source_row, result_base, tasks_base,
              {"role": "user", "content": content}], {
                  "raw_task_dir": str(task_dir.resolve()),
                  "raw_actions": list(current.actions),
+                 "action_budget": action_budget,
+                 "equal_action_budget": include_action_budget,
                  "input_image_sha256": image_hashes,
              })
 
@@ -262,7 +271,16 @@ def main(argv=None):
     parser.add_argument("--response-contract",
                         choices=("paper-four-stage", "official-revised"),
                         default="paper-four-stage")
+    parser.add_argument(
+        "--equal-action-budget", action="store_true",
+        help="include the current primitive-action budget in each judge input")
     args = parser.parse_args(argv)
+
+    if args.equal_action_budget and not args.prompt_file:
+        parser.error("--equal-action-budget requires --prompt-file")
+    if args.equal_action_budget and args.response_contract != "official-revised":
+        parser.error(
+            "--equal-action-budget requires --response-contract official-revised")
 
     source_dirs = parse_named_paths(args.source, "--source")
     result_dirs = parse_named_paths(args.result, "--result")
@@ -276,6 +294,11 @@ def main(argv=None):
     else:
         judge_prompt = STEP_JUDGE_PROMPT
         prompt_version = PROMPT_VERSION
+    has_budget_contract = "STEP-GRANULARITY CONTRACT" in judge_prompt
+    if args.equal_action_budget != has_budget_contract:
+        raise ValueError(
+            "--equal-action-budget and the runtime prompt's step-granularity "
+            "contract must be enabled together")
     judge_prompt_sha256 = sha256_text(judge_prompt)
 
     if args.targets:
@@ -313,7 +336,8 @@ def main(argv=None):
         messages, evidence = build_judge_messages(
             key, source_row, result_dirs[key.source_build],
             task_dirs[key.source_build], save_annotated=args.save_annotated,
-            judge_prompt=judge_prompt)
+            judge_prompt=judge_prompt,
+            include_action_budget=args.equal_action_budget)
         judge_text = None
         score = None
         parse_error = None
@@ -370,6 +394,7 @@ def main(argv=None):
         "prompt_version": prompt_version,
         "prompt_sha256": judge_prompt_sha256,
         "response_contract": args.response_contract,
+        "equal_action_budget": args.equal_action_budget,
         "source_reports": source_reports,
         "requested": len(target_keys),
         "already_done": len(done),
