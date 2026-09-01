@@ -274,6 +274,19 @@ EVAL50_ARMS = {
     # Same 6474 samples as nocap, but a 10-screenshot history window held flat
     # by fold_size=1 instead of 20. Peak memory 136.7 -> 83.74 GiB, and that
     # headroom is what makes a3 and the 9B affordable at all.
+    "lr2e5":     ("mixB 9B · lr 2e-5 · 1ep · ALL 100", "sft-lr",
+                  "lr ladder, gb64: lr 2e-5, 1 epoch, wd 0.1, beta2 0.95."
+                  " Same corpus/window as mixb9b; only the recipe differs."),
+    "lr2e5gb128":("mixB 9B · lr 2e-5 · gb128 · 1ep · ALL 100", "sft-lr",
+                  "single-variable pair with lr2e5: accum 8 -> 16, i.e."
+                  " global batch 64 -> 128. lr NOT scaled with batch."),
+    "lr1e5":     ("mixB 9B · lr 1e-5 · 1ep · ALL 100", "sft-lr",
+                  "single-variable pair with lr2e5: only learning_rate halves."
+                  " 1e-5 is also the lr OpenWebRL's released recipe uses."),
+    "lr1e5b999": ("mixB 9B · lr 1e-5 · wd0/b2.999 · 1ep · ALL 100", "sft-lr",
+                  "single-variable pair with lr1e5: optimizer back to the"
+                  " original settings (weight_decay 0.0, adam_beta2 0.999)."
+                  " Separates 'was it the lr or the optimizer' in the 2e-5 batch."),
     "mixc9b":    ("mixC 9B e3.00 · v16 ONLY · ALL 100 · stock (no-split)", "sft",
                   "arm C: v16-main + v16-pilot ONLY, 554 traj / 13,372 samples --"
                   " NO v11 at all. The no-legacy-data control for arms A and B."
@@ -534,6 +547,9 @@ ARM_PANEL = {"nocap50b": "heldout", "base50b": "heldout", "t3850b": "heldout",
              # 静默丢掉,分数系统性腰斩。
              "mixc9b": "all100", "mixb9b": "all100",
              "mixa9b": "all100", "mixa4b": "all100",
+             # 四个学习率变体,同样跑整 100
+             "lr2e5": "all100", "lr2e5gb128": "all100",
+             "lr1e5": "all100", "lr1e5b999": "all100",
              "np1e6": "all100", "nocapnp238": "all100", "nocapnp": "all100",
              "kGh": "heldout", "r5lorah": "heldout", "base9b": "all100",
              "nocapms100": "all100",
