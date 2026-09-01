@@ -36,9 +36,9 @@ echo "=========== [$(date '+%F %T')] eval 链启动 ==========="
 #                代价:每臂题数翻倍,9B 一臂约 5-6 小时。
 ARMS="
 mixb4b50b|8041|18041|g3084|qwen35-4b-sft|verified_eval50b_nonproxy.json|/gscratch/cse/jy050706/sft/models/mixB-4b-e873|v16-main + v16-pilot + v11new-500 + v11new-all (866 traj / 18,576 samples)|Qwen3.5-4B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1 -- SAME weights as mixb4b, HELD-OUT half of the frozen 100
-mixc9b|8042|18042|g3083|qwen35-9b-sft|verified_eval100_nonproxy.json|/gscratch/cse/jy050706/sft/models/mixC-9b-e627|v16-main + v16-pilot ONLY (554 traj / 13,372 samples) -- NO v11 at all|Qwen3.5-9B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1, checkpoint-627
 mixb9b|8043|18043|g3085|qwen35-9b-sft|verified_eval100_nonproxy.json|-|v16-main + v16-pilot + v11new-500 + v11new-all (866 traj / 18,576 samples)|Qwen3.5-9B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1
 mixa9b|8045|18045|g3082|qwen35-9b-sft|verified_eval100_nonproxy.json|-|v16-main + v16-pilot + q38-Bhqs2t-r5nocapimg10-v11100/-v11500 (914 traj / 19,846 samples)|Qwen3.5-9B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1 (resumed from ckpt-311 after a g012 GPU fault)
+mixc9b|8042|18042|g3083|qwen35-9b-sft|verified_eval100_nonproxy.json|/gscratch/cse/jy050706/sft/models/mixC-9b-e627|v16-main + v16-pilot ONLY (554 traj / 13,372 samples) -- NO v11 at all|Qwen3.5-9B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1, checkpoint-627
 mixa4b|8044|18044|g3087|qwen35-4b-sft|verified_eval100_nonproxy.json|-|v16-main + v16-pilot + q38-Bhqs2t-r5nocapimg10-v11100/-v11500 (914 traj / 19,846 samples)|Qwen3.5-4B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1
 "
 
@@ -55,7 +55,6 @@ while IFS= read -r row; do
   RECIPE=$(echo $row | cut -d'|' -f9)
   META=$C/$METAF
   MN=$ARM-stock
-  [ "$ARM" = "mixb4b50b" ] && MN=mixB-4b-stock   # 复用同一个 serve,服务名是它注册的那个
   echo "--- [$(date '+%F %T')] $ARM ---"
 
   # 1) 权重来源:WFIX 写死的直接用(复用别人已在跑的 serve);写 "-" 的
@@ -94,8 +93,19 @@ while IFS= read -r row; do
   up || { echo "[$(date '+%F %T')] $ARM FATAL: 端点没起来"; continue; }
 
   # 3) 服务端自报加载了什么。名字对不等于权重对——这一条是路径校验。
-  ROOT=$(curl -s -H "Authorization: Bearer $KEY" http://127.0.0.1:$PORT/v1/models \
-         | python3 -c "import json,sys;print(json.load(sys.stdin)['data'][0].get('root',''))")
+  # 从端点同时取 root(路径)和 id(服务名)。路径管**正确性**,名字管**一致性**。
+  # 2026-09-01 的教训:mixc9b 的 serve 注册成 mixC-9b-stock,而链算出的是
+  # mixc9b-stock,每次请求 404、runner 吞掉异常、100 题全部灌 0。当时只断言了
+  # 路径,没断言名字。现在**直接用服务端自报的 id 当模型名**,拼写不可能再错;
+  # 路径仍然硬断言。
+  EP=$(curl -s -H "Authorization: Bearer $KEY" http://127.0.0.1:$PORT/v1/models)
+  ROOT=$(echo "$EP" | python3 -c "import json,sys;print(json.load(sys.stdin)['data'][0].get('root',''))")
+  SRVNAME=$(echo "$EP" | python3 -c "import json,sys;print(json.load(sys.stdin)['data'][0].get('id',''))")
+  [ -n "$SRVNAME" ] || { echo "[$(date '+%F %T')] $ARM FATAL: 端点没报服务名"; continue; }
+  if [ "$SRVNAME" != "$MN" ]; then
+    echo "[$(date '+%F %T')] $ARM 服务名不一致: 端点=$SRVNAME 链算的=$MN -> 改用端点自报的"
+    MN=$SRVNAME
+  fi
   echo "[$(date '+%F %T')] $ARM endpoint UP; vLLM reports root=$ROOT"
   [ "$ROOT" = "$W" ] || { echo "[$(date '+%F %T')] $ARM FATAL: 服务的是 $ROOT,不是 $W"; continue; }
 

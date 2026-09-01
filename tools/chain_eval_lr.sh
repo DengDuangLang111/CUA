@@ -98,8 +98,19 @@ EOS
   up || { echo "[$(date '+%F %T')] $ARM FATAL: 端点没起来"; continue; }
 
   # 5) 服务端自报加载了什么。名字对不等于权重对 —— 这一条是路径校验。
-  ROOT=$(curl -s -H "Authorization: Bearer $KEY" http://127.0.0.1:$PORT/v1/models \
-         | python3 -c "import json,sys;print(json.load(sys.stdin)['data'][0].get('root',''))")
+  # 从端点同时取 root(路径)和 id(服务名)。路径管**正确性**,名字管**一致性**。
+  # 2026-09-01 的教训:mixc9b 的 serve 注册成 mixC-9b-stock,而链算出的是
+  # mixc9b-stock,每次请求 404、runner 吞掉异常、100 题全部灌 0。当时只断言了
+  # 路径,没断言名字。现在**直接用服务端自报的 id 当模型名**,拼写不可能再错;
+  # 路径仍然硬断言。
+  EP=$(curl -s -H "Authorization: Bearer $KEY" http://127.0.0.1:$PORT/v1/models)
+  ROOT=$(echo "$EP" | python3 -c "import json,sys;print(json.load(sys.stdin)['data'][0].get('root',''))")
+  SRVNAME=$(echo "$EP" | python3 -c "import json,sys;print(json.load(sys.stdin)['data'][0].get('id',''))")
+  [ -n "$SRVNAME" ] || { echo "[$(date '+%F %T')] $ARM FATAL: 端点没报服务名"; continue; }
+  if [ "$SRVNAME" != "$MN" ]; then
+    echo "[$(date '+%F %T')] $ARM 服务名不一致: 端点=$SRVNAME 链算的=$MN -> 改用端点自报的"
+    MN=$SRVNAME
+  fi
   echo "[$(date '+%F %T')] $ARM endpoint UP; vLLM reports root=$ROOT"
   [ "$ROOT" = "$W" ] || { echo "[$(date '+%F %T')] $ARM FATAL: 服务的是 $ROOT,不是 $W"; continue; }
 
