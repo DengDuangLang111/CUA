@@ -8,6 +8,9 @@
 > (`chain_eval_rest.sh`)与链 B(`chain_eval_lr.sh`,lr2e5/lr2e5gb128/lr1e5/lr1e5b999,
 > READY 已在)已按用户令停掉;lr 四臂**未排**,要跑需重起链 B。切换时 mixb4b50b 的
 > 补题 runner(PID 132493)未受影响。为什么插 mixb9bw20:见下文 a2 条目的 09-01 注记。
+> **15:20 事故后队列已停**(OPS「WebSTAR 128 并发打爆 WSL」):mixb9bw20 停在 29/100
+> (6 题假 0 已隔离),mixc9b/mixa4b 未跑。恢复顺序:用户桌面拉起 Docker Desktop → Duo 重建
+> 主连接 → 重起 `chain_eval_w20.sh`(自动从 29/100 续)。
 > 进度:mixb4b50b 50/50、mixb9b 100/100、mixa9b 100/100(57.0%;去 infeasible 58.6%,
 > 与 mixb9b 逐分相等,RESULTS §5.30);mixb9bw20 14:21 起跑(runner 命令行与 args.json 均
 > 已核 `--image_max 20 --fold_size 10`)。
