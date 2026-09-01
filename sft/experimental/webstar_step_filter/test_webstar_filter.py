@@ -12,6 +12,7 @@ from .common import StepKey, load_source_rows, sha256_text
 from .decide_steps import decide
 from .filter_copy import build_filtered_copy, validate_coverage
 from .grade_steps import build_judge_messages, parse_score
+from .make_flip_review import derive_flips
 from .prompt import PROMPT_VERSION, STEP_JUDGE_PROMPT
 from .sample_calibration import select_calibration
 from .visuals import annotate_action
@@ -73,6 +74,29 @@ def write_source(root, name, rows):
 
 
 class WebStarFilterTests(unittest.TestCase):
+    def test_flip_derivation_uses_score_threshold_and_full_key(self):
+        keep_to_drop = StepKey("source", "run", "calc", "task-a", 1)
+        drop_to_keep = StepKey("source", "run", "calc", "task-b", 1)
+        unchanged = StepKey("source", "run", "calc", "task-c", 1)
+        old = {
+            keep_to_drop: {"score": 6},
+            drop_to_keep: {"score": 5},
+            unchanged: {"score": 8},
+        }
+        new = {
+            keep_to_drop: {"score": 5},
+            drop_to_keep: {"score": 6},
+            unchanged: {"score": 9},
+        }
+        flips = derive_flips(old, new)
+        self.assertEqual(
+            [(row["task_id"], row["transition"], row["delta"])
+             for row in flips],
+            [("task-a", "keep->drop", -1),
+             ("task-b", "drop->keep", 1)])
+        with self.assertRaisesRegex(ValueError, "score key mismatch"):
+            derive_flips(old, {keep_to_drop: {"score": 5}})
+
     def test_prompt_follows_paper_four_stage_contract(self):
         self.assertEqual(PROMPT_VERSION, "webstar-paper-four-stage-v2")
         for heading in ("1. Screenshot analysis", "2. Proposed action review",

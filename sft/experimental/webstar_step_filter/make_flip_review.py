@@ -40,6 +40,31 @@ def load_flips(path):
     return rows
 
 
+def derive_flips(old_scores, new_scores):
+    if set(old_scores) != set(new_scores):
+        missing_old = sorted(key.text() for key in set(new_scores) - set(old_scores))
+        missing_new = sorted(key.text() for key in set(old_scores) - set(new_scores))
+        raise ValueError(
+            f"score key mismatch: missing_old={missing_old[:3]} "
+            f"missing_new={missing_new[:3]}")
+    flips = []
+    for key in sorted(old_scores):
+        old_score = int(old_scores[key]["score"])
+        new_score = int(new_scores[key]["score"])
+        old_decision = "keep" if old_score > 5 else "drop"
+        new_decision = "keep" if new_score > 5 else "drop"
+        if old_decision == new_decision:
+            continue
+        flips.append({
+            **key.as_dict(),
+            "old_prompt_score": old_score,
+            "new_prompt_score": new_score,
+            "delta": new_score - old_score,
+            "transition": f"{old_decision}->{new_decision}",
+        })
+    return flips
+
+
 def _safe(value):
     return html.escape(str(value), quote=True)
 
@@ -93,11 +118,12 @@ def build_card(key, flip, source_row, old_score, new_score,
         "old_prompt": old_score.get("prompt_sha256", ""),
         "new_prompt": new_score.get("prompt_sha256", ""),
         "images": images,
+        "action_budget": int(evidence["action_budget"]),
         "n_steps": int((source_row.sample.get("meta") or {}).get("n_steps") or 0),
     }
 
 
-def render_card(card):
+def render_card(card, old_label, new_label):
     key = card["key"]
     screenshots = "".join(
         f'<figure><a href="{_safe(item["src"])}" target="_blank">'
@@ -106,7 +132,8 @@ def render_card(card):
         for item in card["images"])
     actions = "\n".join(card["actions"]) or "[No executed action]"
     search = " ".join((key.domain, key.task_id, str(key.step),
-                       card["instruction"], actions)).lower()
+                       str(card["action_budget"]), card["instruction"],
+                       actions)).lower()
     return f"""
 <article class="card" id="{card['anchor']}" data-transition="{card['transition']}"
          data-search="{_safe(search)}" data-delta="{card['delta']}">
@@ -120,7 +147,7 @@ def render_card(card):
     </div>
     <a class="anchor" href="#{card['anchor']}">#</a>
   </header>
-  <div class="meta">{_safe(key.domain)} · step {key.step}/{card['n_steps']} · {_safe(key.task_id)}</div>
+  <div class="meta">{_safe(key.domain)} · step {key.step}/{card['n_steps']} · action budget {card['action_budget']} · {_safe(key.task_id)}</div>
   <h2>{_safe(card['instruction'])}</h2>
   <section>
     <h3>Executed action bundle</h3>
@@ -129,12 +156,12 @@ def render_card(card):
   <div class="screens">{screenshots}</div>
   <div class="judges">
     <section class="judge old-judge">
-      <h3>Old simplified prompt · score {card['old_score']}</h3>
+      <h3>{_safe(old_label)} · score {card['old_score']}</h3>
       <div class="hash">{_safe(card['old_prompt'])}</div>
       <pre>{_safe(card['old_judge'])}</pre>
     </section>
     <section class="judge new-judge">
-      <h3>Official-adapted prompt · score {card['new_score']}</h3>
+      <h3>{_safe(new_label)} · score {card['new_score']}</h3>
       <div class="hash">{_safe(card['new_prompt'])}</div>
       <pre>{_safe(card['new_judge'])}</pre>
     </section>
@@ -146,16 +173,19 @@ def render_card(card):
 </article>"""
 
 
-def render_page(cards, source_hash, old_hash, new_hash):
+def render_page(cards, source_hash, old_hash, new_hash, title, subtitle,
+                old_label, new_label, compared, old_keep, new_keep):
     keep_drop = sum(card["transition"] == "keep->drop" for card in cards)
     drop_keep = sum(card["transition"] == "drop->keep" for card in cards)
-    cards_html = "\n".join(render_card(card) for card in cards)
+    cards_html = "\n".join(
+        render_card(card, old_label, new_label) for card in cards)
+    flipped = len(cards)
     return f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>WebSTAR prompt flip review</title>
+<title>{_safe(title)}</title>
 <style>
 :root{{--bg:#f5f6f8;--panel:#fff;--ink:#172026;--muted:#66737c;--line:#dfe4e8;--red:#b42318;--green:#067647;--blue:#175cd3}}
 *{{box-sizing:border-box}} body{{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,sans-serif}}
@@ -176,11 +206,16 @@ h2{{font-size:18px;margin:10px 0 15px}} h3{{font-size:14px;margin:8px 0}} pre{{w
 </head>
 <body>
 <header class="top">
-  <h1>WebSTAR prompt flip review</h1>
-  <div class="subtitle">Same 307-row local pilot · old simplified prompt vs official-adapted prompt</div>
+  <h1>{_safe(title)}</h1>
+  <div class="subtitle">{_safe(subtitle)}</div>
   <div class="stats">
-    <span class="stat">38 flipped steps</span><span class="stat">keep → drop: {keep_drop}</span>
-    <span class="stat">drop → keep: {drop_keep}</span><span class="stat shown" id="shown">Showing 38</span>
+    <span class="stat">{compared} compared</span>
+    <span class="stat">{_safe(old_label)} keep: {old_keep}</span>
+    <span class="stat">{_safe(new_label)} keep: {new_keep}</span>
+    <span class="stat">{flipped} flipped</span>
+    <span class="stat">keep → drop: {keep_drop}</span>
+    <span class="stat">drop → keep: {drop_keep}</span>
+    <span class="stat shown" id="shown">Showing {flipped}</span>
   </div>
   <div class="controls">
     <button data-filter="all" class="active">All</button>
@@ -205,13 +240,19 @@ document.querySelector('#reset').onclick=()=>{{filter='all';document.querySelect
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--flips", type=Path, required=True)
+    parser.add_argument(
+        "--flips", type=Path, default=None,
+        help="optional precomputed flip CSV; omitted derives score > 5 flips")
     parser.add_argument("--old-scores", type=Path, required=True)
     parser.add_argument("--new-scores", type=Path, required=True)
     parser.add_argument("--source", action="append", required=True)
     parser.add_argument("--result", action="append", required=True)
     parser.add_argument("--tasks", action="append", required=True)
     parser.add_argument("--out-dir", type=Path, required=True)
+    parser.add_argument("--title", default="WebSTAR prompt flip review")
+    parser.add_argument("--subtitle", default="Paired score-manifest comparison")
+    parser.add_argument("--old-label", default="Old prompt")
+    parser.add_argument("--new-label", default="New prompt")
     args = parser.parse_args(argv)
 
     source_dirs = parse_named_paths(args.source, "--source")
@@ -221,7 +262,8 @@ def main(argv=None):
         raise ValueError("source/result/tasks names must match")
     index, source_reports = load_source_rows(source_dirs)
     old_scores, new_scores = load_scores(args.old_scores), load_scores(args.new_scores)
-    flips = load_flips(args.flips)
+    flips = (load_flips(args.flips) if args.flips
+             else derive_flips(old_scores, new_scores))
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     assets_dir = args.out_dir / "assets"
@@ -238,13 +280,25 @@ def main(argv=None):
 
     old_hashes = {row.get("prompt_sha256") for row in old_scores.values()}
     new_hashes = {row.get("prompt_sha256") for row in new_scores.values()}
-    page = render_page(cards, source_reports, sorted(old_hashes), sorted(new_hashes))
+    old_keep = sum(int(row["score"]) > 5 for row in old_scores.values())
+    new_keep = sum(int(row["score"]) > 5 for row in new_scores.values())
+    page = render_page(
+        cards, source_reports, sorted(old_hashes), sorted(new_hashes),
+        args.title, args.subtitle, args.old_label, args.new_label,
+        len(old_scores), old_keep, new_keep)
     (args.out_dir / "index.html").write_text(page, encoding="utf-8")
     report = {
         "cards": len(cards),
         "keep_to_drop": sum(card["transition"] == "keep->drop" for card in cards),
         "drop_to_keep": sum(card["transition"] == "drop->keep" for card in cards),
         "assets": len(list(assets_dir.glob("*.jpg"))),
+        "compared": len(old_scores),
+        "old_label": args.old_label,
+        "new_label": args.new_label,
+        "old_keep": old_keep,
+        "new_keep": new_keep,
+        "old_prompt_sha256": sorted(old_hashes),
+        "new_prompt_sha256": sorted(new_hashes),
         "source_reports": source_reports,
         "old_score_file": str(args.old_scores.resolve()),
         "new_score_file": str(args.new_scores.resolve()),

@@ -114,6 +114,7 @@ multiple runs.
 | `sample_calibration.py` | Deterministic 200-step calibration panel |
 | `grade_steps.py` | Resumable multimodal grading, strict four-stage validation, and append-only raw scores |
 | `decide_steps.py` | Score manifests to keep/drop/review decisions |
+| `make_flip_review.py` | Paired score-manifest flip derivation and static review site |
 | `audit_report.py` | Before/after source, domain, action, length, terminal, recovery and token tables |
 | `filter_copy.py` | Filtered Swift JSONL copies with existing remote image roots |
 | `test_webstar_filter.py` | Offline unit and integration tests; no API calls |
@@ -551,6 +552,80 @@ Temporary smoke manifest hashes:
 targeted intermediate cases: f51efdc9d3d685bd77e9f6cbeabf181e84044a99dc9c60c9113b640e173a1b41
 positive controls:           9491a2db97c840c0231a2b256ab73b29a3a8c106d4a2605dd9d4149ebddef076
 risky controls:              467315300e177c38b39482900bc96f1613d6cb0f24c6cd079321249bd06e8cf1
+```
+
+The complete 307-row pilot was then graded once with this exact equal-budget
+profile and Luna. All rows completed with no API, image, path, or score-parser
+failure:
+
+```text
+rows / unique keys: 307 / 307
+prompt profile: official-revised-equal-budget-v1 (307/307)
+prompt sha256: 5590a47a9d6fe057dfa1a0077f844f0bd545cd4cc69fdae10dc7607b84b6d454
+grader model: gpt-5.6-luna (307/307)
+equal-action-budget: enabled (307/307)
+action budgets: 300 one-action rows, 7 two-action rows
+```
+
+Raw threshold result:
+
+```text
+score > 5:  254 keep
+score <= 5:  53 drop
+single-pass retention: 82.74%
+
+Chrome: 223 / 270 keep = 82.59%
+GIMP:    31 /  37 keep = 83.78%
+```
+
+Applying the terminal-target safety policy gives:
+
+```text
+keep:   252 / 307 = 82.08%
+drop:    53 / 307 = 17.26%
+review:   2 / 307 =  0.65%
+```
+
+The two reviews are unchanged source-target defects: the raw runner executes
+DONE, but the corresponding SFT target response lacks an explicit
+`terminate`/DONE tool call.
+
+Paired against the original official-adapted Luna pass, the new prompt keeps
+13 additional rows net, moving raw retention from 78.50% to 82.74%:
+
+```text
+drop -> drop: 44
+drop -> keep: 22
+keep -> drop:  9
+keep -> keep: 232
+threshold flips: 31 / 307 = 10.10%
+```
+
+The three targeted intermediate-action false negatives remain above threshold
+in the complete pass: visible Save `5 -> 8`, docket-cell Enter `5 -> 7`, and
+DONE-cell Enter `5 -> 9`. Across all rows, 158 scores rise, 124 stay equal,
+and 25 fall; the mean score change is +0.71. Thus the contract fixes the known
+cases but also shifts the distribution broadly enough that the 31 threshold
+flips require human inspection. Independent stochastic calls also mean these
+flips cannot all be causally attributed to the prompt.
+
+The generalized `make_flip_review.py` can derive threshold flips directly
+from any two complete score manifests, rather than requiring a hand-maintained
+CSV. The current review site contains 31 cards and 106 image assets:
+
+```text
+http://127.0.0.1:8765/reports/webstar-equal-budget-flips/
+```
+
+Browser QA verified the 307/241/254 headline counts, both 9/22 transition
+filters, the three-result WAIT search, absolute-delta sorting, prompt labels,
+and reset behavior. Generated HTML/JPEG reports remain outside Git.
+
+Artifact hashes:
+
+```text
+scores:    e7a58e6caa6147d64f39e2d4d7d702e62e162778236382a9a059688528896a09
+decisions: f761d0cb3ca8e8e37a2ecb13a42da841106857596a529dc7f2bd0ec2a8591a64
 ```
 
 ### Historical paper-four-stage prompt v2
