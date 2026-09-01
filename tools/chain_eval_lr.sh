@@ -147,59 +147,6 @@ PY
             for i in $(seq 1 120); do up && break; sleep 20; done; }
     up || { echo "[$(date '+%F %T')] $ARM FATAL: 端点没了"; break; }
     echo "[$(date '+%F %T')] $ARM pass $TRY at $N/$T"
-
-  # ---- 卡死看门狗(2026-09-01,一次 31 分钟的单题黑洞换来的) ----
-  # 生产脚本 run_eval50_stock.sh 的看门狗只防"serve 死了"(端点连续 3 分钟不通)。
-  # 它防不住这次的形态:端点 HTTP 200、runner 活着、另外两道题正常推进,**只有
-  # 一道题的请求在 ssh 隧道里进了黑洞** —— 客户端那侧 socket 是 ESTAB,vLLM 那侧
-  # 从没收到(serve 一直只报 Running: 2 reqs,而有 3 个 env)。客户端不停重试、
-  # 不停被对端关闭,堆到 10 个 CLOSE-WAIT,而 OSWORLD_OPENAI_TIMEOUT=1800 让它
-  # 每次都要空等 30 分钟。
-  #
-  # 所以判据必须是**单题卡死**而不是全局静默:全局最新 traj 很新(别的题在动),
-  # 但某一道有 traj 无 result 的题超过 STALL_MIN 分钟没写过 —— 那道就是楔死了。
-  # 杀掉 runner,外层 for TRY 循环会重起,skip-scored 跳过已出分的。
-  STALL_MIN=35     # > OSWORLD_OPENAI_TIMEOUT(1800s=30min) + 余量,不误杀长生成
-  ( while ps -eo args | grep -q "[r]un_multienv_qwen.*$TAG"; do
-      sleep 120
-      now=$(date +%s)
-      # 限深:traj.jsonl 固定在 $R/<域>/<task_id>/ 第 3 层。不限深会走遍全树
-      # (含每道题最多 50 张截图),而 /mnt/d 是 drvfs,元数据操作本来就慢。
-      # 实测两种写法结果一致(52/52),各 0.127s;规模涨上去差距才显出来。
-      newest=$(find "$R" -mindepth 3 -maxdepth 3 -name traj.jsonl -printf "%T@\n" 2>/dev/null | sort -rn | head -1 | cut -d. -f1)
-      [ -z "$newest" ] && continue
-      # 别的题还在动吗(全局最新 5 分钟内)
-      [ $(( now - newest )) -gt 300 ] && continue
-      wedged=""
-      for t in $(find "$R" -mindepth 2 -maxdepth 2 -type d 2>/dev/null); do
-        [ -f "$t/traj.jsonl" ] || continue
-        [ -f "$t/result.txt" ] && continue
-        m=$(stat -c %Y "$t/traj.jsonl" 2>/dev/null) || continue
-        age=$(( (now - m) / 60 ))
-        [ "$age" -ge "$STALL_MIN" ] && wedged="$wedged $(basename $t | cut -c1-8)($age min)"
-      done
-      if [ -n "$wedged" ]; then
-        echo "[$(date '+%F %T')] $ARM 单题卡死:$wedged —— 别的题仍在动,判为隧道黑洞。杀 runner 让重试循环接管"
-        ssh -S "$KS" -O cancel -L $PORT:$NODE:$RPORT "$KH" 2>/dev/null
-        ssh -S "$KS" -O forward -L $PORT:$NODE:$RPORT "$KH" 2>/dev/null
-        for p in $(ps -eo pid,args | grep "run_multienv_qwen" | grep "$TAG" | grep -v grep | awk '{print $1}'); do kill $p 2>/dev/null; done
-        # 杀 runner 会让在飞的题以 "can only test a child process" 崩掉,而
-        # **harness 会给它们写 result.txt=0** —— skip-scored 从此永远跳过,假 0 分
-        # 就永久留在分数里。2026-09-01 实测:我手工杀一次污染了 2 道;翻历史发现
-        # a6v(2 道)、a7(1 道)在 2026-08-23 已经中过同一招,那两个已发布的分数
-        # 各含假 0。所以杀完必须自己收拾。改名不删,证据留着。
-        sleep 15
-        for hf in $(grep -rl "can only test a child process" "$R"/*/*/harness_error.json 2>/dev/null); do
-          hd=$(dirname "$hf")
-          [ -f "$hd/result.txt" ] || continue
-          mv "$hd/result.txt" "$hd/result.txt.poisoned-by-watchdog-$(date +%Y%m%d%H%M)"
-          mv "$hf" "$hf.poisoned-by-watchdog-$(date +%Y%m%d%H%M)"
-          echo "[$(date '+%F %T')] 隔离被杀污染的假 0 分: $(basename $(dirname $hd))/$(basename $hd | cut -c1-8)"
-        done
-        break
-      fi
-    done ) &
-  GUARD=$!
     OSWORLD_OPENAI_TIMEOUT=1800 OSTG_NO_RECORD=1 OSTG_TYPE_NO_SPLIT=1 OPENAI_API_KEY="$KEY" \
     .venv/bin/python scripts/python/run_multienv_qwen.py \
       --provider_name docker --path_to_vm /mnt/d/research/OSWorld/docker_vm_data/Ubuntu.qcow2 \
@@ -210,7 +157,6 @@ PY
       --screen_width 1920 --screen_height 1080 \
       --image_max 10 --fold_size 1 \
       --test_config_base_dir $C --test_all_meta_path $META --result_dir "$R"
-    kill $GUARD 2>/dev/null
     for p in $(ps -eo pid,args | grep "run_multienv_qwen" | grep "$TAG" | grep -v grep | awk '{print $1}'); do kill $p 2>/dev/null; done
     sleep 10
   done
