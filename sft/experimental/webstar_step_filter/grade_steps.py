@@ -26,7 +26,7 @@ except ModuleNotFoundError:  # pragma: no cover - environment-dependent import
 
 from .common import (StepKey, iter_jsonl, load_source_rows,
                      parse_named_paths, sha256_bytes, sha256_text)
-from .prompt import PROMPT_VERSION, STEP_JUDGE_PROMPT, prompt_sha256
+from .prompt import PROMPT_VERSION, STEP_JUDGE_PROMPT
 from .visuals import annotate_action
 
 
@@ -38,22 +38,25 @@ SECTION_RE = {
 }
 
 
-def parse_score(text):
-    positions = {}
-    for name, pattern in SECTION_RE.items():
-        match = pattern.search(text or "")
-        if not match:
-            raise ValueError(f"judge response missing section: {name}")
-        positions[name] = match
-    ordered = [positions[name].start() for name in SECTION_RE]
-    if ordered != sorted(ordered):
-        raise ValueError("judge response sections are out of paper order")
-    alternative_block = (text or "")[
-        positions["Alternative analysis"].end():positions["Evaluation"].start()]
-    alternatives = re.findall(r"(?m)^\s*([1-9])\.\s+", alternative_block)
-    if alternatives != ["1", "2", "3"]:
-        raise ValueError(
-            f"judge response must contain exactly alternatives 1/2/3; got {alternatives}")
+def parse_score(text, contract="paper-four-stage"):
+    if contract == "paper-four-stage":
+        positions = {}
+        for name, pattern in SECTION_RE.items():
+            match = pattern.search(text or "")
+            if not match:
+                raise ValueError(f"judge response missing section: {name}")
+            positions[name] = match
+        ordered = [positions[name].start() for name in SECTION_RE]
+        if ordered != sorted(ordered):
+            raise ValueError("judge response sections are out of paper order")
+        alternative_block = (text or "")[
+            positions["Alternative analysis"].end():positions["Evaluation"].start()]
+        alternatives = re.findall(r"(?m)^\s*([1-9])\.\s+", alternative_block)
+        if alternatives != ["1", "2", "3"]:
+            raise ValueError(
+                f"judge response must contain exactly alternatives 1/2/3; got {alternatives}")
+    elif contract != "official-revised":
+        raise ValueError(f"unknown response contract: {contract}")
     matches = SCORE_RE.findall(text or "")
     if not matches:
         raise ValueError("judge response has no final 'Expected value: N'")
@@ -123,7 +126,7 @@ def data_url(png_bytes):
 
 def build_judge_messages(key, source_row, result_base, tasks_base,
                          max_screenshots=3, crop_size=200,
-                         save_annotated=None):
+                         save_annotated=None, judge_prompt=STEP_JUDGE_PROMPT):
     task_dir = resolve_task_dir(result_base, key)
     steps = traj.load_steps(task_dir)
     by_num = {step.num: (idx, step) for idx, step in enumerate(steps)}
@@ -191,7 +194,7 @@ def build_judge_messages(key, source_row, result_base, tasks_base,
             if crop_png is not None:
                 (out_dir / f"step_{number:03d}_crop.png").write_bytes(crop_png)
 
-    return ([{"role": "system", "content": STEP_JUDGE_PROMPT},
+    return ([{"role": "system", "content": judge_prompt},
              {"role": "user", "content": content}], {
                  "raw_task_dir": str(task_dir.resolve()),
                  "raw_actions": list(current.actions),
@@ -252,6 +255,13 @@ def main(argv=None):
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--save-annotated", type=Path, default=None)
+    parser.add_argument("--prompt-file", type=Path, default=None,
+                        help="runtime prompt artifact; omitted uses paper-four-stage v2")
+    parser.add_argument("--prompt-profile", default=None,
+                        help="version label recorded with --prompt-file")
+    parser.add_argument("--response-contract",
+                        choices=("paper-four-stage", "official-revised"),
+                        default="paper-four-stage")
     args = parser.parse_args(argv)
 
     source_dirs = parse_named_paths(args.source, "--source")
@@ -260,6 +270,13 @@ def main(argv=None):
     if set(source_dirs) != set(result_dirs) or set(source_dirs) != set(task_dirs):
         raise ValueError("--source, --result, and --tasks names must match exactly")
     index, source_reports = load_source_rows(source_dirs)
+    if args.prompt_file:
+        judge_prompt = args.prompt_file.read_text(encoding="utf-8").strip()
+        prompt_version = args.prompt_profile or args.prompt_file.stem
+    else:
+        judge_prompt = STEP_JUDGE_PROMPT
+        prompt_version = PROMPT_VERSION
+    judge_prompt_sha256 = sha256_text(judge_prompt)
 
     if args.targets:
         target_keys = [StepKey.from_dict(row) for row in iter_jsonl(args.targets)]
@@ -295,7 +312,8 @@ def main(argv=None):
         source_row = index[key]
         messages, evidence = build_judge_messages(
             key, source_row, result_dirs[key.source_build],
-            task_dirs[key.source_build], save_annotated=args.save_annotated)
+            task_dirs[key.source_build], save_annotated=args.save_annotated,
+            judge_prompt=judge_prompt)
         judge_text = None
         score = None
         parse_error = None
@@ -303,7 +321,7 @@ def main(argv=None):
             judge_text = call_chat_completions(
                 endpoint, api_key, args.model, messages)
             try:
-                score = parse_score(judge_text)
+                score = parse_score(judge_text, args.response_contract)
                 break
             except ValueError as exc:
                 parse_error = exc
@@ -322,8 +340,8 @@ def main(argv=None):
             "judge_text": judge_text,
             "grader_model": args.model,
             "pass_id": args.pass_id,
-            "prompt_version": PROMPT_VERSION,
-            "prompt_sha256": prompt_sha256(),
+            "prompt_version": prompt_version,
+            "prompt_sha256": judge_prompt_sha256,
             "source_response_sha256": sha256_text(
                 source_row.sample.get("response", "")),
             **evidence,
@@ -349,8 +367,9 @@ def main(argv=None):
     report = {
         "pass_id": args.pass_id,
         "model": args.model,
-        "prompt_version": PROMPT_VERSION,
-        "prompt_sha256": prompt_sha256(),
+        "prompt_version": prompt_version,
+        "prompt_sha256": judge_prompt_sha256,
+        "response_contract": args.response_contract,
         "source_reports": source_reports,
         "requested": len(target_keys),
         "already_done": len(done),

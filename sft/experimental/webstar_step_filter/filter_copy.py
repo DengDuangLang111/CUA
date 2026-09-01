@@ -187,7 +187,7 @@ def main(argv=None):
     parser.add_argument("--decisions", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--policy", type=Path, default=Path(__file__).with_name(
-        "policy_v1.json"))
+        "policy_official_revised.json"))
     parser.add_argument("--expected-rows", type=int, default=18576)
     args = parser.parse_args(argv)
 

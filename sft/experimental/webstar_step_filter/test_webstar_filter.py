@@ -95,6 +95,13 @@ class WebStarFilterTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exactly alternatives"):
             parse_score(judge_response(7, alternatives=4))
 
+    def test_official_revised_contract_matches_reference_parser_scope(self):
+        self.assertEqual(
+            parse_score("free-form eight-stage analysis\nExpected value: 6",
+                        contract="official-revised"), 6)
+        with self.assertRaises(ValueError):
+            parse_score("no final score", contract="official-revised")
+
     def test_visual_annotation_and_crop(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "screen.png"

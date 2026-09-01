@@ -1,6 +1,6 @@
 # WebSTAR filter v1 for CUA SFT
 
-**Policy:** `webstar-filter-v1`
+**Primary policy:** `webstar-official-revised-desktop-v1`
 
 **Status:** `IMPLEMENTED / CALIBRATION PENDING`
 
@@ -11,7 +11,7 @@
 ## Scope
 
 This arm tests one variable: whether a current SFT target is retained according
-to a WebSTAR-style step score.
+to a minimally adapted copy of WebSTAR's official released step-judge prompt.
 
 ```text
 score > 5  -> keep the current target row
@@ -42,11 +42,11 @@ step1 -> step2_bad -> step3_recovery -> step4_DONE
   - `step_eval/generate_thought_and_process_no_ss.py`
 
 The pinned repository did not contain `LICENSE`, `COPYING`, or `NOTICE`.
-Therefore this directory is an attributed clean-room adaptation of the
-published procedure, not a verbatim vendor copy. The prompt structure, visual
-interface, o4-mini grader, 0-10 score, and `score > 5` threshold follow the
-reference. Local I/O, action parsing, manifest handling, and failure gates are
-new code.
+Therefore the complete official text is not vendored in Git. At runtime,
+`adapt_official_prompt.py` extracts `GPT_STEP_JUDGE_REVISED` verbatim from a
+user-supplied checkout, verifies its official SHA-256, and applies five
+asserted desktop substitutions. The generated full prompt, provenance report,
+and unified official-to-desktop diff live with the run artifacts.
 
 ## What is faithful to WebSTAR
 
@@ -59,10 +59,9 @@ The grader receives:
 5. a 200x200 crop around the current coordinate target when available;
 6. the actual ordered action bundle executed by the harness, in screenshot
    pixel coordinates;
-7. the paper's four grading stages in order: screenshot analysis, proposed
-   action review, alternative analysis, and 0-10 evaluation;
-8. an enforced requirement to propose exactly three feasible alternatives,
-   simulate each outcome, and compare each against the proposed action.
+7. the official released prompt's eight-stage procedure and output format;
+8. its `one or more` alternatives rule, simulated outcomes, `<=6` penalty for
+   a strictly better alternative, and final 0-10 expected value.
 
 The official code accumulates `previous_actions` without truncation. Only its
 visual `sliding_window` is capped at three screenshots. This adapter mirrors
@@ -105,8 +104,10 @@ multiple runs.
 
 | File | Responsibility |
 |---|---|
-| `policy_v1.json` | Frozen method and reference provenance |
-| `prompt.py` | Attributed desktop adaptation of the step-value procedure |
+| `policy_official_revised.json` | Primary official-code-aligned method and hashes |
+| `adapt_official_prompt.py` | Hash-verified extraction and five minimal desktop substitutions |
+| `policy_v1.json` | Historical paper-four-stage profile |
+| `prompt.py` | Historical paper-four-stage prompt used only for comparison |
 | `common.py` | Stable identity, source indexing, action/terminal parsing, hashes |
 | `visuals.py` | Green action label, red coordinate markers/arrows, 200px crop |
 | `sample_calibration.py` | Deterministic 200-step calibration panel |
@@ -330,9 +331,52 @@ The PPAPI endpoint authenticated and listed 132 models. It did not offer
 credential remained in the ignored local environment file and was not written
 to any manifest, prompt, report, or Git file.
 
-### Paper-four-stage prompt v2
+### Primary official-revised desktop adapter
 
-The current prompt version is:
+The primary runtime prompt is generated from the full official
+`GPT_STEP_JUDGE_REVISED` constant at the pinned commit. The adapter first
+requires this exact official hash:
+
+```text
+240c77aca3c08b4f862c48d91f35a8a3a22303554eb5f3d584a2df39cb2f7906
+```
+
+It then applies exactly five asserted substitutions:
+
+1. allow the proposed step to contain an ordered desktop action bundle;
+2. replace the browser action-space block with the pyautogui desktop space;
+3. remove the WebVoyager-only URL/back/sign-in restriction;
+4. adapt `final_answer` to explicit DONE/terminate;
+5. rename `web element` to `UI element`.
+
+Everything else remains official: all eight stages, `one or more`
+alternatives, simulation, the `<=6` strictly-better-alternative rule, 0/5/10
+anchors, and the final score format. The adapted runtime hash is:
+
+```text
+3cd1d4350f1f6b59f69f0b9fc44ad220b8b72beb34ec711eae5293d40768ee69
+```
+
+The complete generated diff contains 55 lines, mostly the action-space block.
+The provenance report and diff are produced beside the runtime prompt and are
+required audit artifacts rather than hand-written documentation.
+
+Luna completed an initial official-adapter smoke with no API, image, or score
+parsing failures. Three positive controls all scored `8`. Eight selected risky
+steps scored:
+
+```text
+0, 1, 1, 2, 2, 3, 6, 6
+paper threshold: drop 6, keep 2
+```
+
+This proves the complete official prompt can run on the local desktop data. It
+does not establish a new overall retention rate; the old 307-row run used a
+different prompt hash.
+
+### Historical paper-four-stage prompt v2
+
+The historical paper-prose-aligned comparison profile is:
 
 ```text
 version: webstar-paper-four-stage-v2
