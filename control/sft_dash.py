@@ -543,7 +543,16 @@ REST_TRIPLES = {"base261": ("basekeep", "base50b"),
                 # double-counted. Pairs here must be (seen, held) for arms that
                 # split the 100, and (arm, arm) for arms that did not.
                 "a2261": ("a2", "a2"),
-                "base9b261": ("base9b", "base9b")}
+                "base9b261": ("base9b", "base9b"),
+                # AWS 侧 mixb9b(2026-09-02):eval100 一次跑完整 100,所以两半都
+                # 指向同一臂,和 a2261/base9b261 同型。臂 key 用完整目录名,因为
+                # ^eval50-([A-Za-z0-9]+)-\d+$ 匹配不了带 -aws- 的名字。panel 由
+                # panel_from_boundary() 从 MODEL_BOUNDARY.tasks 解析,不需要
+                # ARM_PANEL 条目。注意 AWS 侧未过校准(−5.0pp 通过率),这行只与
+                # 同为 AWS 的臂可比。
+                "eval50-mixb9b261-aws-20260902":
+                    ("eval50-mixb9bcal-aws-20260902",
+                     "eval50-mixb9bcal-aws-20260902")}
 
 # Arms not scored on the default (seen) panel.
 ARM_PANEL = {"nocap50b": "heldout", "base50b": "heldout", "t3850b": "heldout",
