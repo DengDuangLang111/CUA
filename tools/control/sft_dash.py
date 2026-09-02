@@ -762,6 +762,14 @@ SFT361 = {
     # finishes, same fixed-denominator caveat as every in-flight 261 row.
     "27b": ("teacher Qwen3.8-27B · untrained", "reference",
             ("t38", "t3850b", "t38261")),
+    # mixB-9b 官方 361(2026-09-02,AWS 侧,10/1 窗)。eval100 一次跑完整 100,所以
+    # 两个 50 槽指向同一臂(同 a2/base9b 型),rest261 = mixb9b261。臂 key 是完整
+    # 目录名:带 -aws- 的名字过不了 eval50 的 key 正则(见 REST_TRIPLES 注)。
+    # 与上面各行不同侧不同窗:AWS 校准臂 −5pp,10/1 对教师 20/10 又差 ≤8pp,
+    # 均未修正 —— 只能同侧比,RESULTS §5.33。
+    "mixb9b-aws": ("mixB-9b · Qwen3.5-9B SFT (AWS side · 10/1, uncalibrated)", "sft",
+                   ("eval50-mixb9bcal-aws-20260902", "eval50-mixb9bcal-aws-20260902",
+                    "eval50-mixb9b261-aws-20260902")),
 }
 SLICE_N = (("seen50", 50), ("held50", 50), ("rest261", 261))
 
