@@ -706,6 +706,19 @@ WSL `[Errno 12] Cannot allocate memory` → 15:20:22 Windows 系统日志 `Tcpip
 重起 `chain_eval_w20.sh`(它会从 mixb9bw20 29/100 续跑,再 mixc9b、mixa4b)→
 另一会话再拉 WebSTAR(≤48 并发,与 eval 错开)。
 
+## 共享 Docker 的第三条硬规矩:停自己的东西只按 PID 杀,永远不对 daemon 做全局操作(2026-09-01 22:0x)
+
+另一会话停 OSWorld-V2 跑批时执行了 `docker ps -q | xargs docker rm -f`,把当时 daemon 上
+**所有**容器删掉——包括正在跑 eval 的 3 台 VM(它以为那 3 个是自己的,因为它也是 num_envs=3)。
+这次侥幸:eval 每题都会快照回滚重建容器,rm 恰好落在两题之间,mixc9b 无掉题、无假 0
+(22:00–22:20 出分 12 题逐一核过,runner 日志无 ERROR)。但同一条命令落在题中就是 3 个假 0
+加一次链停摆。
+
+规矩:WSL 上只有一个 Docker daemon,多个会话共用。停自己的容器**只按容器名/ID 或进程
+PID**;`docker rm -f $(docker ps -q)`、`docker system prune`、`docker kill $(...)` 一律禁止,
+不管你以为里面是谁的。判断容器归属看 `docker ps` 的端口映射:eval 链的三台固定是
+5000–5002 / 8006–8008 / 9222–9224。
+
 ## 作业编排的两条硬规矩(2026-08-17,各犯一次换来的)
 
 ### 一、先占再放:新作业排上之后,才取消旧作业
