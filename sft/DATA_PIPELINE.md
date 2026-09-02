@@ -225,6 +225,7 @@ assistant 段。由此:
 | `terminalfix --backend anthropic` | 漏传 `--model` 会**静默返回空理由** | RUNBOOK 终止规范化节已记 |
 | `terminalfix` | 漏传 `--style-examples N`,教师只按规则写 | 97% 的结尾句以 "Done." 开头(自然写只有 16%) |
 | `grade_steps` | 漏传 `--prompt-file` 会**静默退回**已被取代的 paper-four-stage v2 | `PLAN-20260901-strict-corpus.md` §7 |
+| 推权重后立刻写 `READY_*` | 解包完成、md5 两端一致,**但 GPFS 上"文件可见"≠"数据可读"**:READY 出现后 1 秒起 vLLM 报 `SafetensorError: incomplete metadata, file not fully covered`,25 分钟后同一目录一次成功(2026-09-02,computeragent-00 在 Klone 读 mixaw9b-ckpt230) | 写 READY 前**真读一遍**每个 safetensors 的头(`safetensors.safe_open` 或至少 `python -c "open(f,'rb').read(8)"` + 大小两轮不变),消费方也应在首次加载失败时等 60 s 重试而不是判死。`prep_evals.sh` 第 5 步与本会话的推送脚本都是"解包即写 READY",待改 |
 | `to_swift` 的 `gen_meta`(ostg@5c6aea84 起) | 单语料时 ms-swift 加载后丢列,**看似无害**;两代语料合并时 `related_apps` 一边全 `[]` 一边有值,Arrow 推出 `list<null>` 后 cast 失败 | 2026-09-01 Slurm 271875 在 preflight 全绿之后死于 `DatasetGenerationError`;混合语料前先 `pop('gen_meta')` 或让类型稳定。`PLAN-20260901-strict-corpus.md` §10 |
 
 **判据**:凡是"开关控制检查、不开则跳过"的工具,输出里那个 0 必须先确认是
