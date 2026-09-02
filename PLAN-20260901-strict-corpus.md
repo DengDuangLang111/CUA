@@ -584,9 +584,12 @@ mixaw9b 的不行。preflight 147,336 张图 0 未解析;运行时步数算术 1
 
 ### mixaw9b 评测排程(用户令 2026-09-01 21:13 / 21:17,经 computeragent-17 转达)
 
-链 `chain_eval_w20e.sh`(PID 41912,用户 21:26 再调序):mixc9b 补趟 → **mixaw9b(ckpt-115,10/1)
-→ mixaw9b230(10/1)→ mixaw9b230w20(20/10)→ mixaw9bw20(115,20/10)** → mixa4b。两窗各一次,
-同权重同 serve。后果:230 那套在 mixc9b 完成后约 5h 就轮到(g3083 要等 mixc9b 的 serve
+**最终分工(用户令 23:21)**:10/1 两行(115、230)**从 17 的 WSL 链拿掉,改由 computeragent-00
+在 AWS 跑**(g3104:8056 / g3109:8057,读同一份权重);17 的链改为 `chain_eval_w20f.sh`
+(PID 61475):mixc9b 补趟 → **mixaw9b230w20(20/10,g3083:8042)→ mixaw9bw20(115,20/10,
+g3082:8045)** → mixa4b。230 那套紧跟 mixc9b(约 2–3h 后):mixc9b 评完 17 scancel 它的
+serve step 并发我消息,我的自守门任务随即起 serve、写 `READY_mixaw9b230`。
+(此前顺序 w20e:mixc9b → 115@10/1 → 230@10/1 → 230@20/10 → 115@20/10 → mixa4b,已废。)后果:230 那套在 mixc9b 完成后约 5h 就轮到(g3083 要等 mixc9b 的 serve
 step 39187994.95 结束才空);115 的 serve 要活到 ~20h 后。占位预算:g3082=39306244 剩 3d16h,
 g3083=39187994 剩 2d08h,都够。230 的对接做成自守门的后台任务:权重到 + 8042 空 +
 mixc9b step 结束 → `srun --overlap` 起 serve → root 校验 → 写 READY;不自动杀任何 step。
