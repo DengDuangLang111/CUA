@@ -553,3 +553,17 @@ mixaw9b / mixbtf9b 训练窗口都是 10/1,所以**两个窗口各跑一次 eval
 **读法**:mixb9b → mixbtf9b = 修末步的净效应(同窗 10/1);mixbtf9b → a2 = 换语料
 (r5 vs mixB)的部分(同窗 20/10)。两窗各评一次(§10 末)。
 
+### mixaw9b 评测排程(用户令 2026-09-01 21:13 / 21:17,经 computeragent-17 转达)
+
+链 `chain_eval_w20d.sh`(PID 40886):mixc9b 补趟 → **mixaw9b(ckpt-115,10/1)→ mixaw9bw20
+(115,20/10)→ mixaw9b230(10/1)→ mixaw9b230w20(20/10)** → mixa4b。两窗各一次,同权重同 serve。
+
+| 点位 | 权重(Klone) | serve | READY |
+|---|---|---|---|
+| checkpoint-115(ep1) | `$KB/sft/models/mixaw9b-ckpt115` | 占位 dxg_w37=39306244,g3082:8045,`mixaw9b-stock` | `READY_mixaw9b` |
+| checkpoint-230(ep2) | `$KB/sft/models/mixaw9b-ckpt230` | g3083:8042(mixc9b 用完后),`mixaw9b230-stock` | `READY_mixaw9b230` |
+
+流程照 `prep_evals.sh`,跳过"等 COMPLETED / epoch≥2.99"两道门(评的是中途点位)。
+g3082 上 mixa9b 的 vLLM 在 eval 结束后仍在跑(step 39306244.0),按 OPS 规矩只 scancel
+该 step,.batch/.extern 未动。ckpt-345(ep3)是否评,待用户令。
+
