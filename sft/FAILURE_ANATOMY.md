@@ -1183,6 +1183,18 @@ harness 对回退 DONE 和显式 terminate 一样判终态,分数按最终状态
 强判官的 `done`)读到的末步没有动作;③ 可比性:a2 DONE 时中位 15 步,mix 系列 10–12 步
 ——mix 更早"说完就停",与 §3「完成判断失败」同源。
 
-**修法**:重建 mixB/mixA 语料时对 v16 和 v11new 都跑 terminalfix(教师必须是
+**09-01 晚补正(隔壁会话核对)**:mixA 的 v11 半边(`q38-Bhqs2t-r5nocapimg10-v11100/-v11500`,
+r5 系)是 terminalfix 过的,末步 **75/75、287/287 = 100% 显式 terminate**;只有 mixB 用的
+v11new(`mix-v11-500/-all`)是纯散文。这正好解释 §11.1 里 mixa9b 显式 terminate 18 条
+而 mixb9b 只有 2 条——mixa9b 语料约 1/3 来自 r5 系。v16 重建前的末步基线(隔壁会话,
+325 条入库轨迹):NO_ACTION_TAG 299 / call_user 14 / terminate 12 = **3.7%**。
+
+**terminalfix 的一个静默失效**(隔壁会话 09-01 踩到,记入 DATA_PIPELINE 静默失效清单):
+`terminalfix.py:626` 取 key 为 `a.key or $OPENAI_API_KEY or "EMPTY"`,脚本没 source
+`OSWorld/.env` 时拿字面量 "EMPTY" 发请求,教师返 401,**但不中断**,只在行尾记一句、末尾
+汇总 "N with a failed teacher call"。不看那行就会拿着 N 条空重写往下走。跑完必须 grep
+这句,且 verify 带 `--require-terminate`。
+
+**修法**:重建 mixB 语料时对 v16 和 v11new 都跑 terminalfix(mixA 的 v11 半边不用)(教师必须是
 Qwen3.8-27B,RUNBOOK「终止规范化」),verify 带 `--require-terminate`;这与严格判官
 重建(PLAN-20260901)可以合成一次 build。

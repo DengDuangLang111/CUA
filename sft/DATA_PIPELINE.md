@@ -217,6 +217,20 @@ assistant 段。由此:
 
 ---
 
+## 7b 静默失效清单:检查开关不开就等于没检查
+
+| 命令 | 不加开关时 | 症状 |
+|---|---|---|
+| `verify OUT` | **不检查末步是否 terminate**,却照样打印 `0 endings not terminate(success)` | 2026-09-01 我把这行当成"末步合格"的证据发给用户,实际 v16 那 340 条末步 264 条纯散文、13 条 call_user、只有 1 条真 terminate。正确写法是 `verify OUT --require-terminate` |
+| `terminalfix --backend anthropic` | 漏传 `--model` 会**静默返回空理由** | RUNBOOK 终止规范化节已记 |
+| `terminalfix` | 漏传 `--style-examples N`,教师只按规则写 | 97% 的结尾句以 "Done." 开头(自然写只有 16%) |
+| `grade_steps` | 漏传 `--prompt-file` 会**静默退回**已被取代的 paper-four-stage v2 | `PLAN-20260901-strict-corpus.md` §7 |
+
+**判据**:凡是"开关控制检查、不开则跳过"的工具,输出里那个 0 必须先确认是
+"查过=0"还是"没查"。区别在于有没有传开关,不在于输出长什么样。
+
+---
+
 ## 8 工具故障会伪装成对象故障(2026-08-19,一天撞四次)
 
 **判据:凡是"结论只有一个数、中间量一个不打"的工具,出错时必然嫁祸给被测对象。**
@@ -295,6 +309,7 @@ harness actually produces it does not"),我没查就自己重推了一遍。
 | 1 | `truncation_strategy=delete` 丢超长样本 | 训练正常启动 | max_length 65536 丢 14 条,40960 丢 1,116 条(17%)。**原型案例**,详见 §5 |
 | 2 | 上游 `reasoning_content`→`reasoning` 改名 | 回复开头多两个空行 | 推理被生成、被计费、被丢弃;历史 think 变空又被模板整块丢掉,**上下文静默瘦 ~88%**;official-361 跑出 7,906 步 0 个 `<think>` |
 | 3 | `fold_size>1` 的锯齿 | 参数写着 `image_max=20` | 稳态可见图在 11–20 之间跳,**均值只有 15.7**;`image_max=3` 配默认 `fold_size=10` 曾让 64.6% 样本全盲 |
+| 3b | terminalfix 教师 401 不中断 | 汇总行 "N with a failed teacher call" | key 回退成字面量 "EMPTY"(`terminalfix.py:626`),401 只记行尾,N 条空重写静默入库;跑完必 grep 汇总行 + verify `--require-terminate`(2026-09-01) |
 | 4 | serve 断档但 runner 不死 | eval 继续推进、进度条正常 | 请求失败被当成任务失败,**157 题静默灌 0**;若未发现,nocap 的 361 会是 25.75% 而不是 47.00%,得出"SFT 有害"的反向结论 |
 | 5 | 读取失败静默回退默认值 | 闸和监控都"正常判定" | `MODEL_BOUNDARY` 键名写错(`tasks_file` vs `tasks`),异常被吞、回退魔数 50,**261 题的臂被判成 50 题就完成** |
 | 6 | 验证视图被截断 | `diff` 输出"看起来"没有该 hunk | `head -12` 恰好截掉 sed 生效的那段,于是得出"改动没生效"的结论,两侧各自"正常"地指向不同端口 |
