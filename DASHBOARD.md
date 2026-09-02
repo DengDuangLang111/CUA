@@ -474,3 +474,21 @@ traj 发布节拍(那才是限制 Vercel 部署配额的东西,见 §3.5)。
 **仍然没做:数据新鲜度告警。** watchdog 只保证**进程活着**,不保证**数据在更新** ——
 daemon 活着但推不出去(push 认证失效、git 状态卡死)依然是静默的。要补的话,
 判据是 GitHub raw 源的 `updated` 字段与当前时间的差值,而不是进程存在与否。
+
+### "STALLED?" 不等于坏了;Vercel 失败是另一回事(2026-09-02 12:3x 核)
+
+- **STALLED? 的判定**(`index.html renderFresh`):`active` = sft.json 里任何一个臂 `scored < panel_n`
+  **或** status.json 里任何 run `scored < total`;`active` 且距上次 push >12 分钟就显示 STALLED?。
+  只要有一个永远补不齐的臂(如 mixaw9b115/230 停在 98/100、a6v 97/100、gb64keep 47/50),
+  `active` 就恒为真,于是**只要数据没变、daemon 不推,页面就会红**。09-02 09:10 之后全库没有
+  新的 result.txt(最后一个 09:03),两个 daemon 每 ~6 分钟照常循环(reflog 全是 reset to
+  FETCH_HEAD)但"nothing to commit",header 显示 pushed 193m ago + STALLED? —— 数据是对的,
+  红字是启发式误报。判"坏没坏"看两件事:daemon 进程在不在、全库最新 result.txt 时间是否
+  晚于 raw 上 sft.json 的 updated;都满足才是坏。
+- **Vercel 生产部署 07:03–09:20 连续失败**(每个触发部署的提交一次:traj auto-publish、md 提交)。
+  页面数据走 raw,不受影响;但页面代码更新不了。原因待看部署详情(用户邮件里的
+  "see deployment details");最可能是仓库体量:HEAD 树里 **415,953 个 traj 文件、pack 10.1 GiB**,
+  09-02 05:07–06:47 四次 traj 推送各加 1,400–4,100 个文件(AWS 十一个臂的截图),最后一次
+  成功部署 ≈04:51(线上 sft.json 时间戳),首次失败 07:03。`.vercelignore` 只挡上传,**挡不住 Vercel
+  clone 仓库**。若确认是体量:把 `dashboard/traj/` 从 main 移到独立分支/仓库(main 上只留
+  239 个文件 4.9 MB),或让 status daemon 停止把 traj 提交进 main。
