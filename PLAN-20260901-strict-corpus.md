@@ -556,6 +556,9 @@ mixaw9b / mixbtf9b 训练窗口都是 10/1,所以**两个窗口各跑一次 eval
 **272551 `mixbtf9b-2x4`** 09-02 00:xx 排上 g[005,021] 开跑,**70.3 s/it,ETA ~16.5h**,preflight
 与步数算术与 272351 逐字同;272351 随即撤(CANCELLED @2h07,未到 checkpoint)。
 **正式臂 = 272551**,OUT `out/mixbtf9b-2x4`。
+**lr 变体(用户令 09-02 01:xx)**:`mixbtf9b-2x4-lr1e5`,**Slurm 272837**,与 272551 逐字同、
+只改 `--learning_rate 1e-5`;g[006-007] 排上即跑。sbatch `sft/sbatch/mixbtf9b-2x4-lr1e5.sbatch`。
+读法:272551 → 272837 = lr 3e-6 → 1e-5 的净效应(同语料、同拓扑、同 3ep)。
 
 **读法**:mixb9b → mixbtf9b = 修末步的净效应(同窗 10/1);mixbtf9b → a2 = 换语料
 (r5 vs mixB)的部分(同窗 20/10)。两窗各评一次(§10 末)。
