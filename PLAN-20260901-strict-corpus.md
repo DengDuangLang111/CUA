@@ -200,7 +200,7 @@ strict 语料对推断型证据的任务系统性欠采样,尤其是 d3。
 | **合计** | **702** | **13878** | 重叠 0 |
 
 v11 那 362 条沿用既有语料(带 terminal-rewrite,§3 已披露的混淆),v16 那 340 条
-用 `build-v16-strict.sh` 中性重建(`--image-max 10 --fold-size 1 --think-cap 2048
+用 `ostg/sft/tools/build-v16-strict.sh` 中性重建(`--image-max 10 --fold-size 1 --think-cap 2048
 --whole-traj-filter`)。
 
 ### 标定被跳过(用户令 2026-09-01 下午)

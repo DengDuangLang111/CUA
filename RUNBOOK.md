@@ -1342,7 +1342,7 @@ cd $V && $P -B -m ostg.sft.strongjudge $R/v16-main-1 --tasks out/runs/v16-main-1
   --truth all --think 0 --answer 1 --last 8 --workers 6 --out judge-v3-main.jsonl
 
 # 复核 agent 自称 FAIL 的那批(--gate 0);targets 从主判里筛 judge_status=gate
-bash $V/run-gateaudit.sh          # setsid 后台,日志 logs-gateaudit.log
+bash $V/ostg/sft/tools/run-gateaudit.sh   # setsid 后台,日志 $V/logs-gateaudit.log
 ```
 
 `--last 8` = 初始帧 + 末 8 帧 = 9 帧。**复核必须与主判逐字同参**,否则不可比。
@@ -1363,12 +1363,16 @@ cd $V && $P -B -m ostg.sft.curate16 \
 ### ③ 中性重建(v16 那半)
 
 ```bash
-bash $V/build-v16-strict.sh       # setsid 后台,日志 logs-build-strict.log
+bash $V/ostg/sft/tools/build-v16-strict.sh   # setsid 后台,日志 $V/logs-build-strict.log
 # --include admitted-v16-strict.jsonl --whole-traj-filter --think-cap 2048
 # --image-max 10 --fold-size 1;图片重编码 15-45 分钟
 ```
 
-v11 那 362 条沿用既有语料,不重建(带 terminal-rewrite,已知混淆)。
+v11 那 362 条沿用既有语料,不重建(r5 系,末步 100% terminate)。
+**v16 那半必须先过终止规范化再 build**:`bash $V/ostg/sft/tools/run-terminalfix.sh`
+(教师 serve 见 OPS 链路节"另起隧道实例";脚本 source `OSWorld/.env`,否则
+`terminalfix.py:626` 拿字面量 "EMPTY" 请求、401 不中断)。上面的 build 脚本已带
+`--terminal-rewrite` 与 `verify --require-terminate`。
 
 ### ④ WebSTAR 步级过滤
 
@@ -1403,6 +1407,11 @@ $P -m webstar_step_filter.grade_steps \
   --prompt-profile webstar-official-revised-desktop-v1 \
   --response-contract official-revised --workers 8
 ```
+
+驱动脚本(与上面命令等价,凭证走 env):`$V/ostg/sft/tools/run-grade-v11.sh` /
+`run-grade-v16.sh`(luna,两半分开写 out)/ `run-grade-opus.sh`(pass 2,Anthropic 直连,
+仅作一致性证据)。决策与出包:`decide_steps` → `filter_copy`(`--image-root` 传
+`images/` 的**父目录**;`--expected-rows` 传语料总行数;合并前 `pop('gen_meta')`)。
 
 **三个必须**:
 
