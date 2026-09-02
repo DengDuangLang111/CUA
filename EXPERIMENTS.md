@@ -9,6 +9,10 @@
 > ckpt-115 用 g3082:8045 + `READY_mixaw9b`,ckpt-230 用 mixc9b 空出的 g3083:8042 + `READY_mixaw9b230`。mixaw9b 两行等
 > Klone 上 `READY_mixaw9b`(隔壁会话 login02 侧推 checkpoint-115 到 g3082:8045 后写);用户令
 > "mixc 下一个就 eval mixaw9b 的第一个 checkpoint"。mixbtf9b(mixB+terminalfix)语料已出包,**等用户令投训**。
+> **eval 链(2026-09-02 02:36 起)**:`chain_eval_w20g.sh`(PID 101578)单行 **mixb9bw20f1** = mixB-9b-e873 同权重、
+> 窗口 **20/1**(恒 20 图),与 mixb9b(10/1,60.0%)、mixb9bw20(20/10,52.0%)构成窗口曲线第三点(用户令)。
+> serve 复用 g3085:8043(step 39187991.65,**别撤**)。约 5h。
+> 此前:
 > **eval 链已停(2026-09-02 02:2x,用户令经 computeragent-73 转达)**:mixaw9b230w20 / mixaw9bw20 / mixa4b
 > 三行从 WSL 撤掉,**以 AWS 上跑的为准**(AWS 结果目录 `eval50-mixaw9b{115,230,345}-aws-20260902` 已在
 > 落盘;mixa4b 尚无)。`chain_eval_w20f.sh` 已按 PID 停,无 runner、无半截结果;链用的
