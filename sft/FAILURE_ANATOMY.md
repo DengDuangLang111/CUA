@@ -1023,6 +1023,16 @@ logger.error("Failed to get screenshot. Status code: %d", response.status_code)
 服务端 `/screenshot` 实现在 guest 镜像内,不在本仓库;宿主侧查不到死因,
 **必须靠客户端把 body 记下来**。
 
+### 10.7.1 第一次抓到 500 的 body(2026-09-01 19:4x,mixb9bw20 writer `8472fece`)
+
+第二层补丁落地后第一个样本:客机 `/screenshot` 返回的是 Flask 的 HTML 500 页,正文
+`PIL.UnidentifiedImageError: cannot identify image file '/tmp/tmpj_v3fonq.png'`——**客机自己
+截下的临时 png 自己解不开**(截图文件被截断/为空,推测是客机负载下写盘未完成就被读)。
+三次重试同样 500 → `None` → `lib_run_single.py:84` TypeError → 假 0(已隔离 `.poisoned`)。
+这证实 §10.2 里 "HTTP 500 = 进程活着但 handler 抛异常" 是独立于 refused/reset 的子机制,
+且与 systemd 限速无关(进程没死)。它的正确修法在客机截图 handler(校验文件后重截),
+不在 harness 重试次数。
+
 ### 10.8 排除项(查过,不是原因)
 
 - **宿主 OOM**:容器 `OOMKilled=false`、`Mem limit=0`(无 cgroup 上限,该标志本就
