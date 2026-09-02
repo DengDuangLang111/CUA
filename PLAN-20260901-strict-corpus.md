@@ -599,7 +599,13 @@ mixaw9b 的不行。preflight 147,336 张图 0 未解析;运行时步数算术 1
 (PID 61475):mixc9b 补趟 → **mixaw9b230w20(20/10,g3083:8042)→ mixaw9bw20(115,20/10,
 g3082:8045)** → mixa4b。230 那套紧跟 mixc9b(约 2–3h 后):mixc9b 评完 17 scancel 它的
 serve step 并发我消息,我的自守门任务随即起 serve、写 `READY_mixaw9b230`。
-(此前顺序 w20e:mixc9b → 115@10/1 → 230@10/1 → 230@20/10 → 115@20/10 → mixa4b,已废。)后果:230 那套在 mixc9b 完成后约 5h 就轮到(g3083 要等 mixc9b 的 serve
+(此前顺序 w20e:mixc9b → 115@10/1 → 230@10/1 → 230@20/10 → 115@20/10 → mixa4b,已废。)
+
+**ckpt-345(ep3)(用户令 09-02 01:xx,经 computeragent-54 转达)**:训好即推 Klone
+`$KB/sft/models/mixaw9b-ckpt345`,**写 `READY_aws_mixaw9b345` 前在 Klone 侧真读校验**
+(4 分片头 `struct+json` 可解析、config 可解析、大小 30 s 两轮不变 —— 即 DATA_PIPELINE §7b
+新记的那条),54 在占位 38976066 / g3106:8059(隧道 18059)起 serve、AWS 6 VM 评 10/1。
+20/10 那一档是否评 345、是否进 17 的链,待用户令;`READY_mixaw9b345` 不写。后果:230 那套在 mixc9b 完成后约 5h 就轮到(g3083 要等 mixc9b 的 serve
 step 39187994.95 结束才空);115 的 serve 要活到 ~20h 后。占位预算:g3082=39306244 剩 3d16h,
 g3083=39187994 剩 2d08h,都够。230 的对接做成自守门的后台任务:权重到 + 8042 空 +
 mixc9b step 结束 → `srun --overlap` 起 serve → root 校验 → 写 READY;不自动杀任何 step。
