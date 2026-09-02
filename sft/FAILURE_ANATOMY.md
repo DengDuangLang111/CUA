@@ -1029,8 +1029,13 @@ logger.error("Failed to get screenshot. Status code: %d", response.status_code)
 `PIL.UnidentifiedImageError: cannot identify image file '/tmp/tmpj_v3fonq.png'`——**客机自己
 截下的临时 png 自己解不开**(截图文件被截断/为空,推测是客机负载下写盘未完成就被读)。
 三次重试同样 500 → `None` → `lib_run_single.py:84` TypeError → 假 0(已隔离 `.poisoned`)。
-这证实 §10.2 里 "HTTP 500 = 进程活着但 handler 抛异常" 是独立于 refused/reset 的子机制,
-且与 systemd 限速无关(进程没死)。它的正确修法在客机截图 handler(校验文件后重截),
+前因与后果(同一 env 的日志时序):17:44:06 上一步 `typewrite("0")` 在客机内**已经抛了
+pyautogui Traceback**(returncode 1,harness 照常记 "Command executed successfully");17:44:09
+`/screenshot` 500(PIL 解不开临时 png);17:44:19 第二次重试 **Connection reset**——服务进程
+死了;之后 giveup。所以 500 不是独立的稳态,是**客机 X/pyautogui 状态已坏 → 截图写坏 →
+服务进程崩 → systemd 重启**这条链的第一个可见症状;三次重试跨 10 秒正好撞在进程重启中。
+这证实 §10.2 的 "HTTP 500 = handler 抛异常" 是死亡前奏而非独立子机制;在 systemd 限速
+未解除时,后续能否恢复取决于崩几次。它的正确修法在客机截图 handler(校验文件后重截),
 不在 harness 重试次数。
 
 ### 10.8 排除项(查过,不是原因)
