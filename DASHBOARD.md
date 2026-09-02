@@ -500,5 +500,6 @@ daemon 活着但推不出去(push 认证失效、git 状态卡死)依然是静�
   时工作树里的 traj 会被删,下一轮 rsync 会重新生成(不进 git)。**本地 viewer 照旧**
   (`file:///…/dashboard/traj/…`),traj-archive 分支保留到今天为止的全部。
   后续可做:status daemon 的 traj 重生成一轮 ~26 分钟已无线上用途,可关掉省周期(改脚本,先 diff)。
-  若 Vercel 不是浅 clone(历史里仍有 10 GB 对象)则本修法不够,需 `git filter-repo` 重写历史。
+  **验证(12:52)**:线上 status.json/sft.json 从 04:45/04:51 跳到 09:10/09:07 = 当前 main,部署恢复;
+  Vercel 的 clone 是浅的,历史里的 10 GB 对象不影响,**不需要重写历史**。
 
