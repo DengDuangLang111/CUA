@@ -492,3 +492,13 @@ daemon 活着但推不出去(push 认证失效、git 状态卡死)依然是静�
   成功部署 ≈04:51(线上 sft.json 时间戳),首次失败 07:03。`.vercelignore` 只挡上传,**挡不住 Vercel
   clone 仓库**。若确认是体量:把 `dashboard/traj/` 从 main 移到独立分支/仓库(main 上只留
   239 个文件 4.9 MB),或让 status daemon 停止把 traj 提交进 main。
+- **修复(2026-09-02 12:38,提交 47731ae57c)**:部署详情确认 `Unable to unpack repo: not enough space on
+  disk`,pack 9,956 MB(8 GB 构建机)。做法:`git branch traj-archive origin/main`(全量存档,历史与
+  文件都在)→ `git rm -r --cached dashboard/traj`(磁盘文件不动)→ `.gitignore` 加 `dashboard/traj/`
+  → main 的树从 415,954 个文件降到 239 个 / 4.9 MB。daemon 的 `git add -A dashboard/traj/<slug>`
+  从此被 .gitignore 挡住,traj 只在磁盘上生成、不再进 main;两个 daemon 的克隆 reset 到新 main
+  时工作树里的 traj 会被删,下一轮 rsync 会重新生成(不进 git)。**本地 viewer 照旧**
+  (`file:///…/dashboard/traj/…`),traj-archive 分支保留到今天为止的全部。
+  后续可做:status daemon 的 traj 重生成一轮 ~26 分钟已无线上用途,可关掉省周期(改脚本,先 diff)。
+  若 Vercel 不是浅 clone(历史里仍有 10 GB 对象)则本修法不够,需 `git filter-repo` 重写历史。
+
