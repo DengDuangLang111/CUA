@@ -616,7 +616,9 @@ serve step 并发我消息,我的自守门任务随即起 serve、写 `READY_mix
 推送任务排在 `READY_aws_mixaw9b345` 出现之后。**训推预算必须对齐**:该臂训练侧
 `IMAGE_MAX_TOKEN_NUM=512`(480 tok/图),语料 r5nocapimg10(img10/fold 1)→ eval 必须
 `OSTG_MAX_PIXELS=491520` 且 10/1 窗口,标签 **tr10i@480 / ev10i@480**(RESULTS 命名规矩,
-两侧都标);54 在 38976067 / g3104:8060 起 serve、AWS 评。tok480-4b 是 img20 语料(tr20i@480),别混。后果:230 那套在 mixc9b 完成后约 5h 就轮到(g3083 要等 mixc9b 的 serve
+两侧都标);54 在 38976067 / g3104:8060 起 serve、AWS 评。tok480-4b 是 img20 语料(tr20i@480),别混。
+**已推(09-02 01:56)**:`tok480-9b-e306` 落 Klone,md5 66b3cff9 两端一致,分片头真读 + 大小两轮
+校验后写 `READY_aws_tok480_9b`。至此给 AWS 侧的四份(115/230/345/tok480-9b)全部就位。后果:230 那套在 mixc9b 完成后约 5h 就轮到(g3083 要等 mixc9b 的 serve
 step 39187994.95 结束才空);115 的 serve 要活到 ~20h 后。占位预算:g3082=39306244 剩 3d16h,
 g3083=39187994 剩 2d08h,都够。230 的对接做成自守门的后台任务:权重到 + 8042 空 +
 mixc9b step 结束 → `srun --overlap` 起 serve → root 校验 → 写 READY;不自动杀任何 step。
