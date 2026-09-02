@@ -706,6 +706,25 @@ WSL `[Errno 12] Cannot allocate memory` → 15:20:22 Windows 系统日志 `Tcpip
 重起 `chain_eval_w20.sh`(它会从 mixb9bw20 29/100 续跑,再 mixc9b、mixa4b)→
 另一会话再拉 WebSTAR(≤48 并发,与 eval 错开)。
 
+## 后台等待"从不叫醒"的真因:Windows sshd 的 cmd.exe 把内层引号里的 | 和 % 当自己的(2026-09-02)
+
+09-01 挂的六个"盯链日志到 complete 就退出"的后台等待,**没有一个在该响的时候响**,全部
+跑到时限退出;mixc9b 01:27 完成,等待到 02:2x 还在循环,serve 是隔壁替撤的。机制:
+`ssh osworld-windows 'wsl -e bash -lc "grep -E \"a (complete|FATAL)\" …"'` 这条命令先经过
+Windows OpenSSH 的 **cmd.exe**,它把内层双引号里的 `|` 当管道、`%T` 当变量展开,grep 拿到的
+是被拆碎的模式,永远不匹配;stderr 被 2>/dev/null 吞掉,表现为"静默不响"。这是第三层引号
+那条规矩的另一个面:**不只是引号,`| % & < >` 在内层也会被 cmd.exe 吃。**
+
+规矩:轮询逻辑一律写成 WSL 上的脚本文件(`/tmp/poll_*.sh`,内部随便用管道),Mac 侧只调
+`ssh host 'wsl -e bash /tmp/poll_x.sh'`,命令行里不出现任何 shell 元字符;grep 多模式用
+`-e a -e b`,不用 `(a|b)`。另:`pgrep -f` 在轮询里会匹配到自己的 `bash -lc` 命令行,
+计数永远 ≥1(pkill -f 自匹配的同族坑)。
+
+**链脚本的一处该补的自动化**:某臂打出 "complete" 后,它的 vLLM step 还挂在 Klone 占位作业里
+(mixa9b、mixc9b 两次都靠人撤),下一臂若要复用同一节点/端口就得空等。应在 complete 之后
+`scancel <该臂 serve 的 step>`——需要在臂表里记 step id 或按 node:port 反查,属链脚本改动,
+先给用户 diff。
+
 ## Mac 侧 ssh ControlMaster 报 "Session open refused / disabling multiplexing" 时别急着清(2026-09-01 晚)
 
 CLAUDE.root.md 写"换网络后 ssh 卡住,`ssh -O exit <host>` 清掉僵死 master"。补一条边界:这个报错
