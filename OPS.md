@@ -645,6 +645,30 @@ TypeError → 10:41 写 `result.txt=0.0`;链脚本 10:41:25 起下一趟,runner 
 或 `harness_error.json`,再看链日志的 `pass N at X/T` 行——"—" 只表示没有
 `result.txt`,不区分"没轮到"和"被隔离等重跑"。
 
+## 推 GitHub 分支被拒 `index-pack failed`:真因是远端 tip 本地未知,git 把整仓打成 >2 GiB(2026-09-01)
+
+**现象**:从 Mac 推 `exp/webstar-step-filter-v1`(18 个提交,独有对象共 76 KB)反复
+`remote unpack failed: index-pack failed`,先"挂"两三分钟再被拒;同一时段推 main 秒过。
+本地 `index-pack --strict` 通过、`fsck --connectivity-only` 通过、author 正常、基提交
+在 origin/main 上 —— 对象没有任何问题。`GIT_TRACE_PACKET=1` 才看到 GitHub 的原话:
+
+```
+remote: fatal: pack exceeds maximum allowed size (2.00 GiB)
+```
+
+**机制**:`git push` 用**远端当下广播的 ref 尖端**作为"对方已有"的排除集去算要发的
+对象;本地不认识那个 sha 就没法拿它做负向 rev,排除集为空 → `pack-objects` 把从推送
+提交可达的**整段历史**(本仓 8.8 GB,dashboard/traj 里 61 MB 的 traj.jsonl 一堆)全打
+进去 → 超 GitHub 的 2 GiB 单包上限 → 被拒。"挂几分钟"是在本地打 8 GB 的包。
+本仓 main 上有**自动提交**(`status: auto-refresh [skip deploy]`,Vercel 侧)加另一
+会话的频繁 push,远端 tip 几乎总比上次 fetch 新,所以推**新分支**几乎必中;推 main
+之所以没事,是因为流程里推前总有 fetch + rebase。
+
+**修法**:推任何分支前**先 `git fetch origin`,紧接着 push**,把窗口压到秒级。
+`--no-thin`、换传输、换机器中转都不对症(中转克隆碰巧 tip 新才会成功)。
+判据:76 KB 的改动推了两分钟还没完,就是在打整仓,直接 Ctrl-C 去 fetch。
+`ssh -T git@github.com` 通、TIME_WAIT 为 0 都排除不了它,别往链路上查。
+
 ## 事故:WebSTAR 128 并发打爆 WSL,Docker 引擎与所有 ssh 主连接同时死(2026-09-01 15:20)
 
 **时序**(两个会话交叉核对):15:0x 另一会话把 `grade_steps` 并发从 48 拉到 128 →
