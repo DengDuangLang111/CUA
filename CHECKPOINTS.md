@@ -44,6 +44,20 @@
   10:58 消失、14:34 用户重建)。serve 在占位 39306243(g3085)端口 8046,`mixr5m9b-stock`;
   `READY_mixr5m9b` 由我手写(prep 脚本第 4 步的 ssh 在 "started" 后挂住没返回,见 OPS)。
 - **eval 已起(09-02 15:08)**:WSL `chain_eval_r5m.sh`,eval100 @ 10/1,结果 `qwen35-9b-sft/eval50-mixr5m9b-20260902`。
+- **累计学习率 ∑lr(2026-09-02 量,用户问"新的+v16 的版本累计 lr 和 r5 比区别是啥")**:所有臂 peak 3e-6、
+  cosine、warmup 0.1、gb 64、3 ep,schedule 形状全同,所以 ∑lr = 3e-6 × 总步数 / 2 = 1.5e-6 × steps,
+  **只随样本数变**;每条样本被看 3 遍、每步 lr 曲线同形,差别不在"每条样本吃多少 lr",在**总位移**。
+  从 `trainer_state.json` 逐步加和核过(R5M 555 步 logging 1 → 8.325e-4 = 公式值;老臂 logging 2,日志加和是
+  公式值的一半,报公式值)。
+
+  | 臂 | 样本 | 步数 | ∑lr | 对 r5-9B(a2) |
+  |---|---|---|---|---|
+  | r5 9B(img10-9b = a2) | 6,474 | 306 | 4.6e-4 | 1.00× |
+  | mixaw9b(r5 + v16 strict 340,WebSTAR) | 7,311 | 345 | 5.2e-4 | 1.13× |
+  | **mixR5M-9b**(r5 + v16 真 multi 166) | 11,816 | 555 | 8.3e-4 | 1.81× |
+  | mixC-9b(v16 only 554) | 13,372 | 627 | 9.4e-4 | 2.05× |
+  | mixB-9b(v16 554 + v11new 312) | 18,576 | 873 | 1.31e-3 | 2.85× |
+  | mixA-9b(r5 + v16 554) | 19,846 | 930 | 1.40e-3 | 3.04× |
 
 **口径与来源**:超参逐臂取自各 checkpoint 自带的 `args.json`(ms-swift 写的,
 不是 sbatch 意图);分数为 `result_dir/**/result.txt` **逐文件**求和 ÷ 50
