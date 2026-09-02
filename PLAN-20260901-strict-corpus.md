@@ -553,6 +553,14 @@ mixaw9b / mixbtf9b 训练窗口都是 10/1,所以**两个窗口各跑一次 eval
 **读法**:mixb9b → mixbtf9b = 修末步的净效应(同窗 10/1);mixbtf9b → a2 = 换语料
 (r5 vs mixB)的部分(同窗 20/10)。两窗各评一次(§10 末)。
 
+**eval 对接(用户令,经 computeragent-00 转达,2026-09-01 深夜)**:mixbtf9b 首个 checkpoint
+(145 步,ep0.5)在 **AWS** 上评,不进 17 的 WSL 链。分工:我(73)在 145 落地后按 115 那套
+tar → klone.sock 直推 → md5 → 解包到 `$KB/sft/models/mixbtf9b-ckpt145`,Klone 侧核到
+config + 4 分片后写 `READY_aws_mixbtf9b`(**不用** `READY_mixbtf9b`,留给链);00 读它后在
+第 6 个空闲 l40s 占位(备选 38976065 g3104 / 39189091 g3109)起 serve,端口 8056、隧道
+18056,AWS 6 VM 评,先 10/1(对 mixb9b),20/10 待第一轮出来再定。与 8041–8045 /
+g3082–g3087 / WSL 3 VM 互不相碰。
+
 **忠实重建的校验(272351 起跑后 8 步,对 mixb9b 269047 同位置)**:
 
 | 步 | mixbtf9b | mixb9b | 差 |
