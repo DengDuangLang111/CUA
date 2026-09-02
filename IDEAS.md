@@ -571,10 +571,26 @@ batch 的目标 token 总数 → **按 token 平均**。一步 8K 字 think ≈ 
 建议:**先做按步归一化(只动一个变量),按轨迹用 1/sqrt(n) 这类折中作第二臂**,并按域看
 分数(multi_apps 是否掉)。
 
-**机制**:swift 的 `loss_scale` 是正则→权重的逐 token 配置(`ignore_empty_think`、坐标
-加权走的同一机制),**没有现成的"按样本 1/len"**;需要自定义 loss_scale 插件或在
-`to_swift` 阶段给每行预算权重。落地前先在 Tillicum 的训练环境里核 `swift/plugin/loss_scale/`
-接口(本日从 WSL 侧没找到 swift 安装路径,见 TRAINING「环境」)。
+**机制(2026-09-01 在 Tillicum 的 swift 4.5.0.dev0 源码里逐行核过,不用写插件)**:
+- `loss_scale/base.py` `__call__`:assistant 消息字典里自带的 `loss_scale` 字段会被读取;在
+  `last_round` 策略下末轮整段响应取 `[loss_scale]` 一个标量 → **就是按样本加权**。
+  所以在 `to_swift` 阶段给每行最后一条 assistant 消息写 `"loss_scale": mean_len/len_i`
+  (len 用 token 数)即可;分母(`seq2seq_trainer.py:196`,`num_items_in_batch` = label token 数)
+  不随权重变,总梯度尺度不变。
+- **一个会静默吃掉权重的开关**:`template/base.py:1134-1155`,`is_binary_loss_scale` 为真时
+  `loss_scale = None`(用 labels=-100 代替,省显存、兼容 liger)。`last_round` 走基类,
+  `is_binary=True` → **默认会把写进数据的权重全丢掉**。必须显式传
+  `--is_binary_loss_scale false`(`template_args.py:142`),代价是走非二值路径(TRAINING 记的
+  外部 logits-loss,约 +250MB/微批,4B@img10 余量够)。
+- 按轨迹归一化同法:权重再乘 `1/n_steps`(或 `1/sqrt(n)`),仍写在同一字段。
+- 验收:训前抽 20 行看字段在;训后第一个 step 的 `loss` 应与基线同量级(分母没变),
+  若差数倍说明权重没进去或进了两次。
+
+**与步级过滤的交互(隔壁会话 09-01 实测,PLAN §10)**:WebSTAR 删除率随 think 长度单调升
+(五分位 Q1 30% → Q5 67%),keep 目标均 226 tok、drop 362 tok,差全在 `<think>`——过滤器
+本身就是一个"短思考选择器"。按步归一化是不靠删数据而压低长 think 权重的另一条路,两者
+叠加时长 think 会被双重压制;**要拆开,按步归一化臂应以未过滤的 mixB 语料为基线**,
+而不是 strict/WebSTAR 语料。也因此各臂 train loss 不可横比(选择效应),只能看 eval。
 
 **臂设计**:以 mixB-9b 为基线,**只换加权**,其余(语料、lr 3e-6、gb64、3ep、img10/fold1)不动;
 eval100 配对读,并附 §8.5 的 think 长度表(按步归一化若有效,p99/最大应明显下降)。
