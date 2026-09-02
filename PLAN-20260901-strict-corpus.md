@@ -564,6 +564,12 @@ mixaw9b / mixbtf9b 训练窗口都是 10/1,所以**两个窗口各跑一次 eval
 只改 `--learning_rate 1e-5`;g[006-007] 排上即跑。sbatch `sft/sbatch/mixbtf9b-2x4-lr1e5.sbatch`。
 读法:272551 → 272837 = lr 3e-6 → 1e-5 的净效应(同语料、同拓扑、同 3ep)。
 
+**两臂都在 ep1.5 崩(09-02)**:272551 于 458/870(9h27)、272837 于 541/870(10h46)死于
+第二节点 rank 6 的 cuDNN SDPA 内核错误(TRAINING 现状块有全文),最后存档都是
+checkpoint-435(ep 1.5),**没有任何一处评过 mixbtf9b**。修法:关 cuDNN SDPA 后端
+(sitecustomize),从 435 续跑到 870(`mixbtf9b-2x4-resume.sbatch` / `-lr1e5-resume.sbatch`,
+已 stage,待用户令投);续完 ep3 再推 Klone、AWS 评 10/1(对 mixb9b)。
+
 **读法**:mixb9b → mixbtf9b = 修末步的净效应(同窗 10/1);mixbtf9b → a2 = 换语料
 (r5 vs mixB)的部分(同窗 20/10)。两窗各评一次(§10 末)。
 

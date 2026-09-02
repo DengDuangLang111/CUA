@@ -268,6 +268,21 @@
   发生在哪一步。mix 系六份已改(CUA 68da807a06);`img10-*.sbatch`、`mixaw9b.sbatch`
   等模板仍是 2,**派生新 sbatch 时必改**,并列进投前参数表。比较旧臂(logging 2)的曲线时
   把新臂相邻两点平均后再比,或注明。
+- **2×4 拓扑下 `attn_impl sdpa` 的 cuDNN 注意力内核会崩(2026-09-02,两次同型)**:
+  272551(mixbtf9b-2x4)在 458/870、272837(lr1e5)在 541/870 都死于**第二节点 rank 6**
+  (local_rank 2)的 `RuntimeError: Expected mha_graph.execute(handle, variant_pack,
+  workspace_ptr.get()).is_good() to be true`,随后 rank 7 NCCL watchdog `CUDA error:
+  Invalid argument`,torchrun SIGTERM 全体,srun `task 1: Exited with exit code 1`。
+  sacct 里作业本身是 COMPLETED|0:0(batch 脚本正常退出),**只有 `.0` step 是 FAILED|1:0**
+  —— 用 sacct 看作业终态会被骗,要看 step 或日志里的 `EXIT_<arm>` 值(143)。
+  4×2 的臂(mixB-9b 873 步、mixaw9b 345 步)同一 venv 同一 sdpa 没撞过;每节点 4 卡时
+  才出现,疑与 cuDNN SDPA 图缓存/多卡有关,未深究。**修法(不改代码)**:
+  `$B/nocudnn/sitecustomize.py` 两行 `import torch; torch.backends.cuda.enable_cudnn_sdp(False)`,
+  sbatch 里 `export PYTHONPATH=$B/nocudnn:$PYTHONPATH`,解释器启动即关 cuDNN 后端,
+  sdpa 仍走 flash/mem_eff(实测 `cudnn_sdp_enabled()==False`)。这版 torch 2.13.0+cu130
+  没有 `TORCH_CUDNN_SDPA_ENABLED` 环境变量(libtorch_cuda 里只有 `TORCH_CUDNN_SDPA_AVOID_RECOMPILE`),
+  flash_attn 未装,所以只能走 sitecustomize。续跑用 `--resume_from_checkpoint <ckpt-435>`
+  (含 `global_step435`/rng,优化器与数据顺序一起恢复),模板 `sft/sbatch/mixbtf9b-2x4-resume.sbatch`。
 - **实测吞吐(2026-09-01 夜,同 9B / 同 gb64 / 同配方,只差拓扑)**:
 
   | 臂 | 拓扑 | s/it | 870 步需时 |
