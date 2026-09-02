@@ -93,6 +93,12 @@ snapshot needs no edit. **An unknown arm still appears**, labelled by its
 directory name — an unlabelled row is a visible gap, a dropped row is an
 invisible one.
 
+**361 视图是例外:一个模型要上 361 表,`sft_dash.py` 里要改两张表**——
+`REST_TRIPLES`(把 eval100 两半 + rest261 合成 361 的数据行)和 `SFT361`
+(页面显示哪些模型、什么标签)。只加前者,数据在 json 里但页面不读
+(2026-09-02 mixb9b-aws 就是这样"消失"了 15 分钟)。带 `-aws-` 的臂 key 用完整
+目录名(过不了 eval50 的 key 正则)。
+
 **The teacher row is a synthesised arm.** `results_generated/qwen36-teacher/`
 is not a rollout: it is Qwen3.6-27B's own passing trajectories for the nine
 panel tasks, `cp -al`-hardlinked out of the runs that produced the SFT data
