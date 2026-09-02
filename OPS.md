@@ -706,6 +706,13 @@ WSL `[Errno 12] Cannot allocate memory` → 15:20:22 Windows 系统日志 `Tcpip
 重起 `chain_eval_w20.sh`(它会从 mixb9bw20 29/100 续跑,再 mixc9b、mixa4b)→
 另一会话再拉 WebSTAR(≤48 并发,与 eval 错开)。
 
+## Mac 侧 ssh ControlMaster 报 "Session open refused / disabling multiplexing" 时别急着清(2026-09-01 晚)
+
+CLAUDE.root.md 写"换网络后 ssh 卡住,`ssh -O exit <host>` 清掉僵死 master"。补一条边界:这个报错
+出现时连接**并没有卡**,只是退化成非复用连接照常能跑;而 `ssh -O exit` 会连带杀掉所有挂在
+那个 master 上的后台任务(隔壁会话 09-01 清一次带走五个等待任务)。所以:**有后台任务在跑就
+不清,让它退化跑完这批;只有真的连不上时才 `-O exit`**,清之前先 `ps` 看有没有挂着的等待。
+
 ## 共享 Docker 的第三条硬规矩:停自己的东西只按 PID 杀,永远不对 daemon 做全局操作(2026-09-01 22:0x)
 
 另一会话停 OSWorld-V2 跑批时执行了 `docker ps -q | xargs docker rm -f`,把当时 daemon 上
