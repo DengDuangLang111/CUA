@@ -703,7 +703,14 @@ WSL `[Errno 12] Cannot allocate memory` → 15:20:22 Windows 系统日志 `Tcpip
    **会话无法自行重建**,推权重/起 serve/AWS 与 WSL 两侧 eval 全部停摆。重建(WSL,daniel_yan):
    `ssh -M -S ~/.ssh/cm/klone-login -o ControlPersist=48h -fN jy050706@klone.hyak.uw.edu`,
    过 Duo 后 `ssh -O check -S ~/.ssh/cm/klone-login jy050706@klone.hyak.uw.edu` 应答 "Master running"。
-   文档此前没记过这条命令,以后别再翻 history。
+   文档此前没记过这条命令,以后别再翻 history。**替代通道**:Tillicum login02 的
+   `/gpfs/home/jy050706/.ssh/klone.sock`(独立主连接,ControlPersist 更长),推权重、在占位上起 serve、
+   写 READY 都能从 login02 走(`prep_evals.sh` 就是这么做的);只有 WSL 侧 `-L` 隧道必须等 WSL 的主连接。
+   两个坑(09-02 R5M 实测):(a)`prep_evals.sh` 第 4 步那条起 serve 的 ssh 在打印 "started" 后不返回
+   (远端 `setsid srun … &` 仍握着会话),脚本卡在第 5 步之前、READY 永远不写——serve 其实已起;
+   核 `srv_<arm>_inner.log` 出现 "Application startup complete" 后手写 `READY_<arm>`(内容 = 权重绝对路径)
+   并杀掉 prep 进程即可。(b)杀它别用 `pgrep -f prep_r5m.sh`:会匹配到自己这条 ssh 的 bash -c,先把自己杀了
+   (同 memory 的 pkill -f 自杀);用 `ps -eo pid,args | grep "^ *[0-9]* bash /path/prep_r5m.sh$"` 精确到进程参数。
 
 4. **"日志几分钟没动"不等于卡死**:恢复后 3 个 env 在 16:33:59 拿到首帧截图后静默
    两分多钟,是第一步的长 think 在算(9B 在 A100 上约 35 token/s)。判卡死的唯一硬证据是

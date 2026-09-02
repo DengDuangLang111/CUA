@@ -39,8 +39,11 @@
 - **完训(2026-09-02 14:14 落地)**:EXIT 0,555/555 步,train_runtime 44,325 s(12.3 h),train_loss
   0.390(mixA 同配方可比);ckpt 185/370/555 三个齐全,ckpt-555 目录 136 GB(含 `global_step555`
   优化器态;只推 4 个 safetensors 分片 4.7+4.7+4.7+3.7 GB + config/tokenizer,同 mixaw9b 先例)。
-  **未推 Klone**:WSL 的 `~/.ssh/cm/klone-login` 主连接 09-02 10:58 消失(Klone 是 Duo,会话起不了),
-  推权重/起 serve/两侧 eval 全部经它,等用户重建(OPS 09-02 条)。
+- **已推 Klone(09-02 14:41)**:`$KB/sft/models/mixR5M-9b-e555`(18.8 GB tar,md5 `721f025a…` 两端一致,14 个文件),
+  走 Tillicum login02 的 `klone.sock`(`prep_r5m.sh` = `prep_evals.sh` 单行版;WSL 的 `klone-login` 当时已断,
+  10:58 消失、14:34 用户重建)。serve 在占位 39306243(g3085)端口 8046,`mixr5m9b-stock`;
+  `READY_mixr5m9b` 由我手写(prep 脚本第 4 步的 ssh 在 "started" 后挂住没返回,见 OPS)。
+- **eval 已起(09-02 15:08)**:WSL `chain_eval_r5m.sh`,eval100 @ 10/1,结果 `qwen35-9b-sft/eval50-mixr5m9b-20260902`。
 
 **口径与来源**:超参逐臂取自各 checkpoint 自带的 `args.json`(ms-swift 写的,
 不是 sbatch 意图);分数为 `result_dir/**/result.txt` **逐文件**求和 ÷ 50

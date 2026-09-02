@@ -10,8 +10,10 @@
 > Klone 上 `READY_mixaw9b`(隔壁会话 login02 侧推 checkpoint-115 到 g3082:8045 后写);用户令
 > "mixc 下一个就 eval mixaw9b 的第一个 checkpoint"。mixbtf9b(mixB+terminalfix)语料已出包,**等用户令投训**。
 > **mixb9bw20f1 收官 07:57:57.0%**(RESULTS §5.34);链 w20g 已结束,g3085:8043 的 mixb9b serve step 已撤,
-> **WSL 3 VM 空闲**。**mixR5M-9b 训完(09-02 14:14,EXIT 0,loss 0.390,ckpt-555 在 Tillicum)**,
-> **卡在推 Klone:`~/.ssh/cm/klone-login` 主连接 10:58 没了,要用户过 Duo 重建**;eval 走哪边待用户令。
+> **eval 链(2026-09-02 15:08 起)**:`chain_eval_r5m.sh`(PID 195675)单行 **mixr5m9b** = mixR5M-9b ckpt-555
+> (r5 + v16 真 multi-app 166,训完 14:14,EXIT 0,loss 0.390),eval100 **10/1**,WSL 3 VM,serve g3085:8046
+> (占位 39306243,`mixr5m9b-stock`,root 断言过)。配对读 mixa9b 57.0%(multi_apps 12/24)。约 5h。
+> Klone 主连接 `klone-login` 14:34 由用户过 Duo 重建。
 > 此前:
 > **eval 链(2026-09-02 02:36 起)**:`chain_eval_w20g.sh`(PID 101578)单行 **mixb9bw20f1** = mixB-9b-e873 同权重、
 > 窗口 **20/1**(恒 20 图),与 mixb9b(10/1,60.0%)、mixb9bw20(20/10,52.0%)构成窗口曲线第三点(用户令)。
