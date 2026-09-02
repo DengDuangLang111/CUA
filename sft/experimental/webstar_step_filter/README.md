@@ -2,11 +2,13 @@
 
 **Primary policy:** `webstar-official-revised-desktop-v1`
 
-**Status:** `IMPLEMENTED / CALIBRATION PENDING`
+**Status:** `EXECUTED ON mixA 2026-09-01 (calibration skipped by user order)` — see "Execution record" below; the MixB calibration plan below it is retained as written and remains unexecuted
 
 **Branch:** `exp/webstar-step-filter-v1`
 
 **Base corpus:** MixB, 866 trajectories and 18,576 current target rows
+
+**Executed corpus (2026-09-01):** mixA = r5 v11 (362 traj) + v16 strict-340, 13,204 source rows, 13,199 graded
 
 ## Scope
 
@@ -278,6 +280,54 @@ The current test suite verifies:
 - missing decisions, unresolved terminal loss, path errors, and response-hash
   drift fail closed;
 - filtered output hashes and counts are recorded.
+
+## Execution record — mixA, 2026-09-01
+
+Full grading ran on mixA by explicit user order, **without** the 200-step
+calibration or the second independent pass. Every deviation is disclosed in
+`CUA/PLAN-20260901-strict-corpus.md` §8–10; this section records what the code
+actually did and what changed.
+
+| Stage | Result |
+|---|---|
+| Sources | `v11100`/`v11500` = `ostg-img3/out/sft-Bhqs2tr5nocapimg10-*` (img10, r5, 100% explicit terminate); `v16main`/`v16pilot` = `ostg-v16/out/sft-v16strict-*` rebuilt with terminalfix (endings 3.7% → 100%) |
+| p1 grader | `gpt-5.6-luna`, `policy_official_revised.json`, `--prompt-file` sha256 `3cd1d435…`, 13,199 rows completed, 5 grader failures |
+| p2 grader | `claude-opus-5` (Anthropic direct after the ppapi relay key died), 4,190 rows (31%) — **evidence only, not used in decisions**. On the shared 3,311: 70.8% agreement, opus keeps 74.9% vs luna 56.0%, disagreement one-sided (luna-drop/opus-keep 22.6%, reverse 5.0%) |
+| Decisions | keep **7,311** / drop 5,893 (5,888 scored ≤5 + 5 `no_score`) / review 0. All 687 terminal targets kept (49 via manual overrides, reviewer jy050706) |
+| Shipped | `/gpfs/scrubbed/jy050706/sft/data/mixa-webstar-v16strict/train_swift.jsonl`, 7,311 rows; preflight 58,003 image refs, 0 unresolved |
+| Arm | Slurm 271889 `mixaw9b`: Qwen3.5-9B, lr 3e-6, 3 ep, gb64, save_steps 115 |
+
+### Code changes on this branch (commit `509de72a5a`)
+
+`decide_steps.py`:
+
+1. **The post-grading response sha256 guard is removed** (user ruling: delete,
+   no switch). terminalfix rewrites the terminal target after grading as a
+   normal pipeline step; the guard contradicted the pipeline. The hash is still
+   recorded per decision row.
+2. Scored keys absent from the sources are skipped and counted (terminalfix
+   `keep_to` truncation; 4 of 13,203), not raised.
+3. Source rows with no score get an explicit `drop` with `source: no_score`
+   so `filter_copy`'s coverage invariant holds and unscored rows never ship.
+
+### Operational findings
+
+- `--image-root NAME=PATH` must be the **parent** of `images/`; the neutral
+  sample paths already start with `images/`. Passing `.../images` produces
+  `images/images/...` — every hash and count check still passes, only the
+  remote `stat` catches it.
+- `to_swift`'s `gen_meta` (ostg@5c6aea84) breaks HF `datasets` schema inference
+  when sources of different generations are concatenated (`related_apps` all
+  `[]` in one, strings in the other → `Couldn't cast array of type string to
+  null`). Slurm 271875 died on it after a fully green preflight. Strip
+  `gen_meta` before training until `to_swift` is fixed.
+- Grader concurrency: 48 workers ran 55 min with zero failures; 128 workers
+  exhausted WSL's UDP ephemeral ports (`Tcpip 4266`), took down Docker and every
+  ssh master, and interleaved 4 half-written jsonl lines. Cap at 48, one writer
+  per output file.
+- Judge scores do not penalize terminal targets: terminal mean 9.00 / median 10
+  (92.9% keep) vs non-terminal 5.37 / 6 (52.9%), because the adapted prompt
+  maps "final answer" to explicit DONE.
 
 ## Current execution boundary
 
