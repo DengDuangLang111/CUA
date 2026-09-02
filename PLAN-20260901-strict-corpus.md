@@ -630,7 +630,11 @@ mixc9b step 结束 → `srun --overlap` 起 serve → root 校验 → 写 READY;
 
 流程照 `prep_evals.sh`,跳过"等 COMPLETED / epoch≥2.99"两道门(评的是中途点位)。
 g3082 上 mixa9b 的 vLLM 在 eval 结束后仍在跑(step 39306244.0),按 OPS 规矩只 scancel
-该 step,.batch/.extern 未动。ckpt-345(ep3)是否评,待用户令。
+该 step,.batch/.extern 未动。**同样的事第二次(09-02 02:1x)**:mixc9b 01:27:54 已
+complete 100/100(61 分),其 serve step 39187994.95 仍占 g3083:8042,链在 mixaw9b230w20
+空等 40 分钟;核 pid 972451 的 `--model` 为 mixC-9b-e627 后只撤该 step,8042 释放,
+守门任务随即起 230 的 serve。**链应在打出 "X complete" 后立刻 scancel 该臂的 serve step**,
+已建议 17。ckpt-345(ep3)评测已由用户令走 AWS(见下)。
 
 ## 12 strict 闸在刷什么:七成是判官视野与"保存"口径,不是轨迹(2026-09-01 深夜)
 
