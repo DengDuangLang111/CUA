@@ -587,3 +587,48 @@ mixc9b step 结束 → `srun --overlap` 起 serve → root 校验 → 写 READY;
 g3082 上 mixa9b 的 vLLM 在 eval 结束后仍在跑(step 39306244.0),按 OPS 规矩只 scancel
 该 step,.batch/.extern 未动。ckpt-345(ep3)是否评,待用户令。
 
+## 12 strict 闸在刷什么:七成是判官视野与"保存"口径,不是轨迹(2026-09-01 深夜)
+
+用 v3 同一个判官(claude-opus-5,`--think 0 --answer 1 --last 8`,走 Anthropic 直连)重判 r5
+采纳的 v11 362 条(75 + 287;313 条判完时的数),并用同一分类器回看 v16 的 strict 拒绝:
+
+| | v11(r5 采纳,313) | v16(全部有效判定,1374) |
+|---|---|---|
+| 判官 success | 96.9% | 52.8% |
+| 默认准入 | 93.5% | 47.1% |
+| **strict** | **63.6%** | **24.4%** |
+| strict / 默认 | 68% | 52% |
+
+**strict 拒绝的构成**(inferred 条目按 requirement 文本与 `evidence_steps` 分类):
+
+| 类 | v11(90 条) | v16(312 条) | 含义 |
+|---|---|---|---|
+| **A** 只有"以原格式保存"被判 inferred | 41(46%) | 94(30%) | 其余全 seen;判官看到 Ctrl+S + Keep Format 对话框消失,但"没有画面证明已存"。r5 那批确定性 evaluator 已在磁盘验过文件 |
+| **B** 证据在被裁掉的早期帧 / 读文件类 | 21(23%) | 109(35%) | 任务要先读 note/policy/brief,读的画面在前几步;判官只拿到初始帧 + 末 8 帧(`--last 8`) |
+| A+B 混合 | 3(3%) | 50(16%) | |
+| **C** 其他 inferred(真·证据缺口) | 20(22%) | 49(16%) | 备注面板没截到、导出文件没看到落地、靠文档推断 |
+| 非 inferred(cannot_tell/evidence 违规/derived<10) | 5(6%) | 10(3%) | |
+
+**A+B(+混合)在 v11 占 72%,在 v16 占 81%。** 换算:
+
+| 口径 | v11 | v16 |
+|---|---|---|
+| 现行 strict | 63.6% | 24.4%(335) |
+| 保存类免检(A) | 78.0% | 31.2%(429) |
+| 再给判官全帧(A+B) | **85.6%** | **42.8%(588)** |
+
+v16 的 strict-340 若按修正口径重筛,语料可到 ~588 条——**接近翻倍,而且多出来的不是低质量,
+是被判官视野误杀的**。§8 记的"d3 只留 8%"很可能主要是 B 类:难任务步数多、读文件更早,
+末 8 帧更装不下。
+
+**建议(两条,都不需要重判)**:
+1. `curate16 --strict` 里,requirement 文本命中"保存/原格式"的 inferred 不计入 `j_inferred`
+   (r5 系有 evaluator 兜底;v16 系至少不该比"做成了"的 verdict 更苛)。
+2. 有"读文件/先看"类 requirement 的任务,判官改用全帧(`--last 0`)或把 `evidence_steps`
+   指向的帧补进去再判 —— 只需重判 B 类那 ~160 条(v16)。
+C 类 49 条才是 strict 真正该保留的判断,单独人工抽 10 条看判官是否可信。
+
+判官输出:`ostg-v16/judge-v3-v11-100.jsonl`、`judge-v3-v11-500.jsonl`;targets
+`targets-v11-r5-*.jsonl`;分类脚本逻辑见本节(正则:保存类 `save|xlsx|docx|odt|ods|pptx|
+original format|in place|keep format`,读文件类 `read|locate|open|inspect|…` + `note|file|brief|
+policy|folder|…`;B 判据 = 该条 `evidence_steps` 全部 < n_steps−8)。
