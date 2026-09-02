@@ -1226,3 +1226,34 @@ terminate)。首建时 `verify` 未带该开关,照样打印 `0 endings not term
 —— 那是"没查",不是"通过"(DATA_PIPELINE §7b)。terminalfix 340 条零失败:append 298 /
 already-terminate 12 / rewrite 30。另一处静默失效:`terminalfix.py:626` 在
 `$OPENAI_API_KEY` 未设时拿字面量 "EMPTY" 请求教师,401 **不中断**,只在行尾记一句。
+
+---
+
+## 12 真 multi-app 在筛选漏斗里被逐层砍掉:45.8% → 30.0% → 16.5%(2026-09-02)
+
+口径(与另一会话的 v11/v16 池统计一致,同一条规则复算出它的 45.8%):"真 multi-app" =
+`related_apps` 去掉 {os, files, terminal, file_manager…} 后仍 ≥2 个 GUI/文档应用;
+"名义 multi-app" = `related_apps`≥2 或 `ostg.app_count`≥2。任务 JSON 在
+`ostg-v16/out/runs/v16-*/examples/`,不依赖被 merge 剥掉的 `gen_meta`。
+
+| 集合 | n | 名义 multi | **真 multi** | 名义中伪多应用 | 真 multi 轨迹:步数中位 / 回退 DONE / 撞 50 步 | 单应用轨迹 |
+|---|---|---|---|---|---|---|
+| 全部执行(v16-main-1 + pilot-200) | 1,386 | 911(65.7%) | **635(45.8%)** | 276/911 | 43 / 43% / **44%** | 19 / 75% / 15% |
+| **判官准入 554(mixA/B/C 实际训练的 v16)** | 554 | 320(57.8%) | **166(30.0%)** | 154/320 | 30 / 84% / 10% | 17 / 94% / 3% |
+| **strict 340** | 340 | 172(50.6%) | **56(16.5%)** | 116/172 | 29 / 95% / 4% | 17 / 92% / 3% |
+
+**结论**:v16 生成池的 task shape 确实比 v11 好(真 multi 45.8% vs v11 原池 14.9%),但**每过一道
+筛选,真 multi 就被不成比例地砍掉**:判官准入把它从 45.8% 压到 30.0%,strict 再压到 16.5%——
+已经退回 v11 的水平。机制清楚:真 multi-app 轨迹长(执行池中位 43 步、44% 撞 50 步上限),
+撞上限/半途而废的判 failure;活下来的是短的那批(中位 30);strict 的末 8 帧视野(PLAN §12 的
+B 类)再对长轨迹加一刀。**所以"mixA/B/C 训到的 v16 里 30% 是真 multi-app"是准确数,比 v11new
+的 11.2% 高 2.7 倍,但只剩生成池的三分之二;若换 strict-340 语料,multi-app 示范会掉到 56 条。**
+
+对 multi_apps 分数下降的读法:不能归因于"v16 的 multi-app 是假的"(不是),也不能只归因
+覆盖(30% 仍是 v11 的近 3 倍);更像是**长链示范被筛选系统性稀释 + 留下的示范 84% 以散文
+结尾(§11)**。要验证,该做的对照是:同一批 554 里真 multi 166 条 vs 单应用 388 条分别的
+WebSTAR 步级保留率与 think 长度(另一会话 PLAN §10 已证 WebSTAR 是短思考选择器,长链吃亏最多)。
+
+对 Eval100 multi_apps 组合的覆盖没有在此给数:OSWorld 任务的 `related_apps` 命名与我们不同
+(`vs_code`/`Writer`/`ubuntu_media_player` vs `vscode`/`libreoffice_writer`),按原始 token 只有
+10/24 题算得上真 multi,需要先做命名归一才能比;另一会话的 19/24、13/17 用的是归一后的映射。
