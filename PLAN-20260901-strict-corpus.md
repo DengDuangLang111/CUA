@@ -605,6 +605,15 @@ g3082:8045)** → mixa4b。230 那套紧跟 mixc9b(约 2–3h 后):mixc9b 评完
 serve step 并发我消息,我的自守门任务随即起 serve、写 `READY_mixaw9b230`。
 (此前顺序 w20e:mixc9b → 115@10/1 → 230@10/1 → 230@20/10 → 115@20/10 → mixa4b,已废。)
 
+**WSL 链的三行撤销(用户令 09-02 02:3x)**:mixaw9b230w20 / mixaw9bw20 / mixa4b 从
+`chain_eval_w20f.sh` 撤掉,以 AWS 为准。已停链进程(PID 61475,当时在 mixaw9b230w20 等 READY,
+无 runner 在跑)、撤 Klone 上为这两行起的 serve step(g3083 39187994.194、g3082 39306244.5,
+占位作业未动)、删 `READY_mixaw9b` / `READY_mixaw9b230`;`READY_aws_*` 保留。**结果:mixaw9b
+115/230/345 只在 AWS 评(10/1),20/10 那档没有任何地方在评** —— 与 a2(20/10)比时要记得
+§5.31 的 6–8pp 窗口错配。mixc9b 收官 60.0%(去 infeasible 59.8%),与 mixb9b 100 题配对
++0.0pp;三个 10/1 mix 臂在 87 道可做题上 52/51/51 一分不动,差异全在 infeasible 拒答
+(RESULTS §5.32,17)。
+
 **ckpt-345(ep3)(用户令 09-02 01:xx,经 computeragent-54 转达)**:训好即推 Klone
 `$KB/sft/models/mixaw9b-ckpt345`,**写 `READY_aws_mixaw9b345` 前在 Klone 侧真读校验**
 (4 分片头 `struct+json` 可解析、config 可解析、大小 30 s 两轮不变 —— 即 DATA_PIPELINE §7b
