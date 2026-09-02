@@ -48,7 +48,7 @@ summary{cursor:pointer;color:#5f6368}
 .chips{display:flex;gap:.6em;margin:.6em 0;flex-wrap:wrap}
 .chip{background:#fff;border-radius:2em;padding:.3em 1em;
       box-shadow:0 1px 2px rgba(0,0,0,.08);font-size:.9em}
-</style><div class=wrap><h2>7e287123-70ca-47b9-8521-47db09b69b14 <span class="badge none">no score</span></h2><div class=instr></div><p class=meta><a href="index.html" onclick="history.back();return false">&larr; back</a></p><div class=nav><button id=prev>&#9664; prev</button><span id=pos></span><button id=next>next &#9654;</button><input type=range id=rng min=0 max=37 value=0><button id=all>show all</button></div><div class=frame><h3>step 1 <small>12:57:44</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The task requires extracting data from 5 PDF reports. Let me start by exploring the directory structure. I&#x27;ll open a terminal to examine the files first.</div><div class="blk b-act"><span class=tag>ACTION</span>I&#x27;ll start by opening a terminal to explore the directory structure and understand the PDF files.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+</style><div class=wrap><h2>7e287123-70ca-47b9-8521-47db09b69b14 <span class="badge fail">FAIL 0</span></h2><div class=instr></div><p class=meta><a href="index.html" onclick="history.back();return false">&larr; back</a></p><div class=nav><button id=prev>&#9664; prev</button><span id=pos></span><button id=next>next &#9654;</button><input type=range id=rng min=0 max=51 value=0><button id=all>show all</button></div><div class=frame><h3>step 1 <small>12:57:44</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The task requires extracting data from 5 PDF reports. Let me start by exploring the directory structure. I&#x27;ll open a terminal to examine the files first.</div><div class="blk b-act"><span class=tag>ACTION</span>I&#x27;ll start by opening a terminal to explore the directory structure and understand the PDF files.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
 &lt;function=computer_use&gt;
 &lt;parameter=action&gt;
 left_click
@@ -1001,7 +1001,667 @@ key
 [&quot;return&quot;]
 &lt;/parameter&gt;
 &lt;/function&gt;
-&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.press(&quot;return&quot;)</div><img class=shot loading=lazy src="step_38_20260902@133706538992.png"></div><script>
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.press(&quot;return&quot;)</div><img class=shot loading=lazy src="step_38_20260902@133706538992.png"></div><div class=frame><h3>step 39 <small>13:39:49</small></h3><div class="blk b-think"><span class=tag>THINKING</span>Now this is very illuminating. In grf21:
+- Line 136: &quot;Computing Science &amp;&quot;
+- Then the sed block (lines 120-145) shows:
+  - 564 0$  (line with two numbers: 564 and 0)
+  - 54$
+  - 60,992 23$
+  - 19,204$
+  - 0$
+  - 0 0$
+  - 0$
+  - Engineering$
+  - Civil Engineering, Surveying$
+  - Building &amp; Construction$
+  - Computing Science &amp;$
+  - Information Technology$
+  - Electrical &amp; Electronic$
+  - Engineering$
+  - Mechanical, Production &amp;$
+  - Industrial Engineering$
+  - Engineering Total$
+  - 172 188,243 53$
+
+So the layout in grf21 is: the data cells are NOT on the same line as the label &quot;Computing Science &amp;&quot;. The label is line 136 &quot;Computing Science &amp;&quot;, then line 137 &quot;Information Technology&quot; (the second part of the label, split across two lines). Then the data cells start at line 138: &quot;564 0&quot;, then 54, 60,992 23, 19,204, 0, 0 0, 0, ... etc. Then &quot;Engineering&quot; section header.
+
+So the structure: label = 2 lines (&quot;Computing Science &amp;&quot; / &quot;Information Technology&quot;), then data cells begin. Each data cell line may contain 1 or 2 tokens. The cells are:
+- &quot;564 0&quot; -&gt; two cells? or one cell &quot;564 0&quot;? 
+- &quot;54&quot;
+- &quot;60,992 23&quot;
+- &quot;19,204&quot;
+- &quot;0&quot;
+- &quot;0 0&quot;
+- &quot;0&quot;
+...
+
+So a single line can contain 1 or 2 cells (two numbers). My earlier parser split each line into tokens and collected ALL numeric tokens. That SHOULD have worked! Let me recount: starting after the 2-line label (line 138), collect all numeric tokens until a pure-label line (&quot;Engineering&quot;, &quot;Civil Engineering...&quot;, etc.). The tokens:
+line138: 564, 0
+139: 54
+140: 60,992, 23
+141: 19,204
+142: 0
+143: 0, 0
+144: 0
+... then &quot;Engineering&quot; (pure label, stop).
+
+So cells = [564, 0, 54, 60992, 23, 19204, 0, 0, 0, ...]. That&#x27;s more than 0! So why did my parser return 0?
+
+OH. My parser used `is_num(t)` which matches `^[0-9]+(,[0-9]+)*$`. &quot;564&quot; matches, &quot;0&quot; matches, &quot;54&quot; matches, &quot;60,992&quot; matches, &quot;23&quot; matches, &quot;19,204&quot; matches. So num_t would be populated. lab_t for line 138 &quot;564 0&quot; — lab_t = tokens not numeric/empty = empty. So lab_t is empty, num_t non-empty -&gt; don&#x27;t break, extend with 564,0. Good. This should collect many cells, NOT 0.
+
+But my parser returned 0. Why? Because for grf21, idx = 136 (line &quot;Computing Science &amp;&quot;). My loop: `for line in lines[idx:]:`. Line 136 tokens = &quot;Computing&quot;, &quot;Science&quot;, &quot;&amp;&quot; — all non-numeric, so num_t=[], lab_t non-empty. Condition: lab_t and not num_t -&gt; TRUE (pure label line) -&gt; BREAK immediately. Result: 0 cells!
+
+The bug: The FIRST line (the Computing label line itself) is a pure-label line, so my loop breaks on the very first line before collecting anything. I need to skip the label lines (the &quot;Computing Science &amp;&quot; and &quot;Information Technology&quot; lines) and start collecting after them.
+
+So the fix: start collecting from the line AFTER the last label line of the Computing row. How to find it? The Computing row label lines are consecutive and all pure-label lines. So I should skip all consecutive pure-label lines starting at idx, then begin collecting. Let me fix: skip label lines until a line with numeric tokens, then collect until a pure-label line.
+
+For grf21: idx=136. Line 136 pure-label -&gt; skip. Line 137 &quot;Information Technology&quot; pure-label -&gt; skip. Line 138 &quot;564 0&quot; has num tokens -&gt; start collecting. Collect until line 147 &quot;Engineering&quot; pure-label.
+
+For grf19: the Computing row was a single line &quot;Computing Science &amp; Information Technology   36 40,741 ...&quot; — line has both label tokens AND numeric tokens, so it&#x27;s NOT a pure-label line. My loop: line 136 (idx) has num_t=36, lab_t non-empty -&gt; not pure-label, so don&#x27;t break, collect 36. That works for grf19! But grf19 returned NOMATCH because... &quot;Computing&quot; isn&#x27;t in the text. Right, grf19&#x27;s text doesn&#x27;t have &quot;Computing&quot;.
+
+For grf21-23: 2-line label. For grf23 earlier, the label was &quot;Computing Science &amp;&quot; (line A) and &quot;Information Technology&quot; (line B), same as grf21.
+
+So the corrected parser:
+- find idx of &quot;Computing Science&quot; line.
+- skip all consecutive lines starting at idx that are pure-label (lab_t non-empty and num_t empty). Let skipped count = k.
+- then collect from line idx+k: for each line, if pure-label -&gt; break; else extend with num_t.
+
+Let me rewrite the parser with this logic and re-run for all 5.
+
+Also, grf19 has no &quot;Computing&quot; text, so I must read grf19 visually. But grf20 returned NOMATCH too — let me check grf20&#x27;s text for &quot;Computing&quot;. If grf20 also lacks it, read visually.
+
+Let me rewrite and run.</div><div class="blk b-act"><span class=tag>ACTION</span>Now I understand grf21&#x27;s layout: the Computing label spans two pure-label lines (&quot;Computing Science &amp;&quot; / &quot;Information Technology&quot;), then data cells begin. My parser broke on the first pure-label line before collecting. Let me fix it to skip consecutive label lines, then collect, and re-run on all files.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+type
+&lt;/parameter&gt;
+&lt;parameter=text&gt;
+cat &gt; /tmp/extract.py &lt;&lt; &#x27;PYEOF&#x27;
+import subprocess,re,os
+os.chdir(&#x27;/home/user/Documents/Fundings/grf&#x27;)
+num_re = re.compile(r&#x27;^[0-9]+(,[0-9]+)*$&#x27;)
+is_num = lambda s: bool(num_re.match(s.strip()))
+is_purelabel = lambda s: bool(re.fullmatch(r&#x27;[A-Za-z\s&amp;]+&#x27;, s.strip())) and not is_num(s.strip())
+def parse_cells(txt):
+    lines = txt.split(&#x27;\n&#x27;)
+    idx = None
+    for i,line in enumerate(lines):
+        if &#x27;Computing Science&#x27; in line:
+            idx=i; break
+    if idx is None:
+        return &#x27;NOMATCH&#x27;,[]
+    # skip consecutive pure-label lines (the multi-line discipline label)
+    k=0
+    while idx+k &lt; len(lines) and is_purelabel(lines[idx+k]):
+        k+=1
+    cells=[]
+    for line in lines[idx+k:]:
+        tokens=line.split()
+        num_t=[t for t in tokens if t.strip()==&#x27;&#x27; or is_num(t)]
+        lab_t=[t for t in tokens if not (t.strip()==&#x27;&#x27; or is_num(t))]
+        if lab_t and not num_t:
+            break
+        cells.extend(num_t)
+    return &#x27;OK&#x27;,cells
+for pdf in [&#x27;grf19.pdf&#x27;,&#x27;grf20.pdf&#x27;,&#x27;grf21.pdf&#x27;,&#x27;grf22.pdf&#x27;,&#x27;grf23.pdf&#x27;]:
+    t = subprocess.check_output([&#x27;pdftotext&#x27;,pdf,&#x27;-&#x27;],text=True)
+    status,cells=parse_cells(t)
+    print(&#x27;===&#x27;,pdf,&#x27;===&#x27;,len(cells),&#x27;status=&#x27;,status)
+    if status==&#x27;OK&#x27; and len(cells)&gt;=32:
+        print(&#x27;HKU=&#x27;,cells[28:32])
+PYEOF
+python3 /tmp/extract.py
+
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.typewrite(&quot;cat &gt; /tmp/extract.py &lt;&lt; &#x27;PYEOF&#x27;\nimport subprocess,re,os\nos.chdir(&#x27;/home/user/Documents/Fundings/grf&#x27;)\nnum_re = re.compile(r&#x27;^[0-9]+(,[0-9]+)*$&#x27;)\nis_num = lambda s: bool(num_re.match(s.strip()))\nis_purelabel = lambda s: bool(re.fullmatch(r&#x27;[A-Za-z\\s&amp;]+&#x27;, s.strip())) and not is_num(s.strip())\ndef parse_cells(txt):\n    lines = txt.split(&#x27;\\n&#x27;)\n    idx = None\n    for i,line in enumerate(lines):\n        if &#x27;Computing Science&#x27; in line:\n            idx=i; break\n    if idx is None:\n        return &#x27;NOMATCH&#x27;,[]\n    # skip consecutive pure-label lines (the multi-line discipline label)\n    k=0\n    while idx+k &lt; len(lines) and is_purelabel(lines[idx+k]):\n        k+=1\n    cells=[]\n    for line in lines[idx+k:]:\n        tokens=line.split()\n        num_t=[t for t in tokens if t.strip()==&#x27;&#x27; or is_num(t)]\n        lab_t=[t for t in tokens if not (t.strip()==&#x27;&#x27; or is_num(t))]\n        if lab_t and not num_t:\n            break\n        cells.extend(num_t)\n    return &#x27;OK&#x27;,cells\nfor pdf in [&#x27;grf19.pdf&#x27;,&#x27;grf20.pdf&#x27;,&#x27;grf21.pdf&#x27;,&#x27;grf22.pdf&#x27;,&#x27;grf23.pdf&#x27;]:\n    t = subprocess.check_output([&#x27;pdftotext&#x27;,pdf,&#x27;-&#x27;],text=True)\n    status,cells=parse_cells(t)\n    print(&#x27;===&#x27;,pdf,&#x27;===&#x27;,len(cells),&#x27;status=&#x27;,status)\n    if status==&#x27;OK&#x27; and len(cells)&gt;=32:\n        print(&#x27;HKU=&#x27;,cells[28:32])\nPYEOF\npython3 /tmp/extract.py&quot;)</div><img class=shot loading=lazy src="step_39_20260902@133949098885.png"></div><div class=frame><h3>step 40 <small>13:40:20</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The command &quot;python3 /tmp/extract.py&quot; is at the prompt but not executed. Let me press Enter.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+key
+&lt;/parameter&gt;
+&lt;parameter=keys&gt;
+[&quot;return&quot;]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.press(&quot;return&quot;)</div><img class=shot loading=lazy src="step_40_20260902@134020541526.png"></div><div class=frame><h3>step 41 <small>13:41:48</small></h3><div class="blk b-think"><span class=tag>THINKING</span>Still all 0 cells even for grf21-23. That&#x27;s surprising. Let me debug: for grf21, idx=136, lines[136]=&quot;Computing Science &amp;&quot; (purelabel), lines[137]=&quot;Information Technology&quot; (purelabel), lines[138]=&quot;564 0&quot; (num). k should become 2, then collect from line 138. But cells=0. 
+
+Why? Let me check: maybe is_purelabel(&quot;Computing Science &amp;&quot;) — re.fullmatch(r&#x27;[A-Za-z\s&amp;]+&#x27;, &quot;Computing Science &amp;&quot;) = matches (only letters, spaces, &amp;). is_num false. So purelabel=True. Good. k=2. Then line 138 &quot;564 0&quot;: tokens=[&quot;564&quot;,&quot;0&quot;], num_t=[&quot;564&quot;,&quot;0&quot;], lab_t=[]. lab_t empty, so not (lab_t and not num_t) is True (short-circuit: lab_t is empty -&gt; lab_t and ... = False). So don&#x27;t break, extend with 564,0. Good. Should collect.
+
+But cells=0. So maybe idx+k &gt;= len(lines) or the while condition. Or maybe lines[idx+k] at k=2 is out of range? No, there are many lines.
+
+Wait — maybe the issue is that &quot;Computing Science&quot; appears, but the line at idx is NOT &quot;Computing Science &amp;&quot; alone. Let me check: grep -n &quot;Comput&quot; gave &quot;136:Computing Science &amp;&quot;. So line 136 is &quot;Computing Science &amp;&quot;. Good.
+
+Hmm. Unless the problem is that after skipping k=2, the loop starts at line 138, but maybe line 138 is NOT &quot;564 0&quot; — maybe the actual data lines are further and there are empty lines. But even then, cells would accumulate from the first numeric line.
+
+Let me add debug prints. Actually, maybe the issue: the number format. &quot;564 0&quot; on one line. But wait, is it possible that pdftotext for grf21 actually has the numbers with leading/trailing that breaks is_num? is_num(&quot;564&quot;) = True. 
+
+Let me add debug output to understand. Let me modify the script to print idx, k, and first few lines&#x27; num/label tokens for grf21.
+
+Actually, let me step back. I&#x27;m spending many steps on a fragile parser. Given grf19 lacks extractable text entirely, and the parser is proving flaky, the most reliable path is visual reading. But let me get the parser to work for grf21-23 quickly to save manual reading, since those 4 years (21,22,23) ARE extractable.
+
+Let me add debug for grf21 only.</div><div class="blk b-act"><span class=tag>ACTION</span>Still 0 cells, which is unexpected. Let me add debug output to understand why grf21&#x27;s data isn&#x27;t being collected.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+type
+&lt;/parameter&gt;
+&lt;parameter=text&gt;
+cat &gt; /tmp/extract.py &lt;&lt; &#x27;PYEOF&#x27;
+import subprocess,re
+os = __import__(&#x27;os&#x27;); os.chdir(&#x27;/home/user/Documents/Fundings/grf&#x27;)
+num_re = re.compile(r&#x27;^[0-9]+(,[0-9]+)*$&#x27;)
+is_num = lambda s: bool(num_re.match(s.strip()))
+is_purelabel = lambda s: bool(re.fullmatch(r&#x27;[A-Za-z\s&amp;]+&#x27;, s.strip())) and not is_num(s.strip())
+def debug(txt, pdf):
+    lines = txt.split(&#x27;\n&#x27;)
+    idx = None
+    for i,line in enumerate(lines):
+        if &#x27;Computing Science&#x27; in line:
+            idx=i; break
+    if idx is None:
+        return &#x27;NOMATCH&#x27;,[]
+    print(&#x27;DEBUG&#x27;,pdf,&#x27;idx=&#x27;,idx,&#x27;line=&#x27;,repr(lines[idx]))
+    k=0
+    while idx+k &lt; len(lines) and is_purelabel(lines[idx+k]):
+        print(&#x27;  skip line&#x27;,idx+k,repr(lines[idx+k]))
+        k+=1
+    print(&#x27;  k=&#x27;,k)
+    cells=[]
+    for line in lines[idx+k:]:
+        tokens=line.split()
+        num_t=[t for t in tokens if t.strip()==&#x27;&#x27; or is_num(t)]
+        lab_t=[t for t in tokens if not (t.strip()==&#x27;&#x27; or is_num(t))]
+        if lab_t and not num_t:
+            print(&#x27;  stop at line pure-label&#x27;,repr(line))
+            break
+        print(&#x27;  collect line&#x27;,repr(line),&#x27;num_t=&#x27;,num_t)
+        cells.extend(num_t)
+        if len(cells)&gt;40: break
+    return &#x27;OK&#x27;,cells
+t = subprocess.check_output([&#x27;pdftotext&#x27;,&#x27;grf21.pdf&#x27;,&#x27;-&#x27;],text=True)
+status,cells = debug(t,&#x27;grf21&#x27;)
+print(&#x27;RESULT&#x27;,len(cells),status)
+PYEOF
+python3 /tmp/extract.py
+
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.typewrite(&quot;cat &gt; /tmp/extract.py &lt;&lt; &#x27;PYEOF&#x27;\nimport subprocess,re\nos = __import__(&#x27;os&#x27;); os.chdir(&#x27;/home/user/Documents/Fundings/grf&#x27;)\nnum_re = re.compile(r&#x27;^[0-9]+(,[0-9]+)*$&#x27;)\nis_num = lambda s: bool(num_re.match(s.strip()))\nis_purelabel = lambda s: bool(re.fullmatch(r&#x27;[A-Za-z\\s&amp;]+&#x27;, s.strip())) and not is_num(s.strip())\ndef debug(txt, pdf):\n    lines = txt.split(&#x27;\\n&#x27;)\n    idx = None\n    for i,line in enumerate(lines):\n        if &#x27;Computing Science&#x27; in line:\n            idx=i; break\n    if idx is None:\n        return &#x27;NOMATCH&#x27;,[]\n    print(&#x27;DEBUG&#x27;,pdf,&#x27;idx=&#x27;,idx,&#x27;line=&#x27;,repr(lines[idx]))\n    k=0\n    while idx+k &lt; len(lines) and is_purelabel(lines[idx+k]):\n        print(&#x27;  skip line&#x27;,idx+k,repr(lines[idx+k]))\n        k+=1\n    print(&#x27;  k=&#x27;,k)\n    cells=[]\n    for line in lines[idx+k:]:\n        tokens=line.split()\n        num_t=[t for t in tokens if t.strip()==&#x27;&#x27; or is_num(t)]\n        lab_t=[t for t in tokens if not (t.strip()==&#x27;&#x27; or is_num(t))]\n        if lab_t and not num_t:\n            print(&#x27;  stop at line pure-label&#x27;,repr(line))\n            break\n        print(&#x27;  collect line&#x27;,repr(line),&#x27;num_t=&#x27;,num_t)\n        cells.extend(num_t)\n        if len(cells)&gt;40: break\n    return &#x27;OK&#x27;,cells\nt = subprocess.check_output([&#x27;pdftotext&#x27;,&#x27;grf21.pdf&#x27;,&#x27;-&#x27;],text=True)\nstatus,cells = debug(t,&#x27;grf21&#x27;)\nprint(&#x27;RESULT&#x27;,len(cells),status)\nPYEOF\npython3 /tmp/extract.py&quot;)</div><img class=shot loading=lazy src="step_41_20260902@134148972729.png"></div><div class=frame><h3>step 42 <small>13:42:16</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The command &quot;python3 /tmp/extract.py&quot; is at the prompt but not executed. Let me press Enter.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+key
+&lt;/parameter&gt;
+&lt;parameter=keys&gt;
+[&quot;return&quot;]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.press(&quot;return&quot;)</div><img class=shot loading=lazy src="step_42_20260902@134216676956.png"></div><div class=frame><h3>step 43 <small>13:47:41</small></h3><div class="blk b-think"><span class=tag>THINKING</span>Now the debug output reveals the real structure of grf21:
+- idx=135, line= &#x27;Computing Science &amp;&#x27;
+- skip line 135 &#x27;Computing Science &amp;&#x27;
+- skip line 136 &#x27;Information Technology&#x27;
+- skip line 137 &#x27;Electrical &amp; Electronic&#x27;
+- skip line 138 &#x27;Engineering&#x27;
+- k=4
+- stop at line pure-label &#x27;Mechanical, Production &amp;&#x27;
+- RESULT 0 cells
+
+So the layout is NOT &quot;Computing label lines then data&quot;. Instead, the lines 135-138 are ALL labels of DIFFERENT disciplines (Computing, then Electrical &amp; Electronic, then Engineering section). That means the data cells for &quot;Computing Science&quot; are NOT on lines 135-138 at all — they must be elsewhere, possibly the data cells are on the SAME visual line as the label but pdftotext split them weirdly, OR the data cells for Computing appear right after &quot;Engineering&quot; line 138 and before &quot;Mechanical, Production &amp;&quot; line 139.
+
+Wait: &quot;stop at line pure-label &#x27;Mechanical, Production &amp;&#x27;&quot; — the loop collected lines 139 onward? No. The loop is `for line in lines[idx+k:]` = lines 139 onward. Line 139 is what? The collection: it checked each line from 139. The FIRST line checked was line 139. But the debug shows &quot;stop at line pure-label &#x27;Mechanical, Production &amp;&#x27;&quot; and it says &quot;RESULT 0 cells&quot;. The &quot;collect&quot; print never showed, meaning the very first line after skipping (line 139) was the pure-label &#x27;Mechanical, Production &amp;&#x27;. So line 139 = &#x27;Mechanical, Production &amp;&#x27;. 
+
+So between line 138 &#x27;Engineering&#x27; and line 139 &#x27;Mechanical, Production &amp;&#x27; there is NO data line? That means the data cells for Computing are NOT between these label lines in the text order. 
+
+This strongly suggests that in grf21, the table is rendered with the label and data cells on the SAME line, but pdftotext rendered each cell&#x27;s text run... no.
+
+Wait. Let me reconsider. Maybe the table in grf21 has the structure where each row&#x27;s label is on its own line, and the data cells for that row are ALSO on that same line (to the right). So the Computing row = line 135 &quot;Computing Science &amp;&quot; + data cells on the same line. But line 135 only shows &quot;Computing Science &amp;&quot; (no numbers). So the data cells for Computing are NOT on line 135.
+
+Alternatively, maybe the data cells appear on a line that&#x27;s NOT a &quot;label line&quot; and NOT between these discipline labels. Let me look at the actual text around lines 135-145 more carefully. Earlier sed showed:
+136 (grep said 136, but debug says idx=135... off by one maybe due to wc). Let me just look at the raw lines 133-148 of g21.txt.
+
+Actually the debug shows idx=135. Let me print lines 135-150 with cat -A to see exact content.
+
+The key realization: the data cells must exist somewhere. Since pdftotext extracted them (the doc has text), and they&#x27;re numeric, they exist as lines with numbers. The discipline labels (Computing, Electrical, Engineering, Mechanical...) are the separators. The data for &quot;Computing&quot; should be immediately associated with its label. Given the numbers appeared in the earlier sed (564 0, 54, 60,992 23, 19,204, 0, 0 0, 0, then Engineering section), those ARE the Computing data cells! And they appeared right after &quot;Information Technology&quot; and before &quot;Engineering&quot;. 
+
+So the structure is:
+- Line A: &quot;Computing Science &amp;&quot;
+- Line B: &quot;Information Technology&quot;
+- Line C: data cells start: &quot;564 0&quot;
+- ... more data lines
+- Then &quot;Engineering&quot; (section header)
+- Then sub-disciplines
+- Then &quot;Engineering Total&quot;
+- Then &quot;172 188,243 53&quot;
+
+So the Computing data lines are between &quot;Information Technology&quot; and &quot;Engineering&quot;. In the debug, after skipping k=4 (lines 135-138: Computing, Info Tech, Electrical, Engineering), the loop started at line 139 which is &quot;Mechanical, Production &amp;&quot;. That means lines 139... wait, but the data should be there. 
+
+Hold on — the debug skip went: 135 Computing, 136 Info Tech, 137 Electrical, 138 Engineering, k=4. So the loop considers lines 139+. Line 139 = &quot;Mechanical, Production &amp;&quot; (pure label, stop). So where are the data lines &quot;564 0 ...&quot;? They must be at lines 139-146 or so, but debug says line 139 is &quot;Mechanical, Production &amp;&quot;. There&#x27;s a mismatch between the earlier sed output and the debug line numbers.
+
+The discrepancy: earlier I ran `sed -n &#x27;120,145p&#x27;` and saw the data (&quot;564 0&quot; etc.) around there, and &quot;Engineering&quot; and sub-disciplines. But debug with idx=135 says line 139 = &quot;Mechanical, Production &amp;&quot;. The line numbering might differ because the &quot;grep -n&quot; showed &quot;136:Computing Science &amp;&quot; but the actual file line for &quot;Computing Science&quot; found by my script is 135 (one off — probably the grep -n included a different baseline, or the file changed). 
+
+I&#x27;m getting confused by line number offsets. Let me stop the ad-hoc debugging and take the robust approach: dump the ENTIRE relevant section of g21.txt to a file and view it clearly, OR better, just dump all lines and print them all.
+
+Actually, the cleanest: print ALL lines of the file (or the full text) isn&#x27;t feasible (1300 lines). Let me instead print lines from the &quot;Computing&quot; label to the next &quot;Total&quot; with clear numbering. Let me do: awk to print from the Computing line to the end, but that&#x27;s many lines. 
+
+Better: Let me reconsider the fundamental problem. The table is complex. Given grf19 is entirely non-extractable, and the text extraction for grf21-23 is proving very fragile, I think the genuinely reliable approach is to read the tables VISUALLY from a PDF viewer at high zoom. This works for ALL 5 files (including grf19 which has no text).
+
+Let me pivot decisively to visual reading. I&#x27;ll open each PDF in the browser (or a PDF viewer) at a good zoom and screenshot the Computing row. To be efficient, I can read all 5 since they likely have the same layout.
+
+But 5 tables × careful transcription is a lot. However, the HKU column is in a consistent position (2nd from right, before Total). Once I read the column structure once, I can locate HKU by position.
+
+Actually, wait — let me reconsider whether I should keep trying the parser. The parser approach, if fixed, would be far more reliable for grf21-23. The core fix: the data cells are on lines that are NOT pure-label, and they appear right after the Computing label lines. The issue in debug was that my &quot;skip&quot; logic skipped too much (it skipped &quot;Electrical &amp; Electronic&quot; and &quot;Engineering&quot; as part of the label skip). That&#x27;s wrong — the label for Computing is only 2 lines (Computing / Information Technology). The data should start at line 137 (0-indexed 137). But my skip continued because line 137 &quot;Electrical &amp; Electronic&quot; was ALSO a pure-label, so it got skipped too.
+
+The problem: the discipline label is 2 lines, but then the NEXT line is the START of the NEXT discipline&#x27;s label (&quot;Electrical &amp; Electronic&quot;), and the data cells for Computing are actually placed in a way that the text lines are: 
+[Computing label line 1], [Computing label line 2], [data cells for Computing ...], [Engineering section], ...
+
+But the data cells shouldn&#x27;t be right after &quot;Engineering&quot; section header; they should be right after &quot;Information Technology&quot;. So why did my earlier sed (120-145) show the data (&quot;564 0&quot; etc.) and then &quot;Engineering&quot;? Let me reconsider: maybe the order in text is:
+- &quot;Computing Science &amp;&quot;
+- &quot;Information Technology&quot;
+- (data cells: 564 0, 54, 60,992 23, 19,204, 0, 0 0, 0, ...  and the values that sum...)
+- &quot;Engineering&quot;
+- ... sub-disciplines ...
+- &quot;Engineering Total&quot;
+- &quot;172 188,243 53&quot;
+
+If that&#x27;s the case, then after &quot;Information Technology&quot; come the data lines, then &quot;Engineering&quot;. So the data lines are NOT pure-label, so my skip (which only skips pure-label lines) should stop at line 2 (Information Technology) and NOT skip &quot;Electrical &amp; Electronic&quot; — because &quot;Electrical &amp; Electronic&quot; would be AFTER the data, not before.
+
+But the debug showed skip of 135,136,137,138 = Computing, Info Tech, Electrical, Engineering. That means in the ACTUAL file, lines 137 and 138 are &quot;Electrical &amp; Electronic&quot; and &quot;Engineering&quot;, i.e., they come IMMEDIATELY after &quot;Information Technology&quot; with NO data lines in between. That contradicts the sed output which showed data before &quot;Engineering&quot;.
+
+The contradiction is because the line numbers in the debug (idx=135) don&#x27;t match the sed (which showed data around lines 120-145). The sed &#x27;120,145&#x27; — the data &quot;564 0&quot; appeared near the top of that range, and &quot;Engineering&quot; appeared lower. If Computing is at line ~135-136, then sed 120-145 would show Computing around line 135. Let me re-examine: in the earlier sed output, I saw the sequence but I didn&#x27;t record exact line numbers for each. The &quot;Engineering&quot; and sub-disciplines were at the BOTTOM of the displayed range (the sed showed them near the end). So actually the data lines are at the TOP of 120-145, and Engineering/sub-disciplines at the bottom. That means: Computing data lines come right after the label, then Engineering. 
+
+So the real structure: label (2 lines) + data lines + &quot;Engineering&quot; section. My skip logic skipped the data lines thinking they were labels — but data lines have NUMBERS, so they&#x27;re NOT pure-label. So skip should have stopped after 2 lines and collected the data. Yet it didn&#x27;t.
+
+I&#x27;m now fairly certain the bug is subtle. Let me stop fighting the parser and just do what works: dump the full Computing-row region to a file and read it. 
+
+New plan: For grf21-23, print lines from the &quot;Computing Science&quot; line to the next &quot;Engineering&quot; section header (or to a fixed count), saving to a file, and view it at full width. Actually simpler: use `grep -n` to find the Computing line, then `sed -n &#x27;LINE,LINE+60p&#x27;` to print with numbers, and redirect to a file, then view in a text editor or the terminal at a large font.
+
+Given the terminal is small, let me maximize the terminal window first, then print. Actually, let me reconsider: I&#x27;ve already seen the rendered PDF in the browser, and I can read it visually. The visual approach is guaranteed to work and I&#x27;ve already confirmed the table layout. Let me just go with visual reading for all 5, carefully.
+
+But actually — the browser showed grf19 (I think). Let me verify the browser currently shows which file, and whether grf19&#x27;s table IS readable (it should be, since it&#x27;s a normal PDF). The fact that pdftotext can&#x27;t extract grf19&#x27;s Computing text is unusual but the browser renders it fine. 
+
+Let me reconsider the grf19 pdftotext issue once more. It&#x27;s possible the Computing row in grf19 uses a font where characters are present as glyphs but pdftotext (with default settings) can&#x27;t map them to Unicode, so it outputs them as placeholders or omits them. But the browser (which uses a full PDF renderer) shows them fine. So visual reading is required for grf19.
+
+OK, final decision: Use visual reading from the browser for all 5 PDFs. This is reliable. Let me:
+1. Confirm browser shows grf19 and read the Computing row HKU values at a clear zoom.
+2. Navigate to grf20-23 and read similarly.
+3. Transcribe into the xlsx.
+
+Let me maximize the browser for clarity and zoom. Actually, let me first verify which file the browser shows now. Let me switch to Chrome and check the tab/address.
+
+Actually, I recall I navigated to grf19 earlier. Let me re-navigate to be certain and set a zoom. Let me click Chrome.
+
+But before that — let me reconsider efficiency. I have the terminal and the browser. Let me use the browser for all 5 readings. I&#x27;ll zoom to 150% for clarity.
+
+Let me switch to Chrome.</div><div class="blk b-act"><span class=tag>ACTION</span>The debug clarifies the grf21 text layout, but the parser logic keeps fighting the multi-line label + data arrangement. Since grf19&#x27;s Computing row is fully text-inaccessible and the text layouts vary per year, the most reliable path is to read the rendered tables directly. Let me switch to Chrome, verify the file, and read the tables visually.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+left_click
+&lt;/parameter&gt;
+&lt;parameter=coordinate&gt;
+[17, 61]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.click(32, 65)</div><img class=shot loading=lazy src="step_43_20260902@134741831241.png"></div><div class=frame><h3>step 44 <small>13:51:06</small></h3><div class="blk b-think"><span class=tag>THINKING</span>Now the browser is showing grf19.pdf (confirmed: tab &quot;grf19.pdf&quot;, address &quot;/home/user/Documents/Fundings/grf/grf19.pdf&quot;, title &quot;2019 / 2020 General Research Fund&quot;). This is the full table rendered. The Computing row &quot;Computing Science &amp; Information Technology&quot; is visible under Engineering.
+
+Now I can read the values. The columns: CityU, HKBU, LU, CUHK, EdUHK, PolyU, HKUST, HKU, Total. Each has Application (No, Amt &#x27;000), Supported (No, Amt &#x27;000).
+
+I need the HKU column values for the Computing row. HKU is the second-to-last main column (before Total). Let me read the Computing row carefully.
+
+The Computing row (third under Engineering) reads:
+&quot;Computing Science &amp; Information Technology | 41 | 40,113 | 10 | 6,284 | 13 | 12,082 | 5 | 3,086 | 0 | 0 | 6 | 4,933 | 2 | 1,247 | 2 | 2,227 | 0 | 0 | 72 | 56,500 | 14 | 9,479 | 2 | 1,312 | 1 | 487 | 30 | 33,793 | 14 | 9,028 | 42 | 57,401 | 13 | 8,179 | 25 | 29,484 | 7 | 4,693 | 196 | 230,685 | 64 | 41,237 | 7 | 4,332 | 151 | 179,876 | 67 | 38,627&quot;
+
+Wait, that&#x27;s the sequence. Let me map to columns. The order of unis: CityU, HKBU, LU, CUHK, EdUHK, PolyU, HKUST, HKU, Total. Each: App No, App Amt, Supp No, Supp Amt.
+
+Let me enumerate the values in order. The row after the label:
+CityU: 41, 40,113, 10, 6,284
+HKBU: 13, 12,082, 5, 3,086
+LU: 0, 0, 6, 4,933
+CUHK: 2, 1,247, 2, 2,227
+EdUHK: 0, 0, 72, 56,500
+PolyU: 14, 9,479, 2, 1,312
+HKUST: 1, 487, 30, 33,793
+HKU: 14, 9,028, 42, 57,401
+Total: 13, 8,179, 25, 29,484
+
+Wait, but there are 9 unis × 4 = 36, plus Total 4 = 40 cells. Let me recount the values I read. Actually let me recount carefully from the image. The image text is small. Let me count the values I listed: 
+41,40113,10,6284, 13,12082,5,3086, 0,0,6,4933, 2,1247,2,2227, 0,0,72,56500, 14,9479,2,1312, 1,487,30,33793, 14,9028,42,57401, 13,8179,25,29484.
+
+That&#x27;s: CityU(4), HKBU(4), LU(4), CUHK(4), EdUHK(4), PolyU(4), HKUST(4), HKU(4), Total(4) = 40. Good.
+
+So HKU: App No=14, App Amt=9,028, Supp No=42, Supp Amt=57,401. Total: App No=13, App Amt=8,179, Supp No=25, Supp Amt=29,484.
+
+Now let me verify: sum of App No across unis = 41+13+0+2+0+14+1+14 = 85. Total App No = 13. 85 ≠ 13. So my mapping is WRONG. The columns don&#x27;t align with my uni order assumption, OR I misread the values.
+
+Hmm, 85 vs 13 is a big discrepancy. My column assignment is off. Let me reconsider the column ordering. Maybe the order of universities in the table is NOT CityU, HKBU, LU, CUHK, EdUHK, PolyU, HKUST, HKU, Total. Let me re-read the header from the image.
+
+The header shows: CityU | HKBU | LU | CUHK | EdUHK | PolyU | HKUST | HKU | Total. That&#x27;s what I read. But the values don&#x27;t sum. So either I misread the Computing row values, OR the header order differs.
+
+Wait — maybe I misread which values belong to which. Let me reconsider: maybe the table columns are ordered differently than I think. Let me look at the header row carefully in the image.
+
+The header: &quot;CityU&quot; (around x=360), &quot;HKBU&quot; (x=470), &quot;LU&quot; (x=580), &quot;CUHK&quot; (x=690), &quot;EdUHK&quot; (x=800), &quot;PolyU&quot; (x=910), &quot;HKUST&quot; (x=1020), &quot;HKU&quot; (x=1130), &quot;Total&quot; (x=1240).
+
+Hmm, that&#x27;s my order. Let me verify with the &quot;Total&quot; row which MUST sum. The Total row (bottom): &quot;467 425,523 156 92,442 215 166,319 65 34,577 14 6,004 615 618,666 212 145,254 123 97,360 31 18,965 469 454,542 156 96,079 357 424,265 159 162,521 2975 2,908,351 1006 654,854&quot;.
+
+Let me count: that&#x27;s 32 values. 8 unis × 4 = 32. So the Total (grand total) row has 32 cells = 8 unis × 4 subcols. The 8 unis in order give the subtotals, and the grand total. So the last uni&#x27;s App No = 2975? And the final value 654,854 is... hmm. Actually the grand total row: the last 4 values &quot;159 162,521 2975 2,908,351 1006 654,854&quot; — that&#x27;s 6 values, not 4. Let me recount the Total row values.
+
+This is getting confusing due to the small font and many columns. The sum verification is the key, and it&#x27;s not working with my assumed order. I need to determine the TRUE column-to-value mapping.
+
+The most reliable way: the Total (grand total) row&#x27;s last group should represent... actually the grand total row in these HKU GRF reports typically lists, for each university, its total App No, App Amt, Supp No, Supp Amt, and the FINAL cell is the grand total across everything. But here there seem to be more than 32 cells.
+
+Let me step back. Rather than fight this, let me read the table more carefully by zooming in, so I can:
+1. Read the header column order exactly.
+2. For the Computing row, read each value and verify against the Total row and sum constraints.
+
+The critical constraint for correctness: For each university, Supported No ≤ Applied No. And the sum of Applied No across the 8 unis should equal the Total Applied No (or the Total row&#x27;s value).
+
+Let me zoom in significantly on the Engineering section to read the Computing row and header precisely. Let me use Ctrl++ to zoom. Actually, let me first zoom to read the header column labels clearly to confirm the order.
+
+Let me zoom in using the browser zoom controls (+) a couple times, focusing on the top portion (header + Engineering section). Let me click the &quot;+&quot; button twice.
+
+Actually, a more precise approach: Let me read the header labels. Let me zoom and screenshot. Let me press Ctrl and + (zoom in) then screenshot. But zoom changes the whole page. Let me just use the + button near the zoom control at top (the + is at ~738,88).
+
+Let me zoom in to 150%: click + twice.</div><div class="blk b-act"><span class=tag>ACTION</span>Chrome confirms this is grf19.pdf (&quot;2019 / 2020 General Research Fund&quot;), and I can now see the full rendered table including the Computing row. The font is small and the column order must be verified. Let me zoom in to read the header and Computing row values precisely. I&#x27;ll increase the zoom.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+left_click
+&lt;/parameter&gt;
+&lt;parameter=coordinate&gt;
+[540, 128]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.click(1037, 138)</div><img class=shot loading=lazy src="step_44_20260902@135106611854.png"></div><div class=frame><h3>step 45 <small>13:58:27</small></h3><div class="blk b-think"><span class=tag>THINKING</span>Now zoomed to 100% (actually was 96%, now 100%). I can see more clearly. The header order: CityU, HKBU, LU, CUHK, EdUHK, PolyU, HKUST, HKU, Total. 
+
+Now let me re-read the Computing row. The Computing row (third under Engineering):
+&quot;Computing Science &amp; Information Technology | 41 | 40,113 | 10 | 6,284 | 13 | 12,082 | 5 | 3,086 | 0 | 0 | 6 | 4,933 | 2 | 1,247 | 2 | 2,227 | 0 | 0 | 72 | 56,500 | 14 | 9,479 | 2 | 1,312 | 1 | 487 | 30 | 33,793 | 14 | 9,028 | 42 | 57,401 | 13 | 8,179 | 25 | 29,484&quot;
+
+Wait, I need to carefully count. Let me group by the vertical grid lines. This is hard from the image. Let me reconsider using the Total row constraint.
+
+Actually, the cleanest verification: The Total (grand) row. Let me read the Total row and verify. Total row:
+&quot;Total | 467 | 425,523 | 156 | 92,442 | 215 | 166,319 | 65 | 34,577 | 14 | 6,004 | 615 | 618,666 | 212 | 145,254 | 123 | 97,360 | 31 | 18,965 | 469 | 454,542 | 156 | 96,079 | 357 | 424,265 | 159 | 162,521 | 2975 | 2,908,351 | 1006 | 654,854&quot;
+
+Hmm that&#x27;s 32 values? Let me count: 467(1) 425,523(2) 156(3) 92,442(4) 215(5) 166,319(6) 65(7) 34,577(8) 14(9) 6,004(10) 615(11) 618,666(12) 212(13) 145,254(14) 123(15) 97,360(16) 31(17) 18,965(18) 469(19) 454,542(20) 156(21) 96,079(22) 357(23) 424,265(24) 159(25) 162,521(26) 2975(27) 2,908,351(28) 1006(29) 654,854(30). So 30 values. That&#x27;s odd (should be 32 for 8 unis ×4, or 40 with Total).
+
+I&#x27;m clearly miscounting because the image is hard to read precisely. This visual reading approach is too error-prone with 30+ columns.
+
+Let me reconsider the whole strategy. The text extraction approach, once the parser is correct, would be far more reliable. The parser issue is the multi-line label. Let me seriously fix the parser now, since I now understand the structure better.
+
+Actually, you know what — let me reconsider. The real issue with the parser: I need to collect cells, but the relationship between lines and cells is 1:1 in grf21 (each data line = cells). Let me reconsider grf21 structure from the debug:
+
+grf21 lines near Computing:
+135: &quot;Computing Science &amp;&quot;
+136: &quot;Information Technology&quot;
+137: &quot;Electrical &amp; Electronic&quot;
+138: &quot;Engineering&quot;
+139: &quot;Mechanical, Production &amp;&quot;
+
+And the data values (&quot;564 0&quot;, &quot;54&quot;, &quot;60,992 23&quot;, &quot;19,204&quot;, &quot;0&quot;, &quot;0 0&quot;, &quot;0&quot;, &quot;172 188,243 53&quot;) — where are these? From the earlier sed &#x27;120,145p&#x27;, the sequence was:
+&quot;564 0&quot;
+&quot;54&quot;
+&quot;60,992 23&quot;
+&quot;19,204&quot;
+&quot;0&quot;
+&quot;0 0&quot;
+&quot;0&quot;
+&quot;Engineering&quot;
+&quot;Computing Science &amp;&quot;
+...
+
+Wait, that sed output — let me re-read. The earlier output showed (after &quot;Engineering&quot;):
+&quot;Civil Engineering, Surveying, 564 0&quot; — no, that was my misread. Let me look again at the actual terminal output from the sed command. The output was:
+```
+564 0$
+54$
+60,992 23$
+19,204$
+0$
+0 0$
+0$
+Engineering$
+Civil Engineering, Surveying,$
+Building &amp; Construction$
+Computing Science &amp;$
+Information Technology$
+Electrical &amp; Electronic$
+Engineering$
+Mechanical, Production &amp;$
+Industrial Engineering$
+Engineering Total$
+172 188,243 53$
+```
+
+Wait no — the terminal output I saw earlier (after `sed -n &#x27;120,145p&#x27; /tmp/g21.txt | cat -A`) showed:
+Line starting with &quot;564 0$&quot; — but this was within the sed range 120-145. And later I saw &quot;Engineering$&quot;, &quot;Civil...&quot;, &quot;Computing Science &amp;&quot;, etc. at the END of that output (the sed range ended at 145, and Computing appeared near line 135 which is within 120-145... no, 135 is within 120-145).
+
+Hmm, I&#x27;m confusing myself. The sed range 120-145: Computing at line 135 is WITHIN that range. So the output should show Computing around the middle, not the end. But the terminal output I saw had &quot;Computing Science &amp;&quot; near the bottom of the displayed block, followed by Electrical, Engineering, Mechanical, Engineering Total. That suggests Computing is at a HIGHER line number than I thought, or the displayed block was scrolled.
+
+Actually, I think the displayed block in the terminal was the BOTTOM portion of the sed output (the tail), because when I ran `cat -A | head -30`, it showed the first 30 lines of the sed output (lines 120-150 of file). But the &quot;Engineering&quot;, &quot;Computing&quot;, etc. were at the END of that 30-line display — meaning they&#x27;re around file line 145-150, NOT 135. 
+
+This means the &quot;Computing Science &amp;&quot; line is actually around file line 145, and the grep -n &quot;136:Computing&quot; — wait grep said 136. Contradiction. Ugh.
+
+I&#x27;ve spent ~20 steps. Let me take a clean, decisive approach that&#x27;s guaranteed to work:
+
+DECISION: I will use the rendered PDF visual reading for all 5 files, but I&#x27;ll read them in a much more controlled way by using the browser to show each PDF and zooming to read the header + Computing row, and I&#x27;ll verify values using the TOTAL row&#x27;s column grouping. 
+
+But the sum discrepancy earlier (my assumed mapping gave 85 vs total 13) means I genuinely need the correct column order. Let me get that from the header. Let me zoom in on JUST the header row to read the column order, then I&#x27;ll be confident about the 8 uni order.
+
+Actually, let me reconsider the sum issue. Maybe the total row&#x27;s values are arranged such that the FIRST value (467) is the GRAND total Applied No, and the values after are subtotals per university? Let me think about how these HKU GRF tables are structured.
+
+In these reports, the &quot;Breakdown of Applications from Institutions&quot; table:
+- Columns: each institution (CityU, HKBU, LU, CUHK, EdUHK, PolyU, HKUST, HKU) with sub-columns &quot;Application: No, Amt $&#x27;000&quot; and &quot;Supported: No, Amt $&#x27;000&quot;, then a &quot;Total&quot; column also with sub-columns.
+- Rows: subject disciplines, plus a &quot;Total&quot; row for the section, and a grand &quot;Total&quot; row at the bottom.
+
+So the column order IS: CityU, HKBU, LU, CUHK, EdUHK, PolyU, HKUST, HKU, Total (9 institutions). Each institution = 4 subcols = 36 cells, plus the &quot;Total&quot; institution 4 subcols = 40 cells per data row.
+
+For the grand Total row: 8 unis × 4 = 32 cells + Total 4 = 36 cells. So the grand total row should have 36 values.
+
+Now, the grand total row&#x27;s FIRST value 467 should be CityU&#x27;s total Applied No, and the LAST value 654,854... hmm that doesn&#x27;t fit as a total. Unless the layout is: the 8 unis then a &quot;Total&quot; column where Total&#x27;s 4 subcols are: App No = grand total apps, App Amt, Supp No, Supp Amt. So last 4 values = 2975, 2,908,351, 1006, 654,854 = Total: App No=2975, App Amt=2,908,351, Supp No=1006, Supp Amt=654,854. And the value before that &quot;159 162,521&quot; would be HKU&#x27;s total: App No=159, App Amt=162,521.
+
+So HKU (in the Total row): Applied No = 159, Applied Amt = 162,521, Supported No = 156, Supported Amt = 96,079.
+
+This gives a pattern I can verify! For the Computing row, HKU&#x27;s values should be at positions corresponding to the 8th uni. Let me now re-read the Computing row with this understanding and verify that HKU&#x27;s Supported ≤ Applied (151 ≤ 42? no, that&#x27;s the wrong cell).
+
+Hold on. Let me reconsider the Computing row mapping with 8 unis × 4 + Total 4:
+Positions 0-31 = 8 unis, positions 32-35 = Total.
+HKU = 8th uni = positions 28,29,30,31.
+
+From my reading:
+0 CityU: 41, 40,113, 10, 6,284
+1 HKBU: 13, 12,082, 5, 3,086
+2 LU: 0, 0, 6, 4,933
+3 CUHK: 2, 1,247, 2, 2,227
+4 EdUHK: 0, 0, 72, 56,500
+5 PolyU: 14, 9,479, 2, 1,312
+6 HKUST: 1, 487, 30, 33,793
+7 HKU: 14, 9,028, 42, 57,401
+32-35 Total: 13, 8,179, 25, 29,484
+
+HKU = 14 / 9,028 / 42 / 57,401. Supported 42 &gt; Applied 14 → IMPOSSIBLE.
+
+So the uni ORDER or my VALUE READING is wrong. The values I&#x27;m assigning to HKU (14 applied, 42 supported) don&#x27;t make sense. Let me reconsider: maybe the order of unis is different from the header text order, OR I misread which numbers are which.
+
+Given the difficulty, let me take the DEFINITIVE approach: use a script to extract the text of grf21-23 with a CORRECT parser (I now understand the layout), AND for grf19 read visually. But the parser for grf21 needs fixing.
+
+Let me reconsider grf21 once more with fresh eyes. The key is that each data cell = one visual line (mostly), and the label for Computing is 2 lines. Let me write a parser that, after finding the &quot;Computing Science&quot; line, collects ALL subsequent numeric tokens line-by-line, and stops when it hits a line that is a DISCIPLINE LABEL (contains only letters &amp; &amp; and is a known label). 
+
+The discipline labels are: &quot;Computing Science &amp;&quot;, &quot;Information Technology&quot;, &quot;Electrical &amp; Electronic Engineering&quot;, &quot;Civil Engineering, Surveying, Building &amp; Construction&quot;, &quot;Mechanical, Production &amp; Industrial Engineering&quot;, etc. These all contain only letters, spaces, &amp;, commas. A data line contains numbers.
+
+So: after the 2-line Computing label, collect numeric tokens from each following line until a line contains NO numbers (pure label line). This should work for grf21. My earlier attempt did exactly this but broke because the VERY FIRST line (idx) was pure-label, and I didn&#x27;t skip the label lines properly in the collection (I started at idx which is pure-label, and my condition `if lab_t and not num_t: break` broke on the first line). 
+
+The fix: after finding idx, first skip all pure-label lines (the label), THEN collect. My skip loop `while is_purelabel(lines[idx+k])` — but this broke because lines after the 2-line label included &quot;Electrical &amp; Electronic&quot; and &quot;Engineering&quot; which are ALSO pure-label, so k kept incrementing past the data! 
+
+Wait no. If data lines (with numbers) exist right after the 2-line label, then is_purelabel would be FALSE for the data line, so the while loop would stop at k=2. Let me verify: line idx+2 (the first data line) = &quot;564 0&quot; which has numbers → is_purelabel=False → while stops with k=2. Then collection starts at line idx+2, collects numbers. 
+
+So the while loop should have stopped at k=2, not k=4. But the debug showed k=4 (skipped 135,136,137,138 = Computing, Info Tech, Electrical, Engineering). That means line idx+2 (137) &quot;Electrical &amp; Electronic&quot; WAS a pure-label (true), and line idx+3 (138) &quot;Engineering&quot; WAS a pure-label (true). So there are NO data lines between &quot;Information Technology&quot; and &quot;Engineering&quot;! The data lines must be elsewhere.
+
+This means in grf21, the text layout is: the Computing data cells are NOT in the lines between the label and &quot;Engineering&quot;. They must be on the SAME line(s) as the label. 
+
+Conclusion: In grf21, the Computing row&#x27;s label AND data cells are on the same physical line(s) as the label text, but arranged so that the label text and the numeric cells share lines in a way that each &quot;line&quot; in the pdftotext output contains a MIX of label text and numbers, making every line have BOTH lab_t and num_t, so my collection (which extends num_t from every non-purelabel line) SHOULD have collected them all as I traverse. But it collected 0 because I started at idx and broke on the first pure-label line.
+
+I think the real structure: The label line &quot;Computing Science &amp;&quot; is followed by the data cells on SUBSEQUENT lines, but those data lines ALSO contain the label&#x27;s second part or are interleaved. I&#x27;m going in circles.
+
+NEW DECISION: Stop fighting the parser. Use the RENDERED PDF for ALL 5 files. I&#x27;ll read each at a zoom that lets me clearly read the header order and the Computing row. I&#x27;ll verify by cross-checking: for the row, the value under HKU must satisfy Supported ≤ Applied, and I&#x27;ll confirm the column order by reading the header. If there&#x27;s any doubt, I&#x27;ll re-read.
+
+The most efficient way to read 5 tables precisely is to have them all visible and zoomed. Let me use the browser. But the browser only shows one page. Let me instead use the browser to view each PDF, zoom to ~150%, and carefully read the header + Computing row, taking a screenshot for each and transcribing.
+
+Actually, an even better idea for reliability: Let me use the browser&#x27;s ability to print the PDF to a high-res image, then I could... no, that&#x27;s complex.
+
+Let me just do careful visual reading. First, let me zoom in on the header and Computing row of grf19 to read the exact values. Let me set zoom to 150% and reposition. Actually the current 100% view shows the whole table but text is small. Let me zoom to 150% with Ctrl+Plus a couple, then the table will be larger and I can read each number.
+
+Let me use keyboard zoom Ctrl+= twice. Actually, let me use the view to read the header first. Let me press Ctrl and + twice.
+
+Hmm, but the page is one page; zooming just enlarges. Let me do it. Actually, I realize I should verify the column-to-value mapping rigorously. The best verification is: for each row, the value under &quot;HKU&quot; that I read, when I check &quot;Supported ≤ Applied&quot; — only one assignment per row will satisfy this for HKU (and likely the sums will match the Total). 
+
+Let me re-read the Computing row values very carefully from the current 100% view. I&#x27;ll read left to right, noting each value under each column. Let me identify columns by their header position:
+
+From the image (100%):
+- &quot;CityU&quot; header ~ x=365
+- &quot;HKBU&quot; ~ x=475
+- &quot;LU&quot; ~ x=585
+- &quot;CUHK&quot; ~ x=695
+- &quot;EdUHK&quot; ~ x=805
+- &quot;PolyU&quot; ~ x=915
+- &quot;HKUST&quot; ~ x=1025
+- &quot;HKU&quot; ~ x=1135
+- &quot;Total&quot; ~ x=1245
+
+Each column has sub-headers &quot;Application (No, Amt)&quot; and &quot;Supported (No, Amt)&quot;.
+
+Now the Computing row, reading the numbers under each. The row&#x27;s first number (CityU App No) should be the first number after the label. Let me read the Computing row numbers by their horizontal position:
+
+I&#x27;ll read the sequence and assign by column. This is still hard. Let me zoom to 150% to make it readable. Let me press Ctrl+= twice.
+
+Actually, I&#x27;ll use a cleaner method. Let me use the browser zoom to 150%, then carefully screenshot and read. Let me do Ctrl+= twice.</div><div class="blk b-act"><span class=tag>ACTION</span>I can see grf19 rendered clearly now. The text is still small with 9 institution columns. Let me zoom in to read the header and Computing row precisely. I&#x27;ll increase zoom with Ctrl+=.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+key
+&lt;/parameter&gt;
+&lt;parameter=keys&gt;
+[&quot;ctrl&quot;, &quot;plus&quot;]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.hotkey(&quot;ctrl&quot;, &quot;plus&quot;)</div><img class=shot loading=lazy src="step_45_20260902@135827003308.png"></div><div class=frame><h3>step 46 <small>13:58:56</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The Ctrl+= didn&#x27;t change zoom (still 100%). The zoom control still shows 100%. Maybe Ctrl+= doesn&#x27;t work in this Chrome. Let me use the + button at 738,88. Let me click it twice to zoom to 150-160%.</div><div class="blk b-act"><span class=tag>ACTION</span>Zoom is stuck at 100%. Let me use the + button to increase zoom.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+left_click
+&lt;/parameter&gt;
+&lt;parameter=coordinate&gt;
+[540, 128]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.click(1037, 138)</div><img class=shot loading=lazy src="step_46_20260902@135856180674.png"></div><div class=frame><h3>step 47 <small>13:59:16</small></h3><div class="blk b-think"><span class=tag>THINKING</span>Now 110%. Let me click + once more to get to ~120-125% for better readability.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+left_click
+&lt;/parameter&gt;
+&lt;parameter=coordinate&gt;
+[540, 128]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.click(1037, 138)</div><img class=shot loading=lazy src="step_47_20260902@135916437992.png"></div><div class=frame><h3>step 48 <small>14:00:56</small></h3><div class="blk b-think"><span class=tag>THINKING</span>Now at 125%. The table is much clearer. Let me read the Computing row (&quot;Computing Science &amp; Information Technology&quot;) and the header.
+
+Header order (left to right): CityU, HKBU, LU, CUHK, EdUHK, PolyU, HKUST, HKU, Total (the last &quot;Total&quot; header is partially cut off at right edge, showing &quot;Tota...&quot;). Each has subcolumns Application (No, Amt $&#x27;000) and Supported (No, Amt $&#x27;000).
+
+Now let me read the Computing row values. The Computing row is the 3rd under Engineering. Reading the numbers:
+- CityU: 41 (App No), 40,113 (App Amt), 10 (Supp No), 6,284 (Supp Amt)
+- HKBU: 13, 12,082, 5, 3,086
+- LU: 0, 0, 6, 4,933
+- CUHK: 2, 1,247, 2, 2,227
+- EdUHK: 0, 0, 72, 56,500
+- PolyU: 14, 9,479, 2, 1,312
+- HKUST: 1, 487, 30, 33,793
+- HKU: 14, 9,028, 42, 57,401
+- Total: 13, 8,179, 25, 29,484
+
+Wait, but the right side is cut off — I can&#x27;t see the Total column&#x27;s full values (the last columns are cut off at the right edge). Also I need to verify HKU&#x27;s position. Let me confirm the HKU column. The HKU header is at ~x=1150 (second from right, before the cut-off Total). 
+
+But the issue: HKU = 14 applied, 42 supported → 42 &gt; 14 impossible. So my reading is wrong, OR the column order is different.
+
+Let me reconsider. Maybe the column order is NOT what the header text order suggests. Let me verify using the &quot;Engineering Total&quot; row which must be internally consistent, and the grand Total row.
+
+Actually, wait. Let me reconsider whether the values I read are correct. Let me look at the Computing row again more carefully. The numbers: &quot;41  40,113  10  6,284  | 13  12,082  5  3,086  | 0  0  6  4,933  | 2  1,247  2  2,227  | 0  0  72  56,500  | 14  9,479  2  1,312  | 1  487  30  33,793  | 14  9,028  42  57,401  | 13  8,179  25  29,484&quot;.
+
+Hmm, but the right side (Total column) is cut off so I can&#x27;t see the last 4 values fully. Let me zoom more to read clearly and also to see the full row including Total. Let me click + again to ~150%.</div><div class="blk b-act"><span class=tag>ACTION</span>Now at 125%, much clearer. Let me zoom a bit more to read the full row including the Total column (currently cut off). I&#x27;ll increase to ~150%.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+left_click
+&lt;/parameter&gt;
+&lt;parameter=coordinate&gt;
+[540, 128]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.click(1037, 138)</div><img class=shot loading=lazy src="step_48_20260902@140056978097.png"></div><div class=frame><h3>step 49.1 <small>14:01:58</small></h3><div class="blk b-think"><span class=tag>THINKING</span>Now at 150%. The table is very clear now. But I can only see up to PolyU column (HKUST, HKU, Total are cut off at the right edge). I need to scroll RIGHT to see the HKUST, HKU, and Total columns.
+
+Let me scroll the page to the right to reveal the rightmost columns (HKUST, HKU, Total) while keeping the Computing row visible. Actually, the table is one page; I can scroll horizontally within the PDF view. Let me use the horizontal scroll on the page content.
+
+Actually, a better idea: the Computing row&#x27;s values under HKUST, HKU, Total are on the right. Let me scroll right to see them. I&#x27;ll scroll horizontally on the page.
+
+But first, let me now read the Computing row values that ARE visible, and then scroll right to read the HKUST/HKU/Total.
+
+Visible Computing row (left portion, up to PolyU):
+- CityU: 41, 40,113, 10, 6,284
+- HKBU: 13, 12,082, 5, 3,086
+- LU: 0, 0, 6, 4,933
+- CUHK: 2, 1,247, 2, 2,227
+- EdUHK: 0, 0, 72, 56,500
+- PolyU: 14, 9,479, 2, 1,312
+
+Now I need HKUST, HKU, Total. Let me scroll right. Let me use horizontal scroll at the page.</div><div class="blk b-act"><span class=tag>ACTION</span>Now at 150%, the left portion is very clear. I can see CityU through PolyU. I need to scroll right to read HKUST, HKU, and Total columns. Let me scroll the page horizontally.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+mouse_move
+&lt;/parameter&gt;
+&lt;parameter=coordinate&gt;
+[515, 555]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;
+&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+scroll
+&lt;/parameter&gt;
+&lt;parameter=pixels&gt;
+5
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.moveTo(989, 600)</div><img class=shot loading=lazy src="step_49_20260902@140158986509.png"></div><div class=frame><h3>step 49.2 <small>14:02:02</small></h3><p class=meta>same model call as the previous action</p><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.scroll(5)</div><img class=shot loading=lazy src="step_49_20260902@140202370125.png"></div><div class=frame><h3>step 50.1 <small>14:03:59</small></h3><div class="blk b-think"><span class=tag>THINKING</span>The scroll didn&#x27;t move horizontally (the table still shows the same columns, no horizontal scroll happened — the page content didn&#x27;t scroll). The table is still showing CityU-PolyU, and the right edge cuts off HKUST/HKU/Total. The horizontal scroll wheel may not have affected the PDF view, or it scrolled too little.
+
+Let me try a larger horizontal scroll, or use the scrollbar. Actually, let me reconsider. The PDF viewer in Chrome — horizontal scrolling might work differently. Let me try scrolling more aggressively to the right. Let me use keyboard: Page Down? No. Let me try Ctrl+Right or just more scroll. 
+
+Actually, an alternative: rather than fighting to read grf19&#x27;s right columns visually, let me reconsider using the text extraction for grf21-23 (which have extractable text) AND accept that grf19 must be read visually. But I still need grf19&#x27;s HKU values.
+
+Wait — let me reconsider the whole column-order problem. The fundamental issue is that I keep getting HKU Applied &lt; Supported, which is impossible. This means my column-to-value assignment is wrong. Let me use a RIGOROUS verification method:
+
+For grf19, let me use the fact that the Total (grand) row and section Total rows MUST be consistent. Let me read the Engineering Total row and the grand Total row, and verify the sum of Applied No across the 8 unis equals the Total&#x27;s Applied No.
+
+Actually, let me step back and think about what &quot;HKU&quot; means. The user is an assistant professor at HKU (University of Hong Kong). In the GRF table, &quot;HKU&quot; is the University of Hong Kong. HKUST is Hong Kong University of Science and Technology (different). So HKU is a distinct column from HKUST.
+
+Now, the realistic values: for Computing Science, HKU (University of Hong Kong) as a major university would have a SUBSTANTIAL number of applications and supported grants — in the hundreds of applications and hundreds of supported. My reading of &quot;14 applied, 42 supported&quot; for HKU is clearly wrong because 42 &gt; 14. But also 14 applied for HKU (a top uni) in Computing seems too low.
+
+Wait — maybe I misidentified which column is HKU. Let me reconsider the header. The headers are: CityU, HKBU, LU, CUHK, EdUHK, PolyU, HKUST, HKU, Total. So HKU is the 8th column (second from last). 
+
+Let me re-read the Computing row, but this time let me look at the numbers more carefully. Maybe the value under HKU is NOT 14/42. Let me look at the columns HKUST and HKU at 150% — they&#x27;re cut off. I need to scroll right to read them.
+
+Let me try to scroll right using the Chrome horizontal scroll more. Let me try scrolling with a larger pixel amount, centered on the page.
+
+Actually, the mouse scroll in Chrome PDF viewer should scroll horizontally. Let me try again with more scroll force, or use the scrollbar at the bottom. There&#x27;s a scrollbar at the bottom of the page. Let me use the horizontal scroll and take a screenshot. Let me scroll more.</div><div class="blk b-act"><span class=tag>ACTION</span>The horizontal scroll didn&#x27;t move the PDF view. Let me try scrolling more aggressively to the right to reveal HKUST, HKU, and Total columns.</div><div class="blk b-tool"><span class=tag>TOOL CALL</span>&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+mouse_move
+&lt;/parameter&gt;
+&lt;parameter=coordinate&gt;
+[515, 555]
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;
+&lt;tool_call&gt;
+&lt;function=computer_use&gt;
+&lt;parameter=action&gt;
+scroll
+&lt;/parameter&gt;
+&lt;parameter=pixels&gt;
+10
+&lt;/parameter&gt;
+&lt;/function&gt;
+&lt;/tool_call&gt;</div><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.moveTo(989, 600)</div><img class=shot loading=lazy src="step_50_20260902@140359251583.png"></div><div class=frame><h3>step 50.2 <small>14:04:02</small></h3><p class=meta>same model call as the previous action</p><div class="blk b-exec"><span class=tag>EXECUTED (pyautogui in VM)</span>pyautogui.scroll(10)</div><img class=shot loading=lazy src="step_50_20260902@140402620040.png"></div><script>
 const frames=[...document.querySelectorAll('.frame')];
 let cur=0, all=false;
 const pos=document.getElementById('pos'), rng=document.getElementById('rng');
