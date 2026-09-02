@@ -1324,7 +1324,7 @@ python3 -B -m ostg.sft.strongjudge RESULT_DIR --tasks $V/out/runs/v16-main-1 \
 
 ## v16 严格语料流水线(2026-09-01 固化)
 
-口径与偏置披露见 `PLAN-20260901-strict-corpus.md` §8;判官与协议门见
+口径与偏置披露见 `PLAN-20260901-strict-corpus.md` §8;判官与规则闸见
 `JUDGING.md` §2f。四步,前三步在 WSL 的 ostg-v16 跑,第四步在
 `/mnt/d/research/webstar`。
 
@@ -1334,7 +1334,7 @@ V=/mnt/d/research/ostg-v16
 R=/mnt/d/research/OSWorld/results_generated/qwen38-27b-local
 ```
 
-### ① 轨迹判官 + 协议门复核
+### ① 轨迹判官 + 规则闸复核
 
 ```bash
 # 主判(边跑边判,断点续跑)
