@@ -1321,3 +1321,111 @@ python3 -B -m ostg.sft.strongjudge RESULT_DIR --tasks $V/out/runs/v16-main-1 \
 python3 -B -m ostg.sft.strongjudge RESULT_DIR --tasks $V/out/runs/v16-main-1 \
   --truth all --out judge-pass2.jsonl --workers 6
 ```
+
+## v16 严格语料流水线(2026-09-01 固化)
+
+口径与偏置披露见 `PLAN-20260901-strict-corpus.md` §8;判官与协议门见
+`JUDGING.md` §2f。四步,前三步在 WSL 的 ostg-v16 跑,第四步在
+`/mnt/d/research/webstar`。
+
+```bash
+P=/mnt/d/research/OSWorld/.venv/bin/python
+V=/mnt/d/research/ostg-v16
+R=/mnt/d/research/OSWorld/results_generated/qwen38-27b-local
+```
+
+### ① 轨迹判官 + 协议门复核
+
+```bash
+# 主判(边跑边判,断点续跑)
+cd $V && $P -B -m ostg.sft.strongjudge $R/v16-main-1 --tasks out/runs/v16-main-1 \
+  --truth all --think 0 --answer 1 --last 8 --workers 6 --out judge-v3-main.jsonl
+
+# 复核 agent 自称 FAIL 的那批(--gate 0);targets 从主判里筛 judge_status=gate
+bash $V/run-gateaudit.sh          # setsid 后台,日志 logs-gateaudit.log
+```
+
+`--last 8` = 初始帧 + 末 8 帧 = 9 帧。**复核必须与主判逐字同参**,否则不可比。
+
+### ② 准入 —— strict
+
+```bash
+cd $V && $P -B -m ostg.sft.curate16 \
+  judge-v3-gateaudit.jsonl judge-v3-main.jsonl judge-v3-pilot.jsonl \
+  --tasks out/runs/v16-main-1 out/runs/v16-pilot-200 \
+  --strict --out out/admitted-v16-strict.jsonl
+```
+
+**复核文件必须排在最前**:`curate16` 同 `(domain,task_id)` 只留
+`_result_mtime` 最大的一条,同一条轨迹两次判定 mtime 相同,**先出现的胜出**。
+放后面等于复核结果被原 gate 行盖掉(实测 645 → 638,静默少 7 条)。
+
+### ③ 中性重建(v16 那半)
+
+```bash
+bash $V/build-v16-strict.sh       # setsid 后台,日志 logs-build-strict.log
+# --include admitted-v16-strict.jsonl --whole-traj-filter --think-cap 2048
+# --image-max 10 --fold-size 1;图片重编码 15-45 分钟
+```
+
+v11 那 362 条沿用既有语料,不重建(带 terminal-rewrite,已知混淆)。
+
+### ④ WebSTAR 步级过滤
+
+代码 `.worktrees/cua-webstar-step-filter-v1/sft/experimental/webstar_step_filter`
+推到 WSL `/mnt/d/research/webstar/`;prompt 产物 `official_revised_desktop.txt`
+(6303 字符 strip 后,sha256 `3cd1d435…`)。判官 `gpt-5.6-luna`,凭证在
+`ostg-v14/.env` 的 `PPAPI_API_KEY` / `PPAPI_BASE_URL`。
+
+```bash
+cd /mnt/d/research/webstar
+set -a && . ./.env && set +a          # ppapi 凭证;ostg-v14/.env 那份是
+export OPENAI_API_KEY="$PPAPI_API_KEY"  # api.anthropic.com,不是 ppapi
+export OPENAI_BASE_URL="$PPAPI_BASE_URL/v1"
+unset PPAPI_API_KEY
+O=/mnt/d/research/ostg-v11.1/out
+$P -m webstar_step_filter.grade_steps \
+  --source v11100=$O/sft-Bhqs2tr5nocap-v11100 \
+  --source v11500=$O/sft-Bhqs2tr5nocap-v11500 \
+  --source v16main=$V/out/sft-v16strict-v16-main-1 \
+  --source v16pilot=$V/out/sft-v16strict-v16-pilot-200 \
+  --result v11100=$R/v11-100-t1-20260814 \
+  --result v11500=$R/v11-500-t1ms50-20260814 \
+  --result v16main=$R/v16-main-1 \
+  --result v16pilot=$R/v16-pilot-200 \
+  --tasks v11100=/mnt/d/research/os-simple-taskgen-v8/out/runs/v11-all \
+  --tasks v11500=/mnt/d/research/os-simple-taskgen-v8/out/runs/v11-500-final \
+  --tasks v16main=$V/out/runs/v16-main-1 \
+  --tasks v16pilot=$V/out/runs/v16-pilot-200 \
+  --all --out scores-mixa-p1.jsonl --pass-id p1 \
+  --model gpt-5.6-luna \
+  --prompt-file /mnt/d/research/webstar/official_revised_desktop.txt \
+  --prompt-profile webstar-official-revised-desktop-v1 \
+  --response-contract official-revised --workers 8
+```
+
+**三个必须**:
+
+1. `--prompt-file` 不传会**静默退回**已被取代的 paper-four-stage v2 旧 prompt。
+2. `--source NAME=DIR` 的 NAME 参与 StepKey 构造,`--result` / `--tasks` 的
+   NAME 必须逐字对应,否则同 task_id 跨来源撞键。
+3. `--all` 是 18k 级调用的显式闸门;不给 `--targets` 就必须显式给它。
+4. **凭证只走环境变量**(`OPENAI_API_KEY` / `OPENAI_BASE_URL`),绝不用
+   `--api-key` / `--endpoint`:命令行参数会让 key 出现在 `ps` 输出里,
+   本机任何用户可见(2026-09-01 踩过,已轮换)。
+5. **`--workers` 封顶 48**,且**不与 eval VM 同时跑**(WSL 21GB,3 个 VM 占 ~11GB)。
+   2026-09-01 拉到 128 的后果:Windows 系统日志 15:20:22 记 `Tcpip 4266`
+   (UDP 临时端口耗尽),docker-desktop 的 shared-sockets 与 Ubuntu 里的
+   `/var/run/docker.sock` 同时消失,Klone ControlMaster 一并没了,WSL 此后
+   `wsl -e` 一律 `E_UNEXPECTED`;恢复要用户在 Windows 桌面手点 Docker Desktop
+   (`docker desktop start` 从 ssh 里会随会话被杀),隧道要重过 Duo。
+   同时打坏另一会话 6 道 eval 题。48 并发实测稳跑 55 分钟零失败。
+6. **同一个 jsonl 只能有一个写进程**:`grade_steps` 的 append 不是原子的,
+   128 线程并发写把 4 行写成了半行(症状是 `json.loads` 在某行 char 0 处炸)。
+   两半分开跑就分开写 out 文件。
+
+阈值 `score > 5` 保留,`<= 5` 丢掉该 target **但仍留在后续步的 history 里**。
+决策由 `decide_steps.py` 出,`grade_steps` 自己不删任何行。
+
+⚠ **200 步标定被用户令跳过**(2026-09-01):没有判官一致性、假保留率、终止步
+行为、逐域保留率的事前检查,阈值未经本语料标定。报结果必须披露。

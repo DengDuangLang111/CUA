@@ -225,6 +225,7 @@ assistant 段。由此:
 | `terminalfix --backend anthropic` | 漏传 `--model` 会**静默返回空理由** | RUNBOOK 终止规范化节已记 |
 | `terminalfix` | 漏传 `--style-examples N`,教师只按规则写 | 97% 的结尾句以 "Done." 开头(自然写只有 16%) |
 | `grade_steps` | 漏传 `--prompt-file` 会**静默退回**已被取代的 paper-four-stage v2 | `PLAN-20260901-strict-corpus.md` §7 |
+| `to_swift` 的 `gen_meta`(ostg@5c6aea84 起) | 单语料时 ms-swift 加载后丢列,**看似无害**;两代语料合并时 `related_apps` 一边全 `[]` 一边有值,Arrow 推出 `list<null>` 后 cast 失败 | 2026-09-01 Slurm 271875 在 preflight 全绿之后死于 `DatasetGenerationError`;混合语料前先 `pop('gen_meta')` 或让类型稳定。`PLAN-20260901-strict-corpus.md` §10 |
 
 **判据**:凡是"开关控制检查、不开则跳过"的工具,输出里那个 0 必须先确认是
 "查过=0"还是"没查"。区别在于有没有传开关,不在于输出长什么样。

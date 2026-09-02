@@ -66,7 +66,8 @@ SUCCESS/NOT SUCCESS,**同一模型(claude-opus-5)、同样 flags,716 条全量�
 
 闸一在轨迹级,闸二在步级 —— 一条通过闸一的轨迹,里面仍可能有该丢的步。
 
-### 取消了证据闸(用户令 2026-09-01)
+### 取消了证据闸(用户令 2026-09-01 上午)—— ⚠ 当日下午已推翻,见 §8
+
 
 原计划在两闸之间加一道 `evidence == seen`。**取消,理由是那个信号本身没有
 外部验证** —— `evidence` 是判官自己填的字段,没有 checker 或人工复核支撑,
@@ -166,3 +167,294 @@ provenance.json,official_to_desktop.diff}`。
 
 ⚠ **跑 grade_steps 必须显式传 `--prompt-file`**,否则按其 CLI 默认
 ("omitted uses paper-four-stage v2")会**静默退回已被取代的旧版**。
+
+## 8 证据闸恢复:strict-340(用户令 2026-09-01 下午)
+
+§1 "取消证据闸"当天下午被推翻。用户原话:"我要求的是 340 准入,用 strict 规则,
+我现在在筛数据质量。"
+
+**口径**(`curate16 --strict`,ostg@5c8594f2):默认准入规则之上,再要求每条
+requirement 都有截图为证 —— `j_inferred == 0`、`j_cannot_tell == 0`、
+`j_crit_fail` 假、`j_evidence_violations == 0`、`j_derived >= 10`。
+
+| 口径 | 准入 | 占 1374 |
+|---|---|---|
+| curate16 默认(只看 verdict + 每条 requirement done) | 645 | 46.9% |
+| **curate16 --strict** | **340** | **24.7%** |
+| §4 计划里的"闸一" | 686 | — |
+
+按难度:d1 168/468 = 36%,d2 137/465 = 29%,**d3 只有 35/441 = 8%**。
+
+§1 反对证据闸的两条理由仍然成立(evidence 是判官自填、无外部验证;旧 schema
+的行会被误杀),但用户判定筛质量优先。**报结果时要把这一点当已知偏置披露**:
+strict 语料对推断型证据的任务系统性欠采样,尤其是 d3。
+
+### 语料组成(mixA,实测)
+
+| 来源 | 轨迹 | 步数 | result_dir |
+|---|---|---|---|
+| v11-100-t1-20260814 | 75 | 1363 | qwen38-27b-local/v11-100-t1-20260814 |
+| v11-500-t1ms50-20260814 | 287 | 5145 | qwen38-27b-local/v11-500-t1ms50-20260814 |
+| v16-main-1 (strict) | 300 | 6386 | qwen38-27b-local/v16-main-1 |
+| v16-pilot-200 (strict) | 40 | 984 | qwen38-27b-local/v16-pilot-200 |
+| **合计** | **702** | **13878** | 重叠 0 |
+
+v11 那 362 条沿用既有语料(带 terminal-rewrite,§3 已披露的混淆),v16 那 340 条
+用 `build-v16-strict.sh` 中性重建(`--image-max 10 --fold-size 1 --think-cap 2048
+--whole-traj-filter`)。
+
+### 标定被跳过(用户令 2026-09-01 下午)
+
+WebSTAR README 写死 `The next allowed operation is the 200-step calibration.
+Full grading remains blocked`。用户令直接对这 702 条全量打分,跳过 200 步标定
+与双 pass。**这是明知的偏离**:没有判官一致性、假保留率、终止步行为、逐域保留率
+的事前检查,阈值 `score > 5` 未经本语料标定。报结果时必须披露。
+
+### 闸二执行口径:luna 单 pass(用户令 2026-09-01 下午)
+
+| | 判官 | 规模 | 保留率 |
+|---|---|---|---|
+| **p1 决策用** | `gpt-5.6-luna` | 13203 条 target,全部完成 | **55.0%** |
+| p2 仅作证据 | `claude-opus-5` | 4190 条(31%,事故中断) | 74.9% |
+
+**双 pass 被否**:两个判官在同一批 3311 条上判定一致率仅 70.8%,
+`decide_steps --require-passes 2` 会把分歧的 22.6% 全标 `review`,
+而 `filter_copy.py:50` 拒绝任何未解决的 review —— 换算约 2900 条要逐条人裁,
+不现实。**opus 那遍只作为判官一致性证据写进文档,不参与删留决策。**
+
+判官分歧的方向是单边的:luna 丢 / opus 留 占 22.6%,反方向仅 5.0%,
+分差均值 +0.83、中位 0 —— **opus 系统性比 luna 松 19pp**,差异集中在
+骑在阈值线上的 5/6 分那批。这说明 `score > 5` 这个阈值对判官选择极其敏感,
+是跳过 200 步标定的直接代价,报结果必须披露。
+
+v11 与 v16 两半都过滤(用户令):13203 → 约 7260 条 target。
+
+### 出数据的前置(WebSTAR README 的硬约束)
+
+1. `filter_copy` **不复制也不重编码图片**,只把路径重映射到 `--image-root NAME=PATH`
+   给的**已存在的** GPFS 根目录。所以顺序是**先传图片上 Tillicum,再跑 filter_copy**。
+2. `decide_steps` 会把三类标 `review`,必须清零 filter_copy 才肯出数据:
+   两 pass 分歧(单 pass 不触发)、终止步没有显式 DONE/terminate、终止步 score<=5。
+   后两条单 pass 也会产生,702 个终止步里落进 review 的要逐条裁。
+3. `--expected-rows` 默认 18576 是 MixB 的数,本语料要传 13203。
+
+## 9 执行记录(2026-09-01 傍晚)
+
+### 漏做终止规范化,已补
+
+首次 build v16 时漏传 `--terminal-rewrite`,`verify` 又没带 `--require-terminate`
+(不带就不检查,却照样打印 `0 endings not terminate(success)` —— 这句被我当成
+证据引用过)。后果不是 review 多几条,是整个 v16 半区没有终止示范。
+
+**重建前后(325 条进语料的轨迹末步)**:
+
+| 末步动作 | 重建前 | 重建后 |
+|---|---|---|
+| NO_ACTION_TAG(纯散文) | 299 | 0 |
+| call_user | 14 | 0 |
+| **terminate** | **12 = 3.7%** | **325 = 100%** |
+
+项目记录的全局基线是 13-15% 带显式 terminate,这批 3.7% 更低。
+
+**为什么会这样(机制,与 computeragent-17 逐行核过)**:模型末步根本不调工具,
+只输出散文;`mm_agents/qwen/actions.py:416` 的 `if not pyautogui_code:` 让
+harness 追加 `"DONE"`。**轨迹里的 DONE 是 harness 贴的标签,不是模型输出的动作**,
+所以转成语料时没有 tool_call 可写 —— 忠实转换,不是 bug。另两条同源:
+`:159 answer → DONE`、`:379 call_user → FAIL/DONE`。
+
+**代价已在 eval 侧量出**(末步 response 是否含显式 terminate):
+
+| 臂 | 任务 | 显式 terminate |
+|---|---|---|
+| base9b 未微调 | 259 | **69%** |
+| base4b 未微调 | 247 | **75%** |
+| mixa9b | 100 | 19% |
+| mixb9bw20 | 49 | 4% |
+| mixb9b | 100 | 2% |
+| mixb4b | 50 | **0%** |
+
+模型本来会说 done,是语料把它教没的。mixa9b 的 19% 明显高于 mixb 系,因为它
+约 1/3 语料来自 r5 系(过了 terminalfix,末步 100% terminate)。
+
+**mixA 的 v11 半区不用重做**:`sft-Bhqs2tr5nocapimg10-v11{100,500}` 实测
+75/75、287/287 全部显式 terminate。散文结尾的是 mixB 用的 v11new 那一代,
+不是 r5 系。
+
+### 判官的分对末步不构成风险(实测)
+
+担心"打分把末步判低分删掉"——**相反,末步是全语料分最高的一批**:
+
+| | n | 均值 | 中位 | 保留(>5) |
+|---|---|---|---|---|
+| 末步 | 687 | **9.00** | 10 | **92.9%** |
+| 非末步 | 12516 | 5.37 | 6 | 52.9% |
+
+原因是适配 prompt 的五处断言替换里有一条 "adapt final answer to explicit DONE",
+判官被告知末步就该是收尾。`decide_steps` 另有一层保护:终止步 score<=5 不 drop,
+标 `review` 待裁。
+
+### 决策定稿
+
+| | 条数 |
+|---|---|
+| keep | **7311**(含 49 条按策略保留的末步) |
+| drop | 5888 |
+| review | 0 |
+| 打分后被 terminalfix 截尾、已不在语料 | 4 |
+
+**末步 687/687 全部 keep,且 687 条全部带 terminate。**
+
+过滤前后动作分布(动作次数,15267 → 8621,整体留存 56%):
+
+| 动作 | 前 | 占比 | 后 | 占比 | 留存 |
+|---|---|---|---|---|---|
+| left_click | 4901 | 32.1% | 2609 | 30.3% | 53% |
+| key | 3930 | 25.7% | 2867 | 33.3% | **73%** |
+| type | 3375 | 22.1% | 1257 | 14.6% | **37%** |
+| **terminate** | 687 | 4.5% | 687 | **8.0%** | **100%** |
+| wait | 547 | 3.6% | 237 | 2.7% | 43% |
+| screenshot | 425 | 2.8% | 132 | 1.5% | **31%** |
+| double_click | 393 | 2.6% | 313 | 3.6% | 80% |
+
+terminate 占比翻倍是因为它是唯一 100% 留存的动作。判官最不待见 `screenshot`
+(31%)与 `type`(37%),最认 `key`(73%)。
+
+### 两个已知代价,报结果必须披露
+
+1. **687 个末步未经任何判官检验**。打分在 terminalfix 之前做,重写后的
+   terminate 从未被打过分。走这条路是用户令(2026-09-01):"直接 keep 就好了,
+   只改了末步"。格式经 `verify --require-terminate` 全绿,内容质量无判官背书。
+2. **`decide_steps` 的打分后 sha256 校验已删除**(用户令,不留开关)。理由:
+   terminalfix 重写末步是流水线的正常一步,校验与既定流程冲突。代价是此后
+   "打分后语料被改"不再有任何自动拦截。
+
+### 判官口径
+
+p1 `gpt-5.6-luna` 13203 条全量;p2 `claude-opus-5` 只跑到 4190 条(31%)即因
+ppapi key 失效中断,**不参与决策**,仅作一致性证据:同一批 3311 条上判定一致
+70.8%,opus 保留 74.9% vs luna 56.0% —— **opus 系统性松 19pp**,分歧单边
+(luna 丢/opus 留 22.6%,反向 5.0%)。这是跳过 200 步标定的直接代价。
+
+## 10 语料出厂与训练臂(2026-09-01 夜)
+
+### 产物
+
+`/gpfs/scrubbed/jy050706/sft/data/mixa-webstar-v16strict/`
+
+| 文件 | 内容 |
+|---|---|
+| `train_swift.jsonl` | **7311 行**(v11100 747 + v11500 2851 + v16main 3249 + v16pilot 464) |
+| `step_decisions.final.jsonl` | 每个 source row 一条决策,含 reason 与 source(judge / manual_override / no_score) |
+| `DATA_VERSION.json` · `FILTER_POLICY.json` · `SOURCE_FILES.sha256` · `retention_report.json` | filter_copy 自带的溯源 |
+| `v16main/images` · `v16pilot/images` | v16 那半的图(5921 + 865 个文件);v11 那半复用既有的 `q38-Bhqs2t-r5nocapimg10-v11{100,500}/images`,一字节没传 |
+
+**图片路径实测**:sbatch preflight 全量 stat,**58003 个引用 0 个未解析**。
+(第一次 `filter_copy` 的 `--image-root` 误传成 `.../images`,而 samples 的相对
+路径本就以 `images/` 开头,拼出 `images/images/...`。行数与内容全对、只有路径错 ——
+正是"row counts lie"那类静默失效,靠远端 stat 才抓到。`--image-root` 传父目录。)
+
+### 训练臂 mixaw9b(Slurm 271875)
+
+| 项 | 值 |
+|---|---|
+| 模型 | `Qwen3.5-9B` |
+| 数据 | mixa-webstar-v16strict,7311 样本 |
+| lr / epochs | **3e-6** / **3** |
+| 全局批 | **64** = 8卡 × per_device 1 × accum 8 |
+| save_steps | **115**,limit 4 |
+| 资源 | 4 节点 × 2 H200,400G,12h,排除 g018,估价 $86.40 |
+| 其余 | zero2_offload / sdpa / bf16 / max_len 65536 / warmup 0.1 / wd 0.0 / `IMAGE_MAX_TOKEN_NUM=2048` / channel_loss on / preserve_thinking on —— 与 `img10-9b.sbatch` 逐字相同 |
+
+**checkpoint 落点**:7311 / gb64 = 每 epoch 115 步(奇数),3 epoch 345 步。
+115 的因数只有 1/5/23/115,**无法同时满足"硬整除"与"每 epoch 两个点位"**
+(后者要 57.5)。用户 2026-09-01 裁定取 `save_steps=115`:整除 345,三个点位
+正好压在 ep1/ep2/ep3 终点。既有规矩在 spe 为奇数时以硬整除优先,此例入册。
+
+### 训练侧的连带变化(样本数少 44.6% 的后果)
+
+被过滤的步不算 loss,但**仍留在后续步的上下文里**(label 置 -100,不是删数据)。
+轨迹数不变,变的是每条轨迹的训练目标数:
+
+| | 前 | 后 |
+|---|---|---|
+| 训练样本(目标步) | 13199 | **7311** |
+| 每条轨迹目标步 均值/中位 | 19.2 / 17 | **10.6 / 9** |
+| 一个目标步都不剩的轨迹 | — | **0** |
+| 只剩末步的轨迹 | — | 3 |
+
+**每 epoch 步数因此几乎减半**,`save_steps` / 调度总步数都要按新数重算 ——
+沿用旧臂的 save_steps 会让 checkpoint 全部落错位置。
+
+### 与 r5 基线的关系(报结果时的读法)
+
+| | 样本前 | 样本后 | 留存 | 轨迹 |
+|---|---|---|---|---|
+| v11(r5,旧) | 6473 | 3598 | 55.6% | 362 |
+| v16(新) | 6726 | 3713 | 55.2% | 325 |
+| **mixA 合计** | 13199 | **7311** | 55.4% | 687 |
+| 对照:r5 原样(a2 训过) | 6473 | — | 100% | 362 |
+
+轨迹 +90%,样本只 +13% —— **新增的量基本被步级过滤吃掉**。所以这个臂测的
+不是"数据更多",而是"同样多的数据、每一步都被判官筛过"。
+
+⚠ **与 a2 不可直接归因**:r5 半区自己也被砍掉 44%,差异里同时含"加了 v16"与
+"r5 变少了"两个变量。要拆开须再跑一个"只过滤 r5、不加 v16"的臂
+(语料现成,按 `step_decisions.final.jsonl` 的 source_build 一筛即可)。
+
+两半留存率几乎相同(55.6% vs 55.2%),说明**新语料的步级质量与旧的没有系统性差别**;
+strict 卡的是轨迹级(1374 → 340),WebSTAR 卡的是步级,两道闸筛的是不同的东西。
+
+### 过滤对动作分布的影响
+
+动作次数 15267 → 8621(留存 56%):
+
+| 动作 | 前 | 占比 | 后 | 占比 | 留存 |
+|---|---|---|---|---|---|
+| left_click | 4901 | 32.1% | 2609 | 30.3% | 53% |
+| key | 3930 | 25.7% | 2867 | 33.3% | **73%** |
+| type | 3375 | 22.1% | 1257 | 14.6% | **37%** |
+| **terminate** | 687 | 4.5% | 687 | **8.0%** | **100%** |
+| wait | 547 | 3.6% | 237 | 2.7% | 43% |
+| screenshot | 425 | 2.8% | 132 | 1.5% | **31%** |
+| double_click | 393 | 2.6% | 313 | 3.6% | 80% |
+
+**终止示范的密度翻倍**(4.5% → 8.0%),因为 terminate 是唯一 100% 留存的动作。
+若 mixa9b 那 19% 显式终止率确实来自 r5 的贡献,这是本臂最可预期的效果。
+判官最不认 `screenshot`(31%)与 `type`(37%),最认 `key`(73%)。
+
+### 271875 死因:`gen_meta` 让 Arrow 推出冲突 schema(已修,271889 重投)
+
+第一次投的 271875 在 `datasets` 加载时死于
+
+```
+TypeError: Couldn't cast array of type string to null
+datasets.exceptions.DatasetGenerationError
+```
+
+**不是 OOM,不是路径**(preflight 58003 张图零未解析)。是 `train_swift.jsonl`
+里 v11 与 v16 两半的 `gen_meta.related_apps` 一边全空 `[]`、一边 `['chrome']`,
+Arrow 按前一块推成 `list<null>`,读到后一块 cast 失败;`gen_meta.ostg` 同理
+(v11 半区完全没这些键)。
+
+**为什么 mixA-9b(08-30)混同样两代语料没炸**:那四份 `train_swift_abs.jsonl`
+(v16-main / v16-pilot / r5nocapimg10-v11100 / -v11500)都是各自年代的 `to_swift`
+转的,都只有 `[channel, images, messages]`,**根本没有 `gen_meta`**。
+`gen_meta` 是 ostg@`5c6aea84`("v14 item 0: 生成坐标活到训练样本")加进
+`to_swift.py` 的。这次 `filter_copy` import 的是 ostg-v16 的新 `to_swift`,
+**第一次让 v11 那份旧 samples.jsonl 过新转换器** —— 旧 samples 没有
+`meta.ostg`/`meta.related_apps`,写出来就是空壳,与 v16 的实值撞型。
+
+`to_swift.py:63-70` 的注释 "VERIFIED 2026-08-26 … accepts the extra column
+without error and then DROPS it" **只验了单一语料**。丢列发生在 schema 推断
+之后;"null-valued fields rather than no key" 只管 dict 键缺失,不管
+空 list 对字符串 list。**这条要进 DATA_PIPELINE 静默失效清单**:一路绿灯
+(filter_copy 原子改名成功、preflight 全过),到 `datasets` 读文件才炸。
+
+**本次修法**:合并时 `pop('gen_meta')`,7311 行只留 `[channel, images, messages]`,
+远端校验 schema 一种。溯源信息在 `step_decisions.final.jsonl` 完整保留,
+swift 训练只读 `messages`/`images`/`channel`,无损。
+
+**未做的根治**(要改 `to_swift.py`,先给 diff):混合语料下 `gen_meta` 必须
+类型稳定 —— 要么 `related_apps` 永远非空 list 或永远 null(不能一半空 list),
+要么 `filter_copy` 路径不写 `gen_meta`。任何再走 `filter_copy` 的混合语料
+在根治前都会踩同一坑。
