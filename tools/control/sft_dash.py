@@ -287,6 +287,13 @@ EVAL50_ARMS = {
                   "single-variable pair with lr1e5: optimizer back to the"
                   " original settings (weight_decay 0.0, adam_beta2 0.999)."
                   " Separates 'was it the lr or the optimizer' in the 2e-5 batch."),
+    "mixr5m9b":  ("mixR5M 9B e3.00 · r5 + v16 TRUE-MULTI 166 · ALL 100 · stock (no-split)", "sft",
+                  "arm R5M: r5 (v11100 + v11500, 6,474 samples) + the true multi-app"
+                  " subset of v16 (166 traj / 5,342 samples; >=2 GUI apps, judge-admitted"
+                  " 554, non-strict) = 11,816 samples. Same recipe as mixA (lr 3e-6,"
+                  " gb 64, 3 ep, img10/fold1), checkpoint-555. READ AGAINST mixa9b"
+                  " (57.0%): does dropping v16's single-app trajectories help"
+                  " multi_apps? Served on Klone g3085:8046, window 10/1."),
     "mixc9b":    ("mixC 9B e3.00 · v16 ONLY · ALL 100 · stock (no-split)", "sft",
                   "arm C: v16-main + v16-pilot ONLY, 554 traj / 13,372 samples --"
                   " NO v11 at all. The no-legacy-data control for arms A and B."
@@ -561,7 +568,7 @@ ARM_PANEL = {"nocap50b": "heldout", "base50b": "heldout", "t3850b": "heldout",
              # 不配这几行会拿 eval50 的 50 题去筛 100 题的结果,后 50 题
              # 静默丢掉,分数系统性腰斩。
              "mixc9b": "all100", "mixb9b": "all100",
-             "mixa9b": "all100", "mixa4b": "all100",
+             "mixa9b": "all100", "mixa4b": "all100", "mixr5m9b": "all100",
              # 四个学习率变体,同样跑整 100
              "lr2e5": "all100", "lr2e5gb128": "all100",
              "lr1e5": "all100", "lr1e5b999": "all100",
