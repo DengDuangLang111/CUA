@@ -353,7 +353,7 @@ ppapi key 失效中断,**不参与决策**,仅作一致性证据:同一批 3311 
 路径本就以 `images/` 开头,拼出 `images/images/...`。行数与内容全对、只有路径错 ——
 正是"row counts lie"那类静默失效,靠远端 stat 才抓到。`--image-root` 传父目录。)
 
-### 训练臂 mixaw9b(Slurm 271875)
+### 训练臂 mixaw9b(Slurm 271889;首投 271875 死于 gen_meta schema,见下)
 
 **完训(09-02 ~02:00)**:EXIT 0,train_runtime 25,210 s ≈ 7h00(345 步,~71 s/it,4 节点×2 卡),
 train_loss 0.333(⚠ 选择效应,不可横比,见 §10 末),checkpoint 115/230/345 齐。
