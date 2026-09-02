@@ -36,6 +36,11 @@
   若 R5M ≥ mixA → 单应用 v16 在稀释多应用示范(密度/纯度假设);若 ≤ → 多应用示范本身不够好。
 - **eval**:用户令 10/1(训练窗口),eval100,与 mixA(57.0%,multi_apps 12/24)配对读;权重落地后
   走 Klone READY 流程,排进链。
+- **完训(2026-09-02 14:14 落地)**:EXIT 0,555/555 步,train_runtime 44,325 s(12.3 h),train_loss
+  0.390(mixA 同配方可比);ckpt 185/370/555 三个齐全,ckpt-555 目录 136 GB(含 `global_step555`
+  优化器态;只推 4 个 safetensors 分片 4.7+4.7+4.7+3.7 GB + config/tokenizer,同 mixaw9b 先例)。
+  **未推 Klone**:WSL 的 `~/.ssh/cm/klone-login` 主连接 09-02 10:58 消失(Klone 是 Duo,会话起不了),
+  推权重/起 serve/两侧 eval 全部经它,等用户重建(OPS 09-02 条)。
 
 **口径与来源**:超参逐臂取自各 checkpoint 自带的 `args.json`(ms-swift 写的,
 不是 sbatch 意图);分数为 `result_dir/**/result.txt` **逐文件**求和 ÷ 50

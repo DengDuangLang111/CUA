@@ -697,6 +697,14 @@ WSL `[Errno 12] Cannot allocate memory` → 15:20:22 Windows 系统日志 `Tcpip
 3. WSL 打嗝时 `wsl -e` 返回 `Wsl/Service/E_UNEXPECTED`(UTF-16 乱码),几十秒后自愈;
    `wsl -l -v` 在 Windows shell 里照常可用,可用它判断发行版状态。
 
+4½. **补记(2026-09-02 10:58)**:`~/.ssh/cm/klone-login` 再次消失(cm 目录 mtime 10:58,
+   `qwen36-tillicum-login` 幸存,pid 908);当时无 WSL 重启、无 Docker 事故,疑似某会话
+   `ssh -O exit`(见 memory:后台 ssh 在飞时禁 -O exit)。Klone 是 Duo keyboard-interactive,
+   **会话无法自行重建**,推权重/起 serve/AWS 与 WSL 两侧 eval 全部停摆。重建(WSL,daniel_yan):
+   `ssh -M -S ~/.ssh/cm/klone-login -o ControlPersist=48h -fN jy050706@klone.hyak.uw.edu`,
+   过 Duo 后 `ssh -O check -S ~/.ssh/cm/klone-login jy050706@klone.hyak.uw.edu` 应答 "Master running"。
+   文档此前没记过这条命令,以后别再翻 history。
+
 4. **"日志几分钟没动"不等于卡死**:恢复后 3 个 env 在 16:33:59 拿到首帧截图后静默
    两分多钟,是第一步的长 think 在算(9B 在 A100 上约 35 token/s)。判卡死的唯一硬证据是
    vLLM `/metrics` 的 `generation_tokens_total` 在 20 秒内**不增长**且 `num_requests_running=0`
