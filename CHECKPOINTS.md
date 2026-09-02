@@ -21,6 +21,22 @@
 
 ## 2 全臂总表(2026-08-19)
 
+### mixR5M-9b —— r5 + v16 真 multi-app 166(Slurm 272870,2026-09-02 00:5x 投)
+
+- **语料**:`q38-Bhqs2t-r5nocapimg10-v11100`(1,358)+ `-v11500`(5,116)+ **`v16-truemulti`**(5,342 样本 /
+  166 条轨迹)= 11,816 样本。v16-truemulti 由 `CUA/tools/build_truemulti_subset.py`(sha256
+  `a00fbb079fa5`,WSL 副本 `ostg-v16/tools/`)从 mix-v16-main + mix-v16-pilot(判官准入 554,**非 strict**)
+  按 `related_apps` 去掉 os/files/terminal 后 ≥2 个 GUI 应用筛出;38 种组合,TOP chrome+calc 22、
+  calc+writer 14、calc+vscode 11、chrome+gimp 11、chrome+vscode 11。ids 见
+  `$B/data/v16-truemulti/ids.jsonl`;5,342 张图全部在 Tillicum 解析通过(指向 data/v16-main、v16-pilot 原目录)。
+- **配方**:与 mixA-9b 逐字同(lr 3e-6、gb64 = 4×2×accum8、3 ep、img10/fold1、think 不截断),
+  只换 DSLIST。steps/epoch 185、save_steps 185、总 555。OUT `$B/out/mixR5M-9b`,sbatch
+  `CUA/sft/sbatch/mixR5M-9b.sbatch`(= Tillicum `$B/sbatch/`,md5 da35da2d…)。
+- **回答的问题**(FAILURE_ANATOMY §12):mixA = r5 + 全部 554;R5M = r5 + 其中真 multi 166。
+  若 R5M ≥ mixA → 单应用 v16 在稀释多应用示范(密度/纯度假设);若 ≤ → 多应用示范本身不够好。
+- **eval**:用户令 10/1(训练窗口),eval100,与 mixA(57.0%,multi_apps 12/24)配对读;权重落地后
+  走 Klone READY 流程,排进链。
+
 **口径与来源**:超参逐臂取自各 checkpoint 自带的 `args.json`(ms-swift 写的,
 不是 sbatch 意图);分数为 `result_dir/**/result.txt` **逐文件**求和 ÷ 50
 (缺题记 0;禁 `cat` 拼接,见 `sft/RESULTS.md` §5.12);臂名↔权重映射取自

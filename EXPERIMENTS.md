@@ -9,6 +9,8 @@
 > ckpt-115 用 g3082:8045 + `READY_mixaw9b`,ckpt-230 用 mixc9b 空出的 g3083:8042 + `READY_mixaw9b230`。mixaw9b 两行等
 > Klone 上 `READY_mixaw9b`(隔壁会话 login02 侧推 checkpoint-115 到 g3082:8045 后写);用户令
 > "mixc 下一个就 eval mixaw9b 的第一个 checkpoint"。mixbtf9b(mixB+terminalfix)语料已出包,**等用户令投训**。
+> **训练中(2026-09-02)**:`mixR5M-9b`(Slurm 272870,g001-004)= r5 + v16 真 multi-app 166 条,对照 mixA;
+> 详见 CHECKPOINTS §2 mixR5M-9b。另:mixbtf9b(272551)、mixbtf9b-2x4-lr1e5(272837)在跑(隔壁会话)。
 > 此前:
 > **eval 队列(2026-09-01 13:56 起,WSL 3 VM 串行)**:链 `chain_eval_w20.sh`(PID 135573,
 > 日志 `$CTL/logs/chain_eval_w20.log`)接管:`mixb9b 补1 → mixa9b 补2 → **mixb9bw20**
