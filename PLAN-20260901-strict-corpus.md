@@ -632,3 +632,23 @@ C 类 49 条才是 strict 真正该保留的判断,单独人工抽 10 条看判�
 `targets-v11-r5-*.jsonl`;分类脚本逻辑见本节(正则:保存类 `save|xlsx|docx|odt|ods|pptx|
 original format|in place|keep format`,读文件类 `read|locate|open|inspect|…` + `note|file|brief|
 policy|folder|…`;B 判据 = 该条 `evidence_steps` 全部 < n_steps−8)。
+
+### 独立复算(computeragent-73,2026-09-01 深夜)
+
+用 gateaudit 优先合并 main/pilot(默认准入 645,strict 拒绝 305),按本节写的 B 判据
+(该条 `evidence_steps` 全部 < n_steps−8,**不加**"读文件"文本条件)重算:
+
+| 类 | 条 | 占拒绝 |
+|---|---|---|
+| A 只有保存类 inferred | 96 | 31% |
+| B 全部 inferred 证据在末 8 帧之外 | 119 | 39% |
+| B' 至少一条 inferred 在窗外(≈上表 A+B 混合) | 51 | 17% |
+| C 证据步在窗内仍判 inferred | 38 | 12% |
+
+A+B+B' = 87%,与上表 81% 同向同量级(分母口径略异)。**结论成立。** 注意 B 的判据必须
+是"证据步在窗外",不能再叠"requirement 文本命中读文件"—— 叠了会把 B 压到 41 条、
+C 涨到 167,结论反转;分类正则只是标签,不是判据。
+
+代价提醒:B 类重判要 `--last 0` 全帧,v16 那 ~170 条平均 20+ 步 = 每条 20 帧,
+是 v3 那轮 9 帧的两倍多,opus 直连按帧计费。是否改口径由用户定;两个在训的臂
+(mixaw9b 用 strict-340,mixbtf9b 不用 strict)不受影响。
