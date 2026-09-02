@@ -605,7 +605,14 @@ serve step 并发我消息,我的自守门任务随即起 serve、写 `READY_mix
 `$KB/sft/models/mixaw9b-ckpt345`,**写 `READY_aws_mixaw9b345` 前在 Klone 侧真读校验**
 (4 分片头 `struct+json` 可解析、config 可解析、大小 30 s 两轮不变 —— 即 DATA_PIPELINE §7b
 新记的那条),54 在占位 38976066 / g3106:8059(隧道 18059)起 serve、AWS 6 VM 评 10/1。
-20/10 那一档是否评 345、是否进 17 的链,待用户令;`READY_mixaw9b345` 不写。后果:230 那套在 mixc9b 完成后约 5h 就轮到(g3083 要等 mixc9b 的 serve
+20/10 那一档是否评 345、是否进 17 的链,待用户令;`READY_mixaw9b345` 不写。
+
+**tok480-9b(用户令 09-02,经 54 转达,优先级低于 345)**:终点 `out/tok480-9b/v0-20260829-024854/checkpoint-306`
+(epoch 3.0)推 Klone `$KB/sft/models/tok480-9b-e306`,同样真读校验后写 `READY_aws_tok480_9b`;
+推送任务排在 `READY_aws_mixaw9b345` 出现之后。**训推预算必须对齐**:该臂训练侧
+`IMAGE_MAX_TOKEN_NUM=512`(480 tok/图),语料 r5nocapimg10(img10/fold 1)→ eval 必须
+`OSTG_MAX_PIXELS=491520` 且 10/1 窗口,标签 **tr10i@480 / ev10i@480**(RESULTS 命名规矩,
+两侧都标);54 在 38976067 / g3104:8060 起 serve、AWS 评。tok480-4b 是 img20 语料(tr20i@480),别混。后果:230 那套在 mixc9b 完成后约 5h 就轮到(g3083 要等 mixc9b 的 serve
 step 39187994.95 结束才空);115 的 serve 要活到 ~20h 后。占位预算:g3082=39306244 剩 3d16h,
 g3083=39187994 剩 2d08h,都够。230 的对接做成自守门的后台任务:权重到 + 8042 空 +
 mixc9b step 结束 → `srun --overlap` 起 serve → root 校验 → 写 READY;不自动杀任何 step。
