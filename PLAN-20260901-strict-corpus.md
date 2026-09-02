@@ -555,8 +555,12 @@ mixaw9b / mixbtf9b 训练窗口都是 10/1,所以**两个窗口各跑一次 eval
 
 ### mixaw9b 评测排程(用户令 2026-09-01 21:13 / 21:17,经 computeragent-17 转达)
 
-链 `chain_eval_w20d.sh`(PID 40886):mixc9b 补趟 → **mixaw9b(ckpt-115,10/1)→ mixaw9bw20
-(115,20/10)→ mixaw9b230(10/1)→ mixaw9b230w20(20/10)** → mixa4b。两窗各一次,同权重同 serve。
+链 `chain_eval_w20e.sh`(PID 41912,用户 21:26 再调序):mixc9b 补趟 → **mixaw9b(ckpt-115,10/1)
+→ mixaw9b230(10/1)→ mixaw9b230w20(20/10)→ mixaw9bw20(115,20/10)** → mixa4b。两窗各一次,
+同权重同 serve。后果:230 那套在 mixc9b 完成后约 5h 就轮到(g3083 要等 mixc9b 的 serve
+step 39187994.95 结束才空);115 的 serve 要活到 ~20h 后。占位预算:g3082=39306244 剩 3d16h,
+g3083=39187994 剩 2d08h,都够。230 的对接做成自守门的后台任务:权重到 + 8042 空 +
+mixc9b step 结束 → `srun --overlap` 起 serve → root 校验 → 写 READY;不自动杀任何 step。
 
 | 点位 | 权重(Klone) | serve | READY |
 |---|---|---|---|
