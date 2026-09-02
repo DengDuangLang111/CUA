@@ -74,6 +74,20 @@ OSWorld 有一个名为 `multi_apps` 的域。ostg 生成的任务没有这个�
 
 ---
 
+### 3.4 mixa-webstar-v16strict(2026-09-01,臂 mixaw9b)
+
+| 项 | 值 |
+|---|---|
+| 组成 | r5 系 v11 362 轨迹 + v16 strict 340 轨迹 = 702;**两半都过 WebSTAR 步级过滤** |
+| 规模 | 13199 步打分 → **7311 训练目标**(keep 55.4%);末步 687/687 全 keep,全带 terminate |
+| 判官 | 轨迹级 `claude-opus-5`(v3 二元);步级 `gpt-5.6-luna` 单 pass,`score>5` 留 |
+| 视觉 | `tr10i@2040`(img10,fold 1) |
+| 位置 | Tillicum `sft/data/mixa-webstar-v16strict/`;决策 `step_decisions.final.jsonl` |
+| 与 r5 的关系 | 轨迹 +90%,样本仅 +13%;r5 半区自身被砍 44% —— **不是 a2 的"加数据"对照** |
+| 已披露代价 | 687 个重写末步未经判官;阈值未标定(opus 比 luna 松 19pp);sha256 校验已删 |
+
+全链与偏置见 `PLAN-20260901-strict-corpus.md` §8-10。
+
 ## 4 语料与臂的对应
 
 | 语料 | 使用它的臂 |

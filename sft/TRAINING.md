@@ -16,6 +16,13 @@
   同一步的多行共享同一段 `response`;按行数算样本数会高估 13%,按行数算 token
   会重复计入同一段思考。数样本一律 `distinct(step_num)`。
 
+- **mixaw9b(Slurm 271889,2026-09-01 夜)**:`Qwen3.5-9B`,`mixa-webstar-v16strict`
+  7311 样本,lr 3e-6 / 3ep / **gb64**(4 节点×2 H200×bs1×accum 8),其余与 `img10-9b.sbatch`
+  逐字同。**每 epoch 115 步(奇数)**,`save_steps 115` → 三个点位压在 ep1/ep2/ep3 终点。
+  首投 271875 在 preflight 全绿后死于 `datasets` 的 `DatasetGenerationError`
+  (`gen_meta` 一半空 list 一半有值,Arrow 推 `list<null>` 后 cast 失败),不是 OOM。
+  过滤后每条轨迹训练目标从 19.2 → 10.6 步,**每 epoch 步数几乎减半**,沿用旧臂
+  save_steps 会全部落错位;被过滤的步仍在后续上下文里(label -100),轨迹数不变。
 - **VL 训练拓扑定式(2026-08-19,实测)**:8 节点 × 1 卡 × bs1 × accum 补足
   global batch。不只是绕开 OOM(bs2 会把两条长样本挤同一 micro-batch,峰值
   136G+34G 索求爆 139.79G),**它本身更快**:vl3pic-gb128 实测 56 s/it,比
@@ -242,6 +249,10 @@
   1-epoch 对照臂 kD1 被迫用 0.902(ckpt-90;次近是 1.201)。动机不变:
   细粒度损伤曲线 + 崩溃止损 + **每个 epoch 边界必须可评**。
   在飞作业(235820/235322,epoch 存)不追改。
+  **奇数 spe 先例(2026-09-01,用户裁定)**:mixaw9b 7311 样本 / gb64 = 115 步/epoch,
+  因数只有 1/5/23/115,"每 epoch 两个点位"(57.5)做不到 —— 取 `save_steps=115`,
+  三个点位正好压在 ep1/ep2/ep3 终点。**spe 为奇数时硬整除优先于点位密度**,
+  不为凑偶数改 gb(用户明令 gb64)。
 
 - **量的裁决第一票(2026-08-17 02:39):B-1ep = 15/50 = 30%**——语料 4.8 倍
   + 单 epoch 完整退火,比 A 系收复 2-4 题(方向正、幅度噪声边缘),距 base

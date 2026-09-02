@@ -281,9 +281,9 @@ python-pptx 读不了 .odp、openpyxl 读不了 .ods。图片只做魔数检测(
 - 判官读的截图来自 rollout 目录(未经 build 处理),**不受 slug 冲突事故影响**;
   该事故只污染 SFT 语料的图片路径(`SFT_DATA.md` 事故章)。
 
-## 2f 协议门(agent 自称 FAIL)与它的复核 —— 2026-09-01
+## 2f 规则闸(agent 自称 FAIL)与它的复核 —— 2026-09-01
 
-`strongjudge.py` 抄 OpenWebRL 的协议门:**末步动作恰好是 `FAIL` 就直接记
+`strongjudge.py` 抄 OpenWebRL 的规则闸:**末步动作恰好是 `FAIL` 就直接记
 failure,一次调用都不花**。v3 那轮 1375 条里 130 条走了这条短路(9.5%)。
 
 **它是省钱的短路,不是数据缺口。** `curate16` 和统计口径都把 `judge_status`

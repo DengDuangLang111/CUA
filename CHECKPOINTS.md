@@ -174,6 +174,7 @@ bs2→1,不是节点拓扑**(1 rank/节点多的是 CPU 内存,显存还是那�
 | job | 臂 | 数据 | 配置 | 状态 |
 |---|---|---|---|---|
 | **249492**(原 249458 撤) | **img1** | q38-Bhqs2t-img1-*(6385 条,窗 1,fold 1,cap 同 img3;自助构建,code e6b6e034,双端 md5 + 6385/6385 图片 resolve) | kE 配方同(lr3e-6/3ep/seed 同默认),仅窗口变量;**08-19 重拓扑 2×8→8×1,accum 4→8,gb64 梯度数学不变**(整节点申请卡到次日 01:15,碎片单卡秒排——**调度差异是唯一成立的理由**;曾附的"1 卡/节点避 PCIe 争用快 2.3×/rank"归因已由另一会话撤回:误把续训作业的墙钟除以全步数,拓扑对吞吐的影响**无定论**,教训见 TRAINING.md;原 sbatch 注记已同步撤回标注,存 .bak-2x8) | **完训**(EXIT 0,1h42m,endpoint=checkpoint-300 @epoch3.00,12 ckpt;eval 臂 img1 已接链 @1图匹配窗;当时 8 节点 g001/002/006/010/011/017/019/020,新规前豁免形状) |
+| **271889**(271875 撤:gen_meta schema 崩) | **mixaw9b** | mixa-webstar-v16strict(7311 行;r5 系 v11 + v16 strict-340,两半 WebSTAR 步级过滤;v16 图 5921+865 新传,v11 图复用 r5nocapimg10;preflight 58003/58003) | 9B,lr 3e-6/3ep/**gb64**(4×2×bs1×accum8),save_steps **115**(=spe,三个 epoch 终点),limit 4,400G/12h,估 $86.40 | **跑动中**(09-01 夜,g[006-007,012,014]) |
 | **249500**(249457→249486→249496→249500,定稿) | **vl20nocap** | q38-Bhqs2t-r5vlnocap-*(6474 条,另一会话建+过闸) | **4 节点×2 卡×bs1×accum8 = gb64**(用户新规 ≤4 节点;训练超参与 249486 一字未动,cpus 16/mem 400G/墙钟 10h——实测 95.87 s/it×306 步=8h09m,6h 会在 74% 处砍出一个"看着像 3ep 实为 2.2ep"的不可比 checkpoint),**max_length 81920**(smoke 实测 99% 峰值可容;65536-delete 会恰好丢掉 3 条轨迹的 terminate 目标行——19a5b6dd/acd3db2e/128c9ca6 终止行各 18 图),lr1e-5/3ep | **跑动中**(另一会话管理,g[001,004,017,020];249486 撤于墙钟 6h<ETA 8.1h、249496 撤于拓扑新规,两次都在个位数步、零 checkpoint 损失) |
 | ~~249536~~ | ~~nocaplean~~ | r5nocap 同 nocap | nocap 配方 + preserve_thinking false | **已撤(用户令,27/306,零 ckpt 损失)**:真实 payload 渲染证明 **eval 历史 think 全保留(27/27)**——"匹配 eval 模板"的立项前提反了,false 训的是最坏方向 skew;旧 lean/rich(23.81<28.00)同向。eval 臂已撤、img1 重连 nocapnp;serve-chain-4b-nocaplean-stock.sbatch 留盘未用。§5.14/CONTEXT§4 口径修正由 64333 会话统一负责 |
 | **249612** | **np2e6** | r5nocapnp 同 nocapnp | **nocapnp 配方唯一变量 lr 3e-6→2e-6**(累积 3.1e-4,冠军剂量 4.5e-4 以左从未采样区;4×2/3ep/81920/save34);对照 nocapnp;用户阶梯假设:loss 台阶轻→分高 | 排队(与 249613 同波,等 01:10 nocapnp 释放) |
@@ -219,6 +220,7 @@ nocap    (65536)        · 16卡accum4 → 303 步
 | `q38e3B-v11100` / `-v11500` | B 原始(checker 判过的全部 pass) | B 各臂、gb64o |
 | `q38e3B-tc2048-v11100` / `-v11500` | Bs = B + think-cap 2048 | Bs-gb64、Bs-LoRA |
 | `q38-Bhqs-v11100` / `-v11500` | **Bhqs = 双判官+仲裁筛选 + cap 2048** | Bhqs 臂(新) |
+| `mixa-webstar-v16strict` | **mixA + WebSTAR 步级过滤**(2026-09-01):r5 系 v11 + v16 strict-340,7311 行,末步 100% terminate;自带 `step_decisions.final.jsonl` / `DATA_VERSION.json` 溯源 | mixaw9b(271889) |
 | `q38-Bhqs2t-v11100` / `-v11500` | **Bhqs-2-terminal**。集群上目前是**有缺陷的旧版**(6,297 行),待换成 r5 | 239100 LoRA、239101 全量 lr 3e-6 |
 | `q38e3B-v11100`(旧)/ `v11-legacy` / `v11-500-partial` 等 | 早期实验 | 已退役 |
 

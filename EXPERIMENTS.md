@@ -15,6 +15,18 @@
 > 与 mixb9b 逐分相等,RESULTS §5.30);mixb9bw20 14:21 起跑(runner 命令行与 args.json 均
 > 已核 `--image_max 20 --fold_size 10`)。
 
+- **严格语料线出厂 + 训练臂 mixaw9b(09-01 晚,全链 `PLAN-20260901-strict-corpus.md` §8-10)**:
+  judge 全量 1375 → `curate16 --strict` 340(24.7%;含规则闸复核捞回 5)→ 与 r5 系 v11 362 条合成
+  702 轨迹 → **v16 半区补做终止规范化**(末步显式 terminate 3.7% → 100%;首建时漏传
+  `--terminal-rewrite`,`verify` 未带 `--require-terminate` 假绿)→ WebSTAR 步级过滤
+  (luna 单 pass,13199 步 → **keep 7311 / drop 5893**,55.4%;末步 687/687 全 keep)→
+  `mixa-webstar-v16strict` 7311 行,图片 58003 引用 0 未解析 → **Slurm 271889**
+  (9B / lr 3e-6 / 3ep / gb64 / save_steps 115 = 三个 epoch 终点)。首投 271875 死于
+  `gen_meta` 混合语料 Arrow schema 冲突(DATA_PIPELINE §7b),`pop('gen_meta')` 后重投。
+  **读法**:相对 r5 原样,轨迹 +90% 但样本只 +13%(新增量被过滤吃掉),且 r5 半区
+  自己也被砍 44% —— **与 a2 不可直接归因**,拆变量要加"只过滤 r5 不加 v16"臂(IDEAS)。
+  三条已披露代价:687 个重写末步未经判官;`score>5` 未在本语料标定(opus 比 luna 松 19pp);
+  decide_steps 的打分后 sha256 校验按用户令删除。
 - **动作普查:v16 成功轨迹 vs v11 成功轨迹(08-30 夜,用户令"看下动作区别")**:
   ⚠**先修一个计数错误(本轮我自己犯的):`traj.jsonl` 一行 = 一个 pyautogui 动作,
   不是一步;步是 `step_num` 字段。** 按行数数会把"50 步打出 142 个动作"报成 142 步,

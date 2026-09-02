@@ -4,6 +4,19 @@
 > `EXPERIMENTS.md` / `sft/TRAINING.md`。每条记:想法、评估、与现状的接线、
 > 依赖与坑。来源不限(外部讨论、复盘、论文),入档前须经评估。
 
+## 2026-09-01 批次(严格语料线出厂后)
+
+### K1. 「只过滤 r5、不加 v16」对照臂,拆开 mixaw9b 与 a2 的差异 【优先级 2,语料现成】
+- 动机:mixaw9b 相对 a2(r5 原样 6473 样本)同时动了两个变量 —— 加了 v16 strict
+  半区,**且 r5 半区自身被 WebSTAR 砍掉 44%**(6473 → 3598)。两半留存率几乎相同
+  (55.6% / 55.2%),但 eval 差异无法归因到"新数据"还是"步级过滤"。
+- 做法:从 `mixa-webstar-v16strict/step_decisions.final.jsonl` 按 `source_build ∈
+  {v11100, v11500}` 筛出 keep 行,`filter_copy` 只带这两个 source(图片复用
+  `q38-Bhqs2t-r5nocapimg10-*`,零传输),同配方(9B / 3e-6 / 3ep / gb64)训一臂。
+  3598 样本 / gb64 = 57 步/epoch(奇数,同 K 规矩取 save_steps=57)。
+- 读法:a2 → 该臂 = 步级过滤的净效应;该臂 → mixaw9b = v16 strict 的净效应。
+- 坑:与 mixaw9b 一样,`gen_meta` 要 pop;末步 362 条全 keep(overrides 里 18 条)。
+
 ## 2026-08-31 批次(v16 判官制开工期)
 
 ### G1. a1「明确档」的表达方式单一化 【优先级 3,下轮生成时改提示词】

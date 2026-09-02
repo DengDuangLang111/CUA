@@ -65,6 +65,9 @@
 | 盲评判官 | 看不到程序评分的轨迹打分员(0-10),只提名不定罪 | sft/trajaudit.py | judge、trajaudit |
 | 仲裁 | 分歧轨迹的定罪环节:亮判据代码,Opus5+思考 | sft/arb.py | arb |
 | 强判官 | v16 唯一裁判:规则闸拦掉后每条一次调用,给二元判定+要求清单。生产证据袋=末尾8帧+全动作(不给思考/不给自述,2×2 实测四格纯度无差异)+磁盘转录 | sft/strongjudge.py | strong judge、llm judge |
+| 严格准入 | 轨迹级准入的收紧口径:判官 success 且每条要求 done=yes 之上,再要求全部要求有截图为证(无 inferred/cannot_tell/crit_fail/evidence 违规,derived≥10);v16 全池 1374 → 340 | curate16.py `--strict` | strict-340、证据闸 |
+| 步级过滤 | 对已准入轨迹的每一步打 0-10 分,>5 留作训练目标,≤5 不算 loss 但仍留在后续步上下文;末步不直接删 | webstar_step_filter grade_steps / decide_steps / filter_copy | WebSTAR、step filter、stepaudit(另一工具,教师看前后帧打元数据,不删) |
+| 终止规范化 | 教师重写每条轨迹的末步理由并确定性拼上 terminate(success);没做时末步是纯散文,harness 贴的 DONE 不是模型动作 | terminalfix.py + build `--terminal-rewrite`;验收 verify `--require-terminate` | terminal-rewrite、补 done |
 | 规则闸 | 判官前的零成本确定性拦截:自报 FAIL/空轨迹直接记败,不花判官钱(承 OpenWebRL) | strongjudge.py 门 | protocol gate |
 | 双判官 | **已废(08-31)**:2×2+3臂对照证明错放是系统性盲区不是手抖,四种证据配置在同一批硬负样本上一起栽,冗余无效、只翻倍成本 | — | double judge |
 | 哑判据 | v16 可行题的占位判据(恒 0),程序分作废、判官唯一裁判;infeasible 题仍挂真 `infeasible` 判据白捡信号 | emit16.py ZERO_EVAL | dummy evaluator |

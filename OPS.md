@@ -292,6 +292,11 @@ WSL 127.0.0.1:1800x/18020
 
 - 身份文件:`~/.ssh/id_ed25519_tillicum`(WSL 上,**没有 `~/.ssh/config`**,全靠脚本显式传参)
 - Slurm 作业名 `eval`,分区 `gpu-h200`,时限 `1-00:00:00`
+- **教师 serve 的隧道要另起一个实例**(2026-09-01 实测):`tunnel_qwen36_auto.sh`
+  默认盯作业名 `eval`、LPORT 18001,且**按 LPORT 自去重**,所以教师那条用环境变量
+  覆盖另起:`JOB=eval38h20 LPORT=18020 RPORT=8000 setsid bash tunnel_qwen36_auto.sh`,
+  不改默认那份。教师 sbatch 是 `qwen-serve/serve-chain-38-i-h20.sbatch`
+  (BF16,`--served-model-name qwen38-27b-local`,节点 8000,20h 估 $18)
 - ControlMaster `ControlPersist=48h`——**只要它活着,后续所有 Tillicum 操作都不用再过 Duo**
 - 隧道脚本会自动 `squeue` 找当前节点,Slurm 换节点时自动重连
 

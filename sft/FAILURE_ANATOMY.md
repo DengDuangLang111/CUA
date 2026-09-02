@@ -1198,3 +1198,16 @@ v11new(`mix-v11-500/-all`)是纯散文。这正好解释 §11.1 里 mixa9b 显�
 **修法**:重建 mixB 语料时对 v16 和 v11new 都跑 terminalfix(mixA 的 v11 半边不用)(教师必须是
 Qwen3.8-27B,RUNBOOK「终止规范化」),verify 带 `--require-terminate`;这与严格判官
 重建(PLAN-20260901)可以合成一次 build。
+
+### 11.5 v16 strict-340 补做终止规范化前后(2026-09-01,mixaw9b 语料)
+
+| | 末步纯散文 | call_user | 显式 terminate |
+|---|---|---|---|
+| 首建(漏 `--terminal-rewrite`) | 299 | 14 | **12 = 3.7%** |
+| terminalfix 后重建 | 0 | 0 | **325 = 100%** |
+
+`verify --require-terminate` 两半全绿(main 5869 / pilot 861 样本,0 endings not
+terminate)。首建时 `verify` 未带该开关,照样打印 `0 endings not terminate(success)`
+—— 那是"没查",不是"通过"(DATA_PIPELINE §7b)。terminalfix 340 条零失败:append 298 /
+already-terminate 12 / rewrite 30。另一处静默失效:`terminalfix.py:626` 在
+`$OPENAI_API_KEY` 未设时拿字面量 "EMPTY" 请求教师,401 **不中断**,只在行尾记一句。
