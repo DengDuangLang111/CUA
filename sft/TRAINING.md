@@ -21,6 +21,9 @@
   逐字同。**每 epoch 115 步(奇数)**,`save_steps 115` → 三个点位压在 ep1/ep2/ep3 终点。
   首投 271875 在 preflight 全绿后死于 `datasets` 的 `DatasetGenerationError`
   (`gen_meta` 一半空 list 一半有值,Arrow 推 `list<null>` 后 cast 失败),不是 OOM。
+  **起步 loss 0.53 / acc 0.85(img10-9b 同点 0.78 / 0.78)是选择效应,不是学得快**:
+  WebSTAR 系统性删长思考的步(think 五等分删除率 30% → 67%),留下的目标 think 短 32%、
+  正文等长;**各臂 loss 曲线从此不可横比**,细节 `PLAN-20260901-strict-corpus.md` §10 末。
   过滤后每条轨迹训练目标从 19.2 → 10.6 步,**每 epoch 步数几乎减半**,沿用旧臂
   save_steps 会全部落错位;被过滤的步仍在后续上下文里(label -100),轨迹数不变。
 - **节点数上限 2(用户令 2026-09-01,取代 08-19 的"≤4 节点")**:"以后 node 节点最多两个,
