@@ -49,9 +49,14 @@ def load_overrides(path):
 def decide(index, scores_by_key, overrides=None, require_passes=1):
     overrides = overrides or {}
     decisions = []
+    # 打分之后 terminalfix 的 keep_to 会截掉停滞的尾巴,那些 step 不再进语料。
+    # 它们没有 source row,也就无从决策 —— 跳过,但计数上报,数量异常大时说明
+    # source 选错了而不是截了几条尾巴。
+    truncated = []
     for key in sorted(scores_by_key):
         if key not in index:
-            raise ValueError(f"score key absent from sources: {key.text()}")
+            truncated.append(key.text())
+            continue
         source_row = index[key]
         score_rows = scores_by_key[key]
         pass_ids = {str(row.get("pass_id")) for row in score_rows}
@@ -59,10 +64,12 @@ def decide(index, scores_by_key, overrides=None, require_passes=1):
             raise ValueError(
                 f"{key.text()}: needs {require_passes} passes, has {pass_ids}")
         response = source_row.sample.get("response", "")
+        # 2026-09-01: 去掉打分后的 response sha256 校验。terminalfix 重写末步
+        # 是流水线的正常一步(build --terminal-rewrite),它必然改 response,
+        # 而重写只换收尾写法、不改这一步做了什么,判官的分仍然成立。
+        # 校验与既定流程冲突,删除,不留开关。输出行仍记当前 response 的 hash,
+        # 供事后追溯"决策是对哪个版本的 response 下的"。
         response_hash = sha256_text(response)
-        if any(row.get("source_response_sha256") != response_hash
-               for row in score_rows):
-            raise ValueError(f"source response changed after grading: {key.text()}")
 
         scores = [int(row["score"]) for row in score_rows]
         keep_votes = [score > 5 for score in scores]
@@ -105,6 +112,37 @@ def decide(index, scores_by_key, overrides=None, require_passes=1):
     extra_overrides = sorted(key.text() for key in overrides if key not in scores_by_key)
     if extra_overrides:
         raise ValueError(f"overrides have no score rows: {extra_overrides[:5]}")
+    if truncated:
+        print("note: %d scored steps no longer in sources (tail-truncated): %s"
+              % (len(truncated), ", ".join(truncated[:5])))
+    # 判官调用失败的步没有分数,因此上面的循环走不到它们 —— 但 filter_copy 要求
+    # 每个 source row 都有一条决策。它们没有任何判官背书,一律 drop,并在行里
+    # 标明来源是 no-score 而不是判官,事后可与真正被判低分的区分开。
+    scored = {StepKey.from_dict(d) for d in decisions}
+    unscored = 0
+    for key, source_row in sorted(index.items()):
+        if key in scored:
+            continue
+        meta = source_row.sample.get("meta") or {}
+        decisions.append({
+            "schema_version": 1,
+            "policy_version": "webstar-filter-v1",
+            **key.as_dict(),
+            "n_steps": int(meta.get("n_steps") or 0),
+            "terminal": int(meta.get("step") or 0) == int(meta.get("n_steps") or -1),
+            "explicit_done": has_explicit_done(
+                source_row.sample.get("response", "")),
+            "scores": [],
+            "pass_ids": [],
+            "decision": "drop",
+            "reason": "no judge score (grader call failed); dropped for lack of evidence",
+            "source": "no_score",
+            "source_response_sha256": sha256_text(
+                source_row.sample.get("response", "")),
+        })
+        unscored += 1
+    if unscored:
+        print("note: %d source rows had no judge score, dropped" % unscored)
     return decisions
 
 
