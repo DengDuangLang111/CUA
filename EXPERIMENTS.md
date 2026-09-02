@@ -9,6 +9,9 @@
 > ckpt-115 用 g3082:8045 + `READY_mixaw9b`,ckpt-230 用 mixc9b 空出的 g3083:8042 + `READY_mixaw9b230`。mixaw9b 两行等
 > Klone 上 `READY_mixaw9b`(隔壁会话 login02 侧推 checkpoint-115 到 g3082:8045 后写);用户令
 > "mixc 下一个就 eval mixaw9b 的第一个 checkpoint"。mixbtf9b(mixB+terminalfix)语料已出包,**等用户令投训**。
+> **mixb9bw20f1 收官 07:57:57.0%**(RESULTS §5.34);链 w20g 已结束,g3085:8043 的 mixb9b serve step 已撤,
+> **WSL 3 VM 空闲**。mixR5M-9b 训练 309/555(76 s/it),预计 ~14:00 落地,eval 走哪边待用户令。
+> 此前:
 > **eval 链(2026-09-02 02:36 起)**:`chain_eval_w20g.sh`(PID 101578)单行 **mixb9bw20f1** = mixB-9b-e873 同权重、
 > 窗口 **20/1**(恒 20 图),与 mixb9b(10/1,60.0%)、mixb9bw20(20/10,52.0%)构成窗口曲线第三点(用户令)。
 > serve 复用 g3085:8043(step 39187991.65,**别撤**)。约 5h。
