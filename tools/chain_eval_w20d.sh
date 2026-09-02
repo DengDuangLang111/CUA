@@ -1,5 +1,5 @@
 #!/bin/bash
-# chain_eval_w20c.sh -- 接管:mixc9b 补趟 -> mixaw9b@ckpt-115 两窗(等 READY_mixaw9b)-> mixa4b(用户令 2026-09-01 晚;w20b 那份 mixbtf9b 是误读,作废)
+# chain_eval_w20d.sh -- 接管 w20c,加 ckpt-230 两行(用户令 2026-09-01 21:2x);前身 w20c:mixc9b 补趟 -> mixaw9b@ckpt-115 两窗(等 READY_mixaw9b)-> mixa4b(用户令 2026-09-01 晚;w20b 那份 mixbtf9b 是误读,作废)
 # 前身:chain_eval_w20.sh -- 接管 chain_eval_rest.sh 的剩余臂表,并插入 mixb9b 的
 # 20/10 推理窗口对照臂(用户 2026-09-01 令:优先排)。
 #
@@ -22,7 +22,7 @@
 # --image_max 10 --fold_size 1(语料 build 时就是 img10/fold1)。
 set -u
 CTL=/mnt/d/research/osworld-verified-control
-LOG=$CTL/logs/chain_eval_w20c.log
+LOG=$CTL/logs/chain_eval_w20d.log
 mkdir -p $CTL/logs
 exec >>$LOG 2>&1
 cd /mnt/d/research/OSWorld
@@ -46,6 +46,8 @@ ARMS="
 mixc9b|8042|18042|g3083|qwen35-9b-sft|verified_eval100_nonproxy.json|/gscratch/cse/jy050706/sft/models/mixC-9b-e627|v16-main + v16-pilot ONLY (554 traj / 13,372 samples) -- NO v11 at all|Qwen3.5-9B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1, checkpoint-627 -- takeover row: finish remaining passes
 mixaw9b|8045|18045|g3082|qwen35-9b-sft|verified_eval100_nonproxy.json|-|v16-strict(340, judge v3 --strict + terminalfix) + r5 v11100/v11500 (terminalfix'd) + WebSTAR step filter -- last step 100% terminate|Qwen3.5-9B full FT, lr 3e-6, gb 64, img10/fold1, checkpoint-115 (ep1 of 3) -- user order 2026-09-01: eval right after mixc9b|--image_max 10 --fold_size 1
 mixaw9bw20|8045|18045|g3082|qwen35-9b-sft|verified_eval100_nonproxy.json|-|same as mixaw9b|same weights (checkpoint-115), served window 20/10 to match a2 (RESULTS §5.31: two windows, one per comparator)|--image_max 20 --fold_size 10
+mixaw9b230|8042|18042|g3083|qwen35-9b-sft|verified_eval100_nonproxy.json|-|same corpus as mixaw9b|same run, checkpoint-230 (ep2 of 3) -- user order 2026-09-01: right after the ckpt-115 pair; serve on g3083 freed by mixc9b|--image_max 10 --fold_size 1
+mixaw9b230w20|8042|18042|g3083|qwen35-9b-sft|verified_eval100_nonproxy.json|-|same corpus as mixaw9b|checkpoint-230, served window 20/10 to match a2|--image_max 20 --fold_size 10
 mixa4b|8044|18044|g3087|qwen35-4b-sft|verified_eval100_nonproxy.json|-|v16-main + v16-pilot + q38-Bhqs2t-r5nocapimg10-v11100/-v11500 (914 traj / 19,846 samples)|Qwen3.5-4B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1
 "
 

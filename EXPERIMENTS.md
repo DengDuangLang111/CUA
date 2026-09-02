@@ -2,8 +2,9 @@
 
 ## 现状(2026-08-30,过时即改;历史快照看 git log)
 
-> **eval 队列(2026-09-01 21:14 起)**:链 `chain_eval_w20c.sh`(PID 40149,日志 `$CTL/logs/chain_eval_w20c.log`)
-> 接管:`mixc9b 补趟 → mixaw9b@ckpt-115(10/1)→ mixaw9bw20(同权重 20/10)→ mixa4b`。mixaw9b 两行等
+> **eval 队列(2026-09-01 21:17 起)**:链 `chain_eval_w20d.sh`(PID 40886,日志 `$CTL/logs/chain_eval_w20d.log`)
+> 接管:`mixc9b 补趟 → mixaw9b@ckpt-115(10/1)→ mixaw9bw20(20/10)→ mixaw9b230(10/1)→ mixaw9b230w20(20/10)→ mixa4b`。
+> ckpt-115 用 g3082:8045 + `READY_mixaw9b`,ckpt-230 用 mixc9b 空出的 g3083:8042 + `READY_mixaw9b230`。mixaw9b 两行等
 > Klone 上 `READY_mixaw9b`(隔壁会话 login02 侧推 checkpoint-115 到 g3082:8045 后写);用户令
 > "mixc 下一个就 eval mixaw9b 的第一个 checkpoint"。mixbtf9b(mixB+terminalfix)语料已出包,**等用户令投训**。
 > 此前:
