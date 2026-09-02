@@ -524,3 +524,32 @@ mixaw9b / mixbtf9b 训练窗口都是 10/1,所以**两个窗口各跑一次 eval
 再比 a2,低估;只跑 10/1 与 a2 不可比。排不排、排在哪仍由用户令。要拆"加数据"与"步级过滤",
 再跑 IDEAS K1(只过滤 r5)。
 
+## 11 对照臂 mixbtf9b:mixB 同一份语料,只补终止规范化(用户令 2026-09-01 夜)
+
+用户问:"把 mixb9b 的数据不带 step filter、只加 terminalfix,训一个新的 9B 看效果。"
+这是拆变量的干净对照:与 mixb9b 同语料同配方,唯一变量 = 末步。
+
+**语料重建(与 08-30 的 `out/sft/mix-*` 构建逐项对齐:img10 / fold 1 / `--include`
+准入名单 / 无 think-cap,只加 `--terminal-rewrite`)**:
+
+| 份 | 轨迹 | 行(前 → 后) | terminalfix(append / already / rewrite) | 末步 terminate(前 → 后) |
+|---|---|---|---|---|
+| v16-main | 485 | 11678 → 11670 | 423 / 22 / 40 | 24 → **485** |
+| v16-pilot | 69 | 1694 → 1694 | 63 / 2 / 4 | 2 → **69** |
+| v11new-500 | 246 | 4265 → 4259 | 216 / 13 / 17 | 15 → **246** |
+| v11new-all | 66 | 939 → 937 | 65 / 0 / 1 | 0 → **66** |
+| **合计** | **866** | **18576 → 18560** | 767 / 37 / 62,**0 失败** | **41 → 866** |
+
+−16 行是 `keep_to` 截掉的停滞尾巴。`verify --require-terminate` 四份全绿。图片一张没传:
+重建只换末步文本,图片与原构建逐字节相同,jsonl 里的路径指回 `data/{v16-main,…}/images`,
+出包脚本逐条对预取的 GPFS 清单核过(`sft/tools/ship-mixbtf.sh`,ostg@221b8a9f)。
+驱动:`sft/tools/run-terminalfix-mixbtf.sh` / `build-mixbtf.sh`(ostg@30bca0be)。
+
+**训练配方 = mixB-9b 逐字,只改拓扑**(节点上限 2):9B / lr 3e-6 / 3ep / gb64 =
+2 节点 × 2 卡 × bs1 × accum 16 / max_length 81920 / `IMAGE_MAX_TOKEN_NUM=2048`。
+步数:18560 / 64 = 290 步/epoch,`save_steps` 145(sbatch 运行时算,290 % 3 ≠ 0 取 2),
+6 个 checkpoint,总 870 步。sbatch `sft/sbatch/mixbtf9b.sbatch`(草稿,待用户令投)。
+
+**读法**:mixb9b → mixbtf9b = 修末步的净效应(同窗 10/1);mixbtf9b → a2 = 换语料
+(r5 vs mixB)的部分(同窗 20/10)。两窗各评一次(§10 末)。
+

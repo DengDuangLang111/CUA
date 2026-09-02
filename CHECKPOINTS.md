@@ -220,6 +220,7 @@ nocap    (65536)        · 16卡accum4 → 303 步
 | `q38e3B-v11100` / `-v11500` | B 原始(checker 判过的全部 pass) | B 各臂、gb64o |
 | `q38e3B-tc2048-v11100` / `-v11500` | Bs = B + think-cap 2048 | Bs-gb64、Bs-LoRA |
 | `q38-Bhqs-v11100` / `-v11500` | **Bhqs = 双判官+仲裁筛选 + cap 2048** | Bhqs 臂(新) |
+| `mixbtf-{v16-main,v16-pilot,v11new-500,v11new-all}` | **mixB 同语料只补终止规范化**(2026-09-01):866 轨迹 18560 行,末步 41 → 866 terminate;目录只有 jsonl,图片指回 `data/{v16-main,…}/images` | mixbtf9b(待投) |
 | `mixa-webstar-v16strict` | **mixA + WebSTAR 步级过滤**(2026-09-01):r5 系 v11 + v16 strict-340,7311 行,末步 100% terminate;自带 `step_decisions.final.jsonl` / `DATA_VERSION.json` 溯源 | mixaw9b(271889) |
 | `q38-Bhqs2t-v11100` / `-v11500` | **Bhqs-2-terminal**。集群上目前是**有缺陷的旧版**(6,297 行),待换成 r5 | 239100 LoRA、239101 全量 lr 3e-6 |
 | `q38e3B-v11100`(旧)/ `v11-legacy` / `v11-500-partial` 等 | 早期实验 | 已退役 |
