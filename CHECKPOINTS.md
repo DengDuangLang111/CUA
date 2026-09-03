@@ -43,7 +43,8 @@
   走 Tillicum login02 的 `klone.sock`(`prep_r5m.sh` = `prep_evals.sh` 单行版;WSL 的 `klone-login` 当时已断,
   10:58 消失、14:34 用户重建)。serve 在占位 39306243(g3085)端口 8046,`mixr5m9b-stock`;
   `READY_mixr5m9b` 由我手写(prep 脚本第 4 步的 ssh 在 "started" 后挂住没返回,见 OPS)。
-- **eval 已起(09-02 15:08)**:WSL `chain_eval_r5m.sh`,eval100 @ 10/1,结果 `qwen35-9b-sft/eval50-mixr5m9b-20260902`。
+- **eval 收官(09-02 20:44)**:**59.0% / 均分 59.9,multi_apps 12/24 = mixa9b**,配对净 +2(RESULTS §5.35)。
+  结论:v16 单应用不稀释多应用(FAILURE_ANATOMY §12.2)。serve step 39306243.0 未撤。
 - **累计学习率 ∑lr(2026-09-02 量,用户问"新的+v16 的版本累计 lr 和 r5 比区别是啥")**:所有臂 peak 3e-6、
   cosine、warmup 0.1、gb 64、3 ep,schedule 形状全同,所以 ∑lr = 3e-6 × 总步数 / 2 = 1.5e-6 × steps,
   **只随样本数变**;每条样本被看 3 遍、每步 lr 曲线同形,差别不在"每条样本吃多少 lr",在**总位移**。
@@ -221,7 +222,7 @@ bs2→1,不是节点拓扑**(1 rank/节点多的是 CPU 内存,显存还是那�
 | job | 臂 | 数据 | 配置 | 状态 |
 |---|---|---|---|---|
 | **249492**(原 249458 撤) | **img1** | q38-Bhqs2t-img1-*(6385 条,窗 1,fold 1,cap 同 img3;自助构建,code e6b6e034,双端 md5 + 6385/6385 图片 resolve) | kE 配方同(lr3e-6/3ep/seed 同默认),仅窗口变量;**08-19 重拓扑 2×8→8×1,accum 4→8,gb64 梯度数学不变**(整节点申请卡到次日 01:15,碎片单卡秒排——**调度差异是唯一成立的理由**;曾附的"1 卡/节点避 PCIe 争用快 2.3×/rank"归因已由另一会话撤回:误把续训作业的墙钟除以全步数,拓扑对吞吐的影响**无定论**,教训见 TRAINING.md;原 sbatch 注记已同步撤回标注,存 .bak-2x8) | **完训**(EXIT 0,1h42m,endpoint=checkpoint-300 @epoch3.00,12 ckpt;eval 臂 img1 已接链 @1图匹配窗;当时 8 节点 g001/002/006/010/011/017/019/020,新规前豁免形状) |
-| **273350**(排队) | **mixbtf9b-2x4 续跑** | 同 272551 | `--resume_from_checkpoint` 272551 的 checkpoint-435(ep1.5,含 global_step435/rng),**PYTHONPATH 加 nocudnn/ 关 cuDNN SDPA**,其余逐字同;剩 435 步 ≈ 8.5h,存档 580/725/870 | **PENDING**(09-02 下午投,Priority) |
+| **273350**(**完成** 09-02,9h46;ckpt 580/725/870 齐)→ **eval 排队**:09-03 02:16 `prep_btf.sh` 推 `mixbtf9b-2x4-e870`,serve 占位 39306244 g3082:8047;WSL `chain_eval_btf.sh` 等 `klone-login` 重建后起(用户令:Klone 部署、WSL 3 VM eval100 10/1) | **mixbtf9b-2x4 续跑** | 同 272551 | `--resume_from_checkpoint` 272551 的 checkpoint-435(ep1.5,含 global_step435/rng),**PYTHONPATH 加 nocudnn/ 关 cuDNN SDPA**,其余逐字同;剩 435 步 ≈ 8.5h,存档 580/725/870 | **PENDING**(09-02 下午投,Priority) |
 | **273351**(排队) | **mixbtf9b-2x4-lr1e5 续跑** | 同 272837 | 同上,起点 272837 的 checkpoint-435 | **PENDING**(同上) |
 | **272837** | **mixbtf9b-2x4-lr1e5** | 同 272551 语料 | **与 272551 逐字同,只改 lr 3e-6 → 1e-5**;2×4×accum 8 = gb64,3ep,save_steps 145,logging 1,OUT `out/mixbtf9b-2x4-lr1e5`,估 $172.80 | **崩于 541/870(ep1.5,10h46)**:同 cuDNN SDPA 错误;最后存档 checkpoint-435;由 273351 续 |
 | **272551**(排队中) | **mixbtf9b-2x4** | 同 272351 语料 | 同配方,**2 节点×4 卡×accum 8 = gb64**(2x2 实测 130 s/it 会撞 24h 墙;2x4 与 4x2 每卡负载同,~70 s/it),OUT `out/mixbtf9b-2x4`,估 $172.80(24h 上限×8 卡,实际 ~17h) | **崩于 458/870(ep1.5,9h27)**:第二节点 rank 6 cuDNN SDPA `mha_graph.execute` 错误(TRAINING 现状块);最后存档 checkpoint-435;由 273350 续 |

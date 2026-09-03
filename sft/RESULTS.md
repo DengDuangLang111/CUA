@@ -2146,3 +2146,23 @@ xhigh+锯齿 69.8)都低:**调节器叠两个浪费,一个不上吃亏**。I 的
 **决策**:rollout 教师配置锁 **`--image_max 10 --fold_size 1` @2040**,其余谱系默认;xhigh 或 medium 取决于 H 格(不叠没测过的组合,G 的教训)。附带红利实测:每步 −15% 时延、任务步数最短、DONE 收尾 +10pp、p99 think −26%(超长样本被 max_length 砍的比例随之降)。
 
 **试点自身的运维账**(细节 OPS/EXPERIMENTS):七臂一夜串行,复用+自愈 serve 链;中途一次 Tillicum master TCP 黑洞(无心跳连接静默死,ControlMaster 重建已加 ServerAliveInterval)、一次 pkill 自匹配监视器返工、GIMP 复测匹配器一次空跑(未验证先跑,0 索引;修正版先干跑 12/12 再排队)。
+
+## 5.35 mixR5M-9b(r5 + v16 真 multi-app 166)eval100 @ 10/1:59.0% / 均分 59.9,multi_apps 12/24 = mixa9b(2026-09-02 20:44)
+
+WSL 3 VM,serve Klone g3085:8046(`mixR5M-9b-e555`,root 断言过),`--image_max 10 --fold_size 1`,
+结果 `qwen35-9b-sft/eval50-mixr5m9b-20260902`,100/100 无 harness_error。
+
+| 臂(9B,同侧同窗) | 语料 | 通过率 | 均分 | multi_apps | 其他域差异 |
+|---|---|---|---|---|---|
+| mixa9b | r5 + v16 全部 554 | 57.0 | 58.9 | **12/24** | — |
+| **mixr5m9b** | r5 + v16 真 multi 166 | **59.0** | **59.9** | **12/24** | vlc 4/5(+2)、os 5/8(+1)、impress 11/15(+1)、writer 4/7(+1);gimp 3/8(−1)、calc 8/15(−1)、vs_code 3/7(−1) |
+| mixb9b | v16 554 + v11new 312 | 60.0 | 61.7 | 9/24 | — |
+| mixc9b | v16 only 554 | 60.0 | 60.9 | 12/24 | — |
+
+配对(100 题):r5m 独胜 9、mixa 独胜 7,净 +2,在噪声内(§5.2x 的 ±4.8pp 口径)。
+
+**回答 FAILURE_ANATOMY §12 立的问题:把 v16 的单应用轨迹(388 条)全部拿掉,multi_apps 一格不动(12/24 = 12/24),
+总分 +2 在噪声内。** 所以"单应用 v16 稀释多应用示范"的密度假设不成立;multi_apps 12/24 这道墙不是靠
+改 v16 的成分配比能推动的——四个 9B mix 臂 multi_apps 落在 9–12/24,与语料里多应用示范的占比
+(mixC 30%、mixA 14%、R5M 44%)不相关。下一步只能从示范本身(操作覆盖、任务类型与 eval 的 12 道失败题
+的对应)去看,见 FAILURE_ANATOMY §12.2。

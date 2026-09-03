@@ -1327,3 +1327,12 @@ WebSTAR 步级保留率与 think 长度(另一会话 PLAN §10 已证 WebSTAR �
 对 Eval100 multi_apps 组合的覆盖没有在此给数:OSWorld 任务的 `related_apps` 命名与我们不同
 (`vs_code`/`Writer`/`ubuntu_media_player` vs `vscode`/`libreoffice_writer`),按原始 token 只有
 10/24 题算得上真 multi,需要先做命名归一才能比;另一会话的 19/24、13/17 用的是归一后的映射。
+
+### 12.2 R5M 臂的回答:v16 单应用不是稀释源(2026-09-02)
+
+mixR5M-9b(r5 + 仅 v16 真 multi 166)eval100 @ 10/1 = 59.0% / 均分 59.9,**multi_apps 12/24,与 mixa9b
+(r5 + 全部 554)一模一样**;总分净 +2(配对 9:7)在噪声内(RESULTS §5.35)。§12 立的两个分支里,
+"若 R5M ≥ mixA → 单应用在稀释"这一支被证伪:去掉 388 条单应用示范,多应用一格没动。四个 9B mix 臂的
+multi_apps 在 9–12/24,与语料多应用示范占比(mixC 30%、mixA 14%、R5M 44%)无关。剩下的解释只能落在
+示范内容本身——eval 的 12 道 multi_apps 失败题需要的操作/应用组合,语料里是否有对应示范
+(§12.1 的组合表:v16 真 multi 集中在 chrome+calc / calc+writer / chrome+gimp,eval 失败题的组合待逐题对照)。
