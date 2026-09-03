@@ -737,3 +737,25 @@ C 涨到 167,结论反转;分类正则只是标签,不是判据。
 `--image_max 10 --fold_size 1`,num_envs 3,结果 `results_generated/qwen35-9b-sft/eval50-mixbtf9blr1e5-*`)。
 lr 3e-6 那份(`mixbtf9b-2x4-e870`)已由别的会话推到 Klone 并写了 `READY_mixbtf9b`(未核是谁、评没评)。
 
+### 结果:只补末步,分数一分不动(17 评,2026-09-02)
+
+| 臂 | 语料 | 末步 | eval100 @10/1 | 均分 |
+|---|---|---|---|---|
+| mixb9b | mixB 866 轨迹 | 88–100% 散文 | 60.0% | — |
+| **mixbtf9b-2x4(273350,lr 3e-6)** | 同一份 | 100% terminate | **60.0%** | 61.9 |
+
+17 在 WSL 链 `chain_eval_btf.sh`(02:31–07:21,serve g3082:8047)评的,与 mixb9b **逐分相等**
+(RESULTS §5.36,FAILURE_ANATOMY §11.6)。结论:**终止规范化改变的是学生的结束方式(显式
+terminate vs harness 回退),不改变通过率** —— 与 §11.3 早先"看不出分数差别"的判断一致。
+剩下的变量只有 lr:**mixbtf9b-2x4-lr1e5(273351,train_loss 0.097 vs 0.151)** 正在 WSL 评
+10/fold1 3 VM(g3085:8043,链 w20h),它对 mixb9b / 273350 的差就是 lr 1e-5 的净效应。
+
+### 两条运维记录(同日)
+
+- **孤儿自动化**:凌晨 TaskStop "推 230 → 守门起 serve" 任务时只杀了 Mac 侧 ssh,WSL 里的
+  循环活着,02:33 自行在 g3083:8042 起了 mixaw9b230-stock 并重写 `READY_mixaw9b230`(用户
+  已撤那行)。下午核 `--model` 后 scancel 39187994.221、删 READY;WSL 侧循环已于 12:4x 全清。
+  教训进 memory(TaskStop 不杀远端循环;用 PID 或 stop-file)。
+- **AWS 侧 SSO 过期**(e3 报):mixaw9b115 / mixaw9b230 各卡在 98/100 已 3.6–4.8h,
+  `TokenRetrievalError`,实例查不了也回收不了,等用户续凭证;不影响 WSL 这条链。
+
