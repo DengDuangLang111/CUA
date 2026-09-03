@@ -14,8 +14,9 @@
 > v16 单应用不是稀释源)。它的 serve step(39306243 g3085:8046)**还挂着未撤**(链不自动撤,待用户定)。
 > **排队中(2026-09-03 02:16,用户令)**:mixbtf9b-2x4 ckpt-870(273350 续跑完,lr 3e-6)→ **02:19 已落 Klone**
 > `mixbtf9b-2x4-e870`(18.8 GB,md5 b036c2d8 两端一致,14 文件),serve 占位 39306244 g3082:8047 `mixbtf9b-stock`
-> 02:24 就绪,READY 已写;**eval 链 `chain_eval_btf.sh`(PID 233757)02:31 起,runner 02:31:24 起跑**,
-> eval100 @ 10/1,3 VM,root 断言过,结果 `qwen35-9b-sft/eval50-mixbtf9b-20260903`,约 5h。此前:WSL 链
+> 02:24 就绪,READY 已写;eval 链 02:31 起,**07:21 收官:60.0% / 均分 61.9 = mixb9b(配对 11:11),
+> 显式终止 3% → 84%、回退 80 → 0,分数不动**(RESULTS §5.36,FA §11.6:终止规范化这条线关闭)。
+> serve step 39306244.28(g3082:8047)与 r5m 的 39306243.0(g3085:8046)**都还挂着未撤**。此前:WSL 链
 > `chain_eval_btf.sh`(eval100 @ 10/1,对照 mixb9b 60.0)**已建但未起**:WSL 的 `klone-login` 主连接
 > 09-02 22:55 又没了(第二次),链取不到 API key,**等用户过 Duo 重建后由看守自动起**(`/tmp/launch_btf_when_master.sh`
 > 每分钟验 `-O check`,通过即 setsid 拉链)。lr1e-5 变体(273351)训练中。

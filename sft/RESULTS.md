@@ -2166,3 +2166,25 @@ WSL 3 VM,serve Klone g3085:8046(`mixR5M-9b-e555`,root 断言过),`--image_max 10
 改 v16 的成分配比能推动的——四个 9B mix 臂 multi_apps 落在 9–12/24,与语料里多应用示范的占比
 (mixC 30%、mixA 14%、R5M 44%)不相关。下一步只能从示范本身(操作覆盖、任务类型与 eval 的 12 道失败题
 的对应)去看,见 FAILURE_ANATOMY §12.2。
+
+## 5.36 mixbtf9b(mixB 同语料 + 终止规范化)eval100 @ 10/1:60.0% / 均分 61.9 = mixb9b;显式终止从 3% 回到 84%,分数一格不动(2026-09-03 07:21)
+
+WSL 3 VM,serve Klone g3082:8047(`mixbtf9b-2x4-e870`,lr 3e-6,2×4×accum8 = gb64,3 ep,从 ckpt-435 关 cuDNN SDPA 续训),
+`--image_max 10 --fold_size 1`,结果 `qwen35-9b-sft/eval50-mixbtf9b-20260903`,100/100。
+
+| 臂 | 语料 | 通过率 | 均分 | 可解 88 | infeasible 12 | multi_apps | 末步:显式 terminate / FAIL / call_user / 撞上限 / **无工具回退** |
+|---|---|---|---|---|---|---|---|
+| mixb9b | v16 554 + v11new 312(散文结尾) | 60.0 | 61.7 | 52 | 8 | 9/24 | 3 / 1 / 0 / 14 / **80** |
+| **mixbtf9b** | 同一份 866 轨迹,末步 41 → 866 显式 terminate | **60.0** | **61.9** | 53 | 7 | 12/24 | **73 / 11 / 1 / 15 / 0** |
+| a2(参照) | r5(100% terminate) | 61.0 | 62.9 | — | — | — | 76 / 7 / 0 / 17 / 0 |
+
+配对 100 题:btf 独胜 11、mixb 独胜 11,净 0。域上 vs_code +1、vlc +1、multi_apps +3,gimp −2、writer −1、os −1、calc −1,全在噪声内。
+
+**结论:终止规范化把学生的行为改回来了(无工具回退 80 → 0,显式 terminate 3 → 73,FAIL 1 → 11,与 a2 同形),
+但分数完全没动。** 也就是说 FA §11 记录的"93–97% DONE 是 harness 贴的"是真的,但它对通过率的影响是 0:harness 的
+回退把散文结尾当 DONE 处理,和模型自己 terminate 等价;评测器判的是终态。它改变的只有 DONE 的**来源**和 FAIL 的
+显式化(1 → 11,与 a2 的 7 同量级)。infeasible 7/12 vs 8/12,也没变——**infeasible 题的失分不是"不会终止",是判断**。
+三条推论:(1)语料末步散文不是分数问题,以后可以不为它专门重训;(2)mixB 系 vs a2 的 −1~−2pp 差不在终止;
+(3)4 个 mix 臂 + btf 共 5 臂 57–60%,multi_apps 9–12/24,这道墙与终止、配比都无关。
+末步分类口径:本节按 traj.jsonl 末步 response 里的工具名正则分类(terminate 含 FAIL 参数记 FAIL),与 §11.1 的分类
+在 mixb9b 上差 7 题(80 vs 73 回退),是口径差不是数据差。
