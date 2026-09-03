@@ -703,7 +703,15 @@ WSL `[Errno 12] Cannot allocate memory` → 15:20:22 Windows 系统日志 `Tcpip
    **会话无法自行重建**,推权重/起 serve/AWS 与 WSL 两侧 eval 全部停摆。重建(WSL,daniel_yan):
    `ssh -M -S ~/.ssh/cm/klone-login -o ControlPersist=48h -fN jy050706@klone.hyak.uw.edu`,
    过 Duo 后 `ssh -O check -S ~/.ssh/cm/klone-login jy050706@klone.hyak.uw.edu` 应答 "Master running"。
-   文档此前没记过这条命令,以后别再翻 history。**替代通道**:Tillicum login02 的
+   文档此前没记过这条命令,以后别再翻 history。
+   **09-03 09:32 第三次消失,这次两个 master(klone-login + qwen36-tillicum-login)同时没**——排查:
+   WSL 没重启(uptime 09-01 16:27,两个 dashboard daemon 从 08-30 连续存活);CTL 无按名杀 ssh 的脚本
+   (`pkill -f` 只打 run_multienv_qwen,cron 只有 dash_watchdog 不碰 ssh);bc 的 `-O exit` 是对 Mac→WSL 的
+   osworld-windows master,与 WSL 侧 cm/ 无关。肇事者仍未定。**根治**:重建时确认 master 是独立守护
+   (`ps -o tty,sid,ppid`:应 TT=`?`、自成 SID、ppid=1/init;12:55 重建的两个已是此形),不要在一个交互
+   shell 里前台起 —— 那种一旦 shell 退出就被带走。下次再消失先 `ps -eo pid,lstart,args | grep 'ssh -M'`
+   看还剩谁、`last -x`/`uptime -s` 排除重启,再回来查谁在清 cm/。
+   **替代通道**:Tillicum login02 的
    `/gpfs/home/jy050706/.ssh/klone.sock`(独立主连接,ControlPersist 更长),推权重、在占位上起 serve、
    写 READY 都能从 login02 走(`prep_evals.sh` 就是这么做的);只有 WSL 侧 `-L` 隧道必须等 WSL 的主连接。
    **09-02 22:55 `klone-login` 第二次消失**(14:34 重建,活了 8.5h,ControlPersist 48h 没到;当时 WSL 无重启、
