@@ -12,10 +12,12 @@
 > **mixb9bw20f1 收官 07:57:57.0%**(RESULTS §5.34);链 w20g 已结束,g3085:8043 的 mixb9b serve step 已撤,
 > **mixr5m9b 收官 20:44:59.0% / 均分 59.9,multi_apps 12/24 = mixa9b**(RESULTS §5.35;FAILURE_ANATOMY §12.2:
 > v16 单应用不是稀释源)。它的 serve step(39306243 g3085:8046)**还挂着未撤**(链不自动撤,待用户定)。
-> **排队中(2026-09-03 02:16,用户令)**:mixbtf9b-2x4 ckpt-870(273350 续跑完,lr 3e-6)→ 走 login02
-> `klone.sock` 推 Klone `mixbtf9b-2x4-e870`,serve 占位 39306244 g3082:8047 `mixbtf9b-stock`;WSL 链
+> **排队中(2026-09-03 02:16,用户令)**:mixbtf9b-2x4 ckpt-870(273350 续跑完,lr 3e-6)→ **02:19 已落 Klone**
+> `mixbtf9b-2x4-e870`(18.8 GB,md5 b036c2d8 两端一致,14 文件),serve 占位 39306244 g3082:8047 `mixbtf9b-stock`
+> 加载中(02:19 起);READY 由看守在 "Application startup complete" 后手写(prep 第 4 步照例挂住);WSL 链
 > `chain_eval_btf.sh`(eval100 @ 10/1,对照 mixb9b 60.0)**已建但未起**:WSL 的 `klone-login` 主连接
-> 09-02 22:55 又没了(第二次),链取不到 API key,**等用户过 Duo 重建后再起**。lr1e-5 变体(273351)训练中。
+> 09-02 22:55 又没了(第二次),链取不到 API key,**等用户过 Duo 重建后由看守自动起**(`/tmp/launch_btf_when_master.sh`
+> 每分钟验 `-O check`,通过即 setsid 拉链)。lr1e-5 变体(273351)训练中。
 > Klone 主连接 `klone-login` 14:34 由用户过 Duo 重建,22:55 再次消失。
 > 此前:
 > **eval 链(2026-09-02 02:36 起)**:`chain_eval_w20g.sh`(PID 101578)单行 **mixb9bw20f1** = mixB-9b-e873 同权重、
