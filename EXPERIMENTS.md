@@ -14,11 +14,12 @@
 > v16 单应用不是稀释源)。它的 serve step(39306243 g3085:8046)**还挂着未撤**(链不自动撤,待用户定)。
 > **排队中(2026-09-03 02:16,用户令)**:mixbtf9b-2x4 ckpt-870(273350 续跑完,lr 3e-6)→ **02:19 已落 Klone**
 > `mixbtf9b-2x4-e870`(18.8 GB,md5 b036c2d8 两端一致,14 文件),serve 占位 39306244 g3082:8047 `mixbtf9b-stock`
-> 加载中(02:19 起);READY 由看守在 "Application startup complete" 后手写(prep 第 4 步照例挂住);WSL 链
+> 02:24 就绪,READY 已写;**eval 链 `chain_eval_btf.sh`(PID 233757)02:31 起,runner 02:31:24 起跑**,
+> eval100 @ 10/1,3 VM,root 断言过,结果 `qwen35-9b-sft/eval50-mixbtf9b-20260903`,约 5h。此前:WSL 链
 > `chain_eval_btf.sh`(eval100 @ 10/1,对照 mixb9b 60.0)**已建但未起**:WSL 的 `klone-login` 主连接
 > 09-02 22:55 又没了(第二次),链取不到 API key,**等用户过 Duo 重建后由看守自动起**(`/tmp/launch_btf_when_master.sh`
 > 每分钟验 `-O check`,通过即 setsid 拉链)。lr1e-5 变体(273351)训练中。
-> Klone 主连接 `klone-login` 14:34 由用户过 Duo 重建,22:55 再次消失。
+> Klone 主连接 `klone-login` 14:34 由用户过 Duo 重建,22:55 再次消失,**09-03 02:30 用户第三次重建**。
 > 此前:
 > **eval 链(2026-09-02 02:36 起)**:`chain_eval_w20g.sh`(PID 101578)单行 **mixb9bw20f1** = mixB-9b-e873 同权重、
 > 窗口 **20/1**(恒 20 图),与 mixb9b(10/1,60.0%)、mixb9bw20(20/10,52.0%)构成窗口曲线第三点(用户令)。

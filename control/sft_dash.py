@@ -287,6 +287,14 @@ EVAL50_ARMS = {
                   "single-variable pair with lr1e5: optimizer back to the"
                   " original settings (weight_decay 0.0, adam_beta2 0.999)."
                   " Separates 'was it the lr or the optimizer' in the 2e-5 batch."),
+    "mixbtf9b":  ("mixBtf 9B e3.00 · mixB corpus + terminal-fix · ALL 100 · stock (no-split)", "sft",
+                  "arm B-tf: the SAME 866 trajectories as mixB (18,560 rows) with"
+                  " terminal-step normalisation only (last step 41 -> 866 explicit"
+                  " terminate). Qwen3.5-9B full FT, lr 3e-6, gb 64 (2x4 x accum 8),"
+                  " 3 ep, img10/fold1, checkpoint-870 (resumed from ckpt-435 with"
+                  " cuDNN SDPA off). READ AGAINST mixb9b (60.0%): does fixing the"
+                  " prose endings change DONE provenance / infeasible handling?"
+                  " Served on Klone g3082:8047, window 10/1."),
     "mixr5m9b":  ("mixR5M 9B e3.00 · r5 + v16 TRUE-MULTI 166 · ALL 100 · stock (no-split)", "sft",
                   "arm R5M: r5 (v11100 + v11500, 6,474 samples) + the true multi-app"
                   " subset of v16 (166 traj / 5,342 samples; >=2 GUI apps, judge-admitted"
@@ -569,6 +577,7 @@ ARM_PANEL = {"nocap50b": "heldout", "base50b": "heldout", "t3850b": "heldout",
              # 静默丢掉,分数系统性腰斩。
              "mixc9b": "all100", "mixb9b": "all100",
              "mixa9b": "all100", "mixa4b": "all100", "mixr5m9b": "all100",
+             "mixbtf9b": "all100",
              # 四个学习率变体,同样跑整 100
              "lr2e5": "all100", "lr2e5gb128": "all100",
              "lr1e5": "all100", "lr1e5b999": "all100",
