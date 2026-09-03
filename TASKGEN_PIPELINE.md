@@ -272,3 +272,27 @@ From 472 generated: 5 sanitized (leaked tags), 1 culled (broken setup that
 could never build its own fixture), 17 culled by similarity over two iterative rounds, 2 instructions repaired
 and 1 task blocked by the severity-aware scan. 3 review items remain, all
 adjudicated benign.
+
+## 附:v11 与 v16 两代语料的生成原始设置对照(2026-09-03 整理,来源:运行目录 args.json / specs 字段 / RUNBOOK §1 §12 / JUDGING §2 §2b §4)
+
+| 环节 | **v11(r5 语料,362 条)** | **v16(判官制,554 / strict 340 条)** |
+|---|---|---|
+| 代码 | `ostg-v11.1`(gen/ship/control/rollout/judge/arb/curate),wrapper `os-simple-taskgen-v8` | `ostg-v16`(branch `datagenv16`):`gen16` / `emit16` / `strongjudge` / `curate16` |
+| 生成模型 | `claude-opus-5`,thinking **关**,强制工具调用,max_tokens 48000 | `claude-opus-5`(经 ppapi,`PPAPI_MODEL` 默认),同 v11 regime |
+| 生成契约 | 每题 = 指令 + setup + **probe(程序判据)**,+ 修复回路(可修闸失败时 ~200 token 只重写指令) | 每题 = 指令 + setup + `apps_used` + `infeasible_reason`,**无 probe/无 verifier**,强判官当唯一裁判 |
+| 抽样空间 | intent(5:info_seeking/transform/configure/create/repair)× domain(13)× difficulty(**5 档**,d3+ 双应用,配额 .15/.25/.25/.20/.15)× ambiguity(4,配额 .10/.30/.30/.30)× voice(4);apps 封闭 10 项目录 | 同一套 lottery(taxonomy.cells + recipe + draw_vocab)只换契约:difficulty 改 **3 档 = 计数应用数 = 判据数**(均分 ⅓);intent 换 **19 族**(discover/understand/consume/create/creative-production/transform/correspond/review/organize/plan/analyze/execute-workflow/paperwork/automate/maintain/recover/protect/self-presentation/follow-procedure);os 域按 state 45/terminal 45/files 10 硬配;指令长度按官方分位带 50–250/120–320/200–400 |
+| 生成命令 | 100 集:与 v10 同命令同 seed(`--n 5 --batches 13 --shard i/2`);500 集:`--n 5 --batches 29 --shard i/4 --seed 20260812 --spent-from v11-s0/s1 --avoid-corpus cua-gym --refill 2` | `gen16 --n 1500 --seed 1661 / 1662 --workers 6 --seed-rate 0`,各 780 格(prod-a / prod-b) |
+| 生成时闸 | 无文件名/绝对路径(ambiguity≥2)、长度上限 150/250/300、terse≤40 词、warm⟺open_path、setup 可编译、probe 打 PASS/FAIL、无 `--convert-to odp/pptx`、无泄漏提示标签;可修者先修再判 | 只留机器能查的:长度带、应用计数 = 档位、ambiguity 路径规则、死短语 |
+| ship / accept | `ship`:prebuild 办公文件在宿主机 → re-emit → 六道闸(指令 jaccard<.40、tf-idf<.50、vs CUA-Gym<.50、vs 官方 361<.50、配额漂移≤2%、实体复用<3)→ scan 静态缺陷类(rigid-name 等) | `emit16`:合并+去重 → 碰撞参照(osworld examples、cua-gym tasks)→ prebuild → setup smoke → task JSON |
+| control(阴性对照) | 每题新 VM:跑 setup 读退出码 → 执行 open → 对未动桌面 `evaluate()`,**空转 agent 必须 0 分**;warm 可见性按 agent 截图判 | 无(没有 probe 可对照;smoke 只验 setup) |
+| 产出题数 | 100 集 100 题(`v11-all`)+ 500 集 **444** 题(`v11-500-final`);单/多应用 40/60 配额 | main **1195** 题(specs 599+596)+ pilot **191** 题;manifest 里 multi_apps 790/1195 |
+| rollout(教师) | `qwen38-27b-local`(Qwen3.8-27B,FP8 serve),**WSL docker**,窗 **20/10**,max_steps 50,temp 1.0 / top_p .95 / top_k 20,max_tokens 81920,sleep 3.0,3 env(100 集)/ 1 env(500 集);运行 `v11-100-t1-20260814`、`v11-500-t1ms50-20260814` | 同模型同采样,**AWS provider**,窗 **10/1**(= 学生训练窗),max_steps 50,sleep 3.0,20 env(main)/ 5 env(pilot);运行 `v16-main-1`、`v16-pilot-200` |
+| 判定 | ① probe 程序判分(checker);② 盲评判官 trajaudit(Qwen3.8-27B v1 low + Opus 5,10 帧 + 动作 + 90 字思考摘要,temp 0);③ arb 仲裁(Opus 5 + extended thinking,checker 与判官分歧时);④ stepaudit 步级 | 强判官 `strongjudge` v3:Opus 5,`--truth all --think 0 --answer 1 --last 8`(初始帧 + 末 8 帧、全部动作、agent 成果自述,不给思考);规则闸拦 agent 自称 FAIL/空轨迹(gate),另 `--gate 0` 复核 |
+| 准入 | `curate`:判官提名、仲裁定罪、只有证据能封杀 → tier1/tier2/rescue/drop:100 集 69/1/10/0,500 集 209/41/44/0;shipped 362 条 | `curate16`:verdict=success 且**每一条**要求 done=yes → **554**(40% of 1386);`--strict` 再加:无 critical 失败、无证据违规、无 cannot_tell、无 inferred、derived=10 → **340**(24.7%) |
+| 末步 | `terminalfix` 三路(48 原样 / 259 补指令 / 69 重写)→ **100% 显式 terminate** | 原生 88–100% 散文结尾;`mixbtf` 版补做终止规范化(实测对分数 0 影响,RESULTS §5.36) |
+| build | `ostg.sft.build --whole-traj-filter --terminal-rewrite`,r5 = Bhqs2t 第 5 版重建(meta 带溯源);nocap 版 `--think-cap 0`(r5 用 2048);img10/fold1 | `build --include admitted --whole-traj-filter --think-cap 2048 --image-max 10 --fold-size 1`(strict 版另 `--terminal-rewrite` + `verify --require-terminate`) |
+| 样本 | 6,474(v11100 1,358 + v11500 5,116) | 13,372(main + pilot,准入版);strict 版 + WebSTAR 步级过滤后 7,311 行(含 r5 半区) |
+
+**两代之间真正的变量**(除了题本身):(1)v16 没有程序判据,准入完全靠判官;(2)教师 rollout 的观察窗
+v11 是 20/10、v16 是 10/1;(3)v16 的 multi_apps 配额 66%(790/1195)但 strict 后真 multi 只剩 16.5%(FA §12);
+(4)v11 有 control 阴性对照,v16 没有;(5)v16 末步散文(已证明不影响分数)。
