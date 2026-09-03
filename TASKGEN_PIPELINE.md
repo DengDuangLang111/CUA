@@ -296,3 +296,41 @@ adjudicated benign.
 **两代之间真正的变量**(除了题本身):(1)v16 没有程序判据,准入完全靠判官;(2)教师 rollout 的观察窗
 v11 是 20/10、v16 是 10/1;(3)v16 的 multi_apps 配额 66%(790/1195)但 strict 后真 multi 只剩 16.5%(FA §12);
 (4)v11 有 control 阴性对照,v16 没有;(5)v16 末步散文(已证明不影响分数)。
+
+### 附.1 两代抽样空间逐轴枚举(2026-09-03,源:`ostg-v11.1/ostg/taskgen/taxonomy.py`、`gen.py`;`ostg-v16/ostg/taskgen/taxonomy.py`、`gen16.py`)
+
+**共用不变的三轴**(v16 的 `taxonomy.cells` 原样复用 v11 的 lottery):
+
+| 轴 | 取值 | 配额 |
+|---|---|---|
+| domain(13) | finance · healthcare · education · logistics · human_resources · legal · marketing · scientific_research · retail · real_estate · travel · manufacturing · nonprofit | 均匀(走完整乘积空间) |
+| ambiguity(4) | a1 explicit(点名文件与位置,逐条列要求)· a2 functional(按"它是什么"描述对象,不许文件名/路径,setup 保证唯一)· a3 deictic(目标已在屏上:"this sheet",无文件名)· a4 outcome(只说要达到的结果和约束,操作由 agent 推断) | .10 / .30 / .30 / .30 |
+| voice(4) | terse(只说目标和约束)· sloppy(小写、缩写、无标点)· polite("Please…")· contextful(目标 + 一条改变"正确"定义的上下文:收件人/期限/约束) | .30 / .10 / .25 / .35 |
+
+**v11 独有轴**
+
+| 轴 | 取值 | 配额 / 规则 |
+|---|---|---|
+| intent(5) | info_seeking(找已有信息并按要求汇报)· transform(改形状/格式/顺序)· configure(改设置或环境状态)· create(从头产出工件)· repair(找错并改) | 最少使用优先,硬保证均匀 |
+| difficulty(5) | d1 一应用一要求 · d2 一应用两三要求 · d3 两应用一到三要求(跨一次边界)· d4 两应用四要求含排序规则 或 三应用一到三要求 · d5 三应用以上四要求含排序/平局规则 | .15 / .25 / .25 / .20 / .15(d3+ 为多应用,合计 60%) |
+| artifact(12) | spreadsheet · text_document · slide_deck · pdf_or_archive · raster_image · source_code · filesystem · terminal_output · browser_tab · preference_store · app_data_store · desktop_session | 由 intent 决定候选集(INTENT_ARTIFACTS),按轮转取 |
+| primary app | artifact → 承载应用表(ARTIFACT_HOSTS,按官方 361 频次排序)轮转;apps 目录封闭 10 项:calc · writer · impress · chrome · gimp · vlc · thunderbird · vscode · files(→os)· terminal(→os) | 无目标份额(v14 起才有 APP_MIX) |
+| warm | browser_tab 或 a3 必 warm;其余 GUI 主应用 65% warm;files/terminal 不 warm | 布尔 |
+| source | browser_tab → live_web;transform/repair → self;其余轮流 second_local_artifact / prompt_literal | — |
+| grade | browser_tab → browser(官方 url 匹配)· spreadsheet → table · 其余 probe | 由格子决定,模型不能降级 |
+
+**v16 独有轴**(gen16 在 cells 之后重画:primary → intent16 → combo → warm → seeds → os_kind;legacy 的 intent/artifact/grade/infeasible 丢弃)
+
+| 轴 | 取值 | 配额 / 规则 |
+|---|---|---|
+| difficulty(3) | d1 一个计数应用(或纯系统),一个判据 · d2 两个计数应用两判据,数据跨边界两侧都判 · d3 三应用三判据 | ⅓ / ⅓ / ⅓;计数应用 = calc/writer/impress/chrome/gimp/thunderbird/vlc/vscode,os/terminal/files 是设施不计数 |
+| intent16(19) | discover-information · understand-material · consume-media · create-content · creative-production · transform · correspond · review-annotate · organize · plan · analyze-decide · execute-workflow · paperwork · automate · maintain · recover · protect · self-presentation · follow-procedure | 近均匀洗牌发牌;creative-production 只发给 impress/gimp/writer 主应用 |
+| primary(9) | os .060 · chrome .215 · calc .186 · impress .131 · writer .120 · gimp .086 · vscode .081 · thunderbird .064 · vlc .057 | OFFICIAL_MIX(官方参与份额解出),最大余数法配额 |
+| secondary(combo) | d2 一个、d3 两个伴应用,按 COMPANION_MIX 权重抽(chrome 40 · calc 25 · writer 17 · impress 11 · vscode 10 · gimp 9 · thunderbird 9 · vlc 6);再以 d2 56% / d3 47% 把一个伴应用换成 os | 复制官方 multi_apps 的 app+os : GUI-GUI ≈ 6:4;闸按抽到的组合精确校验 |
+| os_kind(主应用 = os 时) | state 45% · terminal 45% · files 10% | 硬配(自由生成曾塌成 193/197 全是文件操作) |
+| warm | 0..(手上 GUI 应用数)均匀取整数 = 预开应用个数;a3 至少 1;os 不预开 | 闸校验 open_paths 数 = warm |
+| action seed | 每主应用 8–10 个操作菜单(如 calc:freeze panes/chart/autofilter/pivot…;若存在 seedpools.json 则 45–60 个 LLM 枚举操作覆盖) | 默认 80% 手牌带 seed;**生产跑用 `--seed-rate 0`,即全部不带** |
+| len_target | 从 LEN_BANDS 抽:d1 50–250 · d2 120–320 · d3 200–400 字符 | 闸只查带边(×0.7 / ×1.3) |
+| infeasible | 轴已删除(08-30),全部 feasible;模型仍须填 infeasible_reason 字段 | — |
+
+v16 的 `taxonomy.cells` 内部仍按 legacy 常量走(difficulty ⅓×3、APP_MIX os .35…、infeasible 7.5%),但这些结果随即被 gen16 覆盖或丢弃;有效轴以上表 gen16 列为准。
