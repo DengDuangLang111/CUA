@@ -722,3 +722,18 @@ C 涨到 167,结论反转;分类正则只是标签,不是判据。
 代价提醒:B 类重判要 `--last 0` 全帧,v16 那 ~170 条平均 20+ 步 = 每条 20 帧,
 是 v3 那轮 9 帧的两倍多,opus 直连按帧计费。是否改口径由用户定;两个在训的臂
 (mixaw9b 用 strict-340,mixbtf9b 不用 strict)不受影响。
+
+### 续训完成 + lr1e5 臂的 eval(2026-09-02 下午)
+
+| 臂 | Slurm | 结果 | train_loss | cuDNN 复发 |
+|---|---|---|---|---|
+| mixbtf9b-2x4(lr 3e-6) | 273350 | EXIT 0,870/870,9h44 | 0.151 | 0 |
+| mixbtf9b-2x4-lr1e5 | 273351 | EXIT 0,870/870,10h12 | **0.097** | 0 |
+
+关 cuDNN SDPA 后两条都跑完了 ep3(与 mixb9b 同语料,loss 可横比:mixb9b 终点 train_loss 见 RESULTS)。
+**用户令 12:5x:lr1e5 臂在 WSL 评,10/fold1,3 VM。** 对接:权重 → Klone
+`$KB/sft/models/mixbtf9b-2x4-lr1e5-e870`(真读校验)→ 占位 39187991 g3085:8043 起
+`mixbtf9blr1e5-stock` → 写 `READY_mixbtf9blr1e5` → `chain_eval_w20h.sh`(单行,XWIN 默认
+`--image_max 10 --fold_size 1`,num_envs 3,结果 `results_generated/qwen35-9b-sft/eval50-mixbtf9blr1e5-*`)。
+lr 3e-6 那份(`mixbtf9b-2x4-e870`)已由别的会话推到 Klone 并写了 `READY_mixbtf9b`(未核是谁、评没评)。
+
