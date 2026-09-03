@@ -339,6 +339,20 @@ serve 角色固定专属节点端口,与 WSL 本地端口同尾号**:教师=8000
 历史遗留尾号不一致,不动它),4B rich=8011,base=8012,lean=8013,ep1=8014…
 新 serve sbatch 一律按此表取港;隧道 RPORT 同步。
 
+### Klone 节点 /tmp 被 8 GB sif 拷贝塞满,serve 起不来(2026-09-02)
+
+`serve_inner_<arm>.sh` 每次把 `sif/vllm-0.25.1.sif`(8.16 GB)复制到 `/tmp/vllm-<arm>-$$/`
+再 `apptainer exec`。同一节点跑过几个 serve 后,/tmp(358 GB)被拷贝 + 其他用户的东西塞满:
+g3085 上 `df /tmp` 100%、剩 3 MB,新拷贝在 7.88 GB 处 `No space left on device` 截断,
+apptainer 报 `image driver mount failure: squashfuse_ll instance exited`,step 以 255 退出。
+残留是自己人的:`/tmp/vllm-mixb9b-*`(serve 早已结束,无进程引用)等。
+
+**修法**:① 删无进程引用的陈旧 `/tmp/vllm-*`(先 `fuser`/`pgrep` 核);② serve 脚本
+**直接 `apptainer exec … $BASE/sif/vllm-0.25.1.sif`,不再往 /tmp 复制**(GPFS 读 8 GB 只在
+启动时一次,拷贝的省时可忽略),`XDG_CACHE_HOME`/`APPTAINER_CACHEDIR` 仍放 /tmp(很小)。
+判据:serve 日志第二行出现 `cp: error writing … No space left on device`。**起 serve 前
+`df /tmp` 看一眼**;serve 结束后 `rm -rf /tmp/vllm-<arm>-*`,别留 8 GB 尸体。
+
 ### serve 参数与客户端的硬耦合(2026-08-19 补,查 eval4bv20 时发现)
 
 4B eval serve 的真实启动形状(角色化端口见上节;**端口号与作业号是易变状态,
