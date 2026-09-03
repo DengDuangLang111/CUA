@@ -735,7 +735,7 @@ C 涨到 167,结论反转;分类正则只是标签,不是判据。
 `$KB/sft/models/mixbtf9b-2x4-lr1e5-e870`(真读校验)→ 占位 39187991 g3085:8043 起
 `mixbtf9blr1e5-stock` → 写 `READY_mixbtf9blr1e5` → `chain_eval_w20h.sh`(单行,XWIN 默认
 `--image_max 10 --fold_size 1`,num_envs 3,结果 `results_generated/qwen35-9b-sft/eval50-mixbtf9blr1e5-*`)。
-lr 3e-6 那份(`mixbtf9b-2x4-e870`)已由别的会话推到 Klone 并写了 `READY_mixbtf9b`(未核是谁、评没评)。
+lr 3e-6 那份(`mixbtf9b-2x4-e870`)是 17 推的、也已评完(60.0%,见下节)。**lr1e5 的 eval 于 09-03 13:09 起跑**(endpoint UP,root 校验通过;首次起 serve 因 g3085 /tmp 满失败,改用 GPFS sif 直启,OPS 有记)。
 
 ### 结果:只补末步,分数一分不动(17 评,2026-09-02)
 
