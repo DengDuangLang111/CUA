@@ -798,3 +798,9 @@ Tillicum 主连接活着;经 Tillicum `klone.sock` 跳转可查 Klone 队列。
 - **cap×2 关闭**:mixbtf4b-cap2x 在单张 H200 上 OOM 四次——zero2@81920(超~1GiB)、zero3(参数 all-gather 瞬时峰值更糟)、SP=2(swift 在 SP>1 关 logits_to_keep,materialize 10GiB 完整 logits)、zero2@65536(压序列长度无效,瓶颈疑在视觉塔:10图×4128 过 ViT,与 max_length 无关)。flash 本就通过 sdpa 开着(flash_attn 库没装且 bs1 下无增益)。**退档 cap×1.5(276055,IMAGE_MIN=3072≈3000tok)**,img10 能装下,测同一问题(更清晰有没有用)。基线=原生 4B。
 - **任务均衡加权 taskw(276056,用户令)**:诊断确认长轨迹过权(每步一样本,最长 20% 任务占 39% loss,Gini 0.32,50步任务=2.3×平均)。修法走 swift 官方扩展点:每条 assistant 消息带 `loss_scale=c/N`(c=22.68,令 token 加权均值=1、量级/LR 不变)+ `--is_binary_loss_scale false`,无需改 trainer。脚本 `sft/tools/make-taskw-weights.py`(已入库,自带 md5)。smoke 276054 EXIT 0 验证机制生效。单变量对 mixbtf9b(60.0%),重点看 multi_apps(长任务被压 1/50)。
 
+### 追记 09-04:渐变历史分辨率 histcomp(276060,用户令)
+
+想法:img10 每帧都编成 ~2040tok(10帧=20400 视觉tok),但老帧只是上下文、动作发生在当前帧。按帧龄降采样:最新2帧全清晰(grounding 不受影响),越老压得越狠,最老 1/8。省 55% 视觉 token(显存/速度更松,反方向于 cap×2)。
+机制(route B):Qwen 处理器 `vision_process.py:132` 支持逐图 `max_pixels`,但 swift 对所有图用同一个全局值(`qwen.py:339`,images 只吃路径)。故 PYTHONPATH 挂 `histcomp/sitecustomize.py` 猴补丁 `Qwen2VLTemplate.replace_tag`,按 age=M-1-index 注入 max_pixels(补丁失败即 raise,不静默)。**smoke 276059 打印证实阶梯精确**:age0/1→2040、age2-4→1008、age5-7→510、age8/9→252 tok(32px/tok)。单变量 vs mixbtf9b(60.0%)。**train/infer 必须一致:eval 前要改 mm_agents/qwen/images.py 按同档降采样(当前帧全清晰,无坐标问题)——未做,训练跑完再补。**
+注:本轮后台监视器(三层嵌套 base64 ssh)一直空转返回空、误报 TIMEOUT;作业真实状态一律直接 squeue/日志查(见 memory)。
+
