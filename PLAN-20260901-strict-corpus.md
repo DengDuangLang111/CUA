@@ -793,3 +793,8 @@ Tillicum 主连接活着;经 Tillicum `klone.sock` 跳转可查 Klone 队列。
 - **臂 mixbtf4b-cap2x(Slurm 276042)**:唯一变量 = 每图 token。IMAGE_MIN_TOKEN_NUM=4096 强制 1920×1088→~4128 tok/图(cap×2,√2 线性),img10 不砍帧,max_len 81920,2×4 gb64 3ep,与 9B mixbtf 逐字同。真 2×(4× token=8160)在 img10 装不下(最长样本 native 58,047→cap×2 ~79k 贴 81920;真2× ~120k 超长度且爆 141 GiB),要真 2× 只能砍到 img5、变两变量,故先跑 cap×2 单变量。对照走 B(现有原生 4B,terminalfix 准确率中性)。sbatch sft/sbatch/mixbtf4b-cap2x.sbatch。
 - **max_step 100 复评(链 chain_eval_ms100.sh)**:mixbtf9b-2x4-e870(60.0% 那份,lr 3e-6)原样复评,唯一变量 = per-task 步数上限 50→100,探撞上限失败模式。复用 g3082:8047 mixbtf9b-stock(占位 39306244 仍在),WSL 3 VM,10/fold1,结果 results_generated/qwen35-9b-sft/eval50-mixbtf9bms100-*。09-04 02:20 起(klone-login 第 4 次重建后)。
 
+### 追记 09-04:cap×2 定案 + 任务均衡加权(taskw)
+
+- **cap×2 关闭**:mixbtf4b-cap2x 在单张 H200 上 OOM 四次——zero2@81920(超~1GiB)、zero3(参数 all-gather 瞬时峰值更糟)、SP=2(swift 在 SP>1 关 logits_to_keep,materialize 10GiB 完整 logits)、zero2@65536(压序列长度无效,瓶颈疑在视觉塔:10图×4128 过 ViT,与 max_length 无关)。flash 本就通过 sdpa 开着(flash_attn 库没装且 bs1 下无增益)。**退档 cap×1.5(276055,IMAGE_MIN=3072≈3000tok)**,img10 能装下,测同一问题(更清晰有没有用)。基线=原生 4B。
+- **任务均衡加权 taskw(276056,用户令)**:诊断确认长轨迹过权(每步一样本,最长 20% 任务占 39% loss,Gini 0.32,50步任务=2.3×平均)。修法走 swift 官方扩展点:每条 assistant 消息带 `loss_scale=c/N`(c=22.68,令 token 加权均值=1、量级/LR 不变)+ `--is_binary_loss_scale false`,无需改 trainer。脚本 `sft/tools/make-taskw-weights.py`(已入库,自带 md5)。smoke 276054 EXIT 0 验证机制生效。单变量对 mixbtf9b(60.0%),重点看 multi_apps(长任务被压 1/50)。
+
