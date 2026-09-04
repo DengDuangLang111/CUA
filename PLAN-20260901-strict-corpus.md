@@ -770,6 +770,8 @@ harness_error 2(writer 88fe4b2d、multi_apps 81c425f5,`a bytes-like object is re
 与 §5 早先 vl 系列 lr 1e-5 的 47–48%(RESULTS §5.1x 表)同一方向:**9B 在这类语料上 lr 3e-6 是对的,
 1e-5 关闭。** mixbtf 线到此两臂都评完:终止规范化 0 效应、lr 提升负效应。
 
+**lr 曲线补第三点(用户令 09-04):`mixbtf9b-2x4-lr1e6`,Slurm 276014**,与 lr1e5 逐字同、只改 lr 1e-6,从头起(带 nocudnn),3ep gb64 save 145;完训评 10/1 补 {1e-6 / 3e-6=60.0 / 1e-5=49.0} 低端点。sbatch `sft/sbatch/mixbtf9b-2x4-lr1e6.sbatch`。 mixbtf 线到此两臂都评完:终止规范化 0 效应、lr 提升负效应。
+
 运维备注:WSL 侧观察器(`/tmp/watch_w20h.sh`)没写任何输出就死了,Mac 侧 9h 轮询到期才发现链早已收官;
 下次看守直接以结果目录里 result.txt 计数为准,别依赖中间文件。WSL→Klone 主连接 09-03 再次消失(第四次),
 Tillicum 主连接活着;经 Tillicum `klone.sock` 跳转可查 Klone 队列。
