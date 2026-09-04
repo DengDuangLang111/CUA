@@ -785,3 +785,11 @@ Tillicum 主连接活着;经 Tillicum `klone.sock` 跳转可查 Klone 队列。
 - **AWS 侧 SSO 过期**(e3 报):mixaw9b115 / mixaw9b230 各卡在 98/100 已 3.6–4.8h,
   `TokenRetrievalError`,实例查不了也回收不了,等用户续凭证;不影响 WSL 这条链。
 
+### vision token 实验:分辨率(cap×2)与 max_step 100 复评(2026-09-04,用户令)
+
+背景:用户问切块能不能让图更清晰。实测钉死三点:存盘图全是 1920×1088=2040 tok/图,IMAGE_MAX_TOKEN_NUM=2048 从没裁过(原生);OSWorld VM(docker+AWS AMI)硬锁 1920×1080,拿不到更多像素;480 降采样已证有毒(10 图 −16pp,RESULTS §5)。
+结论:切块对 Qwen(动态分辨率)是错工具、且绝对坐标 grounding 会崩;更清晰的正确机制是上采样编码,但源是 1080p、只有插值。
+
+- **臂 mixbtf4b-cap2x(Slurm 276042)**:唯一变量 = 每图 token。IMAGE_MIN_TOKEN_NUM=4096 强制 1920×1088→~4128 tok/图(cap×2,√2 线性),img10 不砍帧,max_len 81920,2×4 gb64 3ep,与 9B mixbtf 逐字同。真 2×(4× token=8160)在 img10 装不下(最长样本 native 58,047→cap×2 ~79k 贴 81920;真2× ~120k 超长度且爆 141 GiB),要真 2× 只能砍到 img5、变两变量,故先跑 cap×2 单变量。对照走 B(现有原生 4B,terminalfix 准确率中性)。sbatch sft/sbatch/mixbtf4b-cap2x.sbatch。
+- **max_step 100 复评(链 chain_eval_ms100.sh)**:mixbtf9b-2x4-e870(60.0% 那份,lr 3e-6)原样复评,唯一变量 = per-task 步数上限 50→100,探撞上限失败模式。复用 g3082:8047 mixbtf9b-stock(占位 39306244 仍在),WSL 3 VM,10/fold1,结果 results_generated/qwen35-9b-sft/eval50-mixbtf9bms100-*。09-04 02:20 起(klone-login 第 4 次重建后)。
+
