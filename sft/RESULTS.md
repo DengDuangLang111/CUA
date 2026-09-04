@@ -2188,3 +2188,26 @@ WSL 3 VM,serve Klone g3082:8047(`mixbtf9b-2x4-e870`,lr 3e-6,2×4×accum8 = gb64,
 (3)4 个 mix 臂 + btf 共 5 臂 57–60%,multi_apps 9–12/24,这道墙与终止、配比都无关。
 末步分类口径:本节按 traj.jsonl 末步 response 里的工具名正则分类(terminate 含 FAIL 参数记 FAIL),与 §11.1 的分类
 在 mixb9b 上差 7 题(80 vs 73 回退),是口径差不是数据差。
+
+## 5.37 mixbtf9b-2x4-lr1e5(mixB 同语料 + 终止规范化,lr 1e-5)eval100 @ 10/1:49.0% / 均分 49.9,比 lr 3e-6 两臂 −11pp(2026-09-03 18:13,09-04 补记)
+
+WSL 3 VM,serve Klone g3085:8043(`mixbtf9b-2x4-lr1e5-e870`,Slurm 273351:与 273350 逐字同、只改 lr 1e-5,gb64,3 ep,
+从 ckpt-435 关 cuDNN SDPA 续训,train_loss 终点 0.097 vs 0.151),`--image_max 10 --fold_size 1`,
+结果 `qwen35-9b-sft/eval50-mixbtf9blr1e5-20260903`,100/100。
+
+| 臂 | lr | 通过率 | 均分 | 可解 | infeasible | multi_apps | 末步:terminate / FAIL / 撞上限 / harness_error |
+|---|---|---|---|---|---|---|---|
+| mixb9b | 3e-6 | 60.0 | 61.7 | 52/88 | 8/12 | 9/24 | (见 §5.36) |
+| mixbtf9b(273350) | 3e-6 | 60.0 | 61.9 | 53/88 | 7/12 | 12/24 | 73 / 11 / 15 / 0 |
+| **mixbtf9b-lr1e5(273351)** | **1e-5** | **49.0** | **49.9** | 47/87 | **2/13** | 11/24 | 72 / 7 / 19 / 2 |
+
+配对 100 题 vs mixb9b:赢 10、输 21,净 −11。输掉的题按域:os 4、writer 3、gimp 3、calc 3、vs_code 2、multi_apps 2、
+其余各 1;impress 是唯一净赢的域(7 → 10)。逐域通过:chrome 4/6、gimp 3/8、calc 7/15、impress 10/15、writer 2/7、
+multi_apps 11/24、os 3/8、thunderbird 3/5、vlc 3/5、vs_code 3/7。
+harness_error 2 题(writer 88fe4b2d、multi_apps 81c425f5)是截图返回 None 的 harness 故障,计 0;两题在 mixb9b 与 273350 上也是 0,不复跑。
+可解/infeasible 按任务 JSON `evaluator.func == "infeasible"` 划分得 13 题,§5.36 口径是 12,差一题。
+
+**结论:lr 1e-5 在 mixB 语料上净负 11pp,train_loss 更低是过拟合信号不是收益。** 失分两处:infeasible 8 → 2
+(FAIL 11 → 7:模型更少判"做不到",更倾向硬做),和 os/writer/gimp 这类操作精度域。与 §5.1x 的 vl 系列
+lr 1e-5 臂 47–48% 同向。9B 在本语料族上 lr 3e-6 定案;mixbtf 线两臂评完,关闭。
+

@@ -747,8 +747,32 @@ lr 3e-6 那份(`mixbtf9b-2x4-e870`)是 17 推的、也已评完(60.0%,见下节)
 17 在 WSL 链 `chain_eval_btf.sh`(02:31–07:21,serve g3082:8047)评的,与 mixb9b **逐分相等**
 (RESULTS §5.36,FAILURE_ANATOMY §11.6)。结论:**终止规范化改变的是学生的结束方式(显式
 terminate vs harness 回退),不改变通过率** —— 与 §11.3 早先"看不出分数差别"的判断一致。
-剩下的变量只有 lr:**mixbtf9b-2x4-lr1e5(273351,train_loss 0.097 vs 0.151)** 正在 WSL 评
-10/fold1 3 VM(g3085:8043,链 w20h),它对 mixb9b / 273350 的差就是 lr 1e-5 的净效应。
+剩下的变量只有 lr:**mixbtf9b-2x4-lr1e5(273351,train_loss 0.097 vs 0.151)**,WSL 评
+10/fold1 3 VM(g3085:8043,链 w20h),它对 mixb9b / 273350 的差就是 lr 1e-5 的净效应 → 见下节。
+
+### 结果:lr 1e-5 净负 −11pp(2026-09-03 18:13 收官,09-04 补记)
+
+| 臂 | lr | train_loss 终点 | eval100 @10/1 | 均分 | 可解 | infeasible | 配对 vs mixb9b |
+|---|---|---|---|---|---|---|---|
+| mixb9b | 3e-6 | — | 60.0 | 61.7 | 52/88 | 8/12 | — |
+| mixbtf9b-2x4(273350) | 3e-6 | 0.151 | 60.0 | 61.9 | 53/88 | 7/12 | 11:11 |
+| **mixbtf9b-2x4-lr1e5(273351)** | **1e-5** | **0.097** | **49.0** | **49.9** | 47/87 | **2/13** | **赢 10 / 输 21** |
+
+结果目录 `results_generated/qwen35-9b-sft/eval50-mixbtf9blr1e5-20260903`,100/100(49 满分 + 1 题 0.903)。
+逐域(通过/题):chrome 4/6、gimp 3/8、calc 7/15、impress **10/15**(+3)、writer 2/7、multi_apps 11/24、
+os **3/8**(−4)、thunderbird 3/5、vlc 3/5、vs_code 3/7。末步:显式 terminate 72 / FAIL 7 / 撞上限 19 /
+harness_error 2(writer 88fe4b2d、multi_apps 81c425f5,`a bytes-like object is required, not 'NoneType'`
+= 截图为 None;两题在 mixb9b 和 273350 上也都是 0,**不值得复跑**)。可解/infeasible 划分按任务 JSON
+`evaluator.func == "infeasible"`(13 题),与 §5.36 的 12 差一题口径。
+
+**读法**:train_loss 更低(0.097 vs 0.151)、分数低 11pp——这是过拟合,不是欠训。掉分集中在 infeasible
+(8 → 2:模型更少喊 FAIL,7 vs 11)和 os/writer/gimp 这些"操作要准"的域,impress 反而 +3 是噪声量级。
+与 §5 早先 vl 系列 lr 1e-5 的 47–48%(RESULTS §5.1x 表)同一方向:**9B 在这类语料上 lr 3e-6 是对的,
+1e-5 关闭。** mixbtf 线到此两臂都评完:终止规范化 0 效应、lr 提升负效应。
+
+运维备注:WSL 侧观察器(`/tmp/watch_w20h.sh`)没写任何输出就死了,Mac 侧 9h 轮询到期才发现链早已收官;
+下次看守直接以结果目录里 result.txt 计数为准,别依赖中间文件。WSL→Klone 主连接 09-03 再次消失(第四次),
+Tillicum 主连接活着;经 Tillicum `klone.sock` 跳转可查 Klone 队列。
 
 ### 两条运维记录(同日)
 

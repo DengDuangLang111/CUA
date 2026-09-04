@@ -19,7 +19,7 @@
 > serve step 39306244.28(g3082:8047)与 r5m 的 39306243.0(g3085:8046)**都还挂着未撤**。此前:WSL 链
 > `chain_eval_btf.sh`(eval100 @ 10/1,对照 mixb9b 60.0)**已建但未起**:WSL 的 `klone-login` 主连接
 > 09-02 22:55 又没了(第二次),链取不到 API key,**等用户过 Duo 重建后由看守自动起**(`/tmp/launch_btf_when_master.sh`
-> 每分钟验 `-O check`,通过即 setsid 拉链)。lr1e-5 变体(273351)训练中。
+> 每分钟验 `-O check`,通过即 setsid 拉链)。lr1e-5 变体(273351)**训完并评完:49.0% / 均分 49.9,比 lr 3e-6 两臂 −11pp**(09-03 18:13,RESULTS §5.37);lr 1e-5 关闭。
 > Klone 主连接 `klone-login` 14:34 由用户过 Duo 重建,22:55 再次消失,**09-03 02:30 用户第三次重建**。
 > 此前:
 > **eval 链(2026-09-02 02:36 起)**:`chain_eval_w20g.sh`(PID 101578)单行 **mixb9bw20f1** = mixB-9b-e873 同权重、
