@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=eval4b-c2
+#SBATCH --job-name=eval4b-c2m
 #SBATCH --account=video
 #SBATCH --partition=gpu-h200
 #SBATCH --qos=normal
@@ -9,7 +9,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=400G
 #SBATCH --time=1-00:00:00
-#SBATCH --output=/gpfs/scrubbed/jy050706/sft/mixbtf_4bcap2_%j.out
+#SBATCH --output=/gpfs/scrubbed/jy050706/sft/mixbtf_4bcap2m65_%j.out
 # 臂 mixbtf —— mixB 的同一份 866 条轨迹,**只补终止规范化(terminalfix),其余不动**
 # 对照 mixb9b:同语料/同配方,唯一变量 = 末步从 88-100% 散文变成 100% 显式 terminate。
 # (原 mixB 头注释保留如下)
@@ -26,8 +26,8 @@
 # Resources/Priority 上不动。4x2 只要每节点 2 张空即可,秒上。
 #
 # 两臂的唯一变量是 v11 用哪一批 rollout;v16 那 554 条两臂共用。
-# 276042 首投 zero2_offload 在 rank6 OOM(cap x2 图 token 使单卡峰值 138.8/141 GiB,超~1 GiB)。
-# 改 zero3:参数+梯度切片分摊到 8 卡,省~14 GiB;实验变量(img10/cap x2/max_len 81920/lr/data)全不动。
+# max_length 65536(=原生 4B 基线值,对比更公平;峰值封 65536,cap x2 无 SP 稳装下)。
+# 三次 OOM 定案:zero3(all-gather 峰值更糟)/SP=2(关 logits_to_keep,10GiB logits)都帮倒忙;回 zero2_offload,靠 max_length 65536 封峰值。cap x2 下仅 157 条(0.85%)超 65536。
 umask 077
 set -x
 B=/gpfs/scrubbed/jy050706/sft
@@ -41,7 +41,7 @@ DS_V11NEWALL=$B/data/mixbtf-v11new-all
 DSLIST="$DS_V16MAIN $DS_V16PILOT $DS_V11NEW500 $DS_V11NEWALL"
 
 # ---- 防撞自检:同一 OUT 里不许混进别的语料训出的产物 -----------------------
-OUT=$B/out/mixbtf4b-cap2x
+OUT=$B/out/mixbtf4b-cap2x-ml65k
 for _a in "$OUT"/*/args.json; do
   [ -e "$_a" ] || continue
   grep -q "mixbtf-v11new-500" "$_a" || {
@@ -101,10 +101,10 @@ PY
 echo ">>> 样本 $SAMPLES | steps/epoch $STEPS_PER_EPOCH | save_steps $SAVE_STEPS | 总步 $TOTAL_STEPS"
 [ -n "$SAVE_STEPS" ] || { echo "FATAL: 步数算术失败"; exit 1; }
 
-REPORT=none; RUN_NAME=mixbtf4b-cap2x-${SLURM_JOB_ID}
+REPORT=none; RUN_NAME=mixbtf4b-cap2x-ml65k-${SLURM_JOB_ID}
 if [ -f "$B/wandb.env" ]; then set +x; source "$B/wandb.env"; set -x
   export WANDB_PROJECT="${WANDB_PROJECT:-cua-sft}"; REPORT=wandb; fi
-export WANDB_NOTES="mixbtf4b-cap2x: Qwen3.5-4B on mixbtf corpus (mixB 866 traj + terminalfix, 18560 samples), lr 3e-6 gb64 3ep. SINGLE VARIABLE vs native 4B = image resolution: IMAGE_MIN_TOKEN_NUM=4096 forces 1920x1088 upsample to ~4128 tok/img (cap x2, sqrt2 linear), img10 kept. cuDNN SDPA disabled from step0 (2x4). max_length 81920."
+export WANDB_NOTES="mixbtf4b-cap2x: Qwen3.5-4B on mixbtf corpus (mixB 866 traj + terminalfix, 18560 samples), lr 3e-6 gb64 3ep. SINGLE VARIABLE vs native 4B = image resolution: IMAGE_MIN_TOKEN_NUM=4096 forces 1920x1088 upsample to ~4128 tok/img (cap x2, sqrt2 linear), img10 kept. cuDNN SDPA disabled from step0 (2x4). max_length 65536 (= native 4B baseline; caps peak so cap x2 fits without SP/zero3). Only 157/18560 (0.85%) samples exceed 65536 at cap x2."
 export B DSLIST REPORT RUN_NAME OUT SAVE_STEPS PYTHONPATH
 export MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n1)
 export MASTER_PORT=$((20000 + SLURM_JOB_ID % 9000))   # 写死端口在共享节点必撞
@@ -120,15 +120,15 @@ srun --ntasks=2 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
     --enable_channel_loss true \
     --tuner_type full --loss_scale last_round --gradient_accumulation_steps 8 \
     --preserve_thinking true \
-    --attn_impl sdpa --deepspeed zero3 \
+    --attn_impl sdpa --deepspeed zero2_offload \
     --torch_dtype bfloat16 \
     --num_train_epochs 3 --per_device_train_batch_size 1 \
     --learning_rate 3e-6 --warmup_ratio 0.1 \
     --weight_decay 0.0 --adam_beta2 0.999 \
-    --max_length 81920 --gradient_checkpointing true \
+    --max_length 65536 --gradient_checkpointing true \
     --save_strategy steps --save_steps $SAVE_STEPS --save_total_limit 12 \
     --logging_steps 1 \
     --report_to $REPORT --run_name $RUN_NAME \
     --output_dir $OUT
 '
-echo "EXIT_mixbtf4bcap2x $?"
+echo "EXIT_mixbtf4bcap2xml65k $?"

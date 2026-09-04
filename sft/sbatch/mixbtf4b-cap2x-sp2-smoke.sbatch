@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=eval4b-c2
+#SBATCH --job-name=eval4b-c2sm
 #SBATCH --account=video
 #SBATCH --partition=gpu-h200
 #SBATCH --qos=normal
@@ -9,7 +9,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=400G
 #SBATCH --time=1-00:00:00
-#SBATCH --output=/gpfs/scrubbed/jy050706/sft/mixbtf_4bcap2_%j.out
+#SBATCH --output=/gpfs/scrubbed/jy050706/sft/mixbtf_4bcap2sm_%j.out
 # 臂 mixbtf —— mixB 的同一份 866 条轨迹,**只补终止规范化(terminalfix),其余不动**
 # 对照 mixb9b:同语料/同配方,唯一变量 = 末步从 88-100% 散文变成 100% 显式 terminate。
 # (原 mixB 头注释保留如下)
@@ -41,7 +41,7 @@ DS_V11NEWALL=$B/data/mixbtf-v11new-all
 DSLIST="$DS_V16MAIN $DS_V16PILOT $DS_V11NEW500 $DS_V11NEWALL"
 
 # ---- 防撞自检:同一 OUT 里不许混进别的语料训出的产物 -----------------------
-OUT=$B/out/mixbtf4b-cap2x
+OUT=$B/out/smoke-mixbtf4b-cap2x-sp2
 for _a in "$OUT"/*/args.json; do
   [ -e "$_a" ] || continue
   grep -q "mixbtf-v11new-500" "$_a" || {
@@ -86,7 +86,7 @@ import sys
 n = 0
 for ds in sys.argv[1:]:
     n += sum(1 for line in open(ds + "/train_swift_abs.jsonl", encoding="utf-8") if line.strip())
-GB = 64                      # 8 rank x accum 8 (2 节点 x 4 卡)
+GB = 64                      # 保持 gb64:8 卡 / SP=2 = 4 数据并行组 x accum 16(SP 切激活,不改梯度数学)
 spe = -(-n // GB)            # steps per epoch, 向上取整
 for d in (3, 2, 1):          # 尽量一个 epoch 存 3 次,退而求其次
     if spe % d == 0:
@@ -101,7 +101,7 @@ PY
 echo ">>> 样本 $SAMPLES | steps/epoch $STEPS_PER_EPOCH | save_steps $SAVE_STEPS | 总步 $TOTAL_STEPS"
 [ -n "$SAVE_STEPS" ] || { echo "FATAL: 步数算术失败"; exit 1; }
 
-REPORT=none; RUN_NAME=mixbtf4b-cap2x-${SLURM_JOB_ID}
+REPORT=none; RUN_NAME=mixbtf4b-cap2x-sp2-smoke-${SLURM_JOB_ID}
 if [ -f "$B/wandb.env" ]; then set +x; source "$B/wandb.env"; set -x
   export WANDB_PROJECT="${WANDB_PROJECT:-cua-sft}"; REPORT=wandb; fi
 export WANDB_NOTES="mixbtf4b-cap2x: Qwen3.5-4B on mixbtf corpus (mixB 866 traj + terminalfix, 18560 samples), lr 3e-6 gb64 3ep. SINGLE VARIABLE vs native 4B = image resolution: IMAGE_MIN_TOKEN_NUM=4096 forces 1920x1088 upsample to ~4128 tok/img (cap x2, sqrt2 linear), img10 kept. cuDNN SDPA disabled from step0 (2x4). max_length 81920."
@@ -118,11 +118,11 @@ srun --ntasks=2 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
     --model $B/models/Qwen3.5-4B \
     --dataset $DS_ARGS \
     --enable_channel_loss true \
-    --tuner_type full --loss_scale last_round --gradient_accumulation_steps 8 \
+    --tuner_type full --loss_scale last_round --gradient_accumulation_steps 16 \
     --preserve_thinking true \
-    --attn_impl sdpa --deepspeed zero3 \
+    --attn_impl sdpa --deepspeed zero2_offload --sequence_parallel_size 2 \
     --torch_dtype bfloat16 \
-    --num_train_epochs 3 --per_device_train_batch_size 1 \
+    --num_train_epochs 3 --per_device_train_batch_size 1 --max_steps 3 \
     --learning_rate 3e-6 --warmup_ratio 0.1 \
     --weight_decay 0.0 --adam_beta2 0.999 \
     --max_length 81920 --gradient_checkpointing true \
@@ -131,4 +131,4 @@ srun --ntasks=2 --ntasks-per-node=1 --kill-on-bad-exit=1 bash -c '
     --report_to $REPORT --run_name $RUN_NAME \
     --output_dir $OUT
 '
-echo "EXIT_mixbtf4bcap2x $?"
+echo "EXIT_mixbtf4bcap2xSMOKE $?"
