@@ -24,7 +24,7 @@
 > **mixbtf lr 阶梯齐**(同语料 WSL 10/1):1e-6=52.0 / **3e-6=60.0** / 1e-5=49.0,倒 U,3e-6 峰顶。
 > lr1e6 serve(39306243/g3085:8046)与 mixbtf9b serve(39306244/g3082:8047)step 仍挂未撤。此前:WSL 链
 > **taskw 收官(09-05 06:33,新机器 jy-eval-wsl 8VM 首评)=55.0% / 均分 55.9,multi_apps 11/24,低于 mixbtf9b 60.0**
-> (配对净 −5;RESULTS §5.38)。任务加权负向,同 histcomp。**cap1p5(4B,图 token ×1.5,已修分辨率)在 osworld-windows 3VM 跑**
+> (配对净 −5;RESULTS §5.38)。**taskw(重 loss)负向;但 histcomp(渐变历史分辨率)= 60.0/60.9 multi_apps 14/24 持平且省 55% token,正向(§5.39,我一度误记为 49.x 已更正)。** **cap1p5 收官 50.0/51.9 ≈ mixB-4b native → 图 token ×1.5 对 4B 无效(§5.39)**
 > (serve g3085:8046 cap1p5-stock,OSTG_MIN_PIXELS=3145728 已核),对 mixB-4b 读。新机器 8VM 通道打通(OPS 记)。
 > `chain_eval_btf.sh`(eval100 @ 10/1,对照 mixb9b 60.0)**已建但未起**:WSL 的 `klone-login` 主连接
 > 09-02 22:55 又没了(第二次),链取不到 API key,**等用户过 Duo 重建后由看守自动起**(`/tmp/launch_btf_when_master.sh`

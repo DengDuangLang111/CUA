@@ -2240,10 +2240,23 @@ lr 1e-5 臂 47–48% 同向。9B 在本语料族上 lr 3e-6 定案;mixbtf 线两
 | mixbtf9b(基线) | 60.0 | 61.9 | 53 | 7 | 12/24 | osworld-windows |
 | mixb9b | 60.0 | 61.7 | 52 | 8 | 9/24 | osworld-windows |
 | **mixbtf9b-taskw** | **55.0** | **55.9** | 50 | 5 | 11/24 | **jy-eval-wsl(新)** |
-| mixbtf9b-histcomp | 49.x | — | — | — | — | osworld-windows |
+| mixbtf9b-histcomp | **60.0** | 60.9 | 53 | 6 | **14/24** | osworld-windows |
 
 配对(100 题,两份都在 osworld-windows):taskw vs mixbtf9b = 9 胜 14 负,**净 −5.0pp**(翻转 23),压在噪声底 ±4.8 上沿,偏真。
 
-**结论:任务加权没帮上,反而 −5pp,与立项假设("长轨迹过权是问题")相反。** 逐域看伤在长任务 office:impress 6/15(vs 基线 12/15)、writer 2/7(vs 5/7)——给长轨迹降权削弱了正需要多步的任务。连同 histcomp(49.x),**mixbtf 的两个消融(重分辨率分配 / 重 loss 分配)都是负向**,mixbtf9b 60.0 原样仍是这条线最好的。
+**结论:任务加权没帮上,反而 −5pp,与立项假设("长轨迹过权是问题")相反。** 逐域看伤在长任务 office:impress 6/15(vs 基线 12/15)、writer 2/7(vs 5/7)——给长轨迹降权削弱了正需要多步的任务。**注意:histcomp(渐变历史分辨率)不是负向——实测 60.0/60.9、multi_apps 14/24,与 mixbtf9b 持平且 multi_apps 全场最好,还省 ~55% 视觉 token(§5.39)。** 所以 mixbtf 两个消融里只有 taskw(重 loss)负向;histcomp(重分辨率分配)持平且更省。
 
 **caveat**:新 host 首评,−5pp 虽超噪声底、大概率真,但严格说应在 osworld-windows 上复评一趟 taskw 才能剥离 host 因素;当前 WSL 3 VM 被 cap1p5 占着,待其收官后可补(若值得)。
+
+## 5.39 cap1p5(图 token ×1.5,4B)与 histcomp(渐变历史分辨率,9B)分辨率两臂(2026-09-05)
+
+两臂都动"每图/每帧视觉 token",方向相反:cap1p5 把当前帧上采样到 ×1.5,histcomp 把老帧降采样。
+
+| 臂 | 基座 | 分辨率处理 | 通过率 | 均分 | multi_apps | 对照 |
+|---|---|---|---|---|---|---|
+| **cap1p5** | 4B | 当前帧 ×1.5(2040→3108 tok,eval OSTG_MIN_PIXELS=3145728 对齐训练 IMAGE_MIN_TOKEN_NUM=3072) | **50.0** | 51.9 | — | mixB-4b native all-100 ≈ 50.9 → **无效果** |
+| **histcomp** | 9B | 最新2帧满(2040)/age2-4 半(1020)/age5-7 ¼(510)/age8+ ⅛(255) | **60.0** | 60.9 | **14/24** | mixbtf9b 60.0/12 → 持平,multi_apps 更好,省 token |
+
+**cap1p5:图 token ×1.5 对 4B 没换来提升**(50.0 ≈ native 50.9)。源是 1080p 插值上采样,信息没真变多,只是编码更细——和 §5.29 教师侧"480 有毒、但更高分辨率没有对称收益"一致(OSWorld VM 硬锁 1080p,上采样是插值不是新像素)。
+
+**histcomp:老帧降采样零损失(60.0=60.0),multi_apps 反而最好(14/24),视觉 token 省 ~55%**。稳态 10 帧:2×2040+3×1020+3×510+2×255 = **9,180 视觉 tok/prompt**,vs 基线 10×2040 = **20,400**(−55.0%)。含义:历史帧只是上下文、动作发生在当前帧,老帧压狠不伤分——**这是这批消融里唯一正向的方向(省显存/token 且不掉分,multi_apps 还略好)**,值得推广到默认 eval/训练配置。
