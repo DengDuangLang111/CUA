@@ -1063,3 +1063,30 @@ uv run python scripts/python/run_multienv_claude.py \
 6. **报分数四件套**:代码 tag v2026.06.24 / 任务 0808 / 网站 tag / 镜像 id,必须一起报。
 
 (执行中,实际命令/路径/校验随做随补。)
+
+### 0.6.1 实际搭建记录(2026-09-05 完成,可复现)
+
+**关键发现:整仓 tar 过去时 `.venv` / 108 任务 / 素材 cache / test_v2.json / .env 全都在里面**——所以
+**不需要 uv、不需要 HF 登录/token、不需要重新下任务**。jy-eval-wsl 只是没装 uv,但传过来的 `.venv`
+(python 3.12.3)直接可用(`requests/openai/anthropic` 都在)。用 `.venv/bin/python` 跑,别碰 uv。
+
+实际步骤(源都在 osworld-windows,经 Mac 中转 `ssh osworld … | tailscale ssh yanji@jy-eval-wsl …`):
+1. `mkdir` 目标目录;`tar czf - --exclude=.git .`(repo+cache,6.3G)→ 解到 `/home/yanji/research/OSWorld-V2-0808`。
+2. qcow2(26G,`cat | gzip -1` 管道)→ `/home/yanji/research/OSWorld-V2/docker_vm_data/releases/v2026.06.24/`;两端字节数核对一致(27471970304)。
+3. `.env` 改两个路径:`OSWORLD_FILE_BASE_URL` / `OSWORLD_DOCKER_UBUNTU_VM_PATH` 从 `/mnt/d/...` → `/home/yanji/...`。
+4. 教师 serve:Klone g3082 A100 起 **Qwen3.8-27B BF16**(`served-model-name qwen38-27b`,port 8047)——**A100 sm_80 不支持 FP8,只能 BF16**(Tillicum 教师是 H200/FP8,精度不同,报分数标注)。
+5. jy-eval-wsl 用自己的 `~/.ssh/cm/klone-login`(48h Duo)`-O forward -L 8100:g3082:8047`;runner `--base_url http://127.0.0.1:8100/v1 --api_key_env OPENAI_API_KEY`(key = Klone `.vllm_api_key`,64 位)。
+6. 自检全绿:qcow2/素材存在、ANTHROPIC key、docker OK、`https://insurance-claim.site.hku.icu` 200。
+
+**运行命令**(`run_v2_teacher.sh`,internal runner 参数以 `--help` 为准):
+```
+.venv/bin/python scripts/python/run_multienv_qwen_internal_agent.py \
+  --eval_version v2 --provider_name docker --observation_type screenshot \
+  --model qwen38-27b --base_url http://127.0.0.1:8100/v1 --api_key_env OPENAI_API_KEY \
+  --temperature 1.0 --top_p 0.95 --max_tokens 81920 \
+  --max_steps 100 --num_envs 6 --image_max 10 --fold_size 1 \
+  --test_config_base_dir evaluation_examples --test_all_meta_path evaluation_examples/test_v2.json \
+  --result_dir results_v2/qwen38-27b-v2-20260905
+```
+注:internal runner 用 `--api_key_env <变量名>`(不是 `--api_key`);无 `--action_space`/`--sleep_after_execution`/`--headless` 等 flag。
+**启动坑**:`cat > f && … & setsid …` 合并一条会让 `&` 把 cat 也后台化抢 stdin,进程起不来;**分三步**(单独 cat 写脚本 / 单独 `setsid bash f </dev/null >/dev/null 2>&1 &` 启动 / 再验证)。08-05 14:16 起,6 VM。
