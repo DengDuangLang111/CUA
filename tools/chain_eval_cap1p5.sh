@@ -43,7 +43,7 @@ echo "=========== [$(date '+%F %T')] eval 链启动 ==========="
 #                a2 的 20/10。结果目录 eval50-mixb9bw20-*,与 eval50-mixb9b-* 并列。
 #   3 mixc9b / 4 mixa4b  原链的剩余两臂,不变。
 ARMS="
-cap1p5|8046|18046|g3085|qwen35-4b-sft|verified_eval100_nonproxy.json|-|mixbtf-{v16-main,v16-pilot,v11new-500,v11new-all} (terminalfix corpus)|Qwen3.5-4B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1, think-cap 1.5k, checkpoint-870 -- 4B mixbtf; READ vs mixB-4b|--image_max 10 --fold_size 1
+cap1p5|8046|18046|g3085|qwen35-4b-sft|verified_eval100_nonproxy.json|-|mixbtf-{v16-main,v16-pilot,v11new-500,v11new-all} (terminalfix corpus)|Qwen3.5-4B full FT, lr 3e-6, gb 64, 3 ep, img10/fold1, checkpoint-870 -- 4B mixbtf, IMAGE token x1.5 (IMAGE_MIN_TOKEN_NUM=3072 train; eval OSTG_MIN_PIXELS=3145728 -> ~3108 tok/img); READ vs mixB-4b (native ~2040 tok)|--image_max 10 --fold_size 1
 "
 
 # 必须按**行**读。`for row in $ARMS` 是按任意空白分词的,而表格里的语料说明
@@ -143,7 +143,7 @@ PY
             for i in $(seq 1 120); do up && break; sleep 20; done; }
     up || { echo "[$(date '+%F %T')] $ARM FATAL: 端点没了"; break; }
     echo "[$(date '+%F %T')] $ARM pass $TRY at $N/$T"
-    OSWORLD_OPENAI_TIMEOUT=1800 OSTG_NO_RECORD=1 OSTG_TYPE_NO_SPLIT=1 OPENAI_API_KEY="$KEY" \
+    OSWORLD_OPENAI_TIMEOUT=1800 OSTG_NO_RECORD=1 OSTG_TYPE_NO_SPLIT=1 OSTG_MIN_PIXELS=3145728 OPENAI_API_KEY="$KEY" \
     .venv/bin/python scripts/python/run_multienv_qwen.py \
       --provider_name docker --path_to_vm /mnt/d/research/OSWorld/docker_vm_data/Ubuntu.qcow2 \
       --headless --observation_type screenshot --action_space pyautogui \
