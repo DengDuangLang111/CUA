@@ -23,6 +23,9 @@
 > eval100 @ 10/1 **02:24 收官:52.0% / 均分 54.8**(欠拟合;配对对 3e-6 净 −8.0pp,RESULTS §5.37)。
 > **mixbtf lr 阶梯齐**(同语料 WSL 10/1):1e-6=52.0 / **3e-6=60.0** / 1e-5=49.0,倒 U,3e-6 峰顶。
 > lr1e6 serve(39306243/g3085:8046)与 mixbtf9b serve(39306244/g3082:8047)step 仍挂未撤。此前:WSL 链
+> **taskw 收官(09-05 06:33,新机器 jy-eval-wsl 8VM 首评)=55.0% / 均分 55.9,multi_apps 11/24,低于 mixbtf9b 60.0**
+> (配对净 −5;RESULTS §5.38)。任务加权负向,同 histcomp。**cap1p5(4B,图 token ×1.5,已修分辨率)在 osworld-windows 3VM 跑**
+> (serve g3085:8046 cap1p5-stock,OSTG_MIN_PIXELS=3145728 已核),对 mixB-4b 读。新机器 8VM 通道打通(OPS 记)。
 > `chain_eval_btf.sh`(eval100 @ 10/1,对照 mixb9b 60.0)**已建但未起**:WSL 的 `klone-login` 主连接
 > 09-02 22:55 又没了(第二次),链取不到 API key,**等用户过 Duo 重建后由看守自动起**(`/tmp/launch_btf_when_master.sh`
 > 每分钟验 `-O check`,通过即 setsid 拉链)。lr1e-5 变体(273351)**训完并评完:49.0% / 均分 49.9,比 lr 3e-6 两臂 −11pp**(09-03 18:13,RESULTS §5.37);lr 1e-5 关闭。

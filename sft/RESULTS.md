@@ -2228,3 +2228,22 @@ lr 1e-5 臂 47–48% 同向。9B 在本语料族上 lr 3e-6 定案;mixbtf 线两
 1. **倒 U,峰在 3e-6**:1e-6(52)欠拟合、1e-5(49)过拟合,两头都比 3e-6(60)低约 8–11pp。
 2. **train loss 低 ≠ eval 好**:1e-5 的 train loss 最低(0.15,还在塌)但 eval 最差(49);1e-6 loss 最高(0.40)eval 反而略好过 1e-5。健康形态是 3e-6 那条平滑收敛、不塌台阶的中间曲线,不是最低的那条。
 3. **与 09-02 的 ∑lr 饱和结论一致**:3e-6 下约 2 epoch 饱和;1e-6 步长太小 3 epoch 没走到,1e-5 步长太大提前记忆。这条 lr 阶梯是那个结论在同语料上的正面确认(此前 lr 阶梯是 mixB-9b 1-epoch AWS 侧,口径不同)。
+
+## 5.38 mixbtf9b-taskw(任务加权)eval100 @ 10/1:55.0% / 均分 55.9,低于 mixbtf9b 60.0(2026-09-05,新机器 jy-eval-wsl 8VM 首评)
+
+任务加权 = mixbtf 语料(mixB 866 轨迹 + terminalfix),每条 assistant 消息带 `loss_scale=c/N`(c=22.68,N=轨迹步数,令 token 加权均值=1),给长轨迹降权。诊断动机:长轨迹过权(最长 20% 任务占 39% loss,Gini 0.32)。9B,lr3e-6/gb64/3ep/img10-fold1,ckpt-870。
+
+**评测环境**:第二台 eval 机 `jy-eval-wsl`(新 Windows WSL,8 env,docker,Ubuntu.qcow2),serve Klone g3082:8047(隧道 18047),10/1,verified_eval100_nonproxy。**这是该 host 首评**;同为 WSL docker / 10-1 / 同面板,但换了机器,列 caveat。
+
+| 臂(9B,10/1) | 通过率 | 均分 | 可解 88 | infeasible 12 | multi_apps | host |
+|---|---|---|---|---|---|---|
+| mixbtf9b(基线) | 60.0 | 61.9 | 53 | 7 | 12/24 | osworld-windows |
+| mixb9b | 60.0 | 61.7 | 52 | 8 | 9/24 | osworld-windows |
+| **mixbtf9b-taskw** | **55.0** | **55.9** | 50 | 5 | 11/24 | **jy-eval-wsl(新)** |
+| mixbtf9b-histcomp | 49.x | — | — | — | — | osworld-windows |
+
+配对(100 题,两份都在 osworld-windows):taskw vs mixbtf9b = 9 胜 14 负,**净 −5.0pp**(翻转 23),压在噪声底 ±4.8 上沿,偏真。
+
+**结论:任务加权没帮上,反而 −5pp,与立项假设("长轨迹过权是问题")相反。** 逐域看伤在长任务 office:impress 6/15(vs 基线 12/15)、writer 2/7(vs 5/7)——给长轨迹降权削弱了正需要多步的任务。连同 histcomp(49.x),**mixbtf 的两个消融(重分辨率分配 / 重 loss 分配)都是负向**,mixbtf9b 60.0 原样仍是这条线最好的。
+
+**caveat**:新 host 首评,−5pp 虽超噪声底、大概率真,但严格说应在 osworld-windows 上复评一趟 taskw 才能剥离 host 因素;当前 WSL 3 VM 被 cap1p5 占着,待其收官后可补(若值得)。
