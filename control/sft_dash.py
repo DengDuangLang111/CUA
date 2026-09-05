@@ -52,6 +52,10 @@ PY = "/mnt/d/research/OSWorld/.venv/bin/python"
 EVAL50_META = "/mnt/d/research/OSWorld/evaluation_examples/verified_eval50_nonproxy.json"
 EVAL50_EXAMPLES = "/mnt/d/research/OSWorld/evaluation_examples/examples"
 EVAL50_ARMS = {
+    "taskw": ("mixBtf-taskw 9B \u00b7 task-weighted \u00b7 stock (no-split)", "sft",
+              "mixbtf corpus + per-trajectory 1/N loss weighting (long-traj de-weight). 9B, lr3e-6 gb64 3ep img10/fold1 ckpt-870. Eval on jy-eval-wsl 8 env, synced. READ vs mixbtf9b 60.0."),
+    "cap1p5": ("mixBtf-cap1.5 4B \u00b7 image token x1.5 \u00b7 stock (no-split)", "sft",
+              "mixbtf corpus 4B, IMAGE_MIN_TOKEN_NUM=3072 (image tokens x1.5, upsampled from ~2040); eval OSTG_MIN_PIXELS=3145728 -> ~3108 tok/img. READ vs mixB-4b (native ~2040 tok)."),
     "t38i20med": ("teacher 27B \u00b7 i20 slide \u00b7 effort medium", "teacher window pilot",
                  "I-cell: completes the effort x window 2x3 grid."),
     "t38i10med": ("teacher 27B \u00b7 i10 \u00b7 effort medium", "teacher window pilot",
