@@ -735,6 +735,16 @@ WSL `[Errno 12] Cannot allocate memory` → 15:20:22 Windows 系统日志 `Tcpip
    核 `srv_<arm>_inner.log` 出现 "Application startup complete" 后手写 `READY_<arm>`(内容 = 权重绝对路径)
    并杀掉 prep 进程即可。(b)杀它别用 `pgrep -f prep_r5m.sh`:会匹配到自己这条 ssh 的 bash -c,先把自己杀了
    (同 memory 的 pkill -f 自杀);用 `ps -eo pid,args | grep "^ *[0-9]* bash /path/prep_r5m.sh$"` 精确到进程参数。
+   (c)**推文件到 login02/klone 时,内层 `ssh -n … "cat > 远端" < 本地文件` 会写出空文件**——`-n`
+   把 stdin 重定向到 /dev/null,覆盖了 `< 文件`(远端 md5 = `d41d8cd9…` 空文件哈希即中招)。
+   heredoc 里内层 ssh 又必须带 `-n`(否则吞后续脚本行),两条冲突。解:**base64 传**——
+   `B64=$(base64 -w0 本地)`,内层 `ssh -n … "echo $B64 | base64 -d > 远端 && md5sum 远端"`,base64 是
+   单串无引号无特殊字符,-n 也不碍事。(d)**三层引号(`$T "$K '…'"`)必崩**(GBK 乱码"找不到路径"):
+   要在 klone 侧跑逻辑就先 base64 传一个助手脚本到 login02/klone,WSL 只做一层 `$T 'bash 助手.sh'`。
+   (e)**起 serve 前先清节点 /tmp**:serve_inner 每次把 sif(~5GB)和 torch autotune 缓存写 `/tmp/vllm-*`,
+   历次 serve 残留会把节点 /tmp 塞满 → vLLM engine core 初始化崩 `[Errno 28] No space left`(09-04 lr1e6 实测)。
+   崩了看 `srv_<arm>_inner.log` 找 `Errno 28`;修:`srun --overlap --jobid=<占位> bash -lc 'rm -rf /tmp/vllm-* /tmp/jitcache-*'`
+   再重起 serve_inner。占位复用别的臂前尤其要清。
 
 4. **"日志几分钟没动"不等于卡死**:恢复后 3 个 env 在 16:33:59 拿到首帧截图后静默
    两分多钟,是第一步的长 think 在算(9B 在 A100 上约 35 token/s)。判卡死的唯一硬证据是
