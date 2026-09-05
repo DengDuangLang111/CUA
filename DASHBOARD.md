@@ -395,6 +395,15 @@ bhqskeep/lorakeep**(后三个 2026-08-17 加)。
 缺题的臂**:gb64keep 在 47 题上读作 44.5%,面板分实为 41.8%。生成器同时
 输出 `mean_scored`(÷已跑,备查)与 `missing`(缺题数)。
 
+## 跨机器 eval:别的 host 的结果守护进程看不见(2026-09-05)
+
+守护进程跑在 osworld-windows,只扫**它本地** `results_generated/`。第二台 eval 机
+(jy-eval-wsl)上跑的臂(如 taskw 8VM)结果在那台磁盘上,dashboard 看不到,要先同步
+过来(OPS「第二台 eval 机」节的 Mac 中转 tar 管道)。同步后还要:①`sft_dash.py`
+`EVAL50_ARMS` 注册标签(不注册也显示,只是标签丑);②**`ARM_PANEL` 标 `all100`**——
+跑整 100 的臂不配这条,只显示前 50(seen-50 面板过滤,后 50 静默丢),taskw/cap1p5
+就中过。两处都改完再同步 CTL。
+
 ## daemon 的启动与存活(2026-08-28 补,一次 4 天无人察觉的停更换来的)
 
 **上面那张表只写了 daemon 干什么,从没写怎么把它们启动起来,也没有任何存活
