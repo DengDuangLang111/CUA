@@ -582,6 +582,8 @@ ARM_PANEL = {"nocap50b": "heldout", "base50b": "heldout", "t3850b": "heldout",
              "mixc9b": "all100", "mixb9b": "all100",
              "mixa9b": "all100", "mixa4b": "all100", "mixr5m9b": "all100",
              "mixbtf9b": "all100",
+             "taskw": "all100", "cap1p5": "all100",
+             "mixbtflr1e6": "all100", "mixbtf9blr1e5": "all100",
              # 四个学习率变体,同样跑整 100
              "lr2e5": "all100", "lr2e5gb128": "all100",
              "lr1e5": "all100", "lr1e5b999": "all100",
