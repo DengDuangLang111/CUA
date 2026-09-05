@@ -1036,3 +1036,30 @@ uv run python scripts/python/run_multienv_claude.py \
 | 091 | (默认) | 60 GB | wps+chrome |
 | 107 | t3.xlarge | 80 GB | - |
 | 108 | t3.xlarge | 80 GB | - |
+
+## 0.6 第二台机 jy-eval-wsl 上跑 V2 教师(2026-09-05,用户令,进行中)
+
+**目标**:Qwen3.8-27B teacher 跑 V2 全 108 题,在新 Windows 的 WSL 节点 `jy-eval-wsl`(独立 Tailscale 节点,54GB/20核,Docker + v1 harness 现成)。
+
+**商定的运行配置**(用户 2026-09-05):
+
+| 项 | 值 |
+|---|---|
+| 任务集 | 全 108 题(`test_v2.json`),`--eval_version v2` |
+| **max_steps** | **100** |
+| **num_envs** | **6**(V2 镜像大,收保守;54GB RAM) |
+| **图窗** | **10/1**(`--image_max 10 --fold_size 1`) |
+| 采样 | 教师 general profile:temp 1.0 / top_p 0.95 / top_k 20 |
+| runner | **`scripts/python/run_multienv_qwen_internal_agent.py`**(我们的 809 行 internal runner) |
+| 模型 | Qwen3.8-27B,serve 起在 **Klone**(FP8),隧道到 jy-eval-wsl |
+| 判官/用户模拟 | 19 题 judge + 7 题 user-sim = `claude-sonnet-4-6`,要 `ANTHROPIC_API_KEY` |
+
+**jy-eval-wsl 环境搭建步骤**(源都在 osworld-windows `/mnt/d/research/`):
+1. **repo**:tar `OSWorld-V2-0808`(分支 v2-0808-qwen,不含 qcow2)→ jy-eval-wsl。
+2. **qcow2**:拷 `OSWorld-V2/docker_vm_data/releases/v2026.06.24/osworld-v2-ubuntu-x86-v2026.06.24-official-fonts.qcow2`(**26GB**)→ jy-eval-wsl;`OSWORLD_DOCKER_UBUNTU_VM_PATH` 指向新路径。
+3. **.env**:拷 `OSWorld-V2-0808/.env`(含 `WEBSITE_HOST_SUFFIX`、`OSWORLD_FILE_BASE_URL`、`ANTHROPIC_API_KEY`),路径改成 jy-eval-wsl 的。
+4. **HF 任务**:用户 HF 登录后 `download_osworld_v2_tasks.py --benchmark-release osworld-v2-2026.08.08` + 素材 `cache/osworld_v2_assets`。
+5. **teacher serve**:Klone 起 Qwen3.8-27B FP8 serve,jy-eval-wsl 经自己的 klone.sock 隧道(48h Duo 已建)转发到本地端口,runner `--base_url http://127.0.0.1:<port>/v1`。
+6. **报分数四件套**:代码 tag v2026.06.24 / 任务 0808 / 网站 tag / 镜像 id,必须一起报。
+
+(执行中,实际命令/路径/校验随做随补。)
