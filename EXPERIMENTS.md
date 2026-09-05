@@ -16,7 +16,11 @@
 > `mixbtf9b-2x4-e870`(18.8 GB,md5 b036c2d8 两端一致,14 文件),serve 占位 39306244 g3082:8047 `mixbtf9b-stock`
 > 02:24 就绪,READY 已写;eval 链 02:31 起,**07:21 收官:60.0% / 均分 61.9 = mixb9b(配对 11:11),
 > 显式终止 3% → 84%、回退 80 → 0,分数不动**(RESULTS §5.36,FA §11.6:终止规范化这条线关闭)。
-> serve step 39306244.28(g3082:8047)与 r5m 的 39306243.0(g3085:8046)**都还挂着未撤**。此前:WSL 链
+> **mixbtf9b-2x4-lr1e6(276014,lr 阶梯下界)eval 排上(2026-09-04 21:05,用户令"eval上这个")**:训完 EXIT 0,
+> ckpt-870,train loss 只到 0.40(欠拟合,曲线平缓无台阶)。**撤掉已评完的 mixr5m9b serve(39306243/g3085:8046,
+> 复用其占位)**→ 推 `mixbtf9b-2x4-lr1e6-e870`(md5 d0a156ab)→ serve 首次崩于 g3085 **/tmp 满**
+> (`Errno 28`,历次 serve 的 sif/autotune 残留),清 /tmp 后 21:16 重起成功 → WSL 链 `chain_eval_lr1e6.sh`
+> eval100 @ 10/1,对 mixbtf9b 60.0 / bc 的 lr1e5 读。mixbtf9b 的 serve step 39306244.28(g3082:8047)仍挂未撤。此前:WSL 链
 > `chain_eval_btf.sh`(eval100 @ 10/1,对照 mixb9b 60.0)**已建但未起**:WSL 的 `klone-login` 主连接
 > 09-02 22:55 又没了(第二次),链取不到 API key,**等用户过 Duo 重建后由看守自动起**(`/tmp/launch_btf_when_master.sh`
 > 每分钟验 `-O check`,通过即 setsid 拉链)。lr1e-5 变体(273351)**训完并评完:49.0% / 均分 49.9,比 lr 3e-6 两臂 −11pp**(09-03 18:13,RESULTS §5.37);lr 1e-5 关闭。
