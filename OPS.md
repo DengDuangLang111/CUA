@@ -1359,3 +1359,19 @@ sysctl net.inet.ip.portrange.first net.inet.tcp.msl   # 应为 16384 / 5000
 理论风险是旧连接的重复报文被投递给复用同一四元组的新连接,现代 TCP 有
 timestamps/PAWS 兜底,实践中 10 秒 TIME_WAIT 是常见调优。**如果这台机器
 将来要跑对乱序极敏感的长连接,把这一条去掉只留 portrange。**
+
+## 第二台 eval 机(jy-eval-wsl)8VM 通道 + cap1p5 分辨率对齐(2026-09-05)
+
+**新增 eval host**:新 Windows 的 WSL 作为独立 Tailscale 节点 `jy-eval-wsl`(linux,100.72.191.125),54GB/20 核,自带 Docker + OSWorld 仓库(`/home/yanji/research/OSWorld`,原生 ext4,含 Ubuntu.qcow2)+ venv。跑 8 VM eval100 没问题,harness 全现成、不用拷镜像。接入四步:
+1. **Tailscale SSH ACL**:Windows 主机不支持 Tailscale SSH 服务端(只 Linux),要连的是 WSL 节点 `jy-eval-wsl`。ACL 默认 `"action":"check"`(要浏览器交互),无人值守过不了 → 用户改成 `"accept"`,允许用户 `yanji`。之后 `tailscale ssh yanji@jy-eval-wsl` 直接进。
+2. **到 Klone 的隧道**:Klone 强制 Duo(sshd 只给 gssapi/keyboard-interactive,**不收 publickey**,加 authorized_keys 无用),所以 jy-eval-wsl 必须自己过一次 Duo 建 ControlMaster:`ssh -fN -M -S ~/.ssh/cm/klone-login -o ControlPersist=48h jy050706@klone.hyak.uw.edu`。之后 `ssh -S 该sock -O forward -L 18047:<node>:<port> klone` 加转发,runner base_url 指 `http://127.0.0.1:18047/v1`,key 从 `ssh -n -S sock klone "cat .vllm_api_key"` 取。(A 方案"经 osworld-windows 转发"因 WSL NAT 模式外部到不了它端口、要 Windows portproxy 且 WSL IP 会变而放弃。)
+3. **结果要同步回 osworld-windows**:dashboard 守护进程只扫 osworld-windows 本地 `results_generated/`,新机器的结果它看不见。Mac 中转同步:`tailscale ssh yanji@jy-eval-wsl 'cd .../qwen35-9b-sft && tar czf - eval50-<arm>-*' | ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/.../qwen35-9b-sft && tar xzf -"'`(单个 ≥900s 循环,别高频)。长期自动同步需在机器上常驻推送器 + 跨机凭证,未搭。
+
+**cap1p5 = 图 token ×1.5,不是 think-cap**(我一开始记错,已纠正)。训练 `IMAGE_MIN_TOKEN_NUM=3072`(把 1080p 从 ~2040 tok 上采样到 3072)。**eval 必须对齐**,否则错配(同 §5.29 "480 有毒"反向):
+- 代码:`mm_agents/qwen/images.py` 的 `process_image()` 原来只传 max_pixels(只能缩),加 `min_pixels=int(os.environ.get("OSTG_MIN_PIXELS", 56*56))` 才能上采样(env 门控,默认不变、不影响别的臂)。
+- eval env:`OSTG_MIN_PIXELS=3145728`(=3072 tok × 1024 px/tok,32²=1024,与 tok480 的 `OSTG_MAX_PIXELS=491520=480×1024` 同口径)。实测把 1080p 上采样到 2368×1344≈3108 tok,对齐训练。
+
+**三条通用教训**:
+1. **查臂的真实配置只认训练日志 set -x 打出的 export**——wandb Notes 和 sbatch 行内注释都可能是从别的臂复制来的陈旧字符串(cap1p5 的 Notes 写 4096/cap×2,全错,真值 export=3072)。
+2. **挪走无效结果目录,新名字不能仍匹配链的 glob `eval50-<arm>-*`**——否则链 `ls -dt eval50-<arm>-*` 会把它当结果目录重新捡回、跳过已评题、把新旧混在一起(cap1p5 改名成 `...invalid-lowres-0405` 仍匹配,续用了 15 条低分辨率结果)。要么删,要么改成 `INVALID-...` 这类不带 `eval50-<arm>` 前缀的名。
+3. **换分辨率/token 的臂,eval 前先确认 runner env 真带上了对应旋钮**:`tr '\0' '\n' < /proc/<runner-pid>/environ | grep OSTG_`。
