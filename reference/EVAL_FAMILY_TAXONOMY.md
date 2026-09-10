@@ -34,7 +34,7 @@
 | media_state | VLC 配置/播放态/音视频比对 | 16 | 4.3% |
 | pdf_property | PDF 比对 | 9 | 2.4% |
 
-(361 跑测面板上的对应计数见 PLAN-20260828-v14g-gold §0。)
+(361 跑测面板上的对应计数见 `outdated/plans/PLAN-20260828-v14g-gold.md` §0。)
 
 ## 族 → 生成机制的映射(ostg v14g)
 
