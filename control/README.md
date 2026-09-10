@@ -26,9 +26,11 @@ EOF
 | `v11_500_fp8.sh` | switches the teacher serve BF16 → FP8 and supervises the v11-500 rollout across the serve's 12 h wall and node changes |
 | `final_evals.sh` | tier-3 for the **final** checkpoint of each training arm. Waits for every `sft-*` job to leave the queue |
 | `eval_more3_pair.sh` | the scoped version: pause v11-500 → evaluate two finished arms → resume. Written because `final_evals.sh` would have blocked ~10 h on unrelated jobs still running |
+| `dash_status_daemon.sh` | the status/traj publisher loop (commits `dashboard/status.json` and eval50 traj viewers). Holds only the **path** of the deploy key (`~/.ssh/id_ed25519_cua`) — no secret material, so it is safe to version (corrected 2026-09-09; the old 'holds credentials' note below was over-cautious) |
+| `dash_watchdog.sh` | supervisor for the two daemons (merged in from `control/` 2026-09-09; see its own header for behaviour) |
 
 **Not copied here** (they hold or reach credentials, or are pure scratch):
-`tunnel_qwen36_auto.sh`, `dash_status_daemon.sh`, the `faststat.sh` / `evalstat.sh`
+`tunnel_qwen36_auto.sh`, the `faststat.sh` / `evalstat.sh`
 monitor probes, and anything under `logs/`.
 
 ## Two rules these scripts encode, learned the expensive way
@@ -49,3 +51,12 @@ monitor probes, and anything under `logs/`.
 - **A bare `pkill` leaks the containers.** Always follow with
   `docker rm -f $(docker ps -aq)` — skipping it once starved the box to 4 GB
   free and made every new VM fail to boot.
+
+## 2026-09-09 整编:`control/` 并入本目录
+
+`control/`(08-17 提交)是同一批脚本的**第二份镜像**。两份的 `sft_dash.py` 逐字节相同;
+两个 daemon 却已分叉 —— `control/` 那份更新:`sft_dash_daemon.sh` 带 08-16 的
+"data-first push"(本仓库历史里的自动提交 `sft: refresh (data-first)` 正是它写的,证明它才是
+WSL 上在跑的版本),`dash_status_daemon.sh` 带 08-15 用户决定(`eval50-*` 从第 1 题起发布)。
+整编取新版并入本目录,删除 `control/`;`dash_watchdog.sh` 只有那边有,一并并入。
+**待办**:WSL 09-09 不可达,尚未与 `$CTL` 正本做 md5 复核;可达后按上面的编辑规则重拉一次。

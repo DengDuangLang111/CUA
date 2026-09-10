@@ -142,7 +142,7 @@ sft.json 的 eval50.arms[].facets           ← 页面消费
 ```
 /mnt/d/research/osworld-verified-control/sft_dash.py    ← daemon 实际执行(CTL)
 /home/daniel_yan/cua-dash-sft/control/sft_dash.py       ← git 存档镜像
-/home/daniel_yan/cua-dash-sft/tools/control/sft_dash.py ← git 存档镜像
+/home/daniel_yan/cua-dash-sft/control/sft_dash.py ← git 存档镜像
 ```
 
 **规矩:只改 CTL 那份;镜像永远单向从它同步(改完 `cat` 回仓库并提交),
@@ -366,7 +366,7 @@ with `--ignore-existing`, and only the small mutable files (`traj.jsonl`,
 ## 生成器与版本管理(2026-08-17 补)
 
 站点由 WSL 上 `/mnt/d/research/osworld-verified-control/` 的三个脚本驱动,
-**该目录不在任何 git 里**——镜像已收进 `CUA/tools/control/`(md5 核对):
+**该目录不在任何 git 里**——镜像已收进 `CUA/control/`(md5 核对):
 
 | 文件 | 作用 |
 |---|---|
@@ -379,7 +379,7 @@ with `--ignore-existing`, and only the small mutable files (`traj.jsonl`,
 丢掉的行才是隐形的"。已注册:base/basekeep/rich150/richrich/leankeep/
 b1epkeep/gb128ep2keep/gb64keep/gb128keep/richstock/leanstock/**bskeep/
 bhqskeep/lorakeep**(后三个 2026-08-17 加)。
-改完这个文件后要把 WSL 侧和 `tools/control/` 两边同步,md5 对齐。
+改完这个文件后要把 WSL 侧和 `control/` 两边同步,md5 对齐。
 
 ## 为什么网站数字比 git 里的旧(2026-08-17 澄清)
 
@@ -467,7 +467,7 @@ traj 发布节拍(那才是限制 Vercel 部署配额的东西,见 §3.5)。
 ### watchdog(2026-08-28 已装)
 
 `dash_watchdog.sh` + cron 每 5 分钟一次:两个 daemon 谁不在就拉起谁。
-真源在 CTL,git 镜像在 `CUA/tools/control/dash_watchdog.sh`。
+真源在 CTL,git 镜像在 `CUA/control/dash_watchdog.sh`。
 
 ```bash
 # 已安装的 crontab 行(WSL 的 cron 由 systemd 拉起,随 WSL 启动)

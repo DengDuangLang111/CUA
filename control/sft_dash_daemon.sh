@@ -9,7 +9,7 @@
 #   sft.json          every cycle if it changed (cheap: reads result.txt + traj.jsonl)
 #   traj/sft/<arm>/   once per arm -- a tier-3 arm is frozen the moment its 9th
 #                     result lands, unlike the live rollout, so there is no churn
-REPO=/mnt/d/research/cua-dash-sft
+REPO=$HOME/cua-dash-sft
 CTL=/mnt/d/research/osworld-verified-control
 P=/mnt/d/research/OSWorld/.venv/bin/python
 BRANCH=main   # Vercel production branch; any other branch only makes Previews
@@ -29,6 +29,20 @@ while true; do
   # publish BEFORE status: sft.json records the per-arm traj link by testing for
   # the published index.html, so doing it the other way round would leave a new
   # arm's matrix cells unclickable for a whole cycle.
+  # status FIRST (cheap, seconds): matrix freshness must never wait on viewer
+  # rendering. publish next; then status AGAIN so a newly published arm's
+  # traj links land the same cycle (the original publish-before-status
+  # rationale, preserved at the cost of one extra cheap pass).
+  $P $CTL/sft_dash.py status
+  # PUSH THE DATA NOW (2026-08-16): computing status early is worthless if the
+  # commit still waits behind publish -- a slow viewer-render cycle was still
+  # holding sft.json hostage for 10+ minutes. Data ships the moment it exists;
+  # publish and the link-fixup pass ship at cycle end as before.
+  git add dashboard/sft.json
+  if git commit -q -m "sft: refresh (data-first)"; then
+    git pull --rebase -q origin $BRANCH >/dev/null 2>&1 || git rebase --abort >/dev/null 2>&1
+    git push -q origin HEAD:$BRANCH && echo "[$(date '+%F %T')] data pushed"       || { git reset -q --soft HEAD~1; echo "[$(date '+%F %T')] data push raced"; }
+  fi
   $P $CTL/sft_dash.py publish
   $P $CTL/sft_dash.py status
 
@@ -46,5 +60,5 @@ while true; do
       echo "[$(date '+%F %T')] push raced, next cycle retries"
     fi
   fi
-  sleep 300
+  sleep 75
 done

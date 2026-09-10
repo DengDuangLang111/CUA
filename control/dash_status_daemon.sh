@@ -162,7 +162,12 @@ PY
       for AJ in "$RG"/*/*/args.json; do
         SRC=$(dirname "$AJ")
         N=$(find "$SRC" -name result.txt 2>/dev/null | wc -l)
-        [ "$N" -ge "$MIN_SCORED" ] || continue
+        # eval50-* arms publish from the first scored task (user decision
+        # 2026-08-15); everything else keeps the higher threshold, which also
+        # keeps this daemon from double-publishing the tier-3 valpanel runs
+        # (9 results each) that the SFT daemon already hosts under traj/sft/.
+        case "$SRC" in */eval50-*) MIN=1;; *) MIN=$MIN_SCORED;; esac
+        [ "$N" -ge "$MIN" ] || continue
         # viewers only for runs still moving (any result in the last 3 days);
         # finished old runs stay listed in status.json as not-yet-published
         [ -n "$(find "$SRC" -name result.txt -newermt '-3 days' 2>/dev/null | head -1)" ] || continue
