@@ -1,60 +1,18 @@
 # Synthetic task generation for OSWorld — design, experiments, results
 
-## 现状(2026-08-30,过时即改;历史快照看 git log)
+## 现状(2026-09-09,过时即改;历史快照看 git log,上一版现状块见 `git show 85ae979cb6:EXPERIMENTS.md`)
 
-> **eval 队列(2026-09-01 23:21 起)**:链 `chain_eval_w20f.sh`(PID 61475,日志 `$CTL/logs/chain_eval_w20f.log`)
-> 接管:`mixc9b 补趟 → mixaw9b230w20(20/10,g3083)→ mixaw9bw20(115,20/10,g3082)→ mixa4b`。
-> **mixaw9b 的两个 10/1 已按用户令拿掉,改由 computeragent-00 在 AWS 跑**(6 VM,结果目录
-> `eval50-<arm>-aws-20260902`,provider=aws 单独成表,须先过 mixb9bcal 校准 ±4.8pp 才能并表)。
-> ckpt-115 用 g3082:8045 + `READY_mixaw9b`,ckpt-230 用 mixc9b 空出的 g3083:8042 + `READY_mixaw9b230`。mixaw9b 两行等
-> Klone 上 `READY_mixaw9b`(隔壁会话 login02 侧推 checkpoint-115 到 g3082:8045 后写);用户令
-> "mixc 下一个就 eval mixaw9b 的第一个 checkpoint"。mixbtf9b(mixB+terminalfix)语料已出包,**等用户令投训**。
-> **mixb9bw20f1 收官 07:57:57.0%**(RESULTS §5.34);链 w20g 已结束,g3085:8043 的 mixb9b serve step 已撤,
-> **mixr5m9b 收官 20:44:59.0% / 均分 59.9,multi_apps 12/24 = mixa9b**(RESULTS §5.35;FAILURE_ANATOMY §12.2:
-> v16 单应用不是稀释源)。它的 serve step(39306243 g3085:8046)**还挂着未撤**(链不自动撤,待用户定)。
-> **排队中(2026-09-03 02:16,用户令)**:mixbtf9b-2x4 ckpt-870(273350 续跑完,lr 3e-6)→ **02:19 已落 Klone**
-> `mixbtf9b-2x4-e870`(18.8 GB,md5 b036c2d8 两端一致,14 文件),serve 占位 39306244 g3082:8047 `mixbtf9b-stock`
-> 02:24 就绪,READY 已写;eval 链 02:31 起,**07:21 收官:60.0% / 均分 61.9 = mixb9b(配对 11:11),
-> 显式终止 3% → 84%、回退 80 → 0,分数不动**(RESULTS §5.36,FA §11.6:终止规范化这条线关闭)。
-> **mixbtf9b-2x4-lr1e6(276014,lr 阶梯下界)eval 排上(2026-09-04 21:05,用户令"eval上这个")**:训完 EXIT 0,
-> ckpt-870,train loss 只到 0.40(欠拟合,曲线平缓无台阶)。**撤掉已评完的 mixr5m9b serve(39306243/g3085:8046,
-> 复用其占位)**→ 推 `mixbtf9b-2x4-lr1e6-e870`(md5 d0a156ab)→ serve 首次崩于 g3085 **/tmp 满**
-> (`Errno 28`,历次 serve 的 sif/autotune 残留),清 /tmp 后 21:16 重起成功 → WSL 链 `chain_eval_lr1e6.sh`
-> eval100 @ 10/1 **02:24 收官:52.0% / 均分 54.8**(欠拟合;配对对 3e-6 净 −8.0pp,RESULTS §5.37)。
-> **mixbtf lr 阶梯齐**(同语料 WSL 10/1):1e-6=52.0 / **3e-6=60.0** / 1e-5=49.0,倒 U,3e-6 峰顶。
-> lr1e6 serve(39306243/g3085:8046)与 mixbtf9b serve(39306244/g3082:8047)step 仍挂未撤。此前:WSL 链
-> **taskw 收官(09-05 06:33,新机器 jy-eval-wsl 8VM 首评)=55.0% / 均分 55.9,multi_apps 11/24,低于 mixbtf9b 60.0**
-> (配对净 −5;RESULTS §5.38)。**taskw(重 loss)负向;但 histcomp(渐变历史分辨率)= 60.0/60.9 multi_apps 14/24 持平且省 55% token,正向(§5.39,我一度误记为 49.x 已更正)。** **cap1p5 收官 50.0/51.9 ≈ mixB-4b native → 图 token ×1.5 对 4B 无效(§5.39)**
-> (serve g3085:8046 cap1p5-stock,OSTG_MIN_PIXELS=3145728 已核),对 mixB-4b 读。新机器 8VM 通道打通(OPS 记)。
-> `chain_eval_btf.sh`(eval100 @ 10/1,对照 mixb9b 60.0)**已建但未起**:WSL 的 `klone-login` 主连接
-> 09-02 22:55 又没了(第二次),链取不到 API key,**等用户过 Duo 重建后由看守自动起**(`/tmp/launch_btf_when_master.sh`
-> 每分钟验 `-O check`,通过即 setsid 拉链)。lr1e-5 变体(273351)**训完并评完:49.0% / 均分 49.9,比 lr 3e-6 两臂 −11pp**(09-03 18:13,RESULTS §5.37);lr 1e-5 关闭。
-> Klone 主连接 `klone-login` 14:34 由用户过 Duo 重建,22:55 再次消失,**09-03 02:30 用户第三次重建**。
-> 此前:
-> **eval 链(2026-09-02 02:36 起)**:`chain_eval_w20g.sh`(PID 101578)单行 **mixb9bw20f1** = mixB-9b-e873 同权重、
-> 窗口 **20/1**(恒 20 图),与 mixb9b(10/1,60.0%)、mixb9bw20(20/10,52.0%)构成窗口曲线第三点(用户令)。
-> serve 复用 g3085:8043(step 39187991.65,**别撤**)。约 5h。
-> 此前:
-> **eval 链已停(2026-09-02 02:2x,用户令经 computeragent-73 转达)**:mixaw9b230w20 / mixaw9bw20 / mixa4b
-> 三行从 WSL 撤掉,**以 AWS 上跑的为准**(AWS 结果目录 `eval50-mixaw9b{115,230,345}-aws-20260902` 已在
-> 落盘;mixa4b 尚无)。`chain_eval_w20f.sh` 已按 PID 停,无 runner、无半截结果;链用的
-> `READY_mixaw9b/230` 已删,两个 serve step 已撤,占位作业未动。**WSL 3 VM 现在空闲。**
-> mixc9b 100/100 = 60.0%(RESULTS §5.32)。mixR5M 训完后的 eval 走哪边待用户令。
-> **训练中(2026-09-02)**:`mixR5M-9b`(Slurm 272870,g001-004)= r5 + v16 真 multi-app 166 条,对照 mixA;
-> 详见 CHECKPOINTS §2 mixR5M-9b。另:mixbtf9b(272551)、mixbtf9b-2x4-lr1e5(272837)在跑(隔壁会话)。
-> 此前:
-> **eval 队列(2026-09-01 13:56 起,WSL 3 VM 串行)**:链 `chain_eval_w20.sh`(PID 135573,
-> 日志 `$CTL/logs/chain_eval_w20.log`)接管:`mixb9b 补1 → mixa9b 补2 → **mixb9bw20**
-> (mixB-9b-e873 同权重,推理窗口 20/10 对齐 a2)→ mixc9b → mixa4b`。原链 A
-> (`chain_eval_rest.sh`)与链 B(`chain_eval_lr.sh`,lr2e5/lr2e5gb128/lr1e5/lr1e5b999,
-> READY 已在)已按用户令停掉;lr 四臂**未排**,要跑需重起链 B。切换时 mixb4b50b 的
-> 补题 runner(PID 132493)未受影响。为什么插 mixb9bw20:见下文 a2 条目的 09-01 注记。
-> **15:20 事故后队列已停**(OPS「WebSTAR 128 并发打爆 WSL」):mixb9bw20 停在 29/100
-> (6 题假 0 已隔离),mixc9b/mixa4b 未跑。恢复顺序:用户桌面拉起 Docker Desktop → Duo 重建
-> 主连接 → 重起 `chain_eval_w20.sh`(自动从 29/100 续)。
-> 进度:mixb4b50b 50/50、mixb9b 100/100、mixa9b 100/100(57.0%;去 infeasible 58.6%,
-> 与 mixb9b 逐分相等,RESULTS §5.30);mixb9bw20 14:21 起跑(runner 命令行与 args.json 均
-> 已核 `--image_max 20 --fold_size 10`)。
+> **训练**:无在训臂。待投 `9b-full-mixb.sw`(mixB-9b-swemem,SWE-MeM 轨迹内均衡权重,sbatch 已入库)。
+> `4b-full-mixbtf-imgtok4096`(cap2x)四连 OOM 未成,退档为 `4b-full-mixbtf-ml65k-imgtok3072`(cap1p5,已评)。
+> **eval(全部收官,WSL eval100 @10/1)**:mixbtf lr 阶梯 1e-6 / 3e-6 / 1e-5 = 52.0 / **60.0** / 49.0(倒 U);
+> taskw 55.0(负);histcomp 60.0 持平且视觉 token −55%(正);cap1p5 50.0 ≈ 4B 原生(无效)。RESULTS §5.35–§5.39,总表 §12。
+> **OSWorld-V2 教师 eval**:停在 39/108。根因已定位 —— runner 把教师隧道写进 `OPENAI_BASE_URL`,judge/user-sim 的
+> base_url fallback 继承了它,~26 个 LLM 评测任务每 pass 必崩;修复 = `.env` 加 `OSWORLD_EVAL_MODEL_BASE_URL` 与
+> `OSWORLD_USER_SIM_BASE_URL`(待批);036/037 代理凭证是占位符(待定)。教师 serve 已过 walltime,续跑要重过 Duo + 重起教师。
+> **基础设施**:osworld-windows(WSL)09-09 不可达;WSL→Klone master socket 已失效。
+> **整编(分支 `reorg-20260909`)**:命名规范 `NAMING.md` + 生成器 `tools/armname.py`(21 个活 sbatch 回归全过);
+> 归档 `outdated/plans` · `tools/archive` · `sft/sbatch/archive`;`control/` 合并;RESULTS §5.30–5.34 归位、新增 §12 全臂总表。
+> **等用户定**:V2 续跑与否;swemem 投训;分支合并。
 
 - **严格语料线出厂 + 训练臂 mixaw9b(09-01 晚,全链 `PLAN-20260901-strict-corpus.md` §8-10)**:
   judge 全量 1375 → `curate16 --strict` 340(24.7%;含规则闸复核捞回 5)→ 与 r5 系 v11 362 条合成
