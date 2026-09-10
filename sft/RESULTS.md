@@ -2103,7 +2103,7 @@ img10 的每次转移最多丢 1 张,**从无断崖**。
 
 **目的**:1796 全量 rollout 前定教师生成配置(rollout 闸)。§5.28 缺的"平窗"格在教师侧补齐。
 **固定不动**:同权重(Qwen3.8-27B BF16)、同 serve 形状(vLLM 0.25.1/fp8 kv/262144,sbatch 推理段逐字节同锚点,三层验证)、冻结 eval-50、h100/ms50/t1.0/no-split、`OSTG_TYPE_NO_SPLIT=1`。
-**只动**:`--image_max/--fold_size`(XARGS)、每图 token(`OSTG_MAX_PIXELS`,2040↔480)、思考力度(`OSTG_REASONING_EFFORT`,模板默认 xhigh↔medium)。臂定义 `tools/run_eval50_stock.sh`,launcher `tools_pilot_fold*.sh`。
+**只动**:`--image_max/--fold_size`(XARGS)、每图 token(`OSTG_MAX_PIXELS`,2040↔480)、思考力度(`OSTG_REASONING_EFFORT`,模板默认 xhigh↔medium)。臂定义 `tools/archive/run_eval50_stock.sh`,launcher `tools_pilot_fold*.sh`。
 
 | 臂 | 配置 | 分数 | 步μ/中位 | 顶50步 | think μ/p50/p99/max | 深处回溯/步¹ | DONE% | 假DONE² | 步时延p50 | 生成k字/任务 |
 |---|---|---|---|---|---|---|---|---|---|---|

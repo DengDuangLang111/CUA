@@ -211,7 +211,7 @@
   `t38px480`(20 图滑窗 + `OSTG_MAX_PIXELS=491520` ≈480 视觉 token/张);锚点 =
   08-19 存档 t38(教师谱系配置 h100/20fold10/ms50/t1.0,**69.8%**)。每对只动
   一轴:锚-i20=fold,i20-i10=张数,i20-px480=分辨率。臂定义
-  `tools/run_eval50_stock.sh`,launcher `tools_pilot_fold.sh` 守着尾扫链自动
+  `tools/archive/run_eval50_stock.sh`,launcher `tools_pilot_fold.sh` 守着尾扫链自动
   点火,复用在跑的 eval38h20 serve;结果 dashboard eval-50 区实时可看。
   **08-29 深夜追加 E 臂 `t38med`**(用户令):锚点窗口(20fold10 默认)+
   `OSTG_REASONING_EFFORT=medium`(教师谱系全部是模板默认 xhigh)——对锚点
