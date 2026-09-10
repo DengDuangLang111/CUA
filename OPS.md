@@ -1375,3 +1375,15 @@ timestamps/PAWS 兜底,实践中 10 秒 TIME_WAIT 是常见调优。**如果这�
 1. **查臂的真实配置只认训练日志 set -x 打出的 export**——wandb Notes 和 sbatch 行内注释都可能是从别的臂复制来的陈旧字符串(cap1p5 的 Notes 写 4096/cap×2,全错,真值 export=3072)。
 2. **挪走无效结果目录,新名字不能仍匹配链的 glob `eval50-<arm>-*`**——否则链 `ls -dt eval50-<arm>-*` 会把它当结果目录重新捡回、跳过已评题、把新旧混在一起(cap1p5 改名成 `...invalid-lowres-0405` 仍匹配,续用了 15 条低分辨率结果)。要么删,要么改成 `INVALID-...` 这类不带 `eval50-<arm>` 前缀的名。
 3. **换分辨率/token 的臂,eval 前先确认 runner env 真带上了对应旋钮**:`tr '\0' '\n' < /proc/<runner-pid>/environ | grep OSTG_`。
+
+## 2026-09-09 整编备忘(分支 `reorg-20260909`;下面每条"待办"都卡在 WSL 不可达)
+
+- **control/ 合并**:`tools/control/` 并入 `control/`,两个 daemon 取新版(依据见 `control/README.md` 末节)。
+  **待办**:WSL 可达后与 `$CTL` 正本 md5 复核(`md5sum sft_dash.py sft_dash_daemon.sh dash_status_daemon.sh dash_watchdog.sh`),
+  以 WSL 为准单向同步回来。
+- **eval 链参数化**:`tools/chain_eval.sh` + `tools/chain_eval_arms.tsv` 取代 9 份逐臂脚本(已归档 `tools/archive/`)。
+  **待办**:推到 `$CTL/` 并核 md5;首次用真实臂表跑前先 `bash -n`。臂名用 `python3 tools/armname.py emit` 生成。
+- **看板分组**:`control/sft_dash.py` 的 `GROUPS` 与逐臂分类仍是旧的 9 桶;按实验目的分轴的表在 `sft/RESULTS.md` §12。
+  **待办**:把 `NAMING.md` 别名与 P 轴接进 `sft_dash.py` —— 按 `control/README.md` 规矩**先改 WSL 正本再同步**,别在镜像上改。
+- **命名**:新臂 / 新语料一律 `NAMING.md` + `tools/armname.py`;sbatch 预检加一行 `python3 tools/armname.py check $0`。
+- **仓库外**:`computeragent/_trash-20260909/`(0 字节垃圾文件名 + 7 月的 `output/` `tmp/`)是可逆搬移,确认无用后再删。

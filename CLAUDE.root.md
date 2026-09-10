@@ -77,13 +77,14 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && set -a && . 
 |---|---|
 | 项目总览 / 目录结构 | `CUA/README.md`(L1 索引) |
 | **标准术语与禁用黑话** | `CUA/GLOSSARY.md`(新概念先入表再使用) |
+| **臂名 / 语料名怎么起(不手打)** | `CUA/NAMING.md`(语法与规矩)· `python3 CUA/tools/armname.py emit <sbatch>`(生成四行粘进 sbatch/serve) |
 | 现在跑到哪了 / 下一步 | `CUA/EXPERIMENTS.md` 顶部"现状"块 |
 | 生成任务:gen→ship→cull→merge→control→rollout 全部命令 | `CUA/RUNBOOK.md`(唯一 runbook;WSL 侧同名文件是指路桩) |
 | 生成流水线的设计与各层职责 | `CUA/TASKGEN_PIPELINE.md` |
 | **SFT 数据流水线:每层职责、五道闸、像素审计、排错** | `CUA/sft/DATA_PIPELINE.md` |
 | **Klone 上训练:容器/账号/占位卡/双 bind/OOM 机理/速度账** | `CUA/sft/KLONE.md` |
 | 实验结果与决策依据(账本) | `CUA/EXPERIMENTS.md` |
-| **eval-50 汇报:每个臂的结果/设置/两两差异** | `CUA/sft/RESULTS.md` |
+| **eval 汇报:每个臂的结果/设置/两两差异;§12 全臂总表(按实验目的分轴)** | `CUA/sft/RESULTS.md` |
 | **为什么失败:零解题解剖、操作覆盖缺口、撞上限机制、孤儿根因** | `CUA/sft/FAILURE_ANATOMY.md` |
 | SFT:环境/配方/数据构建/训练/eval 协议 | `CUA/sft/TRAINING.md`(顶部有现状块)· `CUA/SFT_DATA.md` · `CUA/sft/CONTEXT.md` |
 | rollout 打分体系:judge 输入/刻度/schema、仲裁协议、判官对照 | `CUA/JUDGING.md` |
@@ -94,7 +95,7 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && set -a && . 
 | 候选实验/改进方向的评估与排队 | `CUA/IDEAS.md` |
 | ostg 分支史 / main 是谁 | `CUA/taskgen/GIT_HISTORY.md` |
 | 官方 361/V2 任务运行条件(冻结参考) | `CUA/reference/OSWORLD_VERIFIED_RUNTIME_REQUIREMENTS.md` · `..._V2_...` |
-| 历史方案(v7 计划/配对组/旧状态页) | `CUA/outdated/` |
+| 历史方案(v7 计划/配对组/旧状态页;v12–v15 datagen 方案在 `plans/`) | `CUA/outdated/` · `CUA/outdated/plans/` |
 
 ## 6 文档管理规矩(2026-08-15 整编后生效)
 
