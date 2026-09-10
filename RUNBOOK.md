@@ -249,7 +249,7 @@ Reading the results:
 ## 4.6 v14g gold 流水线(2026-08-28 落地;**生成尚未跑 — 等 API 更换**)
 
 代码全在 worktree `/mnt/d/research/ostg-v14/ostg` 分支 `datagenv14`;设计与
-验收门槛见 `PLAN-20260828-v14g-gold.md`,口径见
+验收门槛见 `outdated/plans/PLAN-20260828-v14g-gold.md`,口径见
 `reference/EVAL_FAMILY_TAXONOMY.md`。四个 gold grade(deck/doc/image/
 table_gold)由 bake 产出标准答案文件,evaluator 用官方 `cloud_file` 从本机
 HTTP 拉取。全链:
@@ -1235,7 +1235,7 @@ $P -m ostg.sft.build RESULT_DIR --tasks TASKS_DIR --out OUT \
 #      24 处不同、12 胜 12 负,与同模型重跑的自比基线(24/100)一模一样。
 #      今后 checkpoint 一律取 epoch-3 终点(pick_ckpt.sh endpoint),
 #      5% 的样本回到训练集。训练侧同时不再传 --val_dataset /
-#      --eval_strategy。完整论证见 PLAN-20260822-datagen-v13.md。
+#      --eval_strategy。完整论证见 outdated/plans/PLAN-20260822-datagen-v13.md。
 #    ↑ --fold-size 1 也要显式传。默认 10 会让可见图数在 image_max-9..image_max
 #      之间锯齿(见 sft/RESULTS.md §5.19);e6b6e034 的提交信息原话是
 #      "fold_size>1 silently trains on fewer images than the window says"。

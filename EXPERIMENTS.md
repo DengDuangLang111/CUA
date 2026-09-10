@@ -193,7 +193,7 @@
   os 计数必干实活,搬运不算;词表=官方 9 词,main_app/other_apps 对齐官方
   related_apps。生成合同瘦身为【题面+初始化】两件,提示词只给骨架不给内容
   示例。8 条小样在跑。
-- **v15 立项开工(08-30,用户批 A+B 全上;计划 `PLAN-20260830-v15.md`)**:可验证
+- **v15 立项开工(08-30,用户批 A+B 全上;计划 `outdated/plans/PLAN-20260830-v15.md`)**:可验证
   空间扩容(官方判据复用 13/118→~39)+ 复合判据(**判据数=难度**:d1-2:1/d3:2/
   d4-5:2-3+跨应用)+ divcheck 常驻尺子。背景:image 族 4 函数塌缩、444 条 d≥3
   旅程不被判分(AWS 实测教师 21/21 照做未判分旅程→存量语料干净,修复面向下一轮)。
@@ -223,7 +223,7 @@
   gate 误杀)+ 加权抽签的家族饿死(spent_fam 账本 + 可行前沿结论)。wave-2
   生成 1265 条入库 + 375 钉补差在跑(pdf/音视频机制已落,vlc/tbird 足额)。
   教师通过率按坐标实测:d1-3 62%/d4 42%/amb2 最难/跨应用递减,加权 ≈56%。
-  执行记录 `PLAN-20260828-v14g-gold.md` §8.5;口径 `reference/EVAL_FAMILY_TAXONOMY.md`。
+  执行记录 `outdated/plans/PLAN-20260828-v14g-gold.md` §8.5;口径 `reference/EVAL_FAMILY_TAXONOMY.md`。
 
 - **两大口径更正(08-18,详 `sft/RESULTS.md` §5.2 / §5.7)**:
   ① **keepthink 与 stock 两个评测模板逐字节等价** —— harness 把推理内联进
@@ -635,7 +635,7 @@
   强度来自方向一致性(两半同向 + LoRA 反号 + 2ep 平台)。
 - **targeted-100 定向补数据启动(08-20,用户拍板:纯追加不降采样、FAIL 不做、
   超参冻结、池不够用 Opus 5 生成)**:计划与全部决定 →
-  `PLAN-20260820-targeted100.md`;三层打标器 `tools/taxonomy_tag.py` 首跑:
+  `outdated/plans/PLAN-20260820-targeted100.md`;三层打标器 `tools/taxonomy_tag.py` 首跑:
   候选池 1405 条(18 个时代)、产出形态与语料同偏(file_or_text 83%),
   纯需生成格 = calc/chart、gimp/layers、install、speaker_notes;
   缺口表已交反驳 agent 攻击,配额待审计+通过率后定稿。
@@ -692,7 +692,7 @@
   serve 端口 8028/8029/8031(8030 让给旧 Klone 隧道位,防串线)。
 - **datagenv12 首波启动:补格式类任务 50 道(fmt-w1)**。依据:语料 544 道里
   格式类 **1 道(0.2%)** vs 基准全量 15.2% / eval-50 18%;该类并集解开 3/9,
-  其余 32/41。计划、五条硬约束与闸 → `PLAN-20260818-datagenv12-fmt-w1.md`;
+  其余 32/41。计划、五条硬约束与闸 → `outdated/plans/PLAN-20260818-datagenv12-fmt-w1.md`;
   代码分支 `datagenv12`(worktree `/mnt/d/research/ostg-datagenv12`)。
 
 - **r5 相对旧版(6,297 样本)的四处差异**:① 截尾从 33 条降到 9 条,旧版其中

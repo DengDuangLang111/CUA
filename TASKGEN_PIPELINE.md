@@ -2,9 +2,9 @@
 
 > **datagenv12(分支,未合 main)**:fmt-w1 加 `intent=restyle` 与规则式
 > `grade=pptx` / `grade=image`(宿主 python-pptx / PIL 判呈现属性)。动机与闸 →
-> `PLAN-20260818-datagenv12-fmt-w1.md`。**2026-08-20 起该分支扩为 targeted-200
+> `outdated/plans/PLAN-20260818-datagenv12-fmt-w1.md`。**2026-08-20 起该分支扩为 targeted-200
 > 定向补数据 campaign 的载体**(缺口配额、`--focus` 补丁设计)→
-> `PLAN-20260820-targeted100.md`。本文其余部分描述 v11.1 行为。
+> `outdated/plans/PLAN-20260820-targeted100.md`。本文其余部分描述 v11.1 行为。
 
 How a task goes from a coordinate to a scored trajectory, what each stage
 catches, and what it costs. Every check listed here exists because its
@@ -35,7 +35,7 @@ Two rules shape the whole thing:
 > 抽签轴加 evaluator 族(口径 `reference/EVAL_FAMILY_TAXONOMY.md`);新增四个
 > gold grade(deck/doc/image/table_gold),ship 内插 bake 阶段(容器造
 > seed+gold、host 端不动点 0/1),evaluator 用官方 `cloud_file` 从本机 serve
-> 拉取。命令链 RUNBOOK §4.6,设计与验收 `PLAN-20260828-v14g-gold.md`。
+> 拉取。命令链 RUNBOOK §4.6,设计与验收 `outdated/plans/PLAN-20260828-v14g-gold.md`。
 > 下文描述的是 v11–v14 主线行为,对 v14g 仍成立的部分不重复。
 
 ## 1 gen — draw a coordinate, ask for a task
