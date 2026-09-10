@@ -282,7 +282,7 @@
   sdpa 仍走 flash/mem_eff(实测 `cudnn_sdp_enabled()==False`)。这版 torch 2.13.0+cu130
   没有 `TORCH_CUDNN_SDPA_ENABLED` 环境变量(libtorch_cuda 里只有 `TORCH_CUDNN_SDPA_AVOID_RECOMPILE`),
   flash_attn 未装,所以只能走 sitecustomize。续跑用 `--resume_from_checkpoint <ckpt-435>`
-  (含 `global_step435`/rng,优化器与数据顺序一起恢复),模板 `sft/sbatch/mixbtf9b-2x4-resume.sbatch`。
+  (含 `global_step435`/rng,优化器与数据顺序一起恢复),模板 `sft/sbatch/archive/mixbtf9b-2x4-resume.sbatch`。
 - **实测吞吐(2026-09-01 夜,同 9B / 同 gb64 / 同配方,只差拓扑)**:
 
   | 臂 | 拓扑 | s/it | 870 步需时 |
