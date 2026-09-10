@@ -77,3 +77,13 @@
 ## 防臃肿立法(08-30 用户批准)
 
 **每件进流水线的新东西,提案必须写明它替代或删除了什么。** 净增机器需专门论证。
+
+## 命名(2026-09-09 立;规范在 `NAMING.md`,锚点 `tools/armname.py`)
+
+| 标准词 | 一句话 | 代码锚点 | 禁用别名 |
+|---|---|---|---|
+| 规范臂名 | `<骨干>-<训练法>-<语料>[-<偏离项>…][~e<N>][@<img>f<fold>…]`,由 sbatch 推导,只写与标准配方不同的部分 | armname.py from-sbatch / emit / check | 手打名(`mixbtf9b-2x4-lr1e6`、`taskw`) |
+| 语料公式 | `<来源>[+<来源>][.<变换>]`;常用组合登记短 id(`mixb`) | armname.py CORPUS_DIRS / CORPORA | "mixB 语料"之类不带公式的说法 |
+| 偏离项 | 臂名里与标准配方不同的那些 token(`lr1e5` `ep1` `gb128` `wd0p1` `ml65k` `imgtok3072` `histcomp`) | armname.py deviations() | `2x4`(拓扑不进名)、`cap1p5`(说 imgtok3072) |
+| 推理后缀 | `@<img>f<fold>[.t0][.ms100]`,推理侧配置,不属于权重;默认 `@10f1` 省略 | armname.py eval_suffix() | `w20`、`h3`、`ms100` 前缀写法 |
+| 中途快照 | `~e<N>`:未退火的中途 checkpoint,终点权重不写 | — | "2 epoch 模型"(RESULTS §6 口径) |

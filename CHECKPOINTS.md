@@ -305,12 +305,9 @@ nocap    (65536)        · 16卡accum4 → 303 步
 **清理前必查**:该臂是否出现在 `EXPERIMENTS.md` 的分数表里、是否有 serve
 sbatch 指向它(`grep -r <臂名> sft/sbatch/`)。
 
-## 5 命名约定(新臂照此起名)
+## 5 命名约定 → `NAMING.md`
 
-```
-<教师代号><epoch><语料>[-<优化域>][-<方法>]
-q38  e3      B      -gb64o          全量,3ep,B 语料,全局 batch 64 + 对齐优化器
-q38  Bs      -lora                  LoRA,Bs 语料
-```
-serve sbatch 与 eval 驱动用同一个臂名做 TAG(`eval50-<臂>keep-<日期>`),
-这样 checkpoint→serve→eval 结果三处可以互相对照。
+本节原来的 `<教师代号><epoch><语料>[-<优化域>][-<方法>]`(`q38e3B-gb64o`、`q38Bs-lora`)是 8 月旧代的
+写法,2026-09-09 起由 `NAMING.md` + `tools/armname.py`(从 sbatch 推导规范名)取代。历史目录名不改,
+旧名 → 规范名的对照表在 `NAMING.md` §4。serve sbatch、eval 驱动、结果目录 `eval50-<臂>-<日期>`、
+`MODEL_BOUNDARY.json` 与看板键仍用**同一个臂名**,这一条不变。
