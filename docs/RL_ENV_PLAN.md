@@ -8,7 +8,9 @@
 
 - **R1 π1 发布完成(15:4x PT)**：`/gscratch/cse/jy050706/sft/serving/9b-full-r5-grpoprobe--train20260918--s1/model`，17 个文件经 `checkpoint_files()` 校验。与 π0 服务目录逐文件对比：4 个权重分片与 trainer_state/INIT_MANIFEST 不同，其余 11 个推理文件完全相同；生成的 serve-r0.sh 与 π0 的只差模型 ID 与端口。
 - **R2 π1 服务就绪(15:52 启动，约 3 分钟加载)**：step `40253896.50`，g3108 GPU3(`GPU-f9a6682f…`，启动闸门时占用 1MiB)，端口 8083；`prepare_model.probe_service` 标准检查 ready：服务名、root、上下文 65536、attention 采集路由均通过。启动记录 `allocation-40253896/launch-explicit-gpu.json`。workstation 已按 registry 的 connect_once 建立 8183→g3108:8083 转发。
-- **R3 四轮采样已启动(约 15:58 PT)**：`run_rounds.sh`，产物 `cua-rl-local/artifacts/iter2-pi1-20260922/`。
+- **R3 四轮采样已启动(15:56 PT)**：`run_rounds.sh`，产物 `cua-rl-local/artifacts/iter2-pi1-20260922/`。
+  - **驱动 bug(已修)**：状态判断表达式含生成器表达式，而 `field()` 用 `eval(expr, {}, {"d": d})`，生成器看不到 eval 的 locals，16:01 第一次查状态即 `NameError` 退出；后台通知显示退出码 0，是管道末端 `tee` 的退出码掩盖了失败。第 1 轮 controller 在 workstation 独立运行、不受影响；第 2–4 轮未启动。修复 `4d889a0`：`d` 放入 globals，并支持续跑(沿用已冻结的 plans.json；已有 start-N.json 的轮次只等待、不重复启动)；在真实 plans/status 文件上实测表达式后，以 `pipefail` 重启(16:1x)。
+  - 第 1 轮 Calc(16:01 完成，0 分)的采集按 export_batch 的断言逐项检查：初始分 0、评分进程 rc 0、11 次决策无采集错误、token 与 logprob 数量一致、图像 SHA 全对、策略版本为 π1 服务路径、thinking/preserve_thinking 开。
 - Klone 训练目录 `/gscratch/cse/jy050706/sft/experiments/cua-rl-probe-20260922/` 已放入 iter2 的 probe/verify/run/verify.sh 与上游 ppo_utils，文件 SHA 与本地一致。
 - **汇总脚本回归测试**：改过的 `iter2-20260922/summarize.py` 对 09-18 的 5 份 P2 plan 重新汇总，`summary.json` 与当时证据逐字节相同，`episodes.json` 16 条记录完全一致(09-18 生成 episodes 的那一步当时没有留下脚本，现已由 summarize 复现)。
 
