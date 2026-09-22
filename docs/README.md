@@ -9,6 +9,8 @@
 | [RUNTIME_MIRRORS.md](RUNTIME_MIRRORS.md) | Repository paths versus deployed script locations |
 | [docs/IDEAS.md](IDEAS.md) | Candidate experiments, not completed results |
 | [docs/READING.md](READING.md) | Reading/reference notes |
+| [docs/RL_EXPERIMENT_DESIGN.md](RL_EXPERIMENT_DESIGN.md) | RL (GRPO) experiment design: arms, budgets, success criteria |
+| [docs/RL_ENV_PLAN.md](RL_ENV_PLAN.md) | RL environment facts and dated progress; code and evidence in the sibling `cua-rl-local/` git repository |
 
 Domain guides are under [sft/docs/](../sft/docs/) and [taskgen/docs/](../taskgen/docs/). Dated investigations are under [reports/](../reports/), and benchmark references under [reference/](../reference/). Archived records are under [outdated/](../outdated/README.md).
 

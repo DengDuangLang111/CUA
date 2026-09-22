@@ -9,6 +9,7 @@ Generated desktop tasks, teacher trajectories, SFT data/training recipes, evalua
 | Agent instructions and runtime boundaries | [AGENTS.md](AGENTS.md), [CLAUDE.root.md](CLAUDE.root.md), [runtime mirror mapping](docs/RUNTIME_MIRRORS.md) |
 | SFT: data, quality, training, evaluation | [sft/README.md](sft/README.md) |
 | Task generation and validation | [taskgen/README.md](taskgen/README.md) |
+| RL (GRPO) design and progress | [docs/RL_EXPERIMENT_DESIGN.md](docs/RL_EXPERIMENT_DESIGN.md), [docs/RL_ENV_PLAN.md](docs/RL_ENV_PLAN.md); code and evidence in the sibling `cua-rl-local/` git repository |
 | Model/corpus naming | [docs/NAMING.md](docs/NAMING.md), [sft/armname.py](sft/armname.py) |
 | Latest recorded status | [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md), with its evidence date; not a live job query |
 | Recorded evaluation results | [sft/docs/RESULTS.md](sft/docs/RESULTS.md), section 12 |
@@ -84,6 +85,8 @@ CUA/
 │   ├── OPS.md
 │   ├── READING.md
 │   ├── README.md
+│   ├── RL_ENV_PLAN.md
+│   ├── RL_EXPERIMENT_DESIGN.md
 │   └── RUNTIME_MIRRORS.md
 ├── eval/
 │   ├── qwen35_4b_keepthink.jinja
