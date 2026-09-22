@@ -2,6 +2,29 @@
 
 更新：2026-09-22，America/Los_Angeles。
 
+## 2026-09-22：P1 审题——从 2030 道候选选出 12 道新题(每应用 3 道)
+
+用户要求 P1 按计划推进、先审 12 道题。P1 = 已有 P2 的 4 题(π0 已各采 4 条)+ 12 道新题，共 16 题；新题的 π0 采样(12×4=48 条)在审题完成后进行。代码在 `cua-rl-local` 的 `p1-20260922/`，与 iter2 同在实验分支 `iter2`(R3 驱动运行期间不切分支)；审查清单 `p1-20260922/selection.json`，每条附审查理由与已知风险。
+
+**初筛(只读，`screen.py`)**：候选池 2041 道(09-18 只读短候选，每应用最多 600)，按排除清单 `exclude-20260922.json` 去掉 15 道(P2 已用 4、09-18 pilot 4、09-18 细审未选 7，每条附原因)，筛 2030 道，1014 道过机械闸：Calc 286、Writer 374、Impress 202、VS Code 152。淘汰原因(可重叠)：评分不读单一约定产物 622(426 为 VS Code 无参 `verify_task()` 读固定配置位置，不适配本次夹具方法，不代表评分有缺陷)、setup 实际打开的应用与标签不符 401(候选池标签有误，如标 Calc 的终端截图、PDF 高亮、Vim 设置题)、评分前 postconfig 自动 Ctrl+S 与 config 需额外 open 步骤各 251(与"模型须自己保存"的协议不一致，适配器也不执行这些步骤)、setup 不生成被评文件 85、计分项少于 2 个 21、评分有副作用 15。
+
+**人工审查评分(对称条款：评分只能要求指令说过的)**：淘汰 `30715c1e`(`'C2' in sqref` 子串匹配，与 09-18 E2 假阳性同类，且要求指令未提的错误提示)、`f742d285`(只认 SUMIF 与 'Project Code' 表头)、`b7df3500`(公式须逐字为 `…*100`，常见的百分比格式写法判错)、`23502e40`(LibreOffice 可能把"允许所有值"存成一条验证记录)、`e86ef99b`(分列最自然的做法会覆盖原列；前导 0 邮编)、`7c421304`(读公式文本而非值，公式生成学号的正确做法判 0)。
+
+**四态夹具(`fixtures.py` + `check_local.py`)**：在每题 setup 自己生成的文件上造初始/典型错误/部分完成/正确完成四态，用未改动的 `verify_task` 评分，要求 0 / <1 / (0,1) / 1。首轮 11/12 通过；`a1243b01` 失败是我的夹具标签错(复制未剪切=做了一半应得 0.7，粘贴错一行=错误应得 0)，对调后通过。
+
+**VM 往返检查(`check_vm.py` + `guest_check.py`，osworld-windows，与 workstation 同一 v2026.06.24 镜像、字节数一致)**：每题重置 VM、在真实 VM 里跑原 setup、要求初始分 0、截图，再把四态文件经 VM 自带 LibreOffice 另存一遍后重评。**查出两道在真实环境不可能得分的题**：
+- `f6296ab4`(电话号码格式)：LibreOffice 把 `(000) 000-0000` 存成 `\(000") "000\-0000`，评分逐字比较 → 正确解存盘后 0 分。
+- `f6c790b0`(标题下划线)：评分用 `shape.name.startswith('Title')` 找标题，LibreOffice 存 pptx 时给占位符改名 → 任何存过盘的文件都找不到标题，0 分。
+替补 `f34a4410`(VLOOKUP；已知风险：查找区域写成含表头的 F1:G11 只得 0.7)与 `aed6f1eb`(全部文字居中；遍历形状不依赖名字)。`d41ae560` 同样按形状名找正文框，保留为备选但标注此风险。
+
+**最终 12 道**：Calc `e31f36af` 月度 SUM 合计 · `86bc4aea` 合并居中 · `f34a4410` VLOOKUP；Writer `de0be554` 插 3×4 表 · `c440c03f` 项目符号列表 · `dc185455` Heading 3；Impress `e2b1a84c` 去掉第 1、3 条项目符号 · `4cd0f3c6` 9 张标题 32pt/加粗/深绿 · `aed6f1eb` 全部居中；VS Code `73e6b00f` 行排序 · `38cb2821` temp→temperature · `a1243b01` 剪切粘贴行。本地四态 12/12 通过；VM 往返 12/12 通过(`vm-20260922c`：真实 VM 初始分全为 0，Office 题往返前后四态得分逐项相同)。
+
+**VM 检查自身的 bug(看截图发现，已修)**：`DesktopEnv.reset()` 只在 `step()` 把环境标为已用后才还原快照，而本检查只走 HTTP 执行接口，`vm-20260922b/c` 的 12 题实际在同一台未还原的 VM 里依次运行——Impress 截图里桌面留着 VS Code 题的 `todo.txt`/`names.txt`，并被上一道 Calc 题留下的"LibreOffice 文档恢复"对话框挡住(guest_check 结束应用时触发)。得分不受影响：各题产物路径不同，往返用独立的 LibreOffice 配置目录；但"setup 后应用可见"的截图证据被污染。修复 `af10fad`：每题前把环境标为已用以强制还原，并断言上一题的上传目录已消失；以 `vm-20260922d` 重跑。09-18 的 P0 检查调用过 `step()`，其 reset 是真实还原。
+
+**P1 部署(workstation，未采样)**：`stage_panel.py` 在共享 harness 上建独立 worktree `p1-panel-20260922/harness`(d552441，与 P2 相同方式)，为 12 题生成 bundle 与适配器；适配器模板由 P2 适配器抽出，代入 P2 Calc 题参数时与 09-18 实际文件逐字节相同。`make_registry.py` 由已验证的 P2 registry 派生 `cua-eval/registry.cuagym-p1-r5.json`，模型为 π0，协议与 P2 逐项相同。采样在 R3 结束、workstation VM 空出后启动。
+
+**按"可复用、不写死"重构(用户 09-22 要求，已记入 memory)**：screen 读排除清单；夹具按完整任务 ID 登记；check_local/check_vm 从 selection.json 取题；summarize/export/probe 不再写死 4 轮/16 回合/{1,2,3,4}；`publish_pi1.py` 改为通用 `publish_policy.py`。回归：screen 2030 题逐条记录与重构前相同；summarize 对 09-18 P2 数据 `summary.json` 逐字节相同；export 对 09-18 数据重导 `batch.jsonl` SHA 仍为 `7b7cd304…`；check_local 对沿用的 10 题四态得分与重构前逐项相同。
+
 ## 2026-09-22：第二轮(iter2)执行记录
 
 用户 09-22 批准 R1–R6 与代码改动 `547c09b`，并要求 RL 文档迁入 CUA(本文件即迁移后的位置，原顶层文件留指路桩)。
