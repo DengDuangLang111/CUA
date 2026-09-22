@@ -2,9 +2,18 @@
 
 更新：2026-09-22，America/Los_Angeles。
 
-## 2026-09-22：第二轮(iter2)准备完成，远端执行等待用户批准
+## 2026-09-22：第二轮(iter2)执行记录
 
-本节只记录准备与核查；**π1 未发布、未采样、未训练**。远端写操作(Klone 共享盘写入、起服务、VM 采样)被 Claude Code 权限分类器按"修改共享资源"拦下，按规矩停下等用户批准，没有绕过。
+用户 09-22 批准 R1–R6 与代码改动 `547c09b`，并要求 RL 文档迁入 CUA(本文件即迁移后的位置，原顶层文件留指路桩)。
+
+- **R1 π1 发布完成(15:4x PT)**：`/gscratch/cse/jy050706/sft/serving/9b-full-r5-grpoprobe--train20260918--s1/model`，17 个文件经 `checkpoint_files()` 校验。与 π0 服务目录逐文件对比：4 个权重分片与 trainer_state/INIT_MANIFEST 不同，其余 11 个推理文件完全相同；生成的 serve-r0.sh 与 π0 的只差模型 ID 与端口。
+- **R2 π1 服务就绪(15:52 启动，约 3 分钟加载)**：step `40253896.50`，g3108 GPU3(`GPU-f9a6682f…`，启动闸门时占用 1MiB)，端口 8083；`prepare_model.probe_service` 标准检查 ready：服务名、root、上下文 65536、attention 采集路由均通过。启动记录 `allocation-40253896/launch-explicit-gpu.json`。workstation 已按 registry 的 connect_once 建立 8183→g3108:8083 转发。
+- **R3 四轮采样已启动(约 15:58 PT)**：`run_rounds.sh`，产物 `cua-rl-local/artifacts/iter2-pi1-20260922/`。
+- Klone 训练目录 `/gscratch/cse/jy050706/sft/experiments/cua-rl-probe-20260922/` 已放入 iter2 的 probe/verify/run 与上游 ppo_utils，四个文件 SHA 与本地一致。
+
+### 准备与核查(批准前)
+
+以下为批准前的准备记录。当时远端写操作(Klone 共享盘写入、起服务、VM 采样)被 Claude Code 权限分类器按"修改共享资源"拦下，停下等用户批准，没有绕过。
 
 **现场核查(15:20–15:45 PT)**：9/18 15:42 之后 workstation、Klone、Mac 均无新 RL 产物。allocation 40253896(g3108，8×L40S)有效期 2026-09-18 06:02 → **2026-09-25 06:02 PT**；node-local 的 step1 DeepSpeed checkpoint(119G，含 optimizer 状态)随之消失，g3108 `/tmp` 仍有 2.7T 空闲。π0 服务(step .6，GPU6，端口 8082)仍在，4 天无请求。g3108 各卡：0/1/2/4 为用户的 molmospaces 数据生成(step .47，overlap 持有全部 8 卡与 16 CPU)，5 状态异常(nvidia-smi 显示 [N/A])，6 为 π0，**3 与 7 空闲**。本作业内存上限 512GiB、当前 29.6GiB；节点 `free` 显示的 374G 已用主要属于他人作业 40434900(660G)，不占本作业额度。workstation 空闲(无 VM、无评测进程)，到 Klone 的 SSH master 在线。
 
