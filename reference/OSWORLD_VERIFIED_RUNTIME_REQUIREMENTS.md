@@ -8,7 +8,7 @@
 > 所有统计数字都是从 `evaluation_examples/examples/*/*.json` 逐个解析出来的，不是抄文档。
 > 最后更新 2026-08-08。
 >
-> 相关文档：操作手册看 [CLAUDE.md](CLAUDE.md)，OSWorld 2.0 的对应文档看 [OSWORLD_V2_RUNTIME_REQUIREMENTS.md](OSWORLD_V2_RUNTIME_REQUIREMENTS.md)。
+> 相关文档：操作手册看 [CLAUDE.md](../CLAUDE.root.md)，OSWorld 2.0 的对应文档看 [OSWORLD_V2_RUNTIME_REQUIREMENTS.md](OSWORLD_V2_RUNTIME_REQUIREMENTS.md)。
 
 ---
 
@@ -108,7 +108,7 @@ self.environment = {"DISK_SIZE": "32G", "RAM_SIZE": "4G", "CPU_CORES": "4"}
 ```
 
 实测每个 env 的真实占用 ≈ **6 GB 内存**（4 GB 客机 + ~1.5 GB qemu/容器 + ~0.5 GB runner）、~24.5 GB overlay 磁盘。
-本项目 WSL 上限 22 GB，因此**并发上限是 3 个 env**（内存是瓶颈，不是 CPU）。详见 [CLAUDE.md](CLAUDE.md) §6.5。
+本项目 WSL 上限 22 GB，因此**并发上限是 3 个 env**（内存是瓶颈，不是 CPU）。详见 [CLAUDE.md](../CLAUDE.root.md) §6.5。
 
 ### 3.4 端口
 
@@ -346,7 +346,7 @@ https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/<
 - `proxy: true` 的任务：**49 / 361**（`test_all` 369 里是 56 个；差值 7 个在被排除的 gdrive 任务里）
 - 分布：chrome 28、multi_apps 19、vs_code 2
 
-配置要点（完整操作步骤见 [CLAUDE.md](CLAUDE.md) §4）：
+配置要点（完整操作步骤见 [CLAUDE.md](../CLAUDE.root.md) §4）：
 
 1. 凭据文件放**仓库外**（`evaluation_examples/settings/proxy/dataimpulse.json` 已被 git 跟踪，`.gitignore` 对已跟踪文件无效），用 `PROXY_CONFIG_FILE` 指过去。
 2. 代码只读五个字段——`host` / `port` / `username` / `password` / `protocol`。`provider` / `type` / `country` / `note` **代码里从未引用**，所以**不锁定 dataimpulse**，任何 HTTP/SOCKS5 住宅代理都能用。
@@ -1029,3 +1029,7 @@ grep -rn "client_password" scripts/python/run_multienv_qwen.py
 | thunderbird | 1 | `a1af9f1c` |
 | vlc | 2 | `cb130f0d` `7882ed6e` |
 | vs_code | 4 | `847a96b6` `dcbe20e8` `7c4cc09e` `971cbb5b` |
+
+<!-- REPO NAV -->
+[Repository map](../README.md)
+<!-- /REPO NAV -->

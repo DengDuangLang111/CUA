@@ -3,7 +3,7 @@
 Pulled 2026-08-14 from `huggingface.co/datasets/xlangai/ubuntu_osworld_verified_trajs`
 (the authors' trajectory release: 15+ model variants, 1000+ episodes, 500 GB).
 Fetched by HTTP range request against the zip central directory — no archive was
-downloaded in full. Tool: `sft/tools/zpeek.py`.
+downloaded in full. Tool: `sft/data/zip_reader.py`.
 
 These are **not** reconstructions. Each file is the verbatim `args.json` the
 runner wrote at the start of a real run whose trajectories are in that archive.
@@ -20,3 +20,7 @@ Scores computed from each archive's own `summary/results.json`:
 
 - **qwen3.7-plus, Verified 361, 100 steps: mean 0.6899, exact-1.0 66.6% (n=374).**
 - qwen3.6-think, OSWorld-V2 102, 300 steps: mean 0.2984, exact-1.0 6.3% (n=95).
+
+<!-- REPO NAV -->
+[Repository map](../../README.md)
+<!-- /REPO NAV -->

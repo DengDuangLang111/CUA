@@ -2,7 +2,7 @@
 
 状态:**踩点全部完成,路线待用户拍板,零动作**(未起任何实例,未改任何 AWS 资源)。
 本文是这次踩点的账本:所有数字都是实测或 DryRun 得来的,来源逐条标注。
-定下路线后,命令进 `RUNBOOK.md`,本文只留设计与判据。
+定下路线后,命令进 `taskgen/docs/RUNBOOK.md`,本文只留设计与判据。
 
 ## 0 先说清楚:OSWorld 有两半,搬的是哪一半
 
@@ -171,8 +171,8 @@ fill2 97)+ v14-200 三段 220 + pilot40 36 = **1796**。
 ### ⚠️ 14 个重复 slug 会挡住 merge
 
 **slug 只有 1782 个,重了 14 个**,全部落在 wave2-main 分片之间 —— 正是
-`RUNBOOK.md` 记的机制:slug 由内容派生,分片各自唯一、合并后同名,
-`ostg.taskgen.merge` **直接拒绝、输出目录不写**。`out/runs/` 下还没有 `wave2-all`,
+`taskgen/docs/RUNBOOK.md` 记的机制:slug 由内容派生,分片各自唯一、合并后同名,
+`ostg.taskgen.generation.merge` **直接拒绝、输出目录不写**。`out/runs/` 下还没有 `wave2-all`,
 所以这一步还没跑到,一 merge 就撞。
 
 ```
@@ -189,7 +189,7 @@ vaccine-fridge-log-sheet s1+s2        viewing-feedback-summary-doc s0+s2
 gold URL + `files/` 目录,是踩过坑的手术类型)。规则写死并**逐条打印**:
 ① 单方有 gold → 留有 gold 方;② 双方同态 → 留分片序小的(s0<s1<s2<s3);
 ③ 每条输出 `slug / kept(set,id) / dropped(set,id) / reason`,随 merge 报告归档。
-(依据:`OPS.md`"选文件的代码必须打印它选了什么",一周错分换来的。)
+(依据:`docs/OPS.md`"选文件的代码必须打印它选了什么",一周错分换来的。)
 
 ### 老池 544:已改为本地跑,不再是 AWS 的事(08-29 晚变更)
 
@@ -243,7 +243,7 @@ qwen38-27b-local/v11-100-t1-rerun2-20260816/args.json -> .../out/runs/v11-all
 
 ## 6 关键算术:WSL 的内存瓶颈会随 VM 上云一起消失
 
-`OPS.md` §5 实测:单 env 边际 **4.61 GiB** = 容器 4.08–4.11(qemu 在容器内)
+`docs/OPS.md` §5 实测:单 env 边际 **4.61 GiB** = 容器 4.08–4.11(qemu 在容器内)
 + EnvProcess worker 0.52。19.53 GiB 可用 → 3 个封顶。
 
 **走 aws provider 后,容器那 4.08 GB 不在本地了**:
@@ -255,7 +255,7 @@ qwen38-27b-local/v11-100-t1-rerun2-20260816/args.json -> .../out/runs/v11-all
 → **同一台 WSL 能驱动 20 个 env**。这是路线 ② 成立的支点,也是我 08-29 白天
 推荐 metal 时漏算的一笔账。
 
-(注意 `OPS.md` 记的"runner 内存随时间爬"依然成立,20 env 下爬得更快;
+(注意 `docs/OPS.md` 记的"runner 内存随时间爬"依然成立,20 env 下爬得更快;
 对策仍是同 `result_dir` 重跑的 heal 机制。)
 
 ### 时间账
@@ -284,7 +284,7 @@ WSL 总可用 19.53 GiB。544 用 3 个本地 VM 时的稳态占用:
 ```
 
 我们的 AWS runner 只占 worker(VM 不在本地):`0.66 + N × 0.52 ≤ 4.0` → **N ≤ 6**,
-且没有余量(`OPS.md` 记着 runner 内存会随时间爬)。**保守取 N ≤ 5。**
+且没有余量(`docs/OPS.md` 记着 runner 内存会随时间爬)。**保守取 N ≤ 5。**
 
 结论:544 跑完之前(约 08-30 下午),AWS 侧只能做
 **Tier-2 判定(1 env)和 6 档拐点探测**;**全量 12–20 并发必须等 544 结束**。
@@ -416,7 +416,7 @@ KV 容量实测:8 卡 **14,128,181 + 13,941,155 ≈ 2,807 万 token**(单卡 232
 **判定工具现成:Tier-2 闸** —— gold 在 VM 里过一遍 `soffice --convert-to` 重存后
 必须仍是 1.0。**在 AWS AMI 上跑 40 条,约 $3、半小时**,过了才谈全量。
 
-`taskgen/control.py:27` 已有 `--provider_name`,但 `--path_to_vm` 是 required、
+`taskgen/validation/control.py:27` 已有 `--provider_name`,但 `--path_to_vm` 是 required、
 `snapshot_name` 写死 `init_state` → 走 aws 要改两行(§9 补丁 3)。
 
 ---
@@ -456,7 +456,7 @@ KV 容量实测:8 卡 **14,128,181 + 13,941,155 ≈ 2,807 万 token**(单卡 232
 
 ### C4 让 Tier-2 判定能在 AWS 上跑(改两行)
 
-**为什么要**:§8 的镜像等价性判定要用 `ostg/taskgen/control.py`,它现在只会
+**为什么要**:§8 的镜像等价性判定要用 `ostg/taskgen/validation/control.py`,它现在只会
 走本地 docker。
 
 **要改的**:`--path_to_vm` 从必填改成选填;provider 是 aws 时,快照名取
@@ -538,7 +538,7 @@ i10 冠军 eval 跑于 08-29 02:41 → **当前树 == 产出 eval 的树,零漂�
 
 ⚠ **默认根盘 8 GB 不够** —— 磁盘满的表现是"截图写不进去",看起来像网络问题,极难查。
 
-**内存爬升不成立(实测推翻旧记录)**:`OPS.md` 记的"3 env 跑 5 小时吃掉 4 GB"是
+**内存爬升不成立(实测推翻旧记录)**:`docs/OPS.md` 记的"3 env 跑 5 小时吃掉 4 GB"是
 v11 时代(20 图/fold10)测的。i10 把图数封顶 10,上下文有硬上界。544 跑 68 分钟
 实测 RSS **不升反降**(657→575 / 594→591 / 567→564)。
 
@@ -756,7 +756,7 @@ Zixian 点了 device-code 链接后切到 SSO:
 
 ```
 WSL          遥控台,不跑任何东西
-harness EC2  容器里跑 ostg.taskgen.control --gold ...t2.jsonl --provider_name aws
+harness EC2  容器里跑 ostg.taskgen.validation.control --gold ...t2.jsonl --provider_name aws
              起 8021 喂自己 gold · 下结果文件 · 跑 comparator
 任务 VM      每条一台,官方 AMI:注入 gold → soffice 原格式重存 → 判分 → 销毁
 Tillicum     不参与 —— Tier-2 把 agent 整个摘掉,只测判据链
@@ -862,7 +862,7 @@ tools_*.sh 里含 tier2 的步骤   零
 logs/ 里提到 tier2             零
 ```
 
-`EXPERIMENTS.md` 的"Tier-2 36/36"说的是 pilot40,**而且报告没留存,无法审计**。
+`docs/EXPERIMENTS.md` 的"Tier-2 36/36"说的是 pilot40,**而且报告没留存,无法审计**。
 所以修复之后这条路径再没被真正执行过,直到 08-30 凌晨在 AWS 上第一次跑起来。
 
 **两个独立原因叠加,少任何一个都不会踩到:**
@@ -882,7 +882,7 @@ logs/ 里提到 tier2             零
 
 ### ⚠ 一个我还不能断言的地方(已被上面推翻,保留原文以存过程)
 
-"docker 上 Tier-2 是 36/36"来自 `EXPERIMENTS.md` 的叙述,**但 docker 侧的
+"docker 上 Tier-2 是 36/36"来自 `docs/EXPERIMENTS.md` 的叙述,**但 docker 侧的
 `gold_report.jsonl` 在盘上找不到**(各分片集只有 `bake_report` / `control_neg_0` /
 部分 `control_t1`)。所以严格说,我现在证明的是"**AWS 上 freeze 判不过**",
 而不是"**AWS 与 docker 不同**"。
@@ -1098,8 +1098,8 @@ v14g 的 image 族走的是**"seedful 方向判据"gold 机型**:`expected` = �
 
 分工(08-30 与对面议定):
 - 数字与对照表 → 本文(已写);
-- **下一轮 gen:image 族内判据分布配平(4→15 种,需扩 gold 机型)** → `IDEAS.md` 候选实验队列;
-- `SFT_DATA.md` curation 节:image 族按池占比封顶 ~8.8%(90–95 条)+ 子模式去重,
+- **下一轮 gen:image 族内判据分布配平(4→15 种,需扩 gold 机型)** → `docs/IDEAS.md` 候选实验队列;
+- `sft/docs/SFT_DATA.md` curation 节:image 族按池占比封顶 ~8.8%(90–95 条)+ 子模式去重,
   **并注明子模式天花板 = 4 种滑块动作**。封顶数字不因此收紧 ——
   训练价值 ≠ 评测镜像,滑块 grounding 仍是净增量,但要把它的浅记录清楚。
 
@@ -1364,7 +1364,7 @@ deck    判据最严(16 项默认开)→  88% 的任务都在动标题
 ④ 缺省=沿用现状**但 loader 必须列出未声明 vocab 的族**(静默缺省正是本次塌缩
    潜伏这么久的原因之一);⑤ 显式 `0` = 禁止,与"缺省"语义不同;
 ⑥ **抽中的词必须进 spec 溯源**,与 `recipe_name`/`recipe_hash` 并列 ——
-   否则体检算不出"声明分布 vs 实际分布"(同 `OPS.md`"选择器必须出声");
+   否则体检算不出"声明分布 vs 实际分布"(同 `docs/OPS.md`"选择器必须出声");
 ⑦ 可执行性分类写在代码不写在配方(`FAMILY_VOCAB_KIND`)。
 
 **体检阈值:头部词 > 50% 告警。** 依据是本次三个实测读数 ——
@@ -1891,12 +1891,12 @@ Writer 中的一段纯文本 —— **没有幻灯片可操作,任务从定义�
 扫 `/home/user` 下所有办公扩展名文件,ODF 读 `mimetype` 成员、OOXML 查必需部件,
 不符即整条剔除。**这是正确的设计** —— 它检查真实文件,不解析命令文本。
 
-**② 语料静态审计(本仓 `CUA/tools/fixture_type_audit.py`)**:对已装箱的任务集做
+**② 语料静态审计(本仓 `CUA/taskgen/analysis/fixture_type_audit.py`)**:对已装箱的任务集做
 事后体检,产出可用于剔除的缺陷清单。用法:
 
 ```bash
 FIXTURE_AUDIT_OUT=/path/defects.json \
-  python3 CUA/tools/fixture_type_audit.py <任务集目录> [...]
+  python3 CUA/taskgen/analysis/fixture_type_audit.py <任务集目录> [...]
 # 退出码 0=全合格,1=有不符,可直接当闸挂
 ```
 
@@ -2121,3 +2121,7 @@ ec2 = boto3.client('ec2', region_name=os.environ['AWS_REGION'])
 - 谁在用某 SG:`describe_instances(Filters=[{'Name':'instance.group-id',...}])`
 - 权限:`run_instances(DryRun=True, ...)` →
   `DryRunOperation`=有权限 / `UnauthorizedOperation`=无权限
+
+<!-- REPO NAV -->
+Archived record · [Repository map](../../README.md) · [Archive index](../README.md)
+<!-- /REPO NAV -->

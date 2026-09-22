@@ -94,7 +94,7 @@ strict/WebSTAR 线的既有审计显示：
 
 这些实验尚无最终行为结果，不能预报为提分。
 
-taskw 有一个需要明确的实验定义问题：[make-taskw-weights.py](/Users/knight/uw/computeragent/CUA/sft/tools/make-taskw-weights.py:62) 用 w=c/N_T，并验证每条轨迹的“样本权重和”相等。对于按 token 求和的 loss，若第 i 步有 L_i 个有效目标 token，则轨迹的 token 权重总量为：
+taskw 有一个需要明确的实验定义问题：[make-taskw-weights.py](/Users/knight/uw/computeragent/CUA/sft/data/task_weights.py:62) 用 w=c/N_T，并验证每条轨迹的“样本权重和”相等。对于按 token 求和的 loss，若第 i 步有 L_i 个有效目标 token，则轨迹的 token 权重总量为：
 
 `sum_i w*L_i = c * mean_i(L_i)`
 
@@ -124,8 +124,167 @@ histcomp 的训练端按帧龄改变分辨率；远端当前 `mm_agents/qwen/ima
 
 ## 证据位置
 
-- [结果账本](/Users/knight/uw/computeragent/CUA/sft/RESULTS.md:2150)、[失败分析旧结论](/Users/knight/uw/computeragent/CUA/sft/FAILURE_ANATOMY.md:1347)、[strict 与新实验](/Users/knight/uw/computeragent/CUA/PLAN-20260901-strict-corpus.md:365)。旧账本中的强因果措辞按本文收窄。
+- [结果账本](/Users/knight/uw/computeragent/CUA/sft/docs/RESULTS.md:2150)、[失败分析旧结论](/Users/knight/uw/computeragent/CUA/outdated/reports/SFT_FAILURE_ANATOMY_20260903.md:1347)、[strict 与新实验](/Users/knight/uw/computeragent/CUA/outdated/plans/PLAN-20260901-strict-corpus.md:365)。旧账本中的强因果措辞按本文收窄。
 - WSL 结果根目录：`/mnt/d/research/OSWorld/results_generated/`。
 - 本次关键新结果：`qwen35-9b-sft/eval50-mixbtf9bms100-20260904`；逐题读取 `result.txt`，并核 `args.json`、`MODEL_BOUNDARY.json`。
 - 训练日志：`/gpfs/scrubbed/jy050706/sft/out/mixbtf9b-2x4/v1-20260902-152318/checkpoint-870/trainer_state.json` 与 `mixbtf9b-2x4-lr1e5/v1-20260902-193032/checkpoint-870/trainer_state.json`。
 - 轨迹按 step_num 合并，多动作行不重复计步；存在重启时取最后一段 episode。
+
+## 2026-09-17 补充：v16 保存监督与文件评分诊断
+
+本节在旧 Windows/WSL 只读核查实际代码、训练目标名单、判官 JSONL、原始轨迹和截图；没有重跑模型或判官。问题是：能否筛出教会模型完成保存/导出的成功轨迹，以及漏保存能否解释 mixB/mixbtf 的评分瓶颈。
+
+**结论：能做有证据分级的筛选；现有证据不支持把“普遍忘记按保存”当作主要解释。** 保存动作、保存完成、目标文件内容正确是三个不同条件。v16 的 judge success 或 strict 不能单独证明最后一个条件。
+
+### 本次对象和可复核产物
+
+- 实际训练目标：WSL `/mnt/d/research/ostg-v16/out/targets-mixbtf-v16-main-1.jsonl` 485 条、`targets-mixbtf-v16-pilot-200.jsonl` 69 条，共 554。这是 mixB/mixbtf 的 v16 部分，不是后来 `out/admitted-v16.jsonl` 的 645 条，也不是 strict 的 340 条。
+- 轨迹：`/mnt/d/research/OSWorld/results_generated/qwen38-27b-local/{v16-main-1,v16-pilot-200}/{domain}/{task_id}/traj.jsonl`。
+- 当前判官：`judge-v3-gateaudit.jsonl` → `judge-v3-main.jsonl` → `judge-v3-pilot.jsonl`；按 `(domain, task_id)` 取最大 `_result_mtime`，相同时间先出现者优先。554 条判官时间与现场 `result.txt` 时间全部相符（1 秒容差）。这仍不是原始判定时的轨迹内容哈希。
+- [完整审计数据](v16-save-audit-20260917/audit.json)：含源名单/判官 SHA256、554 条轨迹 SHA256、任务要求、保存相关要求项、动作和截图位置。
+- [240 条 seen 复核候选](v16-save-audit-20260917/save_seen_review_candidate.jsonl)、[112 条 inferred 复核候选](v16-save-audit-20260917/save_inferred_review_candidate.jsonl)、[63 条当前判官不再准入](v16-save-audit-20260917/latest_judge_not_admitted.jsonl)、[3 个手动查看保存画面的例子](v16-save-audit-20260917/manual_save_examples.jsonl)。这些是分析名单，不是已验收的新训练集。
+
+### 计数与边界
+
+| 检查 | 本次结果 | 解释 |
+|---|---:|---|
+| 主批/先导批现存轨迹 | 1195 / 191 | 共 1386 |
+| 其中归档 `final_state.json` | 0 / 1386 | 旧 VM 最终磁盘状态无法从该证据恢复；不是说文件一定没保存 |
+| 554 条训练轨迹有保存/另存/导出快捷键 | 297 | AST 检查 `hotkey` 的 Ctrl+S、Ctrl+Shift+S、Ctrl+Shift+E；不覆盖菜单、按钮、命令写文件 |
+| 单域 Calc / Impress / Writer 有上述快捷键 | 51/54、23/23、21/24 | 合计 95/101；不能解释成 95 条文件内容正确 |
+| 当前判官准入且保存要求均 `seen` | 240 | 人工复核优先队列，尚非磁盘确认 |
+| 当前判官准入且保存要求非全 `seen` | 112 | 常见 Ctrl+S 后缺显式确认，不应自动判失败 |
+| 当前判官准入但未命中保存要求关键词 | 139 | 包含无需文件交付及关键词漏召回，不能当“未保存” |
+| 当前判官不满足准入 | 63 | 包括 verdict 非 success 或至少一项要求没完成；不全是保存问题 |
+
+保存要求关键词匹配 `save/saved/saving/export/exported/exporting/persist/persisted/written/write...file`，排除 password；该匹配只是召回，可能包括非文件持久化，也会漏掉未写这些词的要求。准入按现场 `curate16.admitted` 的核心规则：success 且所有要求 done/status 为 yes/satisfied/mostly_satisfied。`strict` 不作为保存专门筛选条件。
+
+手动看了三个保存证据帧：
+
+- `703d66f5-1e7c-5641-b324-a3258317fec2`，GIMP 第 20 步状态栏明确显示 `Image saved to '/home/user/labphotos/onion-cells-labeled.xcf'`，标题显示 2 layers。[截图](v16-save-audit-20260917/gimp-save.png)
+- `351cc186-a7e4-51b0-92f3-9ddcf044de05`，第 11 步 `ls -l` 显示 `/home/user/Documents/kyoto-itinerary.pdf`，大小 80663 bytes。这证明可见的文件存在/非空证据，不独立证明 PDF 内容正确。[截图](v16-save-audit-20260917/pdf-save.png)
+- `53b2caff-0917-5191-9e84-a3decd909ed3`，第 4 步 Ctrl+S 后标题为 `blurb.txt`、无未保存星号。[截图](v16-save-audit-20260917/text-save.png)
+
+还发现判官标签本身不一致：`0be8da59...` 的“Ctrl+S 后没有格式对话框”被标 `seen`，`04a3e7c5...` 的类似证据被标 `inferred`。因此不能直接拿 `evidence=seen` 作为硬验收。
+
+### 对 eval 假设的约束
+
+现场 v11 `ostg/taskgen/gen.py` 的 `_flush_postconfig` 对特定 Office 格式在评分前执行 Ctrl+S；这可能使成功教师轨迹缺少模型自身保存监督。是否每份 v11new 任务都使用该行为，本轮未逐条核查。
+
+现场 `/mnt/d/research/OSWorld/evaluation_examples/verified_eval100_nonproxy.json` 对应的 **41/100** 题当前配置有 Ctrl+S postconfig，60 题的 evaluator result 包含 `vm_file`。对照 9 月 4 日 `qwen35-9b-sft/eval50-mixbtf9bms100-20260904` 的历史结果：39 题未满分，26 题属于这 60 道文件读取题，其中 15 题当前配置含 Ctrl+S，11 题不含。26 题中 12 题轨迹也执行过 Ctrl+S。
+
+这是**当前任务配置对历史结果的静态比对**；没有逐题证明历史 postconfig 成功执行，也没有证明它保存的是每个要求的目标产物。自动 Ctrl+S 不能保证 Save As 路径、导出格式、多文档切换或最终内容正确。上述计数只能约束假设，不能排除保存失败，更不能推出漏保存造成了多少分。
+
+### 推荐筛选与验证
+
+1. 以当前成功且所有要求完成作为候选门，再从 instruction 提取实际交付物、路径和格式。无需文件交付的浏览/设置任务单独保留。
+2. 对每个交付物核对“最后一次相关编辑 → 保存/导出 → 格式/覆盖确认 → 可观察的保存完成 → 结束”。不仅匹配动作文本，也看对应动作前后帧、判官引用帧、最终帧。多应用任务按文件验收；保存后又修改要重新保存。
+3. 有重开目标文件、文件内容读取、明确保存成功提示或未保存标记消失者优先；只有 Ctrl+S 或 agent 自称已保存者保留为待复核。命令行写文件和菜单导出均是合法保存路径。
+4. 建训练集时保留保存及确认步骤的原始模型动作/响应，核对 build 后监督仍包含这些步；不要追加未经执行的 Ctrl+S 来“修正”轨迹。
+5. 因果诊断优先看上述 11 道没有自动保存配置的文件类失败，再覆盖已有自动保存但路径/格式可能不对的题。严格证明需新运行在终止、evaluator postconfig 之前保存状态，在可恢复的同一状态上只补必要保存，再用原 evaluator 对照；只有这一步使失败变成功，才记为 save-only failure。保留原始正式分数，另报诊断分数，避免把补救后的结果当原模型成绩。
+6. 后续 rollout 可复用现有 `OSTG_FINAL_STATE=1` / `strongjudge.disk_block()` 补磁盘证据，但字段截断、采集遗漏、只列文件不验内容仍可能发生。文件存在之后还需验证格式与任务要求的内容；文件快照须与 run/task/episode 绑定，不能拿后来被覆盖的共享 cache 补证。
+
+### 554 条范围内的第二轮初筛（用户最终指定范围）
+
+最终范围固定为 mixB/mixbtf 的 **554 条**，不是全量 1386。对当前准入成功轨迹的保存要求及其判官说明做离线证据分级，得到 **223 条候选**：读回内容/重新加载 70，文件存在/大小/mtime 60，界面保存成功提示/未保存标记变化 93。其余为动作或主张但未匹配到这些完成线索 131、交付要求需要语义复核 137、当前不满足准入 63；六组互斥且合计 554。
+
+- [223 条候选与截图位置](v16-save-audit-20260917/screened554/review.md) · [详细 JSONL](v16-save-audit-20260917/screened554/save_evidence_candidates.jsonl) · [ID 名单](v16-save-audit-20260917/screened554/candidate_ids.jsonl)。
+- [70 条读回候选](v16-save-audit-20260917/screened554/disk_readback_candidate.jsonl) · [60 条文件存在候选](v16-save-audit-20260917/screened554/file_presence_candidate.jsonl) · [93 条界面完成候选](v16-save-audit-20260917/screened554/ui_completion_candidate.jsonl)。
+- [筛选程序](v16-save-audit-20260917/screened554/screen.py) · [输入证据](v16-save-audit-20260917/screened554/audit.json) · [规则及计数](v16-save-audit-20260917/screened554/summary.json)。脚本只读现有判官/轨迹数据并写分析产物，不调用模型。
+
+这是文本线索筛选，不是新视觉判定；标签依赖旧判官说明且正则不保证召回。候选意味着至少一个保存相关要求有更具体证据线索，**不表示每个交付物都经过独立验收**。131 条不能解释成没有保存；137 条也不能解释成无需交付。训练正式准入前还需核对目标路径、格式、保存后修改和多产物覆盖。全部候选均验证属于原 554 名单、当前判官所有要求完成、mtime 匹配、无 step_num 重启。
+
+### mixB、mixC、mixR5M 的 v16 分布对照（2026-09-17）
+
+用户所指“单纯 multi-app”按现有实验配置对应 `mixR5M-9b`：整份语料仍包含旧 v11 r5，只有 v16 部分限制为 multi-app。读取现场 WSL `out/sft/{mix-v16-main,mix-v16-pilot,v16-truemulti}` 的训练 JSONL、`v16-truemulti/ids.jsonl`、任务元数据及 report。554 个 ID 与既有训练 target 名单完全一致；166 条子集的 5,342 个训练样本逐行 SHA256 均能在 v16 原语料找到。配置来源为 `sft/scripts/train/{mixB-9b,mixC-9b,mixR5M-9b}.sbatch`。
+
+| 配置 | v16 轨迹 / 训练样本 | 其他语料 | 总训练样本 | v16 样本占比 |
+|---|---:|---|---:|---:|
+| mixB | 554 / 13,372 | v11new 312 条 / 5,204 样本 | 18,576 | 72.0% |
+| mixC | 同一份 554 / 13,372 | 无 | 13,372 | 100% |
+| mixR5M | 166 / 5,342 | 旧 v11 r5 362 条 / 6,474 样本 | 11,816 | 45.2% |
+
+旧 r5 数量取训练配置与 CHECKPOINTS 的既有记录，本次未重新遍历集群 r5 数据。其他表内 v16/v11new 源语料数量现场读取。样本数是一条完整训练 prefix 的数量，不是输出 token 数或 loss 权重。
+
+| v16 保存证据初筛类别 | mixB 与 mixC 各自相同的 554 条 | mixR5M 的 166 条 |
+|---|---:|---:|
+| 读回/重新加载线索 | 70（12.6%） | 27（16.3%） |
+| 文件存在/元数据线索 | 60（10.8%） | 20（12.0%） |
+| 界面保存状态线索 | 93（16.8%） | 35（21.1%） |
+| 上面三组合计 | **223（40.3%）** | **82（49.4%）** |
+| 只有保存动作/主张、未命中完成线索 | 131（23.6%） | 40（24.1%） |
+| 交付要求待语义复核 | 137（24.7%） | 19（11.4%） |
+| 当前判官不满足准入 | 63（11.4%） | 25（15.1%） |
+
+这沿用本次 regex 初筛，不是逐条看图或磁盘验收。最后一行是后续当前判官的复核结果，不代表这些轨迹原始入训时被标为失败。没有完成线索也不等于未保存。仅在“已准入且召回到保存相关要求/动作”内比较，候选比例为 223/(223+131)=63.0% 和 82/(82+40)=67.2%，差异比全分母的 9.1pp 小；仍是启发式条件分布。
+
+以训练样本数计，上面三组轨迹贡献的全部样本为 6,174/13,372=46.2% 和 2,677/5,342=50.1%。这些是具有线索的轨迹的全部步骤，不是保存动作步骤占比，更不是保存相关 loss 占比。
+
+按源脚本 `related_apps` 去掉 os/files/terminal/file_manager/nautilus/shell/bash/system 计算，554 条中有 25 条 0 个计入应用、363 条 1 个、135 条 2 个、31 条 3 个。166 子集正好是后两组。原始 `multi_apps` 目录虽然有 320 条，其中 154 条不满足该规则；目录标签不能当作实际双应用证据，`related_apps` 本身也只是任务标注，不是重新从动作识别应用。
+
+| 元数据/长度 | mixB/mixC 的 v16 | mixR5M 的 v16 |
+|---|---:|---:|
+| 难度 d1 / d2 / d3 | 234 / 220 / 100 | 0 / 66 / 100 |
+| 轨迹步数中位数 | 21.5 | 30 |
+| 平均训练样本/轨迹 | 24.14 | 32.18 |
+| 有保存快捷键 | 297/554（53.6%） | 117/166（70.5%） |
+
+166 子集占 v16 轨迹 30.0%，却占 v16 训练样本 39.9%；在完整 mixB、mixC、mixR5M 中，这批 v16 multi-app 样本分别占 28.8%、39.9%、45.2%（不包含 v11 自身可能存在的 multi-app）。38 种应用组合中前三类为 chrome+calc 22、calc+writer 14、calc+vscode 11；chrome+gimp 和 chrome+vscode 也各 11。
+
+解释：mixB/mixC 没有 v16 内部分布差异，它们改变的是 v11 混入和 v16 在全语料中的占比；R5M 同时改变了难度、长度、应用组合与 v11 来源。R5M 的 v16 保存线索更密集，不能据此推断其真实保存可靠性更高，也不能用三个实验的表现证明保存缺失是否为瓶颈。
+
+复核产物：[源文件计数与哈希](v16-save-audit-20260917/composition/sources.json)、[分布对照](v16-save-audit-20260917/composition/comparison.json)、[554 条逐任务关联结果](v16-save-audit-20260917/composition/joined_tasks.jsonl)。
+
+### 按实际 SFT 样本数归一化（同日补充）
+
+按任务实际进入构建后 JSONL 的样本数加权：每类占比 = 该类任务的 SFT 行数之和 / 该臂所有语料 SFT 行数之和。它把长轨迹贡献更多样本的影响计入，且使用构建后行数而非原始 rollout 步数。三臂均为 3 epochs，完整遍历时不改变该组成比例；不据此声称实际有效 label token 的 loss 权重相同。
+
+| 数据类别 | mixB：18,576 行 | mixC：13,372 行 | mixR5M：11,816 行 |
+|---|---:|---:|---:|
+| v16 读回/重新加载线索 | 2,017（10.86%） | 2,017（15.08%） | 937（7.93%） |
+| v16 文件存在/元数据线索 | 1,774（9.55%） | 1,774（13.27%） | 705（5.97%） |
+| v16 界面保存状态线索 | 2,383（12.83%） | 2,383（17.82%） | 1,035（8.76%） |
+| v16 只有保存动作/主张，未匹配完成线索 | 3,071（16.53%） | 3,071（22.97%） | 1,196（10.12%） |
+| v16 交付要求待判断 | 2,457（13.23%） | 2,457（18.37%） | 606（5.13%） |
+| v16 当前复核不满足准入 | 1,670（8.99%） | 1,670（12.49%） | 863（7.30%） |
+| v11，本轮未做保存分类 | 5,204（28.01%） | 0 | 6,474（54.79%） |
+| 合计 | 18,576（100%） | 13,372（100%） | 11,816（100%） |
+
+前三类合计占**完整训练集**：mixB 33.24%、mixC 46.17%、mixR5M 22.66%。仅在 v16 内归一化则为 46.17%、46.17%、50.11%，multi 子集相对全量 v16 高 3.94pp（不是按轨迹计数时的 9.14pp）。不能把完整训练集的这三个比例当成全部保存示范比例排序，因为 v11 的保存类别尚未标注。
+
+“前三类样本”指具有证据线索的轨迹的所有训练步骤，不是 Ctrl+S/导出等动作本身的行数。分类仍来自旧判官说明的规则初筛，不是已验证保存成功率。[精确计数及占比 JSON](v16-save-audit-20260917/composition/sft_sample_shares.json)。
+
+### v11 能否按 100% 验收计入（同日实际复核）
+
+读取四份 v11 语料的 `samples.jsonl` 元数据，按 run/domain/task_id 回查原始 `result.txt`，得到：
+
+| v11 来源 | 轨迹 | SFT 样本 | result=1.0 样本 | rescued 且 result=0 样本 |
+|---|---:|---:|---:|---:|
+| mixB 的 v11new | 312 | 5,204 | 5,204（100%） | 0 |
+| mixR5M 的旧 r5 | 362 | 6,474 | 5,487（84.75%） | 987（15.25%，57 条轨迹） |
+
+旧 r5 的 100 集：68 条原始通过 + 7 条 rescued，分别 1,167 / 191 样本；500 集：237 条原始通过 + 50 条 rescued，分别 4,320 / 796 样本。rescued 不等于轨迹错误，只表示不能称为程序直接通过。当前 `build.py` 的准入允许 `score == 1.0 or key in include`，元数据与原始结果在这四份语料上吻合。
+
+现场 v11 `gen.py` 显示，只有匹配 xlsx/ods/odt/odp 的相应路径才自动加入 Ctrl+S postconfig；浏览器任务可只检查 URL，其他 probe 检查各自目标状态。因此“全部经过任务验收”“每条都验证文件内容”“模型主动保存”是不同口径；自动 flush 发生在 evaluator 阶段，不能自动算作模型的保存监督。
+
+较严格但仍是代理统计：**v11 程序原始通过的样本 + v16 读回/重新加载线索候选的样本**，占完整 SFT 数据为：
+
+| 臂 | 分子 / 全部 SFT 样本 | 占比 | 若假设所有 v11 均计入 |
+|---|---:|---:|---:|
+| mixB | (5,204 + 2,017) / 18,576 | 38.87% | 38.87% |
+| mixC | 2,017 / 13,372 | 15.08% | 15.08% |
+| mixR5M | (5,487 + 937) / 11,816 | 54.37% | (6,474 + 937) / 11,816 = 62.72% |
+
+这些比例不能命名为“严格保存成功率”：v11 checker 未必验文件、v16 读回依旧是未独立看图复核的文本候选。若沿用宽口径把 v16 三类线索都计入，并假设全部 v11 计入，则为 mixB 61.25%、mixC 46.17%、mixR5M 77.45%；这同样只是假设口径的证据覆盖率。
+
+证据：[v11 逐任务准入核查](v16-save-audit-20260917/composition/v11_admission_audit.json) · [严格些/宽些及 v11 假设的精确计算](v16-save-audit-20260917/composition/outcome_evidence_shares.json)。
+
+### 新候选方案：旧 r5 + 完整交付 v16（2026-09-17）
+
+用户要求先给出 100% 满足 instruction 的验收标准及剩余 multi-app 数。标准与候选文件见 [方案](v16-save-audit-20260917/proposed_r5_mix/criteria.md)。逐项检查发现旧 strict 成员 `2b67da05...` 的 r2 为 `partial-seen`，故不能直接把 strict 名单等同所有要求 seen。精确逐字段过滤并与保存线索候选相交后为 **143 条 / 3,668 样本，multi-app 37 条 / 1,128 样本**；仍需独立 instruction 覆盖、每个产物与保存顺序复核，37 不是最终验收通过数。
+
+若候选全部通过，与旧 r5 6,474 样本各加入一次，得到 10,142 样本，r5:v16 = 63.83%:36.17%。当前只有候选名单和配方建议，没有改动训练数据或启动训练。
+
+<!-- REPO NAV -->
+[Repository map](../README.md)
+<!-- /REPO NAV -->

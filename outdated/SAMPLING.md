@@ -202,3 +202,7 @@ VM 内任何程序都看不见。probe 结构上够不着。
 短路的，所以这类任务的 evaluator 只需要 `{"func": "infeasible"}`，一个 getter 都不用。
 成本在 emit/check：这类任务没有 solved 状态，两个构建期对照对它没意义，得特判跳过。
 7.5% 的任务类型空白，换一处特判，看起来划算，但还没做。
+
+<!-- REPO NAV -->
+Archived record · [Repository map](../README.md) · [Archive index](README.md)
+<!-- /REPO NAV -->

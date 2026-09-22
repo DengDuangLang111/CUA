@@ -1,5 +1,5 @@
 """The Anthropic-API client every ostg stage shares: env loading, one
-retrying call, and forced-tool extraction. Split out of taskgen/gen.py so
+retrying call, and forced-tool extraction. Split out of taskgen/generation/gen.py so
 the SFT side does not import the generation pipeline to reach the model.
 """
 import json

@@ -2,7 +2,7 @@
 
 > 本文件是顶层 CLAUDE.md 的实际内容(经 `@CUA/CLAUDE.root.md` import,在 CUA 仓库里受版本管理)。
 > 只放两类东西:**每 session 都需要的环境事实**,和**"去哪查什么"的路由**。
-> 深度内容全在域文档里,按需 Read;变化频繁的状态在 `CUA/EXPERIMENTS.md` 顶部"现状"块,不在这里。
+> 深度内容全在域文档里,按需 Read;变化频繁的状态在 `CUA/docs/EXPERIMENTS.md` 顶部"现状"块,不在这里。
 
 ## 1 机器拓扑与访问
 
@@ -36,20 +36,21 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && <命令>"'
   `sudo sysctl -w net.inet.ip.portrange.first=16384` 秒恢复(运行时参数,重启失效)。
   根源是我们自己高频短命 ssh —— **Mac 侧 ControlMaster 已于 2026-08-28 开启**
   (实测连续 5 次 ssh 新增 0 条连接);换网络后若 ssh 卡住,`ssh -O exit <host>`
-  清掉僵死 master。判别全流程见 `CUA/OPS.md` 末节。
+  清掉僵死 master。判别全流程见 `CUA/docs/OPS.md` 末节。
 
 ## 2 仓库地图(哪份代码是真的)
 
 | 仓库 | 位置 | 角色 |
 |---|---|---|
-| OSWorld(魔改) | WSL `/mnt/d/research/OSWorld`,091f5ef1+9 文件魔改+未跟踪新增 | **实验真正跑的 harness**;报官方分数需披露魔改。**`git diff` 不是完整清单**,未跟踪新增(含一整个 evaluator 模块)要靠 `git status` 才看得到(明细 `CUA/OPS.md` §1) |
+| OSWorld(魔改) | WSL `/mnt/d/research/OSWorld`,091f5ef1+9 文件魔改+未跟踪新增 | **实验真正跑的 harness**;报官方分数需披露魔改。**`git diff` 不是完整清单**,未跟踪新增(含一整个 evaluator 模块)要靠 `git status` 才看得到(明细 `CUA/docs/OPS.md` §1) |
 | OSWorld-upstream | WSL + Mac 各一份纯净 worktree(091f5ef1) | 查官方行为/做任务集分析用这份 |
 | OSWorld(Mac 旧副本) | `OSWorld/`,落后 5 提交 | **别用它做分析** |
 | **ostg**(taskgen) | WSL `/mnt/d/research/ostg-v11.1/ostg`(.git 在 ostg/ 子目录) | 生成流水线代码;**工作分支 v11.1,每次流程级提交后 `git fetch . v11.1:main`** |
 | ostg 各时代 worktree | os-simple-taskgen*(v6/v8.4)、ostg-v9/-v10/-v11 | 历史标记,别从它们跑东西;task 产物在 `os-simple-taskgen-v8/out/runs/` |
 | **CUA**(本项目文档+dashboard) | Mac `CUA/`,github DengDuangLang111/CUA,push=Vercel 生产 | **所有文档定都于此**;含 ostg 代码副本(canonical 代码在 WSL) |
 | OSWorld-V2(0624+魔改) | WSL `/mnt/d/research/OSWorld-V2` | 另一个 benchmark,与 OSWorld 无关。**别拿它跑新实验**:工作区 999 个"已修改"里 993 个是 CRLF 噪音,真实魔改只有 6 个文件 |
-| **OSWorld-V2-0808** | WSL worktree,分支 `v2-0808-qwen` | **跑 V2 用这个**。魔改已移植且 diff 干净(可直接当披露清单)。版本口径/分叉明细/起跑条件 → `CUA/reference/OSWORLD_V2_RUNTIME_REQUIREMENTS.md` §0.5 |
+| OSWorld-V2-0808 | 两台 WSL 的旧诊断/历史目录 | 保留原结果和缓存；不要从这份手工副本启动新 V2 run。原始差异见 `reference/OSWORLD_V2_RUNTIME_REQUIREMENTS.md` 与 harness diff 报告 |
+| **OSWorld-V2-shared / OSWorld-V2-personal** | 两台 WSL `~/research/OSWorld-V2-shared`；Mac 项目同级 `OSWorld-V2-personal/` | **当前 V2 入口**：GitHub `DengDuangLang111/OSWorld-V2`，分支 `qwen38-v2`，两机必须固定同一commit；启动/环境检查/monitor 在 `local_eval/`。实时commit、路径和合并结果 → `docs/EXPERIMENTS.md` 顶部及 `reports/OSWORLD_V2_THINK_SHARED_20260915.md` |
 
 数据与权重不进任何仓库:SFT 数据+checkpoint 在 Tillicum `/gpfs/scrubbed/jy050706/sft/`,
 轨迹在 WSL `results_generated/`。
@@ -60,15 +61,15 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && <命令>"'
 ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && set -a && . ./.env && set +a && curl -s -w \"\nHTTP %{http_code}\n\" -H \"Authorization: Bearer \$OPENAI_API_KEY\" http://127.0.0.1:18001/v1/models"'
 ```
 
-学生 3.6=:18001,教师 3.8=:18020。隧道/ControlMaster/Duo/重建 → `CUA/OPS.md` §4。
+学生 3.6=:18001,教师 3.8=:18020。隧道/ControlMaster/Duo/重建 → `CUA/docs/OPS.md` §4。
 
 ## 4 三条铁律
 
 1. **并发上限 3 个 VM**(22GB WSL 实测红线;改上限要 `wsl --shutdown`,会杀隧道、重过 Duo
-   ——只在两个 campaign 之间做)。明细 `CUA/OPS.md` §5。
+   ——只在两个 campaign 之间做)。明细 `CUA/docs/OPS.md` §5。
 2. **别在 Mac 上分析轨迹/进度**:一律 ssh 现查,先 `pgrep -af run_multienv_qwen`
    看 runner 命令行(**result_dir 在哪个 model 目录下以这行为准,数结果别数错目录**)。
-   命令模板 `CUA/OPS.md` §3.1。
+   命令模板 `CUA/docs/OPS.md` §3.1。
 3. **正在被训练/生成任务读取的数据集不许动**:stage + swap + snapshot(见 memory)。
 
 ## 5 文档路由表(先查这张表,再 Read 对应文件)
@@ -76,24 +77,26 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && set -a && . 
 | 要做的事 | 读 |
 |---|---|
 | 项目总览 / 目录结构 | `CUA/README.md`(L1 索引) |
-| **标准术语与禁用黑话** | `CUA/GLOSSARY.md`(新概念先入表再使用) |
-| **臂名 / 语料名怎么起(不手打)** | `CUA/NAMING.md`(语法与规矩)· `python3 CUA/tools/armname.py emit <sbatch>`(生成四行粘进 sbatch/serve) |
-| 现在跑到哪了 / 下一步 | `CUA/EXPERIMENTS.md` 顶部"现状"块 |
-| 生成任务:gen→ship→cull→merge→control→rollout 全部命令 | `CUA/RUNBOOK.md`(唯一 runbook;WSL 侧同名文件是指路桩) |
-| 生成流水线的设计与各层职责 | `CUA/TASKGEN_PIPELINE.md` |
-| **SFT 数据流水线:每层职责、五道闸、像素审计、排错** | `CUA/sft/DATA_PIPELINE.md` |
-| **Klone 上训练:容器/账号/占位卡/双 bind/OOM 机理/速度账** | `CUA/sft/KLONE.md` |
-| 实验结果与决策依据(账本) | `CUA/EXPERIMENTS.md` |
-| **eval 汇报:每个臂的结果/设置/两两差异;§12 全臂总表(按实验目的分轴)** | `CUA/sft/RESULTS.md` |
-| **为什么失败:零解题解剖、操作覆盖缺口、撞上限机制、孤儿根因** | `CUA/sft/FAILURE_ANATOMY.md` |
-| SFT:环境/配方/数据构建/训练/eval 协议 | `CUA/sft/TRAINING.md`(顶部有现状块)· `CUA/SFT_DATA.md` · `CUA/sft/CONTEXT.md` |
-| rollout 打分体系:judge 输入/刻度/schema、仲裁协议、判官对照 | `CUA/JUDGING.md` |
-| checkpoint/数据集/轨迹存哪、哪个臂对应哪份数据、能删什么 | `CUA/CHECKPOINTS.md` |
-| 运维深度:魔改明细/代理/隧道/资源/任务 JSON 语义与坑 | `CUA/OPS.md` |
-| Dashboard/Vercel 契约 | `CUA/DASHBOARD.md` |
-| 论文与创新点 | `CUA/READING.md` |
-| 候选实验/改进方向的评估与排队 | `CUA/IDEAS.md` |
-| ostg 分支史 / main 是谁 | `CUA/taskgen/GIT_HISTORY.md` |
+| **标准术语与禁用黑话** | `CUA/docs/GLOSSARY.md`(新概念先入表再使用) |
+| **臂名 / 语料名怎么起(不手打)** | `CUA/docs/NAMING.md`(语法与规矩)· `python3 CUA/sft/armname.py emit <sbatch>`(生成四行粘进 sbatch/serve) |
+| 现在跑到哪了 / 下一步 | `CUA/docs/EXPERIMENTS.md` 顶部"现状"块 |
+| 生成任务:gen→ship→cull→merge→control→rollout 全部命令 | `CUA/taskgen/docs/RUNBOOK.md`(唯一 runbook;WSL 侧同名文件是指路桩) |
+| 生成流水线的设计与各层职责 | `CUA/taskgen/docs/PIPELINE.md` |
+| **SFT 数据流水线:每层职责、五道闸、像素审计、排错** | `CUA/sft/docs/DATA_PIPELINE.md` |
+| **Klone 上训练:容器/账号/占位卡/双 bind/OOM 机理/速度账** | `CUA/sft/docs/KLONE.md` |
+| 实验结果与决策依据(账本) | `CUA/docs/EXPERIMENTS.md` |
+| **eval 汇报:每个臂的结果/设置/两两差异;§12 全臂总表(按实验目的分轴)** | `CUA/sft/docs/RESULTS.md` |
+| **失败证据与历史解释** | `CUA/reports/SFT_FAILURE_PATTERNS_20260904.md`;旧账见 `CUA/outdated/reports/SFT_FAILURE_ANATOMY_20260903.md` |
+| SFT:环境/配方/数据构建/训练/eval 协议 | `CUA/sft/docs/TRAINING.md`(当前入口;历史训练账已归档)· `CUA/sft/docs/SFT_DATA.md` · `CUA/sft/docs/CONTEXT.md` |
+| 标准化eval：模型ID、benchmark、题数、两机分配、自动启动与resume | `CUA/sft/docs/EVAL_AUTOMATION.md` |
+| 轨迹页面、visual signal、统一正式/测试目录与恢复 | `CUA/sft/docs/TRAJECTORY_PIPELINE.md` |
+| rollout 打分体系:judge 输入/刻度/schema、仲裁协议、判官对照 | `CUA/sft/docs/JUDGING.md` |
+| checkpoint/数据集/轨迹存哪、哪个臂对应哪份数据、能删什么 | `CUA/sft/docs/CHECKPOINTS.md` |
+| 运维深度:魔改明细/代理/隧道/资源/任务 JSON 语义与坑 | `CUA/docs/OPS.md` |
+| Dashboard/Vercel 契约 | `CUA/dashboard/README.md` |
+| 论文与创新点 | `CUA/docs/READING.md` |
+| 候选实验/改进方向的评估与排队 | `CUA/docs/IDEAS.md` |
+| ostg 分支史 / main 是谁 | `CUA/outdated/docs/TASKGEN_GIT_HISTORY_20260815.md` |
 | 官方 361/V2 任务运行条件(冻结参考) | `CUA/reference/OSWORLD_VERIFIED_RUNTIME_REQUIREMENTS.md` · `..._V2_...` |
 | 历史方案(v7 计划/配对组/旧状态页;v12–v15 datagen 方案在 `plans/`) | `CUA/outdated/` · `CUA/outdated/plans/` |
 
@@ -101,12 +104,13 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && set -a && . 
 
 - **同一事实只活在一个文件里**,其他位置放指针。文档定都 CUA 仓库;
   WSL ostg 仓库只有指路桩;wrapper 仓库(os-simple-taskgen-v8)只有 shell 驱动和化石。
-- 变化频繁的状态写 `EXPERIMENTS.md` / `sft/TRAINING.md` 顶部现状块,**不写进本文件**。
+- 变化频繁的状态写 `CUA/docs/EXPERIMENTS.md` 的有日期现状块,**不写进本文件**。
 - 本文件目标 <200 行:新增内容先问"删掉这行会犯错吗",答案是否就放域文档。
 - 提交规矩:不带 Claude 署名;数据生成代码先入 git 再跑,日志记 code hash。
 
 ## 7 用户约定(跨会话有效)
 
+- Keep code clean and simple: prefer the smallest complete implementation, reuse existing functions, and add abstractions or dependencies only when necessary. Preserve supported behavior when removing duplication.
 - **任何程序修改前先给 diff 和理由征求同意**;测量(只读)随时可做。
 - **不确定的改动不许落在 main 上。** 为一个实验臂加的开关、还没被结果验证的
   改法、"试试看"性质的东西,一律开分支或 worktree:CUA 侧 `git checkout -b`,
@@ -116,3 +120,8 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && set -a && . 
   验证通过再合回 main,不通过就丢掉分支,主干始终干净。
 - **查到的东西除了更新 md,还要在聊天里完整展示**。
 - 中文交流;结论先行,依据跟上;不确定就说不确定,先验证再断言。
+
+
+## 2026-09-14 本地目录调整
+
+代码按 `sft/` 与 `taskgen/` 的 data/quality/generation/validation/analysis/scripts 分组；完整树见 README。原顶层 tools/control 已分配给所属领域。这里记录的是本地路径调整，Windows/WSL 与集群上的代码、脚本文件名、数据及截图均未迁移。不要因本地文件存在就认为已部署。

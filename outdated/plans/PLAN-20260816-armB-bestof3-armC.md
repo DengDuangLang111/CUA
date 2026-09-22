@@ -6,7 +6,7 @@
 > arm A(69 轨迹 ×3ep 全参)对 Verified 迁移为负,损伤集中在语料稀薄域
 > (窄化签名)。本计划用三个可测实验拆开 **量 / 深 / 质** 三个嫌疑。
 
-## 0 现有过滤的事实(2026-08-16 核对 sft/traj.py + build.py)
+## 0 现有过滤的事实(2026-08-16 核对 sft/data/traj.py + build.py)
 
 已有(片段级,arm A 用过):撞顶轨迹截 `low_diversity_tail`(≥8 步、≤3 种动作
 的尾巴);非撞顶截 `tail_run`(结尾逐字节同动作连段);中途 ≥8 连同动作只保
@@ -28,8 +28,8 @@ best-of-3 选择 → C 数据构建 → C 训练 → C eval                  ←
 
 - **B 数据构建**:v11-500 + v11-100 全部 score==1.0 轨迹,**新增两条整条级过滤**
   (用户拍板 2026-08-16):①撞 50 步上限的 pass 整条剔除;②从未 emit
-  terminate/DONE 的 pass 整条剔除。片段级过滤照旧。构建走 `sft/pipeline.sh`
-  一键;count 与剔除清单入 TRAINING.md。
+  terminate/DONE 的 pass 整条剔除。片段级过滤照旧。构建走 `sft/scripts/data/pipeline.sh`
+  一键;count 与剔除清单入 outdated/docs/SFT_TRAINING_20260822.md。
 - **B 训练**:同 e3 配方(全参、lr 1e-5、3ep、epoch 边界 checkpoint)。
   **不预设 3ep 为终点** —— ep1 与 ep3 都要 eval。
 - **ep1 eval(arm A ckpt-150)**:rich 权重的 1-epoch 点,keepthink + preserve,
@@ -60,7 +60,7 @@ best-of-3 选择 → C 数据构建 → C 训练 → C eval                  ←
 - [x] v11-500 rollout **444/444:250 过/194 败 = 56.3%**(末题三世卡死于
       130s 铡刀,600s 标准化后通关 1.0;终版 census:严格幸存 **312 条/5,674
       步样本** = arm A 的 4.7 倍,整条级毒点 8/320,采用严格版)
-- [x] 质量普查固化:`ostg.sft.census`(复用 build 同款 traj 加载器,枚举自
+- [x] 质量普查固化:`ostg.sft.data.census`(复用 build 同款 traj 加载器,枚举自
       harness import;pipeline.sh 第 0 步 + 可独立调用)—— B 构建前的对表会
       用它出数(用户规矩:检测走 pipeline,不写一次性脚本)
 - [x] B 数据构建 + 到仓(2026-08-16 晚):census 后 build `--whole-traj-filter`,
@@ -75,7 +75,7 @@ best-of-3 选择 → C 数据构建 → C 训练 → C eval                  ←
       与 3ep 的 ep1 中途快照分离"训得少"与"日程没走完"两个变量**。
       预检两数据集 55,736 图片引用 0 失效。B-eval 时 235322 出 ep1/ep2/ep3
       快照,235323 出真 1ep 模型。
-- [x] ep1(A-ckpt150)eval **完成:13/50 = 26% ≈ ep3 的 28% —— epochs 判据出局,损伤属于语料本身**(详 TRAINING.md);原 [~] 记录保留:
+- [x] ep1(A-ckpt150)eval **完成:13/50 = 26% ≈ ep3 的 28% —— epochs 判据出局,损伤属于语料本身**(详 outdated/docs/SFT_TRAINING_20260822.md);原 [~] 记录保留:
 - [~] ep1(A-ckpt150)eval **提前开跑**(2026-08-16 02:36,用户决定:信息价值
       最高,先于 500 收尾执行)—— serve 233719,keepthink+preserve,2 VM;
       rollout 同期降 1 VM(run38e)。落地后回填结论。
@@ -103,7 +103,11 @@ best-of-3 选择 → C 数据构建 → C 训练 → C eval                  ←
   rerun2 暂停让位,驱动 run_eval50_gb128.sh 已挂,双门闩:richstock 完 +
   checkpoint 落地)→ ② B-1ep → ③ B-3ep → ④ base/1pic → ⑤ **base/3pic
   (新增:1/3/20 三点剂量-响应曲线)**;base/stock **撤单**。
-- [ ] gb128 eval / [ ] B-1ep eval / [ ] B-ep3 eval → 量与优化域裁决入 TRAINING.md
+- [ ] gb128 eval / [ ] B-1ep eval / [ ] B-ep3 eval → 量与优化域裁决入 outdated/docs/SFT_TRAINING_20260822.md
 - [ ] best-of-3 选择脚本 + C 构建(选择统计入账)
-- [ ] C 训练 + eval → 质的裁决入 TRAINING.md
+- [ ] C 训练 + eval → 质的裁决入 outdated/docs/SFT_TRAINING_20260822.md
 - [ ] 全部入账后:本文与 PLAN-20260815 一起归档 outdated/
+
+<!-- REPO NAV -->
+Archived record · [Repository map](../../README.md) · [Archive index](../README.md)
+<!-- /REPO NAV -->

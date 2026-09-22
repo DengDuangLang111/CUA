@@ -1,4 +1,4 @@
-> **暂缓中(2026-08-15 收编)**:不在当前数据生成路径上;主线见 `EXPERIMENTS.md`。
+> **暂缓中(2026-08-15 收编)**:不在当前数据生成路径上;主线见 `docs/EXPERIMENTS.md`。
 
 # 配对组实验 —— 起草成果与审查结论（⏸ 已暂缓）
 
@@ -173,3 +173,7 @@ osworld-taskgen/examples/paired_group_logics.json
   │                            artifacts / evaluator_sketch / atomic_actions / workload_note
   └── review:    overall[2] + findings[38] + blocker_slugs[4]
 ```
+
+<!-- REPO NAV -->
+Archived record · [Repository map](../README.md) · [Archive index](README.md)
+<!-- /REPO NAV -->

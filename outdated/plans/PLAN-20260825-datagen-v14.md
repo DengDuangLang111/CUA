@@ -244,7 +244,7 @@ app 数:1 个 → 145(40.1%)· 2 个 → 175(48.3%)· 3 个 → 42(11.6%)
 | **image** | **3** | **0** | **0.00** |
 
 **`os` 是官方跨应用的第一大参与方(61 次),我们零。**
-根因已查明(`IDEAS.md` §L):`gen.py:39-49` 的 `APPS` 是喂给生成 LLM 的
+根因已查明(`docs/IDEAS.md` §L):`gen.py:39-49` 的 `APPS` 是喂给生成 LLM 的
 闭合枚举,`os` 不在其中,只作为 `files`/`terminal` 的映射值 ——
 **生成模型语法上就吐不出 `related_apps` 含 `os` 的任务**。
 
@@ -335,16 +335,16 @@ infeasible,这块不是主要矛盾。
 ### 7.1 recovery —— 三条最硬的实测,全部指向同一个病灶
 
 **(a) 语料结构性缺陷:`build.py:198` 只收 `score==1.0` 的轨迹。**
-后果是"一个流程怎么收场"被删了三次(`sft/RESULTS.md` §5.10):
+后果是"一个流程怎么收场"被删了三次(`sft/docs/RESULTS.md` §5.10):
 失败轨迹被丢 → 模型不会在做不成时收场;r5 把 362 个结尾全改成
 `terminate(success)` → 失败只能撞 50 步上限;`--think-cap 2048` →
 思考进入长模式停不下来。
 
-**(a) 而且恰好丢掉了教师思考最充分的那批示范**(`sft/RESULTS.md` L633-635):
+**(a) 而且恰好丢掉了教师思考最充分的那批示范**(`sft/docs/RESULTS.md` L633-635):
 教师在失败轨迹上想得更久 —— p50 **88 vs 70**、p90 **850 vs 520**、
 均值 **326 vs 234**。
 
-**(a) 决定性的一张表**(`sft/TRAINING.md` L1506-1561):
+**(a) 决定性的一张表**(`outdated/docs/SFT_TRAINING_20260822.md` L1506-1561):
 **动作没改变屏幕之后,模型做什么?**
 
 | 模型 | 死胡同步数 | 重复同一动作 | 换个做法 | 解出 |
@@ -368,11 +368,11 @@ infeasible,这块不是主要矛盾。
 **(a) 语料里唯一的 recovery 信号只有 100 个样本**
 (`recovery_samples`,`build.py:355-364`:上下文里某动作已重复 ≥8 次、
 而目标步换了个动作时计数)。
-⚠ **文档内部矛盾**:`sft/TRAINING.md` L1557 与 `dashboard/index.html:711`
-都说 **100**,`IDEAS.md` §C 说 **207**,**没有任何文件调和这两个数**。
+⚠ **文档内部矛盾**:`outdated/docs/SFT_TRAINING_20260822.md` L1557 与 `dashboard/index.html:711`
+都说 **100**,`docs/IDEAS.md` §C 说 **207**,**没有任何文件调和这两个数**。
 大概率是不同语料版本(Bs 时代 vs r5 时代),但没有文档写明 —— **待核**。
 
-**(a) 但重复不是从数据学来的**(`sft/TRAINING.md` L1775-1812):
+**(a) 但重复不是从数据学来的**(`outdated/docs/SFT_TRAINING_20260822.md` L1775-1812):
 873 个"有前一轮 assistant"的样本里,只有 **15(1.7%)** 的目标与前一步
 完全相同,**290(33%)** 只共享动作类型。**所以死循环是闭环动力学产物,
 不是训练数据里的重复模式。** 原文还记了一次自我推翻:
@@ -387,12 +387,12 @@ rollout 证明了这点。单步考试看不见误差累积,只有 tier 3 能看
 
 ### 7.2 on-policy / DAgger —— **提案齐备,零次执行**
 
-**全部是 (b)**。所有 DAgger 家族的提案集中在 `IDEAS.md` §A/§B/§E/§F,
-2026-08-17 写下,**此后再没更新过**;`EXPERIMENTS.md` / `sft/RESULTS.md` /
-`sft/TRAINING.md` / `CHECKPOINTS.md` 里**没有任何 replay 臂、intervention 臂
+**全部是 (b)**。所有 DAgger 家族的提案集中在 `docs/IDEAS.md` §A/§B/§E/§F,
+2026-08-17 写下,**此后再没更新过**;`docs/EXPERIMENTS.md` / `sft/docs/RESULTS.md` /
+`outdated/docs/SFT_TRAINING_20260822.md` / `sft/docs/CHECKPOINTS.md` 里**没有任何 replay 臂、intervention 臂
 或学生失败态收割语料** —— 只有两处前向引用。
 
-已评估的两条路(`IDEAS.md`):
+已评估的两条路(`docs/IDEAS.md`):
 - **§A base replay + token 配平**:纯 SFT vs SFT+25%/50% replay,
   **总 optimizer token 必须配平**,否则"replay 有效"与"训得多"混淆。
   分两阶段:先自 replay(base 自己在生成任务池上的通过轨迹,零污染风险),
@@ -402,7 +402,7 @@ rollout 证明了这点。单步考试看不见误差累积,只有 tier 3 能看
   → 纠正样本回流。**状态分布 on-policy(学生自己的)、监督 off-policy
   (教师标注)**,是 DAgger 经典配方,不是 RL。
 
-**(a) 唯一相关的实测在 `sft/TRAINING.md` L1553-1562**,而且它本身就否定了
+**(a) 唯一相关的实测在 `outdated/docs/SFT_TRAINING_20260822.md` L1553-1562**,而且它本身就否定了
 "多加成功轨迹能解决":
 > *"再加成功轨迹修不好这个问题 —— 每一条都在教'重复'当失败响应。
 > 数据需要的是**动作失败后模型改做别的**的片段……要么接受行为克隆本身
@@ -415,7 +415,7 @@ rollout 证明了这点。单步考试看不见误差累积,只有 tier 3 能看
 ### 7.3 task distribution —— 生成轴齐全,但**配额从不按官方分布对齐**
 
 生成是从 **intent(5) × domain(13) × difficulty(5) × ambiguity(4) = 1300 格**
-的乘积里抽(`TASKGEN_PIPELINE.md` §1),配额**按 keep 计费不按 draw 计费**
+的乘积里抽(`taskgen/docs/PIPELINE.md` §1),配额**按 keep 计费不按 draw 计费**
 (被 gate 拒的规格把格子退回池子,所以拒绝不会掏空某条轴 —— 曾经把 d4+d5
 掏到目标 35% 的 21%)。
 
@@ -450,3 +450,7 @@ rollout 证明了这点。单步考试看不见误差累积,只有 tier 3 能看
 
 ⚠ 第 3 项含**减法**(削 `files`/`terminal`、跨应用从 59.9% 降到 27%),
 会让历史臂不可比。**动存量需要单独拍板**,v13 时代的规矩是纯追加。
+
+<!-- REPO NAV -->
+Archived record · [Repository map](../../README.md) · [Archive index](../README.md)
+<!-- /REPO NAV -->

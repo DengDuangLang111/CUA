@@ -18,7 +18,7 @@
 - 超参全冻结:4B 全量 / lr 3e-6 / gb64 / 3ep / 20 图 / 带散文 / no-cap。
 - **候选池只用 v11 及以后**(2026-08-20 补令):数据标准 = r5 标准基础上修改;
   v11 前时代(v8/v9/v10)一律不做候选。池从 1405 缩到 **647**。
-- **本轮训练加 eval loss 节点**(2026-08-20):`ostg.sft.build --val-ratio 0.05`
+- **本轮训练加 eval loss 节点**(2026-08-20):`ostg.sft.data.build --val-ratio 0.05`
   (按任务/slug 切,前缀不泄漏;该旗 08-13 abs-pilot3 实战验证过,
   1288+178 行走完全链)→ swift `--val_dataset` + `--eval_strategy steps
   --eval_steps 34`(与 save_steps 对齐,每个 checkpoint 配一个 eval loss 点)。
@@ -28,7 +28,7 @@
   接受;**另评一个 ~2.35ep 的 checkpoint** 把"曝光变多"和"覆盖变好"拆开
   (checkpoint 本来每 34 步存一个,零训练成本,只多一次 eval)。
 
-## 事实基础(tools/taxonomy_tag.py,2026-08-20 首跑)
+## 事实基础(taskgen/analysis/taxonomy_tag.py,2026-08-20 首跑)
 
 - 语料产出形态:file_or_text 81% / spreadsheet 15% / browser_state 4%——只有
   3 家族;OSWorld 12 个家族(presentation 11%、config_state 10%、document 9%、
@@ -52,7 +52,7 @@
   vlc/export 2。**池可补大格**:impress/char_format(16 题,池仅 1)、
   multi/export_convert(17 题教 1,池 16)、calc/sheet_ops(13 题教 1,池 1)、
   writer/para_page_layout(8 题教 1,池 3)、thunderbird/sort_filter(池 11)。
-- **池核选结果(08-20,`tools/pool_vet.py`,68 候选逐条过三闸)**:
+- **池核选结果(08-20,`taskgen/analysis/pool_vet.py`,68 候选逐条过三闸)**:
   真可用约 **25-30 条** —— multi/export_convert ~10-12(题材对口,checker 验
   产物)、os/terminal 4(checker 直接验终端使用,最干净)、vlc ~6(配置类,
   有 sed 旁路风险)、gimp/color_tone 2、impress 2-3、multi 杂项 3、calc
@@ -146,7 +146,7 @@ teacher rollout → 通过率复盘(<15% 的 cell 修任务不加量)→ 五道�
 ## 仓库版本状态(2026-08-20 整理)
 
 - ostg:main == v11.1(a1707aa9,同步✓);datagenv12 工作区干净(c84145a6);
-  v11.1 树有两个他人脏文件(sft/corpusaudit.py 改动、sft/tools/
+  v11.1 树有两个他人脏文件(sft/data/corpusaudit.py 改动、sft/tools/
   ship_dataset.sh 未跟踪),归属另一会话,不动。
 - CUA:全部落 main 并已推送;本计划文档为 targeted-200 campaign 唯一定都点。
 
@@ -164,3 +164,7 @@ para_page_layout 8|1)· Chrome ~10 · Thunderbird ~5。
   agent 正在查;
 - (untagged) 黑洞:chrome 23 条、multi 24 条 OSWorld 任务没进任何动作格,
   配额会系统性漏掉——等审计结论补词表。
+
+<!-- REPO NAV -->
+Archived record · [Repository map](../../README.md) · [Archive index](../README.md)
+<!-- /REPO NAV -->

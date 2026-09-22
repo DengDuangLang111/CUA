@@ -171,3 +171,6 @@ a74b607e-6bb5-4ea8-8a7c-5d97c7bbcd2a：
 - 保存产物和 Gold：`/mnt/d/research/OSWorld/cache/<task_id>/`。本轮读取的结果产物时间对应最新这轮；原始素材/Gold 为旧缓存。共享缓存不是不可变归档，后续评测可能覆盖。
 - 只读复算未启动 VM、未调用模型、未修改 evaluator。
 
+<!-- REPO NAV -->
+[Repository map](../README.md)
+<!-- /REPO NAV -->

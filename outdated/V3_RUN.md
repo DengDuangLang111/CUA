@@ -371,3 +371,7 @@ shown = rng.sample(pool, min(own_per_app, len(pool)))
 
 **第 ⑥ 步一旦开始就是 6-16 小时的机器占用**（195 任务 ÷ 3 并发，3 是 18G 内存的硬上限），
 开跑时机由人决定。
+
+<!-- REPO NAV -->
+Archived record · [Repository map](../README.md) · [Archive index](README.md)
+<!-- /REPO NAV -->

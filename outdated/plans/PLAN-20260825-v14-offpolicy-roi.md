@@ -2,7 +2,7 @@
 
 > 2026-08-25 立。前置分析在 `PLAN-20260825-datagen-v14.md`(361 完整梳理)。
 > **本文只管 off-policy(改数据),不涉及 on-policy / DAgger** —— 后者
-> `IDEAS.md` §A/§B 提案齐备但零次执行,判定为下一阶段。
+> `docs/IDEAS.md` §A/§B 提案齐备但零次执行,判定为下一阶段。
 >
 > **纠正一个我先前的错误框架**:v14 白皮书 §3 把"跨应用 59.9% vs 官方
 > 26.9%"读成"过度生成、要砍到 27%"。**这是错的,用户已指出。**
@@ -232,8 +232,8 @@ gsettings get org.gnome.desktop.interface text-scaling-factor
 
 | 数字 | 出处 | 真相 |
 |---|---|---|
-| **207** | `IDEAS.md` §C | **`sft-B` 语料**的两池之和(25 + 182)。B 时代,早已不用 |
-| **100** | `sft/TRAINING.md` L1558 | 上下文是 **e1/e3 时代**的分析,对不上任何一份语料的池配对和 |
+| **207** | `docs/IDEAS.md` §C | **`sft-B` 语料**的两池之和(25 + 182)。B 时代,早已不用 |
+| **100** | `outdated/docs/SFT_TRAINING_20260822.md` L1558 | 上下文是 **e1/e3 时代**的分析,对不上任何一份语料的池配对和 |
 | **243** | 实测 | **当前 img10 语料的真实值 = 50(v11100)+ 193(v11500)** |
 
 **当前语料**(`sft-Bhqs2tr5nocapimg10-*`,训出 `a2` / `9b-full-img10`):
@@ -266,3 +266,7 @@ gsettings get org.gnome.desktop.interface text-scaling-factor
 **→ 对 §5 执行顺序的影响**:新增一项,优先级高于生成新数据 ——
 **撤销 Arm B 的整条过滤,把这 13 条(以及全部同类)捞回来重建语料**。
 这是零生成成本的 recovery 样本增量。
+
+<!-- REPO NAV -->
+Archived record · [Repository map](../../README.md) · [Archive index](../README.md)
+<!-- /REPO NAV -->

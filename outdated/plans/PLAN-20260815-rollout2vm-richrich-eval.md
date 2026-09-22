@@ -1,8 +1,8 @@
 # PLAN 2026-08-15 — rollout 降 2 VM,腾 1 VM 跑 rich/rich eval
 
 > **活跃计划文档**:任务全部跑完后归档进 `outdated/`。批准:用户 2026-08-15
-> ("可以…执行任务")。进度勾选随执行更新;读数入 `EXPERIMENTS.md` /
-> `sft/TRAINING.md`,本文只管计划与执行状态。
+> ("可以…执行任务")。进度勾选随执行更新;读数入 `docs/EXPERIMENTS.md` /
+> `outdated/docs/SFT_TRAINING_20260822.md`,本文只管计划与执行状态。
 
 ## 目标
 
@@ -14,7 +14,7 @@
 
 - `run_multienv_qwen.py:367 get_unfinished()`:resume 跳过有 `result.txt` 的任务,
   删除无 result 的半成品并重跑 → 重启不丢已完成的 261 题,代价 ≤3 个在飞 episode 重跑。
-- 内存:基线 1.0 + 双 runner 1.3 + 3×4.61 = 16.2 GB < 19.5 GiB 可用(§OPS.md 5)。
+- 内存:基线 1.0 + 双 runner 1.3 + 3×4.61 = 16.2 GB < 19.5 GiB 可用(§docs/OPS.md 5)。
 - 顺序偏离知情:原批准顺序 base-stock 先;rich/rich 先跑,分数在 base 落地前只是绝对值。
 - 默认项:checkpoint-450(3 epoch 终点);150/300 留作 epoch 对照。
 
@@ -52,3 +52,7 @@ eval38 隧道副本(pkill -f 匹配不到 env 变量)+ 1 条 18001 死隧道(eva
 
 - rollout 剩余 ~183 题 @2VM:预计 +8–12 h 于原计划
 - rich/rich eval:50 题 @1VM ≈ 6–8 h;serve 1×H200 短 job
+
+<!-- REPO NAV -->
+Archived record · [Repository map](../../README.md) · [Archive index](../README.md)
+<!-- /REPO NAV -->

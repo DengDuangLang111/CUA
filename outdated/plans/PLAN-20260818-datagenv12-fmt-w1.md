@@ -99,7 +99,7 @@ eval-50 18%;该类并集解开率 3/9,其余类 32/41。本波:解锁判据 → 
 
   ```
   cd /mnt/d/research/ostg-datagenv12 && cp /mnt/d/research/os-simple-taskgen-v8/.env .env
-  /mnt/d/research/OSWorld/.venv/bin/python -m ostg.taskgen.gen \
+  /mnt/d/research/OSWorld/.venv/bin/python -m ostg.taskgen.generation.gen \
     --n 5 --batches 14 --seed 12001 --stream --model claude-opus-5 --env .env \
     --intents restyle --apps libreoffice_impress,libreoffice_calc,gimp \
     --out out/runs/fmt-w1/specs.jsonl \
@@ -115,3 +115,7 @@ eval-50 18%;该类并集解开率 3/9,其余类 32/41。本波:解锁判据 → 
 | 新 checker 判错把坏轨迹放进语料 | 闸 5(异路径人工核) |
 | 生成题撞基准 | 闸 3 查重 |
 | 与残余 eval 抢 VM | 步骤 4 前用户定序 |
+
+<!-- REPO NAV -->
+Archived record · [Repository map](../../README.md) · [Archive index](../README.md)
+<!-- /REPO NAV -->

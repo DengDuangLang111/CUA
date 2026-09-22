@@ -1,5 +1,5 @@
 > **SUPERSEDED(2026-08-15 收编)**:停在 2026-07-31 的官方 361 campaign 状态页。
-> 现状一律看 `EXPERIMENTS.md` 顶部现状块;此页职能已由它接管。
+> 现状一律看 `docs/EXPERIMENTS.md` 顶部现状块;此页职能已由它接管。
 
 # OSWorld 实验现状与模型选择
 
@@ -256,3 +256,7 @@ step_*.png
   `OSWorld-Verified test_nogdrive + Qwen3.6-27B BF16 + official QwenAgent + max_steps=50`
 - 当前OSWorld-Verified结果在完整报告中必须追加：  
   `sleep=3 for first 58 valid tasks, sleep=0 afterward`
+
+<!-- REPO NAV -->
+Archived record · [Repository map](../README.md) · [Archive index](README.md)
+<!-- /REPO NAV -->
