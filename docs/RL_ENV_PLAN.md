@@ -19,7 +19,7 @@
 
 **最终 12 道**：Calc `e31f36af` 月度 SUM 合计 · `86bc4aea` 合并居中 · `f34a4410` VLOOKUP；Writer `de0be554` 插 3×4 表 · `c440c03f` 项目符号列表 · `dc185455` Heading 3；Impress `e2b1a84c` 去掉第 1、3 条项目符号 · `4cd0f3c6` 9 张标题 32pt/加粗/深绿 · `aed6f1eb` 全部居中；VS Code `73e6b00f` 行排序 · `38cb2821` temp→temperature · `a1243b01` 剪切粘贴行。本地四态 12/12 通过；VM 往返 12/12 通过(`vm-20260922c`：真实 VM 初始分全为 0，Office 题往返前后四态得分逐项相同)。
 
-**VM 检查自身的 bug(看截图发现，已修)**：`DesktopEnv.reset()` 只在 `step()` 把环境标为已用后才还原快照，而本检查只走 HTTP 执行接口，`vm-20260922b/c` 的 12 题实际在同一台未还原的 VM 里依次运行——Impress 截图里桌面留着 VS Code 题的 `todo.txt`/`names.txt`，并被上一道 Calc 题留下的"LibreOffice 文档恢复"对话框挡住(guest_check 结束应用时触发)。得分不受影响：各题产物路径不同，往返用独立的 LibreOffice 配置目录；但"setup 后应用可见"的截图证据被污染。修复 `af10fad`：每题前把环境标为已用以强制还原，并断言上一题的上传目录已消失；以 `vm-20260922d` 重跑。09-18 的 P0 检查调用过 `step()`，其 reset 是真实还原。
+**VM 检查自身的 bug(看截图发现，已修)**：`DesktopEnv.reset()` 只在 `step()` 把环境标为已用后才还原快照，而本检查只走 HTTP 执行接口，`vm-20260922b/c` 的 12 题实际在同一台未还原的 VM 里依次运行——Impress 截图里桌面留着 VS Code 题的 `todo.txt`/`names.txt`，并被上一道 Calc 题留下的"LibreOffice 文档恢复"对话框挡住(guest_check 结束应用时触发)。得分不受影响：各题产物路径不同，往返用独立的 LibreOffice 配置目录；但"setup 后应用可见"的截图证据被污染。修复 `af10fad`：每题前把环境标为已用以强制还原，并断言上一题的上传目录已消失；以 `vm-20260922d` 重跑：**12/12 通过**，每题前还原与断言均生效，四态与往返得分与 c 轮逐项相同；抽看 Impress/Calc/Writer 截图，应用正常打开题目文件、无上题残留。09-18 的 P0 检查调用过 `step()`，其 reset 是真实还原。
 
 **P1 部署(workstation，未采样)**：`stage_panel.py` 在共享 harness 上建独立 worktree `p1-panel-20260922/harness`(d552441，与 P2 相同方式)，为 12 题生成 bundle 与适配器；适配器模板由 P2 适配器抽出，代入 P2 Calc 题参数时与 09-18 实际文件逐字节相同。`make_registry.py` 由已验证的 P2 registry 派生 `cua-eval/registry.cuagym-p1-r5.json`，模型为 π0，协议与 P2 逐项相同。采样在 R3 结束、workstation VM 空出后启动。
 
