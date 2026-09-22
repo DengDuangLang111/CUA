@@ -34,6 +34,8 @@ preserve_thinking 开 · 梯度重计算开 · 语料建时 img10 / fold 1
 
 TMAX骨干登记为 `tmax9b`（模型目录 `tmax-9b-cua-init`）：TMAX语言权重加原Qwen3.5-9B视觉组件，来源见专门实验计划。其r5训练沿用旧a2的65536长度，规范名为 `tmax9b-full-r5-ml65k`。
 
+RL 工程探针（2026-09-22 临时登记，正式 B/C 臂命名另定）：在 SFT 规范臂名后加 `-grpoprobe`，如 `9b-full-r5-grpoprobe`；模型 ID 的 `--train<日期>` 是该步 GRPO 更新的日期，`--s<N>` 是累计 GRPO optimizer 步数（例：`9b-full-r5-grpoprobe--train20260918--s1`）。设计与进度见顶层 `CUA_RL_EXPERIMENT_DESIGN.md` / `CUA_RL_ENV_PLAN.md`。
+
 ### 标准推理配置(省略即代表用它)
 
 `image_max 10 / fold_size 1` · temperature 1.0 · top_p 0.95 · max_steps 50 · max_tokens 81920

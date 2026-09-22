@@ -96,6 +96,7 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && set -a && . 
 | Dashboard/Vercel 契约 | `CUA/dashboard/README.md` |
 | 论文与创新点 | `CUA/docs/READING.md` |
 | 候选实验/改进方向的评估与排队 | `CUA/docs/IDEAS.md` |
+| **RL(GRPO)实验设计 / 环境与进度** | 顶层 `CUA_RL_EXPERIMENT_DESIGN.md` · `CUA_RL_ENV_PLAN.md`;代码与证据 `cua-rl-local/`(本地 git,新工作在分支上) |
 | ostg 分支史 / main 是谁 | `CUA/outdated/docs/TASKGEN_GIT_HISTORY_20260815.md` |
 | 官方 361/V2 任务运行条件(冻结参考) | `CUA/reference/OSWORLD_VERIFIED_RUNTIME_REQUIREMENTS.md` · `..._V2_...` |
 | 历史方案(v7 计划/配对组/旧状态页;v12–v15 datagen 方案在 `plans/`) | `CUA/outdated/` · `CUA/outdated/plans/` |
