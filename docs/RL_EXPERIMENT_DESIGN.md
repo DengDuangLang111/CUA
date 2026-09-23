@@ -1,8 +1,8 @@
 # 桌面 CUA RL 实验设计：Qwen3.5-9B SFT → GRPO
 
-日期：2026-09-18(09-22 更新)。状态：已完成环境测试、16条真实采样和一次GRPO optimizer update资格测试；第二轮(π1 部署 → 在策略采样 → 从 step1 恢复并更新)的脚本与方案已于 09-22 备好，远端执行待用户批准；持续online RL尚未启动，上游源码未改。
+日期：2026-09-18(09-22 更新)。状态：**P0 已完成**(09-22：π1 发布为新服务 → π1 在策略采样 16 回合 → 从 step1 恢复并更新到 step2 → 独立校验通过，得到 π2)；**P1 进行中**(π0 对 12 道新题各采 4 条，与 09-18 的 4 题合成 16 题 × 4)；持续 online RL 尚未启动，上游源码未改。
 
-**最新进度**：普通r5-9B checkpoint-306已完成16条真实轨迹；其中Writer完整四轨迹group已完成一次HF/DeepSpeed GRPO更新，原生clipped loss复用OpenWebRL。127次输入匹配、33次backward、global_step1、独立权重变化/视觉冻结/重新加载均通过。采用训练侧old-policy重算；跨后端采样一致性、在线权重同步、新权重VM rollout及resume仍待验收。精确结果和运行证据见[环境进度MD顶部](RL_ENV_PLAN.md)。以下较早执行说明保留历史背景，以最新记录为准。
+**最新进度**：普通r5-9B checkpoint-306已完成16条真实轨迹；其中Writer完整四轨迹group已完成一次HF/DeepSpeed GRPO更新，原生clipped loss复用OpenWebRL。127次输入匹配、33次backward、global_step1、独立权重变化/视觉冻结/重新加载均通过。采用训练侧old-policy重算。09-22 已验收：新权重发布为新服务并做 VM rollout、从 checkpoint 恢复后第二次更新；仍未做：跨后端采样一致性(vLLM 与 HF 的 logprob 差异仍存在)、不重启服务的在线权重同步。精确结果和运行证据见[环境进度MD顶部](RL_ENV_PLAN.md)。以下较早执行说明保留历史背景，以最新记录为准。
 
 **执行进度更新**：用户授权试跑后，已按其指定在 workstation 完成 Calc 的 P0 环境/评分/重置检查（0 → 0.7 → 1 → reset 后 0），原始任务/evaluator 未改；测试 VM 已全部停止。此为 scripted fixture 资格检查，不是模型 rollout 或 RL update。完整事实与文件证据只记录在 [环境进度 MD](RL_ENV_PLAN.md)。后续 P0 优先使用 workstation 的独立空闲 slot，Windows 既有评测保持不动。
 
@@ -229,11 +229,14 @@ VM crash、reset 失败、截图服务不可用、evaluator crash 标为 infrast
 - [x] 用户确定主 benchmark：OSWorld-Verified(官方 361 题，2026-09-22)。
 - [x] 初始SFT checkpoint / model registry / 已执行采样协议冻结。
 - [x] Qwen3.5-9B在HF/DeepSpeed完成加载、backward、单步更新、保存和独立重载。
-- [ ] 新权重在线serving同步、VM rollout、第二轮更新及checkpoint resume验收。
-- [x] 独立VM slot、SFT endpoint和单步训练GPU资源已验证；新RL checkpoint endpoint尚未部署。
+- [x] 新权重发布为新服务、VM rollout、第二轮更新及 checkpoint resume 验收(09-22，π1 → π2)。
+- [ ] 不重启服务的在线权重同步(目前每次更新后重新发布并起服务，加载约 3 分钟)。
+- [x] 独立VM slot、SFT endpoint和单步训练GPU资源已验证；π1 endpoint 已部署(g3108 GPU3，端口 8083)。
 - [ ] 任务资格检查、family split 和与旧 SFT/benchmark 的重叠审计。
 - [ ] 持续训练调度adapter待接入；原生VM任务adapter及离线训练样本导出已实现并运行。
-- [ ] 执行 P0/P1 后按实测吞吐批准 P2/P3 预算。
+- [x] P0 完成(09-22)。
+- [ ] P1：16 题 × 4 条 π0 采样(09-18 的 4 题已完成；12 道新题 09-22 进行中)。
+- [ ] 按 P0/P1 实测吞吐批准 P2/P3 预算。
 
 ## 源码依据
 
