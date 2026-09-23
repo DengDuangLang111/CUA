@@ -49,7 +49,10 @@
   每题只有 4 个样本，10/16 与 7/16 的差在采样噪声范围内(双侧 Fisher 精确检验 p≈0.48)，**不能据此判断 update1 让模型变差或变好**；这一步验证的是链路，性能比较要等 P1 的 16 题面板。
 - **R4 完成(17:43)**：`stage_batch.sh` 汇总 → workstation 导出 → 传 Klone。有奖励差异的组 2 个(Writer、Impress)，8 条轨迹、85 次决策、82 张不重复截图、最长序列 26386 token；采集的策略版本全部是 π1 服务路径。`batch.jsonl` SHA256 `185fb0ee…`，Klone 端 SHA 与图片数(82)核对一致。
 - **R5 已启动(17:44)**：`klone_step.sh` 起 step，GPU7(启动前占用 1MiB、无进程)，`--mem=320G`，限时 1:45；日志 `$B/update2.log`，启动记录 `$B/update2-launch.json`。probe 读入的 batch SHA 与导出一致。
-- **P1 π0 采样已启动(17:44，与 R5 并行)**：代码 `75e4018`，4 份 plan 已冻结(`artifacts/p1-pi0-20260922/plans.json`)，doctor ready，第 1 轮 controller 在 workstation 运行(单 VM 串行)。
+- **P1 π0 第一次启动失败(17:44–17:49，已修，数据未污染)**：第 1 轮 12 题各试 2 次，全部在 VM 启动前以 `FileNotFoundError` 退出，找不到镜像 `<harness>/docker_vm_data/osworld-v2-ubuntu-x86-official-fonts.qcow2`；驱动按设计判为基础设施失败，停在第 1 轮(证据 `artifacts/p1-pi0-20260922/`，`fd601a1`)。
+  - **根因**：harness 按 `.env` 里的 `OSWORLD_DOCKER_UBUNTU_VM_PATH` 找镜像，没有这个变量就去读 cwd 下的 `./docker_vm_data`。共享仓库把 `.env`(镜像路径、文件服务地址、VM 口令、API key 等)和 `.venv` 作为未跟踪文件保存。09-18 部署 P2 时在 worktree 里**手工**建了这两个指向 `OSWorld-V2-shared` 的符号链接(13:36)；今天的 `stage_panel.py` 只复现了 worktree 和适配器，没有建这两个链接。`run_eval doctor` 不检查这一项，所以报了 ready。
+  - **处理**：在 P1 harness 建与 P2 相同的两个链接(运维配置，未改代码)。harness 自带的 `local_eval/check_environment.py` 检查通过：Python 3.12.3、依赖无差异、docker 镜像一致；镜像路径解析到与 P2 同一个文件(v2026.06.24 official-fonts，27471970304 字节)。失败 run 的 2 次尝试已用满，`resume` 不会重跑，故在新目录 `artifacts/p1-pi0-20260922b/` 重新冻结 4 份 plan，17:51 重启。17:52 VM 启动，17:53 π0 返回第 1 步动作。
+  - **待批准的代码修复**：`stage_panel.py` 建完 worktree 后链接 `.env`/`.venv`，并运行 harness 自带检查(`--hash-vm` 核对镜像 SHA)，报告写入 `<run>/environment-check.json`，让以后的面板在部署时就发现这类问题。
 - **汇总脚本回归测试**：改过的 `iter2-20260922/summarize.py` 对 09-18 的 5 份 P2 plan 重新汇总，`summary.json` 与当时证据逐字节相同，`episodes.json` 16 条记录完全一致(09-18 生成 episodes 的那一步当时没有留下脚本，现已由 summarize 复现)。
 
 ### R3 之后的命令(已准备并验证，按序执行；`cua-rl-local` 为工作目录)
@@ -59,7 +62,7 @@
 1. R4 导出并传到 Klone：`bash iter2-20260922/stage_batch.sh ../cua-eval/registry.cuagym-p2-grpoprobe-s1.json workstation artifacts/iter2-pi1-20260922 artifacts/p2-grouped-20260918/deployment.json /home/yanji/research/cua-rl-local/iter2-export-20260922 hyak /gscratch/cse/jy050706/sft/experiments/cua-rl-probe-20260922`
 2. R5(在 Klone 登录节点)：`bash $B/klone_step.sh 40253896 $B/update2-launch.json $B/update2.log 320G 01:45:00 -- bash $B/run.sh update2 GPU-6ac74522-c2af-8176-0831-8ef8970817e2 $P1 --update --recompute-old-policy --loss-source $B/ppo_utils.py --policy-version $P1 --resume-from /tmp/jy050706-cua-rl-probe-20260918/update1-resume --resume-tag step1 --save-tag step2 --resume-output /tmp/jy050706-cua-rl-probe-20260918/update2-resume`，其中 `B=/gscratch/cse/jy050706/sft/experiments/cua-rl-probe-20260922`、`P1=/gscratch/cse/jy050706/sft/serving/9b-full-r5-grpoprobe--train20260918--s1/model`。
 3. R6：`bash $B/klone_step.sh 40253896 $B/verify-update2-launch.json $B/verify-update2.log 64G 00:20:00 -- bash $B/verify.sh update2 GPU-6ac74522-c2af-8176-0831-8ef8970817e2`
-4. P1 π0 采样(与 R5 并行，workstation 单 VM：π0 服务并发容量 1，`run_eval` 要求 VM 数 ≤ 容量，约 3 小时)：`bash iter2-20260922/run_rounds.sh ../cua-eval/registry.cuagym-p1-r5.json 9b-full-r5--train20260822--s306 cuagym-p1 workstation cuagym-p1-12task-pi0 artifacts/p1-pi0-20260922 4`
+4. P1 π0 采样(与 R5 并行，workstation 单 VM：π0 服务并发容量 1，`run_eval` 要求 VM 数 ≤ 容量，约 3 小时)：`bash iter2-20260922/run_rounds.sh ../cua-eval/registry.cuagym-p1-r5.json 9b-full-r5--train20260822--s306 cuagym-p1 workstation cuagym-p1-12task-pi0 artifacts/p1-pi0-20260922 4`(实际运行目录为 `artifacts/p1-pi0-20260922b`，见上方"P1 π0 第一次启动失败")
 
 ### 准备与核查(批准前)
 
