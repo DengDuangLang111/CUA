@@ -2,6 +2,35 @@
 
 更新：2026-09-22，America/Los_Angeles。
 
+## 2026-09-22：P2 选题与可复用夹具(用户要求"现在开始选题，夹具做成可复用的")
+
+工具都在 `cua-rl-local`(分支 `iter2`；P1 驱动从工作区读脚本，期间不切分支)，运行前先提交。
+
+**选题流水线**(每步都是参数化工具，P3 或以后的批次直接沿用)：
+1. `split-20260922/make_pool.py`：审计保留的 5,002 题 → `screen.py` 的候选池格式。
+2. `p1-20260922/screen.py`(原样复用)：机械初筛，排除清单 `split-20260922/exclude.json` 只列有记录原因的 17 题(09-18 评分缺陷 4、09-18 审过未选 7、P1 审题否决 6)。已用题不排除，由划分放到训练侧。结果：**1,364 题通过**(Calc 419、Writer 512、Impress 247、VS Code 186)。最大淘汰项"评分有副作用" 1,943 题(评分脚本含 subprocess、time.sleep 等)，这条规则偏严；题量够用，暂不放松。
+3. `split-20260922/split.py`：家族级 train/dev/holdout(种子 20260922；每应用家族份额 holdout 25%、dev 15%)。已用题的家族强制归 train。评测侧与任一训练题相似度 ≥0.30 的剔除：校准时抽看 0.35–0.63 基本是跨家族的参数变体，如自定义放映、断字、奇偶页页眉、标题 3 样式；0.25–0.30 多为不同的题。共剔除 59 题。每份按家族轮转排出审题队列。
+
+| 应用 | train 家族/题 | dev 家族/题 | holdout 家族/题 |
+|---|---|---|---|
+| Calc | 16 / 280 | 4 / 44 | 6 / 84 |
+| Impress | 12 / 162 | 3 / 32 | 5 / 38 |
+| Writer | 39 / 308 | 10 / 38 | 16 / 139 |
+| VS Code | 15 / 113 | 4 / 29 | 6 / 38 |
+
+已用题中 8 题合格且落在 train：e31f36af、86bc4aea、c440c03f、dc185455、73e6b00f、38cb2821、a1243b01、d46f3728；其余 8 题被审计排除。
+- 初筛通过的题集中在少数大家族(Calc 审计后 548 个家族，初筛后只剩 26 个)，dev 多样性偏低。
+- P3 holdout 需每应用 32 题，Impress、VS Code 各只有 38 道候选；按约一半的审题通过率会不够，届时需放宽"评分有副作用"这条初筛规则。
+
+**可复用夹具 `qualify/`**：
+- 构成：核心 `fixtures.py`(接口与 P1 相同：TASKS/PHASES/apply)，加按格式分开的原语模块 `ops_xlsx/ops_docx/ops_pptx/ops_text.py`，每题一份声明式清单 `specs/<id>.json`。
+- partial 缺省由 solved 自动截取前一半目标，不合适时四态检查会失败，再显式写出。
+- 只导入当前文件格式的模块，一个格式的改动不会影响其他格式。
+- P1 的 15 个手写夹具已移植为清单；在 Windows WSL 回归，12 题四态得分与 `local-20260922c` **逐项相同**(拆模块前后各验证一次)。
+- 配套：`qualify/REVIEW.md`(审题标准：不对称评分、假阳性、LibreOffice 存盘后假阴性、罚自然解法、OSWorld 参数变体、超 30 步、计分项不足)与 `qualify/check_remote.sh`(一条命令把包推到 Windows、跑四态检查、报告拷回)。
+
+**P2 审题进行中**：按应用各派一个子代理，按队列顺序审题、写清单、在 Windows 上跑四态检查。目标：新增 train Calc 14、Writer 14、Impress 16、VS Code 12，每应用 dev 8，另各留 2 道备选。各代理只能改自己格式的原语模块；新原语须参数化，并对本格式已有清单做回归。审完由我复核，再做 VM 往返检查。
+
 ## 2026-09-22：CUA-Gym 对 OSWorld-Verified 的重叠审计(用户选方案 a：CUA-Gym 去掉重叠后作训练来源)
 
 代码 `cua-rl-local/split-20260922/overlap_audit.py`(`c4591d7`，运行前提交，输出记脚本 SHA)，产物 `artifacts/overlap-audit-20260922/t025/`(summary.json、families.json、tasks.jsonl.gz)。输入：CUA-Gym 包 `cua_gym_tasks_v1.tar.zst`(sha `2198e335…`)、OSWorld-upstream `test_nogdrive.json` 361 题(sha `fcb9497e…`)。审计 Calc/Writer/Impress/VS Code 共 7,249 题，耗时约 2 秒。
