@@ -29,7 +29,24 @@
 - P1 的 15 个手写夹具已移植为清单；在 Windows WSL 回归，12 题四态得分与 `local-20260922c` **逐项相同**(拆模块前后各验证一次)。
 - 配套：`qualify/REVIEW.md`(审题标准：不对称评分、假阳性、LibreOffice 存盘后假阴性、罚自然解法、OSWorld 参数变体、超 30 步、计分项不足)与 `qualify/check_remote.sh`(一条命令把包推到 Windows、跑四态检查、报告拷回)。
 
-**P2 审题结果(21:30 完成，四态检查全部 PASS；VM 往返检查进行中)**：按应用各派一个子代理，按队列顺序审题、写清单、在 Windows 上跑四态检查。各代理只能改自己格式的原语模块，新原语须参数化，并对本格式 P1 清单做回归(四个格式均逐项相同)。之后由我复核。审题记录见 `artifacts/split-20260922/review/<app>-review.json`，每题一条，含理由、风险与 OSWorld 近邻判断。
+**VM 往返检查(Windows，镜像 v2026.06.24 official-fonts；21:22–22:22)**：共 99 道入选/备选题。每题先重置 VM，跑原 setup，要求初始分为 0，截图；再把四态文件经 VM 自带的 LibreOffice 另存一遍后重新评分。
+
+| 批次 | 通过 | 失败(原因) |
+|---|---|---|
+| Writer + VS Code 48 道 | 45 | `b8c22ab3` 文档属性存盘后 solved 0.6；`f3c69e0f`、`b803bd24` 批注回复的关联存盘后丢失，solved 0.7(审题时已标此风险) |
+| Calc + Impress 51 道 | 45 | Calc 入选 22 道全过；3 道 dev 备选因工作表密码哈希大小写失败(审题时已标)；Impress `35ce29dd` 存盘后部分完成状态也得 1.0(评分区分不出，会有假阳性)，`057a2a81` 存盘后 solved 0，`dc747924` 存盘后 solved 0.15 |
+
+- 失败题一律否决，由通过 VM 检查的备选递补：Writer train `b194a3ec`、Writer dev `d8a4d1d0`、Impress train `01ebde10`。
+- 抽看截图(VS Code `0b1338e1`、Writer `e7e7942a`)：题目文件正常打开，无恢复对话框，无上一题残留。
+- 证据：`artifacts/split-20260922/vm/`。
+
+**P2 最终题单 `artifacts/split-20260922/p2-panel.json`**：每题都有 VM 往返通过记录，P1 已用题引用 `vm-20260922d`。
+- **train 64 道**：每应用 16，含已用题 8 道。
+- **dev 24 道**(设计为 32)：Calc 8、Writer 7、**Impress 1**、VS Code 8。Impress dev 队列 32 道全部审完，只有 `0fac5efe` 一道同时通过审题和 VM。
+- 备选：Calc 6、Writer 1、VS Code 2。
+- dev 集中度：Calc 8 道中 6 道是 `calc_ps`(保护类)，VS Code 4 道是 `vscode_code`。
+
+**P2 审题结果(21:30 完成，四态检查全部 PASS)**：按应用各派一个子代理，按队列顺序审题、写清单、在 Windows 上跑四态检查。各代理只能改自己格式的原语模块，新原语须参数化，并对本格式 P1 清单做回归(四个格式均逐项相同)。之后由我复核。审题记录见 `artifacts/split-20260922/review/<app>-review.json`，每题一条，含理由、风险与 OSWorld 近邻判断。
 
 | 应用 | train 审/选/备选 | 通过率 | dev 审/选/备选 | 新增原语 |
 |---|---|---|---|---|
