@@ -37,6 +37,15 @@
 - Klone 训练目录 `/gscratch/cse/jy050706/sft/experiments/cua-rl-probe-20260922/` 已放入 iter2 的 probe/verify/run/verify.sh 与上游 ppo_utils，文件 SHA 与本地一致。
 - **汇总脚本回归测试**：改过的 `iter2-20260922/summarize.py` 对 09-18 的 5 份 P2 plan 重新汇总，`summary.json` 与当时证据逐字节相同，`episodes.json` 16 条记录完全一致(09-18 生成 episodes 的那一步当时没有留下脚本，现已由 summarize 复现)。
 
+### R3 之后的命令(已准备并验证，按序执行；`cua-rl-local` 为工作目录)
+
+脚本均在 `iter2-20260922/`(提交 `f929530`)：`stage_batch.sh` 已用 09-18 数据端到端回归(batch SHA `7b7cd304…`)；`klone_step.sh` 已实测起 step；`run_rounds.sh` 已参数化。R5 预检：GPU7 空闲无进程、step1 checkpoint(119G)在、g3108 `/tmp` 余 2.7T、`/mmfs1` 余 242G。
+
+1. R4 导出并传到 Klone：`bash iter2-20260922/stage_batch.sh ../cua-eval/registry.cuagym-p2-grpoprobe-s1.json workstation artifacts/iter2-pi1-20260922 artifacts/p2-grouped-20260918/deployment.json /home/yanji/research/cua-rl-local/iter2-export-20260922 hyak /gscratch/cse/jy050706/sft/experiments/cua-rl-probe-20260922`
+2. R5(在 Klone 登录节点)：`bash $B/klone_step.sh 40253896 $B/update2-launch.json $B/update2.log 320G 01:45:00 -- bash $B/run.sh update2 GPU-6ac74522-c2af-8176-0831-8ef8970817e2 $P1 --update --recompute-old-policy --loss-source $B/ppo_utils.py --policy-version $P1 --resume-from /tmp/jy050706-cua-rl-probe-20260918/update1-resume --resume-tag step1 --save-tag step2 --resume-output /tmp/jy050706-cua-rl-probe-20260918/update2-resume`，其中 `B=/gscratch/cse/jy050706/sft/experiments/cua-rl-probe-20260922`、`P1=/gscratch/cse/jy050706/sft/serving/9b-full-r5-grpoprobe--train20260918--s1/model`。
+3. R6：`bash $B/klone_step.sh 40253896 $B/verify-update2-launch.json $B/verify-update2.log 64G 00:20:00 -- bash $B/verify.sh update2 GPU-6ac74522-c2af-8176-0831-8ef8970817e2`
+4. P1 π0 采样(与 R5 并行，workstation 单 VM：π0 服务并发容量 1，`run_eval` 要求 VM 数 ≤ 容量，约 3 小时)：`bash iter2-20260922/run_rounds.sh ../cua-eval/registry.cuagym-p1-r5.json 9b-full-r5--train20260822--s306 cuagym-p1 workstation cuagym-p1-12task-pi0 artifacts/p1-pi0-20260922 4`
+
 ### 准备与核查(批准前)
 
 以下为批准前的准备记录。当时远端写操作(Klone 共享盘写入、起服务、VM 采样)被 Claude Code 权限分类器按"修改共享资源"拦下，停下等用户批准，没有绕过。
