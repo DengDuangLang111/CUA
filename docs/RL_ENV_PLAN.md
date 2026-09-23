@@ -52,7 +52,7 @@
 - **P1 π0 第一次启动失败(17:44–17:49，已修，数据未污染)**：第 1 轮 12 题各试 2 次，全部在 VM 启动前以 `FileNotFoundError` 退出，找不到镜像 `<harness>/docker_vm_data/osworld-v2-ubuntu-x86-official-fonts.qcow2`；驱动按设计判为基础设施失败，停在第 1 轮(证据 `artifacts/p1-pi0-20260922/`，`fd601a1`)。
   - **根因**：harness 按 `.env` 里的 `OSWORLD_DOCKER_UBUNTU_VM_PATH` 找镜像，没有这个变量就去读 cwd 下的 `./docker_vm_data`。共享仓库把 `.env`(镜像路径、文件服务地址、VM 口令、API key 等)和 `.venv` 作为未跟踪文件保存。09-18 部署 P2 时在 worktree 里**手工**建了这两个指向 `OSWorld-V2-shared` 的符号链接(13:36)；今天的 `stage_panel.py` 只复现了 worktree 和适配器，没有建这两个链接。`run_eval doctor` 不检查这一项，所以报了 ready。
   - **处理**：在 P1 harness 建与 P2 相同的两个链接(运维配置，未改代码)。harness 自带的 `local_eval/check_environment.py` 检查通过：Python 3.12.3、依赖无差异、docker 镜像一致；镜像路径解析到与 P2 同一个文件(v2026.06.24 official-fonts，27471970304 字节)。失败 run 的 2 次尝试已用满，`resume` 不会重跑，故在新目录 `artifacts/p1-pi0-20260922b/` 重新冻结 4 份 plan，17:51 重启。17:52 VM 启动，17:53 π0 返回第 1 步动作。
-  - **待批准的代码修复**：`stage_panel.py` 建完 worktree 后链接 `.env`/`.venv`，并运行 harness 自带检查(`--hash-vm` 核对镜像 SHA)，报告写入 `<run>/environment-check.json`，让以后的面板在部署时就发现这类问题。
+  - **代码修复(用户批准，`1ed2d1f`)**：`stage_panel.py` 建完 worktree 后链接 `.env`/`.venv`，并运行 harness 自带检查(`--hash-vm` 核对镜像 SHA)，报告写入 `<run>/environment-check.json`，让以后的面板在部署时就发现这类问题。实测(workstation，与 P1 部署同参数，写入临时目录，测后删除)：两个链接建好，环境检查通过，镜像 SHA `57c4cef4…` 与 runtime lock 一致；bundle、panel.json 与 P1 面板逐字节相同，适配器相同(运行中的面板只多出 `__pycache__`)，deployment/registry 替换目录路径后相同；耗时 71 秒。反向对照：去掉 `.env` 后检查以 rc=1 退出(`KeyError`)。证据在 `artifacts/stage-panel-test-20260922/`。`run_eval doctor` 不改：它是所有 eval 共用的工具，并非每个 harness 都用 `.env`。
 - **汇总脚本回归测试**：改过的 `iter2-20260922/summarize.py` 对 09-18 的 5 份 P2 plan 重新汇总，`summary.json` 与当时证据逐字节相同，`episodes.json` 16 条记录完全一致(09-18 生成 episodes 的那一步当时没有留下脚本，现已由 summarize 复现)。
 
 ### R3 之后的命令(已准备并验证，按序执行；`cua-rl-local` 为工作目录)
