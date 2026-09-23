@@ -36,6 +36,20 @@
   - **驱动第二个 bug(已修，`75e4018`)**：第 2 轮 4 题 16:32 全部评分时，其 controller 仍在做轨迹页面后处理并持有主机 worker 锁；驱动只看题目计数即启动第 3 轮，第 3 轮 worker 取锁失败(`BlockingIOError`)，run 状态 `blocked`、4 题 pending；旧判断只看计数而一直等待(约 35 分钟无进展，17:05 查出)。修复：一轮完成须"全部评分且 controller 已退出"；`blocked` 且 controller 已退出即判失败；进入每轮统一用幂等的 `run_eval resume`(不重复启动活着的 controller、跳过已完成、重启未开工的 run)；先查状态再 sleep。以 16:32 等真实快照在 bash 下验证后重启(17:07)：第 1、2 轮即刻判完成，第 3 轮经 resume 以新 controller 运行。
   - 第 1 轮 Calc(16:01 完成，0 分)的采集按 export_batch 的断言逐项检查：初始分 0、评分进程 rc 0、11 次决策无采集错误、token 与 logprob 数量一致、图像 SHA 全对、策略版本为 π1 服务路径、thinking/preserve_thinking 开。
 - Klone 训练目录 `/gscratch/cse/jy050706/sft/experiments/cua-rl-probe-20260922/` 已放入 iter2 的 probe/verify/run/verify.sh 与上游 ppo_utils，文件 SHA 与本地一致。
+- **R3 完成(17:42 PT)**：4 轮 × 4 题 = 16/16 回合全部评分，failed/blocked/interrupted 均为 0。π1 得分(轮 1–4)与 09-18 π0 同协议对比：
+
+  | 题 | π0(09-18) | π1(09-22) |
+  |---|---|---|
+  | Calc `693b3046` | 0,0,0,0 | 0,0,0,0 |
+  | Writer `f02c7f7f` | 0,1,1,1 | 0,0,0,1 |
+  | Impress `2ecc76ab` | 1,1,1,0 | 0,1,0,1 |
+  | VS Code | 1,1,1,1 | 1,1,1,1 |
+  | 合计 | 10/16 | 7/16 |
+
+  每题只有 4 个样本，10/16 与 7/16 的差在采样噪声范围内(双侧 Fisher 精确检验 p≈0.48)，**不能据此判断 update1 让模型变差或变好**；这一步验证的是链路，性能比较要等 P1 的 16 题面板。
+- **R4 完成(17:43)**：`stage_batch.sh` 汇总 → workstation 导出 → 传 Klone。有奖励差异的组 2 个(Writer、Impress)，8 条轨迹、85 次决策、82 张不重复截图、最长序列 26386 token；采集的策略版本全部是 π1 服务路径。`batch.jsonl` SHA256 `185fb0ee…`，Klone 端 SHA 与图片数(82)核对一致。
+- **R5 已启动(17:44)**：`klone_step.sh` 起 step，GPU7(启动前占用 1MiB、无进程)，`--mem=320G`，限时 1:45；日志 `$B/update2.log`，启动记录 `$B/update2-launch.json`。probe 读入的 batch SHA 与导出一致。
+- **P1 π0 采样已启动(17:44，与 R5 并行)**：代码 `75e4018`，4 份 plan 已冻结(`artifacts/p1-pi0-20260922/plans.json`)，doctor ready，第 1 轮 controller 在 workstation 运行(单 VM 串行)。
 - **汇总脚本回归测试**：改过的 `iter2-20260922/summarize.py` 对 09-18 的 5 份 P2 plan 重新汇总，`summary.json` 与当时证据逐字节相同，`episodes.json` 16 条记录完全一致(09-18 生成 episodes 的那一步当时没有留下脚本，现已由 summarize 复现)。
 
 ### R3 之后的命令(已准备并验证，按序执行；`cua-rl-local` 为工作目录)
