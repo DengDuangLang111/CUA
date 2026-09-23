@@ -48,7 +48,13 @@
 
   每题只有 4 个样本，10/16 与 7/16 的差在采样噪声范围内(双侧 Fisher 精确检验 p≈0.48)，**不能据此判断 update1 让模型变差或变好**；这一步验证的是链路，性能比较要等 P1 的 16 题面板。
 - **R4 完成(17:43)**：`stage_batch.sh` 汇总 → workstation 导出 → 传 Klone。有奖励差异的组 2 个(Writer、Impress)，8 条轨迹、85 次决策、82 张不重复截图、最长序列 26386 token；采集的策略版本全部是 π1 服务路径。`batch.jsonl` SHA256 `185fb0ee…`，Klone 端 SHA 与图片数(82)核对一致。
-- **R5 已启动(17:44)**：`klone_step.sh` 起 step，GPU7(启动前占用 1MiB、无进程)，`--mem=320G`，限时 1:45；日志 `$B/update2.log`，启动记录 `$B/update2-launch.json`。probe 读入的 batch SHA 与导出一致。
+- **R5 完成(17:44–18:13，退出码 0)**：`klone_step.sh` 起 step，GPU7(启动前占用 1MiB、无进程)，`--mem=320G`；日志 `$B/update2.log`，启动记录 `$B/update2-launch.json`。
+  - 恢复断言全部通过：step1 checkpoint 的 global_steps=1、Adam 步数 [1]、二阶矩非零、模块权重与 π1 服务权重一致；保存后 global_steps=2，resume checkpoint 在 g3108 `/tmp/jy050706-cua-rl-probe-20260918/update2-resume`(节点本地盘)。
+  - batch SHA `185fb0ee…` 与导出一致，85 次决策全部参与，采样策略为 π1(on-policy 断言通过)。85 个 turn 上，不带梯度的旧策略重算与带梯度前向逐 token 差值全部为 0(同一权重上两次前向一致，重要性比值恰为 1)。
+  - 梯度范数 3.09(update1 为 4.55)；被监控参数的前 16384 个值中有 127 个改变(update1 为 146)，最大改变量 1.9e-6；耗时 1247 秒(update1 为 33 次决策、595 秒)。
+  - `logprob_alignment_passed=false` 与 update1 相同：vLLM 采样记下的 logprob 与 HF 训练侧重算的有差异，这正是旧策略改由训练侧重算的原因。本次差异比 update1 小：两次抽查决策的平均绝对差约 0.019，最大 0.55(update1 为 0.82)，超出裁剪范围的比例 0.49%(update1 为 1.8%)。
+  - **风险**：显存峰值 45.9GB(L40S 47.7GB，与 update1 相同)；最后一个 turn 出现一次 expandable_segments 映射 OOM 警告，分配器自动恢复。batch 最长序列 26386 token；序列更长的 batch 可能真正 OOM。
+- **R6 校验通过(18:14–18:2x，退出码 0，GPU7)**：`verify.sh update2` 以 π1 为基准比较新保存的权重：global_step=2；760 个张量中抽查的 3 个语言张量均有改变(34/4096、228/16384、238/16384，最大改变量 1.9e-6)；333 个视觉张量与 π1 完全相同(视觉冻结生效)；重新加载后的多模态前向生成 308 个 token，logprob 全部有限。**π2 = `$B/update2/model`**(推理权重 18.8GB，4 个分片 SHA 记于 `cua-rl-local/artifacts/iter2-update2-20260922/pi2-weights.sha256`)；续训用的 DeepSpeed checkpoint 在 g3108 本地盘 `/tmp/jy050706-cua-rl-probe-20260918/update2-resume`，随 allocation 于 09-25 06:02 消失。R5/R6 的报告、启动记录与过滤后的日志已拉回本地仓库。**P0(发布 π1 → π1 采样 → 从 step1 续训 → π2 → 校验)全部完成。**
 - **P1 π0 第一次启动失败(17:44–17:49，已修，数据未污染)**：第 1 轮 12 题各试 2 次，全部在 VM 启动前以 `FileNotFoundError` 退出，找不到镜像 `<harness>/docker_vm_data/osworld-v2-ubuntu-x86-official-fonts.qcow2`；驱动按设计判为基础设施失败，停在第 1 轮(证据 `artifacts/p1-pi0-20260922/`，`fd601a1`)。
   - **根因**：harness 按 `.env` 里的 `OSWORLD_DOCKER_UBUNTU_VM_PATH` 找镜像，没有这个变量就去读 cwd 下的 `./docker_vm_data`。共享仓库把 `.env`(镜像路径、文件服务地址、VM 口令、API key 等)和 `.venv` 作为未跟踪文件保存。09-18 部署 P2 时在 worktree 里**手工**建了这两个指向 `OSWorld-V2-shared` 的符号链接(13:36)；今天的 `stage_panel.py` 只复现了 worktree 和适配器，没有建这两个链接。`run_eval doctor` 不检查这一项，所以报了 ready。
   - **处理**：在 P1 harness 建与 P2 相同的两个链接(运维配置，未改代码)。harness 自带的 `local_eval/check_environment.py` 检查通过：Python 3.12.3、依赖无差异、docker 镜像一致；镜像路径解析到与 P2 同一个文件(v2026.06.24 official-fonts，27471970304 字节)。失败 run 的 2 次尝试已用满，`resume` 不会重跑，故在新目录 `artifacts/p1-pi0-20260922b/` 重新冻结 4 份 plan，17:51 重启。17:52 VM 启动，17:53 π0 返回第 1 步动作。
