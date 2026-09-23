@@ -2,6 +2,14 @@
 
 更新：2026-09-22，America/Los_Angeles。
 
+## 2026-09-22：题目来源与 OSWorld-Verified 重叠风险(只读测量，未处理)
+
+- **来源**：RL 所用 16 题全部来自 xlang-ai 公开的 CUA-Gym(`datasets/tasks.parquet`，10,910 行)。筛选路径：desktop 四应用 7,249 道 → Python setup 6,391 道 → 09-18 只读候选池 2,041 道(每应用最多 600) → 机械初筛通过 1,014 道 → 人工审查 12 道；另 4 道为 09-18 选出的 P2 pilot。
+- **与 SFT 数据的关系**：SFT 语料由自有 ostg 流水线生成，生成时以 CUA-Gym 为回避语料，入库闸门要求与 CUA-Gym、官方 361 的文本相似度 <0.50(`taskgen/docs/PIPELINE.md`)。因此 CUA-Gym 题在文本层面对 SFT 是新题；但该度量看不出只差参数的重复。
+- **与 OSWorld-Verified 的关系(风险)**：CUA-Gym 与 OSWorld 出自同一实验室，按模板生成，`initial_setup.py` 的 `TASK_ID` 指明模板家族。机械初筛通过的 1,014 道中，有 **232 道(23%)属于 `osworld_` 开头的家族**：Impress 98/202、Calc 73/286、Writer 61/374、VS Code 0。本次 12 道新题中有 4 道属于这类家族：`de0be554` 插表、`e2b1a84c` 去项目符号、`f34a4410` VLOOKUP、`aed6f1eb` 全部居中。
+- **实例**：`de0be554`(`osworld_writer_table_creation_001`，"在第二段下插入 3 列 4 行表格")与 OSWorld-Verified `66399b0d`("在光标处插入 7 列 5 行空表格")只差参数。粗略文本最近邻(SequenceMatcher，对照 test_nogdrive 361 题)中，最高的几道也都是 `osworld_` 家族的题(0.52–0.55)。
+- **影响**：P1 是训练信号探测，这 4 题留在 P1 不影响探测结论；但若进入 P2/P3 训练集，OSWorld-Verified 上的"迁移"结论就不干净(RL_EXPERIMENT_DESIGN §4 要求的重叠审计尚未做)。训练集划分前须按家族做结构审计：比较每个家族的 `reward.py` 检查什么，与 OSWorld-Verified 四应用 140 题(Calc 47、Impress 47、Writer 23、VS Code 23)的 evaluator 检查什么。
+
 ## 2026-09-22：P1 审题——从 2030 道候选选出 12 道新题(每应用 3 道)
 
 用户要求 P1 按计划推进、先审 12 道题。P1 = 已有 P2 的 4 题(π0 已各采 4 条)+ 12 道新题，共 16 题；新题的 π0 采样(12×4=48 条)在审题完成后进行。代码在 `cua-rl-local` 的 `p1-20260922/`，与 iter2 同在实验分支 `iter2`(R3 驱动运行期间不切分支)；审查清单 `p1-20260922/selection.json`，每条附审查理由与已知风险。
