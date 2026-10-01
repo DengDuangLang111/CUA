@@ -251,6 +251,24 @@ David(Klone `dan29`)的做法:先在推理时让强模型从 actor 的 5 个候�
 - 后续 SFT 显卡:选择器 SFT(单截图,约 5–15k token,9B LoRA)用 Klone 已占的 A40/A100 即可,估 1–2h;
   actor 蒸馏(10–20 图、≤58k token)需单节点 4×H200,每臂 2–3.5h。
 
+**23:30–23:50 用户定:跳过离线试点,直接 eval50 B 臂,10 VM = workstation 7 + Windows 3;并与 OSWorld2 会话协调**
+- OSWorld2 会话(b601be)回复:22:00 起已停止派题;Windows 全空(21G);workstation 剩 3 台 VM(057/059/060)
+  15–60 min 内跑完,建议先上 3–4 台,其结束后再加满;不能碰清单(~/cua-v2-pilot-20260915、OSWorld-V2-shared、
+  监视器 PID 299972、klone-login 上 8150–8154 转发、39608331、40897918/919/920)均不碰。Windows 无 Klone master,
+  经 workstation 中转,需 WSL 运行时路由 MSS900。
+- **srv-h4 338887 失败**:`check_quant.py` 经 `llm.apply_model(survey)` 把 `__main__.survey` 发往 vLLM 进程,PicklingError;
+  修为模块导入调用(cua-arm `506fd8e`)→ 重投 **338913**,PENDING(Priority),Slurm 估 01:48 开始;g011 的卡已被他人占用。
+  Klone 无法承接:所有自有占位的单节点显存 ≤384G(L40S×8),FP8 需 ≳480G;8×A100/8×H200 可抢占节点满且非自有配额。
+- a2 副本:8031(40897922)、8032 / 8033(40897921 两张不同卡;`f4de639` 起改为取第一张空闲卡,首次两步被分到同卡已
+  scancel 40897921.1)。workstation 转发 18031/18032/18033 → g3074:8031/8032/8033。
+- Windows:用户批准后加 `ip route replace 100.72.191.125/32 via 172.20.128.1 dev eth0 advmss 900`(运行时,WSL 重启即失);
+  workstation 分支 `armsel-select` 以 bundle 传入 Windows 主仓库,worktree `/mnt/d/research/OSWorld-armsel` = a8b2448
+  (两机同 commit;两机主工作区差异 python.py / provider.py / images.py 已逐行核对,对本 eval 无影响);复制 .env 与
+  cache(1.3G);cua-arm `8b9c989`;两个 key(600,md5 前缀与 workstation 一致);隧道 Windows → workstation(机器 ID 一致)
+  转发 18032、18030;Windows 经中转访问 a2 r2 正常。
+- 题目切分(round-robin by i%10,按题集顺序):`armsel_eval50_ws1.json` 20 题 / `_win` 15 / `_ws2` 15,并集 = 50;两机 md5 一致。
+  runner 计划:ws1 4 VM → 18031;win 3 VM → 18032;ws2 3 VM(OSWorld2 腾空后)→ 18033。
+
 <!-- REPO NAV -->
 [Repository map](../../README.md)
 <!-- /REPO NAV -->
