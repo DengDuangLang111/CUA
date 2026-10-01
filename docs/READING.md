@@ -253,7 +253,12 @@ OSWorld Qwen3.5-4B 10.0→21.0% 是 **GPT-5.5 直接当选择器**,训练出的 
   58.33 vs 58.33;GPT-6 每题成本约 2 倍($0.67 vs $0.33,SFT)。
 - 蒸馏成 4B 选择器:GPT-6 标签 37.56/41.57、GPT-5.5 标签 38.44/42.61、Piotr 公开 ARM 39.22/43.58,均低于
   Zixian 参考 SelectionARM 42.67/50.0(参考基线 30.0/33.71)。
-- 另有 `arm_gpt6/teacher126`、`student126`(teacher/student 生成候选重标注)与 `teacher_takeover/`(09-30 在跑),未细看。
+- `arm_gpt6/ckpts/relabel_*` 7 个 checkpoint 全是**选择器**:LoRA,起点 OpenWebRL-4B-SFT,数据
+  `owrl_selection_*`(截图+5 候选→选第几个),标签分别来自 GPT-6 / GPT-5.5 / teacher126 / student126 候选。
+  **未见用选中动作训练 actor 的产物**;`teacher_takeover/`(09-29/30,t8b 与 student)在数据收集阶段。
+- 8,731 个选择样本上 **GPT-6 与 GPT-5.5 选同一候选仅 4,788(55%)**,而两者当选择器的成功率几乎相同 →
+  多数状态的候选差别不大,"5 选 1"的标签噪声高。Piotr 公开标签的目标位置偏向第 1 个(2,778 vs 第 5 个 1,253),
+  David 打乱后均匀。
 
 **ExeVRM 要点(HTML 版经摘要读取,未逐表核对)**:ExeVR-53k = OSWorld 23k(361 题、30 个
 agent、规则判分)+ AgentNet 23k + ScaleCUA 7k;负样本 = 对成功片段改写一个"界面上合理但
