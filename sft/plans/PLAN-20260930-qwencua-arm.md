@@ -1,5 +1,18 @@
 # Qwen-CUA-397B 当动作级 reward model(ARM),按 action-reward-models 仓库做法蒸馏回 9B
 
+> **选择器已改为 GPT-6.1-sol(§10),Qwen-CUA 弃用。** 目标:10-01 10:00 前看到 a2 + ARM-LoRA 在 eval50 的结果。
+
+## 0 实时进度(每次检查更新)
+
+| 时间 | eval50 B 臂(a2 每步 5 选 1,GPT-6.1-sol high,20/10) | r5 提纯(PRM 打分) | ARM-LoRA 训练 |
+|---|---|---|---|
+| 10-01 00:27 | 完成 8/50(ws1+win+ws2a),8 题在跑;选择 127 次、0 退回;已完成 8 题 B 8/8 vs 基线 7/8,翻转 +1/−0(gimp/62f7fd55 不可完成题,B 正确 FAIL) | 候选采样剩 ~35%(~01:00 完);第一批 4,992 状态打分中 320 完成、0 失败、平均分 0.94(偏高,0.7 门槛可能挡不住多少) | 338949(interactive 2×H200,ARM 臂)排队中;随机对照臂后补 |
+
+运行位置:B 臂结果 workstation `~/research/OSWorld-armsel/results_generated/armsel-eval50-gpt61sol-high-20261001/{ws1,ws2a,ws2b}`、
+Windows `/mnt/d/research/OSWorld-armsel/results_generated/.../win`;打分 Tillicum `arm/runs/r5-prm-gpt61-20261001/scored.jsonl`;
+训练输出 Tillicum `sft/out/9b-full-r5-armg61/`,日志 `arm/logs/trn_338949.out`。
+
+
 2026-09-30 草案,**待用户逐项核对(§7),未部署、未下载、未改代码**。
 背景与原仓库数字:`docs/READING.md`「动作级 reward model」节;构思:`docs/IDEAS.md` 末节。
 
