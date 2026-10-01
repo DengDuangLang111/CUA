@@ -20,7 +20,7 @@
 
 用户要求：把 Arijit 的环境复制进自己的私有仓库，9B、截图不缩放、用原生格式，VM 改成本地 docker；两台 Windows 跑 VM，Tillicum 只做 GPU 训练和推理；训练题不要只限于 64 道。
 
-**仓库**：私有仓库 `DengDuangLang111/cua-rl-gigpo`(用户要求不用 fork)。本地 `/Users/knight/uw/computeragent/cua-rl-gigpo`。`main` = Arijit `cac0a51`，完整 123 个提交；`upstream` 指向他的仓库，只拉不推。改动都在 `native-docker` 分支，已推送，代码停在 `088ed85`。为此在 Mac 上装了 `gh` 2.102.0(Homebrew)，用户自行登录。
+**仓库**：私有仓库 `DengDuangLang111/cua-rl-gigpo`(用户要求不用 fork)。本地 `/Users/knight/uw/computeragent/cua-rl-gigpo`。`main` = Arijit `cac0a51`，完整 123 个提交；`upstream` 指向他的仓库，只拉不推。改动都在 `native-docker` 分支，已推送，代码停在 `29a1ac5`(10-01 晚)。为此在 Mac 上装了 `gh` 2.102.0(Homebrew)，用户自行登录。
 
 **改动(每项都已提交)**：
 1. `worker_bridge.py`：
@@ -41,10 +41,7 @@
    - rollout 预处理走 `render()`，超长报错、不截断；
    - `gigpo.py` 新增 `train.format: native` 与 `train.native` 协议，**rollout 采样参数与评测不一致时拒绝启动**；
    - 题目加载器支持 ID 清单，并可指定本地的题目索引和题包，路径相对仓库根目录。
-4. **远程 VM**(Tillicum 登录节点无 `/dev/kvm`、无 docker，只有 apptainer)：
-   - 训练节点 `remote_bridge.py` 监听端口并校验共享口令；
-   - VM 主机 `scripts/bridge_relay.py` 经 SSH 隧道主动连入，每条连接对应本机一个原样的 bridge，逐行转发；
-   - 本地假 bridge 测试通过(`tests/test_remote_bridge.py`)：口令错误被拒、内联文件还原、结束后自动重连新 bridge。
+4. **远程 VM**(Tillicum 无 `/dev/kvm`、无 docker，只有 apptainer)：训练节点 `remote_bridge.py` 监听端口并校验共享口令；relay 连入后逐行转发到 VM 主机上的 bridge。**全部从 Mac 操作**，见下节。
 5. **配置** `experiments/r5_9b_native_desktop_h200.yaml`：
    - 采样与评测服务端一致：temperature 0.8、top_p 0.95、**top_k 20**(来自服务端 `--override-generation-config`)、4096 token；
    - 图片最多 10 张，折叠 1；提示上限 32768；
@@ -58,11 +55,43 @@
 - 另剔除与 Dev/留出家族题目相似度 ≥0.30 的 449 道：跨家族的参数变体比预想的多。
 - 对照：Arijit 那 282 道里有 90 道被审计排除，58 道落在我们的留出集家族，所以不能直接用。
 
+### 10-01 晚：VM 主机全部从 Mac 操作(代码 `29a1ac5`，`native-docker` 已推送)
+
+**为什么不让 Windows 自己连 Tillicum**：WSL 里原来那条 Tillicum 主连接(`~/.ssh/cm/qwen36-tillicum-login`，评测隧道用的)已经不在；Tillicum 只收密码+Duo(实测 `Permission denied (gssapi-keyex,gssapi-with-mic,keyboard-interactive)`，密钥 `id_ed25519_tillicum` 单独登不上)，所以每台主机自己连就得各过一次 Duo。改为 **Mac 中转**：Mac 的 Tillicum 主连接已过 Duo、保持 30 天，Mac 开一条转发到训练节点的 hub，每台主机一个 relay 进程跑在 Mac 上，经 ssh 在主机上拉起 bridge。**代价：训练期间 Mac 要开机联网**(`up` 给每个 relay 挂 caffeinate 防闲置睡眠；合盖仍会睡)。
+
+**用法**(Mac，仓库根目录)：
+```
+python3 scripts/vmhosts.py push          # 把 bridge 及其同目录模块、bridge_host.sh、host.env 推到两台主机(md5 核对)
+python3 scripts/vmhosts.py check         # 镜像、bridge 能否加载、正在跑的 VM 数、可用内存；Mac 的 Tillicum 主连接
+python3 scripts/vmhosts.py token         # 生成共享口令(Mac 600 权限)，装到 Tillicum(600)，不显示内容
+python3 scripts/vmhosts.py up <作业号>   # 转发 Mac:18900 → 作业节点:18900；每台主机起 relay，名额 = 上限 − 已在跑的 VM
+python3 scripts/vmhosts.py status | down
+```
+- 配置 `envs/vm_hosts.json`：路由、路径、上限(Windows 3 台 = 铁律；工作站 7 台 = 用户 10-01 定)。上限按主机上**所有** docker 容器算(含别人的评测)，超了 `up` 拒绝该主机。
+- 路由：Windows = `ssh osworld-windows wsl -e …`；工作站 = 经 Windows 的 WSL 再 `ssh yanji@100.72.191.125`(jy-eval-wsl)。Mac 直连工作站不通：Windows 节点 22 端口关、Tailscale SSH 卡住。所有远端命令只传简单参数，不套引号层。
+- `down` 停 relay → 各 ssh 会话关闭 → 远端 bridge 读到 EOF → 关自己的 VM。
+
+**实测(都不起 VM)**：
+- 两条路由 4MB 单行原样到达；
+- Mac 端 ssh 被 `kill -9` 或 stdin 关闭后，远端进程都读到 EOF 并退出，不留进程；
+- 端到端：Mac 上的 hub ↔ relay ↔ ssh ↔ 两台主机上真实的 `worker_bridge.py` 来回通过(未知命令得到报错、close 得到 ok、bridge rc=0 退出后 relay 重新拨号)；
+- 首次端到端抓到缺口：bridge 运行时还要加载同目录的 `reward_parse.py`、`hit_test.py`，已改为一起推送。`check` 现在会真的加载一遍 bridge，对照组缺这两个文件时报 FAILED；
+- `tests/test_remote_bridge.py` 新增两个反例，都不拉起 bridge：口令错误；端口后没有 hub(relay 要等到 hub 的准入回复才启动 bridge，否则隧道空转时会不停拉起远端 bridge)。
+
+**Tillicum 侧已就绪**：
+- 训练环境 `verl-native` 里重跑逐 token 对照：**85 决策 / 8 轨迹全部一致**(transformers 5.16.1)；
+- 模型目录 `models/r5-9b-s306`：软链 checkpoint-306 的权重与配置，加上 processor 目录多出的 merges/vocab/video 配置。两边重名的 7 个文件 md5 全同，`AutoProcessor` 加载得到 Qwen3VLProcessor / qwen3_5；
+- 题目数据 `data/cuagym/` 两个文件 md5 与 Mac 一致；Tillicum 上空跑读出 2366 训练 + 24 验证；
+- 两个实验的 verl 占位 parquet 已在登录节点生成(要下载 geometry3k，计算节点不一定能上网)；
+- 训练 sbatch `launchers/tillicum_rl.sbatch <实验名>`：1 节点 8×H200、QOS normal、24h、作业名 `rlx`；`NCCL_P2P_DISABLE=1`(Tillicum 上 NVLink P2P 崩溃复现过两次，CUA `c4306e05`)。日志会打出代码 hash 和"从 Mac 运行 `vmhosts.py up <作业号>`"的提示。
+
+**扩展编译**：339174 失败，原因是 venv 的解释器是系统 `/usr/bin/python3.12`，没有 `Python.h`。改为从 uv 管理的同一小版本(3.12.13)取头文件(CPython 同一小版本 ABI 不变)，并在编译前预检。预检在登录节点通过，不加修复的对照组照样报缺 `Python.h`。重投为 339202。
+
 **未完成**：
-- Tillicum 训练环境：需要 vLLM 0.27.1、ray 等，下载数 GB，待用户同意；搭好后在训练环境里重跑逐 token 对照。
-- 训练用模型目录：checkpoint-306 的权重 + 推理服务目录的 processor 文件。
-- VM 实测：两台 Windows 当时都被别的评测占满，未加 VM。
-- RL 的 VM 名额与时段。
+- 339202 编译结果。
+- 8×H200 正式训练：**参数表待用户确认后再投**。
+- 真 VM 冒烟 `scripts/smoke_remote.py`：等两台 Windows 上别人的评测跑完。当前占用 Windows 3/3、工作站 6/7。
+- 一轮训练步里实际做几次参数更新(`ppo_mini_batch_size` 在多轮展开后的含义)；clip 用 0.2 还是 0.28。
 - Binary 对照组的二值化奖励开关。
 
 ## 2026-10-01：Arijit 的 CUA RL 能否训 r5(只读核对)
