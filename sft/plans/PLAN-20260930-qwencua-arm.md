@@ -128,7 +128,28 @@ conv1d/in_proj_a/in_proj_b、MoE gate、shared_expert_gate…)。逐分片 CPU �
   两个 sbatch(`srv-h4` 4×H200 24h 端口 8030;`gen-h1` 1×H200)。
 - **干跑**(只渲染不调模型):r5 第 5 行状态 + 教师动作作候选,上游函数生成的 PRM prompt
   结构正确,4 处替换各命中 1 次。
-- **待办**:用户审 diff → 提交 → 部署 → 试点 200 状态。
+- **用户审 diff 批准四段**(22:0x 前):cua-arm 提交 `20f78a4` 状态 / `5063a47` 阶段 A /
+  `ec44e2e` 阶段 B / `823c0e4` 阶段 C;用户令"不改上游逻辑"后撤回三处自加改动(点击分桶、
+  排末步、think 截断),serve 上下文改 262144。
+- **逻辑自测** `cua/selftest.py`(`db5acf8`,修 workdir `192d0e2`),Tillicum 登录节点真语料:
+  ① 6,474 个教师目标全部可解析、题面与图片占位一致;② 20 个 prompt 构造成功、4 处替换命中;
+  ③ 阶段 C 全链(上游 build_distill_selections → onpolicy_precheck → build_onpolicy_sft → to_swift
+  + random_selections)用已知答案的合成分数:20 状态留 10(门槛以下与 -1 分各 5 个被丢)、
+  5 个偏离多数票,输出行除目标外与语料逐字节一致。产物 `arm/runs/selftest-20260930-2159/`。
+- **部署**:Tillicum `/gpfs/scrubbed/jy050706/arm/cua-arm`(git clone 自 bundle,md5 两端一致)。
+  heredoc 内第二个 ssh 漏 `-n` 吃掉后续命令一次(CLAUDE.md 已记的坑),已逐步补做。
+- **试点状态**:`arm/runs/pilot200-20260930/states.jsonl`,n=200 seed 0;语料 sha256 `6c8b38e6…`
+  与 CHECKPOINTS 登记一致;分布 vs_code 51 / os 35 / calc 33 / chrome 25 / writer 19 / impress 14 /
+  vlc 8 / thunderbird 8 / gimp 7。
+- **阶段 A 试点**:Slurm **338834** `gen-h1`,g008,1×H200,8h 上限(估 $7.20),21:5x 起。
+  **启动日志暴露 top_k=0 → 已 scancel(运行 2:42,未写出任何候选)**。原因:采样器只取
+  checkpoint 的 generation_config(img10-9b 的只有 eos,无 top_k),而 eval 服务由
+  `prepare_model.py` 传 `--override-generation-config`
+  `{temperature 1.0, top_p 0.95, top_k 20, min_p 0, presence_penalty 0, repetition_penalty 1.0,
+  max_new_tokens 81920}`(cua-eval 三份部署记录一致)。用户批准修复 → cua-arm `ecc0d6f`,
+  重投 **338835** `gen-h1`(g008)。
+  教训:"同 eval"要对 eval 服务的实际启动参数核,不能只对 registry 的 protocol 字段。
+- **下载**:22:00 时 145 GB,~135 MB/s,预计 ~23:20 完成;完成后提交 `srv-h4`。
 
 <!-- REPO NAV -->
 [Repository map](../../README.md)
