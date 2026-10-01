@@ -2,6 +2,55 @@
 
 更新：2026-09-22，America/Los_Angeles。
 
+## 2026-10-01：cua-rl-gigpo——Arijit 的 GiGPO 框架改为本地 docker VM + r5 原生格式
+
+用户要求：把 Arijit 的环境复制进自己的私有仓库，9B、截图不缩放、用原生格式，VM 改成本地 docker；两台 Windows 跑 VM，Tillicum 只做 GPU 训练和推理；训练题不要只限于 64 道。
+
+**仓库**：私有仓库 `DengDuangLang111/cua-rl-gigpo`(用户要求不用 fork)。本地 `/Users/knight/uw/computeragent/cua-rl-gigpo`。`main` = Arijit `cac0a51`，完整 123 个提交；`upstream` 指向他的仓库，只拉不推。改动都在 `native-docker` 分支，已推送，代码停在 `088ed85`。为此在 Mac 上装了 `gh` 2.102.0(Homebrew)，用户自行登录。
+
+**改动(每项都已提交)**：
+1. `worker_bridge.py`：
+   - `OSWORLD_PROVIDER=docker` 并用绝对路径的 qcow2 时走本地 docker，默认仍是 AWS；
+   - setup 和评分改为经 VM `/execute` 同步执行，原来是后台启动后固定等 8 秒，评分写文件、睡 3 秒、再读回；
+   - **评分脚本出错时抛错，丢弃这条轨迹**，原来是悄悄记 0 分，与设计"评分器崩溃算基础设施故障"相违；
+   - 支持原生 pyautogui 代码动作(每个动作后停 2 秒，同评测)；
+   - 回合结束后不再执行动作、不再重复打分；
+   - 远程模式下，题目文件随 reset 内联传来。
+2. **原生格式**：
+   - 从评测 harness `d552441` 原样拷入 `QwenInternalAgent` 等 4 个文件，哈希与评测 registry 一致；
+   - `native_session.py` 把它的 `predict()` 拆成"拼提示 / 解析回复"两步，中间的模型调用交给 verl；
+   - `render()` 用 processor chat template，带评测的 `enable_thinking`/`preserve_thinking` 渲染，verl 原来不传这两个参数；
+   - `served_text()` 复现评测服务端(vLLM 0.25.1 `--reasoning-parser qwen3`)的思考/正文切分，以及评测 agent `call_llm` 补回 `<think>` 的方式。
+   - **逐 token 对照**(`scripts/native_parity.py`，Tillicum SFT venv，transformers 5.15.0)：回放 R4 导出的 85 个真实评测决策(8 条轨迹)，**消息、提示 token、图片网格、回复文本全部一致**。途中查出两处差异并修正：系统提示含运行当天日期(训练沿用当天，回放固定为录制日)；输出开头的 `<think>` 由服务端解析器拆出、评测 agent 自行补回。
+3. **训练循环**：
+   - env manager 原生模式：每个桌面槽位一个 `NativeSession`；
+   - rollout 预处理走 `render()`，超长报错、不截断；
+   - `gigpo.py` 新增 `train.format: native` 与 `train.native` 协议，**rollout 采样参数与评测不一致时拒绝启动**；
+   - 题目加载器支持 ID 清单，并可指定本地的题目索引和题包，路径相对仓库根目录。
+4. **远程 VM**(Tillicum 登录节点无 `/dev/kvm`、无 docker，只有 apptainer)：
+   - 训练节点 `remote_bridge.py` 监听端口并校验共享口令；
+   - VM 主机 `scripts/bridge_relay.py` 经 SSH 隧道主动连入，每条连接对应本机一个原样的 bridge，逐行转发；
+   - 本地假 bridge 测试通过(`tests/test_remote_bridge.py`)：口令错误被拒、内联文件还原、结束后自动重连新 bridge。
+5. **配置** `experiments/r5_9b_native_desktop_h200.yaml`：
+   - 采样与评测服务端一致：temperature 0.8、top_p 0.95、**top_k 20**(来自服务端 `--override-generation-config`)、4096 token；
+   - 图片最多 10 张，折叠 1；提示上限 32768；
+   - 不用 KL，不加卡死或无效动作惩罚；按最终状态给 [0,1] 部分分；
+   - 每步 2 组 × 4 条 = 8 台 VM，32 步(P2 预算 256 回合)，8×H200。
+   - Mac 上空跑通过：71 个 verl 参数，题目清单生成正确。**尚未经用户确认参数表。**
+
+**训练题池** `cua-rl-local/split-20260922/rl_pool.py` → `artifacts/rl-pool-20261001`，副本在 cua-rl-gigpo `data/rl_pool_20261001`：
+- 训练 **2,366 道 / 170 个家族**(Calc 806、Writer 615、VS Code 552、Impress 393)；验证 24 道 = P2 Dev。
+- 条件：审计保留、非 Dev/留出家族、符合运行协议，不要求逐题人工审。
+- 另剔除与 Dev/留出家族题目相似度 ≥0.30 的 449 道：跨家族的参数变体比预想的多。
+- 对照：Arijit 那 282 道里有 90 道被审计排除，58 道落在我们的留出集家族，所以不能直接用。
+
+**未完成**：
+- Tillicum 训练环境：需要 vLLM 0.27.1、ray 等，下载数 GB，待用户同意；搭好后在训练环境里重跑逐 token 对照。
+- 训练用模型目录：checkpoint-306 的权重 + 推理服务目录的 processor 文件。
+- VM 实测：两台 Windows 当时都被别的评测占满，未加 VM。
+- RL 的 VM 名额与时段。
+- Binary 对照组的二值化奖励开关。
+
 ## 2026-10-01：Arijit 的 CUA RL 能否训 r5(只读核对)
 
 依据：`cua-rl-local/sources/multi-agent-framework`(`cac0a51`，2026-09-09；`git ls-remote` 显示远端 main 仍是这个提交，Arijit 未推送的本地改动看不到)。逐项核对 `CLAUDE.md`、`README.md`、`experiments/cuagym_sft35_gigpo_r2.yaml`、`experiments/cuagym_sft35_native_h10_osworld_v1.yaml`、`third_party/molmoweb-rl/agent_system/environments/env_package/cuagym/action_space.py`：
