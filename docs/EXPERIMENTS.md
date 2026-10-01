@@ -1,5 +1,28 @@
 # Synthetic task generation for OSWorld — design, experiments, results
 
+## OSWorld2 teacher 剩余91题续跑，仅workstation（2026-09-30 00:27 PDT启动）
+
+- **21:52 PT旧Windows重新上线**（WSL刚启动，21G内存，Docker 29.6.1可用、无运行容器）。现场核实此前只凭缓存的分数：003/005/012/016=0（remaining-20260916-windows）、006=0.2222（d552441-windows），均max_steps=100，与缓存一致。
+- **21:32 PT迁移A40安排**：用户定迁A40、保持100步、保持4VM×10G（不开新run加VM）。21:05进度33完成/4运行/49排队/5跳过（026/041 GitLab，050/055/056代理；062/075/098预计同样跳过），满分3/33、均分19.76%，近6小时约1题/小时。A40 hold 40897918(g3045)/919(g3043)/920(g3072)各起一个TP2 teacher（同`serve-teacher-held.sh 0`，每卡KV 14.8GiB/1.83×），workstation隧道8152/8153/8154，身份与采集路由已验证；920为热备。workstation上`setsid`运行`switch-to-a40-20261001.py`，于10-01 17:30健康检查后原子写`service-routes.json`（仅改klone-g3114-r1/r2的url，plan_sha256 66a46200…），之后新attempt走A40，在跑题留在L40S跑完。监视器改为workstation脱离会话运行（`watch-osworld2-20260930.sh`，日志同名.log），teacher检查跟随路由端口；Mac每10分钟短连接读日志。Windows 2222入口TCP通但ssh被对端关闭，原因未查，现走`tailscale ssh yanji@jy-eval-wsl`。
+
+- **04:25 PT**：026两次attempt均在setup报`GITLAB_URL and GITLAB_PRIVATE_TOKEN must be set`，标failed后controller继续派题；026/041需自建GitLab（见`reference/OSWORLD_V2_RUNTIME_REQUIREMENTS.md` §8），属环境阻塞、不计0分。用户定：有问题的题直接跳过；步数保持100（核实历次V2 teacher args.json均为max_steps=100，含09-05 nothink轮，无500步）。同日按用户要求hold krishna空闲卡7天：A100×2 40897923（g3081，仅1CPU/20G，不够起27B）、A40×2 40897918/919/920运行、40897921（A40×2）与40897922（A40×1）排队；cse分区MaxWall 1天，未hold。sbatch在`/gscratch/krishna/jy050706/holds/`。
+- **03:50 PT进度**：5/91完成、4运行、82排队，failed/interrupted 0。新分数013=1.0（89决策步/144分钟）、015=0.2840（100步/85分钟）、017=0.1429（51步/36分钟）、018=0（100步/132分钟）、020=0.1（69步/132分钟）；本轮满分1/5、均分30.54%。并入此前15题共20题：满分1/20、均分16.02%。已完成题平均约106分钟/题，按4槽位推算剩余约37–45小时，与39608331剩余约41.8小时持平，能否跑完不确定（仅5个样本，长题偏后完成）。WSL used32G/available22G，两teacher各running2/waiting0，故障监视器无告警。
+
+- 用户授权：只在workstation跑，已评分15题不重跑，036/037仍阻塞；使用空闲占位作业 **39608331（dxg_w41，g3114，8×L40S，到期10-01 21:39）** 中的4张卡；每VM 10GB。`hold-l40s-7d`（40340981）自09-19起因krishna组GRES额度PENDING，未使用。GPU4–7留给原项目。
+- Teacher：27B BF16权重52GB放不下单张L40S（46GB），故2个TP2副本：r1=GPU0/1:8150（step 39608331.2）、r2=GPU2/3:8151（step .5）。vLLM参数与09-16 `serve-teacher-signals-full.sbatch`逐行一致，仅端口不同；启动器`/gscratch/cse/jy050706/cua-v2-pilot-20260915/serve-teacher-held.sh`（md5 80217bbc…）。每卡KV 14.71GiB/476,202 tokens，1.82×262K（09-16为14.85GiB/1.83×）。采集改写`/gscratch/scrubbed/jy050706/cua-v2-signals-held-39608331-r{0,1}`，因cse组配额98%满（旧teacher signals 170GB/4982文件保留未动）。采集路由按prepare_model既有方式用未注册模型404探针初始化，不生成token。
+- Klone主机内存：单副本anon 8.1GiB、权重文件页缓存52.6GiB（两副本共享）；两副本运行后cgroup 75/128GiB，anon 20GiB。09-16 teacher的Slurm MaxRSS 73.3GiB主要是文件页。
+- Workstation：OSWorld-V2-shared新分支`qwen38-v2-vmram` commit `ce0c4fd`（仅本地未push），provider.py的`RAM_SIZE`读`OSWORLD_VM_RAM_SIZE`，默认4G不变；registry设10G、slots 6→4、teacher各capacity2（备份`registry.json.bak-20260930-pre-g3114`）。4容器实测RAM_SIZE=10G/CPU_CORES=4；启动4分钟后WSL used 23G/available 31G，负载6.3/20线程。
+- Run：`27b-base--osworld2--remaining-ws4vm10g-n91--20260930T072726Z-8b8df9cf247c`，panel `cua-eval/osworld2-remaining-20260930.json`（91题），plan→doctor（无错误）→run，controller PID263679。首批013/015→r1、017/018→r2；首步attention条目数=输出token（398/398、722/722、253/253、75/75），L63/H0，2040视觉token/图，capture_errors空。协议未变（thinking、preserve=False、10图/fold1、100步）。
+- 预计：按上一轮每步2.5–3.2分钟与多数题跑满100步，91题/4VM粗估46–90小时，大概率超过39608331剩余约45小时，届时需迁移teacher；低置信度。
+
+## OSWorld2 teacher（Qwen3.8-27B）eval进度核对（2026-09-29 23:58 PDT，只读）
+
+- 仍停在2026-09-16 20:21的用户暂停，之后没有续跑。Workstation实查：无eval进程、无运行容器；最后活动是09-22的cuagym评测。旧Windows在Tailscale上离线约1天，Windows分片按Mac catalog缓存（09-19 21:28同步，晚于暂停）及`reports/OSWORLD_V2_REMAINING_20260916.json`计，今日未能现场复核。
+- 当前协议（shared commit d552441、thinking=True/preserve=False、10图/fold1、100步）：**108题中15题有最终分数，2题代理阻塞（036/037），91题无分数**（workstation分片70、Windows分片21）。
+- 已评分：001=0.4444、004=0.1111、006=0.2222（Windows，仅报告记录）、014=0.90，其余002/003/005/007/008/009/010/011/012/016/019均为0。满分0/15，含部分分均分11.19%；001/002/004/006来自131K上下文服务，其余为262K全token采集，来源差异保留。
+- 91题中8题有中断轨迹，无分数：workstation r2的013（28步）、015（92）、017（45）、018（99）、021（36）、022（43）；Windows的020、024。其余未启动。r2在6VM下13:17–20:21约7小时仅完成2题（014、019）。
+- 按记录teacher采集服务40207395已于2026-09-22到期；续跑须重新部署teacher并核对身份，本次未查Klone现状。09-05不开thinking的旧轮次（39/108）协议不同，不与本轮合算。
+
 ## 9B r5＋v16save143 no_grad 完训并启动 Verified100（2026-09-19）
 
 - **20:05 PT，90题同题比较及追加核查**：新51/90满分（56.67%）、均分58.4508%；旧同题59/90（65.56%）、均分67.6678%。严格满分翻转为12退步/4改善，净少8题；13退步/5改善指任意分数升降，其中含0.997988→0及0→0.702663，不能都称为满分翻转。新增实证：VSCode缩进题最终文件仅第2行缺少应有4空格，模型却报告全部完成；DOC转PDF任务模型报告12份，但评测cache归档实际9份有效PDF、gold12份，且命令历史正则也失败；Conda评分只检查bashrc中的conda initialize标记，未独立确认替代做法的功能正确性。数据manifest显示v16占3668/10142样本行（36.17%，非loss权重），terminalfix为append129/rewrite11/already3；这些是数据审计线索，未证明造成退步。训练从原始Qwen3.5-9B开始，不是旧r5 checkpoint续训；同为3epoch，477vs306更新不能单凭步数判定过拟合。保留本轮所有原始分数和配置。[90题核查证据](../reports/r5-v16save143-eval100-20260919/regression-diagnosis-90tasks.json)。

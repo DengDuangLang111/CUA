@@ -491,7 +491,7 @@ def _work_locked(plan, host_id):
     write_json(run / "version.json", dict(run_id=plan["run_id"], benchmark=plan["benchmark"],
                panel_sha256=plan["selected_tasks_sha256"], benchmark_commit=spec["commit"],
                protocol=plan["protocol"], served_model=served, teacher_slots=plan.get("teacher_slots", {}).get(host_id), task_isolation="one native subprocess per task attempt"))
-    env = dict(os.environ, **plan["environment"], OPENAI_API_KEY=Path(endpoint["key_file"]).expanduser().read_text().strip(),
+    env = dict(os.environ, **{**plan["environment"], **host.get("environment", {})}, OPENAI_API_KEY=Path(endpoint["key_file"]).expanduser().read_text().strip(),
                CUA_INSPECTION_CONFIG=str(run / "inspection.json"), CUA_RUN_ID=plan["run_id"],
                PYTHONPATH=":".join(map(str, [TOOL / "sft/scripts/eval/capture_runtime", TOOL, spec["root"], Path(spec["root"]) / "scripts/python"])))
     command([spec["python"], "-c", "import lib_run_single; assert getattr(lib_run_single.run_single_example,'_cua_capture_wrapped',False)"], cwd=spec["root"], env=env)
