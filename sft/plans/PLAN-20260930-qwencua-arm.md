@@ -213,6 +213,26 @@ David(Klone `dan29`)的做法:先在推理时让强模型从 actor 的 5 个候�
 - a2 服务 `cua/serve_actor.sbatch`(待审 diff):eval 部署档案同参(bf16/TP1/262144/图 10/像素/override generation
   config),仅 max_num_seqs 3→32、max_num_batched_tokens 2048→8192(无注意力采集;只影响吞吐)。
 
+**23:0x–23:15 用户定:B 用 20/10 对齐现有 a2 基线;a2 可部署在 Klone**
+
+- a2 基线 = `eval50-a2-20260823`(dashboard 存 args.json / MODEL_BOUNDARY.json):image_max 20 / fold 10、temp 1.0、
+  top_p 0.95、max_tokens 81920、history_n 100、max_steps 50、sleep 3、thinking + preserve_thinking、relative、3 env、
+  enable_proxy true(nonproxy 题集无影响)、env `OSTG_NO_RECORD=1 OSTG_TYPE_NO_SPLIT=1`;服务(Tillicum 253817
+  `serve4bbo_253817.out`)非默认参数:max_model_len 262144、kv fp8、image limit 20、qwen3 reasoning parser、
+  override generation config = temp 1.0/top_p 0.95/top_k 20/min_p 0/无惩罚/81920。
+- Tillicum 版 `serve_actor.sbatch` 未提交即删除(图 10 张在 20/10 下会报错),改 `cua/serve_actor_held.sh`:Klone 占位作业里
+  照 `serve-teacher-held.sh` 模式起 a2,vLLM 参数逐项 = 基线服务。Klone 上的 a2(`sft/serving/9b-full-r5--train20260822--s306/model`)
+  与 Tillicum checkpoint-306 索引及第 4 分片 sha256 一致。拟用空闲占位 **40897922(A40×1,g3074,6 CPU)**;
+  40897918/919/920 是 OSWorld2 teacher 迁移用,不动。
+- `run_eval.py` 默认要求服务端注意力采集器(EVAL_AUTOMATION:capture:false 不关 eval 侧采集),开采集会改服务参数且
+  B 臂 5× 候选采集量 → **B 臂改为直接调原生 runner**(基线当年也是直接跑):`cua/run_armsel_eval.sh`,参数逐项抄基线
+  args.json + env + `OSTG_ARM_*`;已生成的 armsel registry 删除。像素:harness 默认 max_pixels 13,107,200 = 现 registry 值,
+  照基线不设。题集 `verified_eval50_nonproxy.json`(sha256 `a8877065…`);worktree main.py `72b740ac…`。
+- Qwen-CUA 下载完成(23:11,5,292 s):107 文件大小与 HF 逐一一致、索引 94 分片齐;残留 8 个 `.incomplete`(首轮 OOM)待清。
+  **srv-h4 = Slurm 338887,PENDING(Resources)**:当时无单节点 4 张空 H200(最多 3 张);账户 QOS 仅 normal/interactive/debug,
+  无 urgent。采样 338871–4 约 4.4 s/状态,预计 ~00:35 完。
+- workstation 内存:总 54G、可用 35G,OSWorld2 三台 VM 实占 3.3–6.8G;B 臂 3 台 VM(默认 4G)可共存。
+
 <!-- REPO NAV -->
 [Repository map](../../README.md)
 <!-- /REPO NAV -->
