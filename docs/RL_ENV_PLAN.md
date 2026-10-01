@@ -94,6 +94,47 @@ python3 scripts/vmhosts.py status | down
 - 一轮训练步里实际做几次参数更新(`ppo_mini_batch_size` 在多轮展开后的含义)；clip 用 0.2 还是 0.28。
 - Binary 对照组的二值化奖励开关。
 
+### 10-01 晚：按 r5 的标准 eval 重新核对 RL 协议(用户指出 2x5 / temp1 / 20fold10)
+
+**更正**：上文配置的采样与窗口(temperature 0.8、4096、10/1、30 步)来自 P1/P2 面板的 registry(`cua-eval/registry.cuagym-p{1,2}-r5*.json`)，那是 RL 设计文档 §4 写明的"待测量确认的起点"，**不是 r5 的 eval 协议**。yaml 注释"采样与 eval 服务端一致"是错的：eval agent 每个请求都显式发送 temperature/top_p/max_tokens(`qwen_internal_agent.py:309-311`)，服务端 `--override-generation-config` 只补未发送的项(top_k 等)。
+
+**r5(a2 = `img10-9b/checkpoint-306`)标准 eval 的实际参数**(WSL `results_generated/qwen35-9b-sft/eval50-a2-20260823/args.json` 与 `MODEL_BOUNDARY.json`，serve `sft/scripts/train/archive/serve-chain-img10-a2261.sbatch`)：
+
+| 项 | a2 eval(61.0%，RESULTS §5.30) | P1/P2 面板 / 原 RL 配置 |
+|---|---|---|
+| temperature / top_p / top_k | **1.0** / 0.95 / 20(服务端) | 0.8 / 0.95 / 20 |
+| min_p / presence / repetition | 0 / 0 / 1.0 | 同(vLLM 默认) |
+| max_tokens | **81,920** | 4,096 |
+| 图片窗口 | **image_max 20 / fold 10**，history 100 | 10 / 1 |
+| max_steps / 动作后停顿 | **50 / 3 秒** | 30 / 2 秒 |
+| thinking / preserve_thinking | 开 / 开 | 同 |
+| 服务端 | vLLM `--max-model-len 262144`、`--reasoning-parser qwen3`、fp8 kv-cache、每提示最多 20 图 | — |
+
+- r5 的 SFT 数据是 **img10/fold1**、思考不截断(CHECKPOINTS.md 第 21 行)；a2 的 61.0% 是在 20/10 下评的，RESULTS 记为"训 10 图评 20 图的窗口错配"。现行主 registry 的 Verified 协议是 temp 1.0、10/1。
+- **组大小**：用户 10-01 定"工作站开 7 台"，加 Windows 3 台共 10 台 = **2 组 × 5 条**，原配置仍写 2×4，已更正。
+- **训练题出处**：HuggingFace `xlangai/CUA-Gym` 的 `artifacts/cua_gym_tasks_v1.tar.zst`(sha `2198e335…`)+ `data/tasks.parquet`；Calc/Writer/Impress/VS Code 7,249 道 → 去掉 OSWorld-Verified 重叠 2,247、dev/留出家族 1,627、不符合运行协议 560、与 eval 题近重复 449 → **2,366 道**。
+
+**上下文实测**(a2 eval100 的 100 条轨迹、2,162 轮，用训练代码 `native_session.build` + chat template 逐轮重建；截图用同尺寸空白图，单图 2,040 token；每 50 轮做一次完整 render 对照，44 次全一致)：
+
+| | 10/1 | **20/10** | 20/10 且只看前 30 步 |
+|---|---|---|---|
+| 提示 p50 / p90 / p99 | 25,084 / 53,230 / 95,033 | 32,088 / 65,689 / 106,199 | 25,482 / — / 87,014 |
+| 提示最长 | 113,647 | **134,007** | — |
+| 提示 + 回复 > 65,536 的轮 | 132(6.1%) | 225(10.4%) | 69 / 1,729(4.0%) |
+| 提示 + 回复 > 81,920 的轮 | 38 | 98 | 27 |
+| 提示 + 回复最长 | 114,508 | 134,868 | 109,760 |
+
+- 回复(与窗口无关)：p50 188、p90 1,166、p99 5,190、最长 29,065 token；超过 4,096 的 37 轮(1.7%)，超过 8,192 的 11 轮，超过 16,384 的 4 轮。
+- 长的原因：preserve_thinking + history 100，之前每轮的思考都留在上下文里。r5 的 SFT max_length 是 65,536。
+- **两次测量踩到的坑**(已改正)：OSWorld 的 traj.jsonl 一条回复含多个动作时，每个动作各写一行(相同 step_num、相同回复)；第一次把它们当成多轮，得到"每题 195 步、提示 43 万"的假数字。同一原因让 P1 统计误报了"4096 截断 2.7%"：去重后 P1 为 48 次尝试 / 701 轮，**思考未闭合 0 轮**，无 tool_call 2 轮，最多 30 步，平均 14.6 步。
+
+**由此暴露的训练端问题**(都在 `third_party/molmoweb-rl`，未改，待用户同意)：
+1. **一律补齐到上限**：提示左补齐到 `max_prompt_length`(`rollout_loop._preprocess_native`)、回复右补齐到 `response_length`(`vllm_rollout_spmd.py:439`)，而配置是 `use_remove_padding=False`、actor 没有去补齐的步骤，所以每条轮次样本都按"提示上限 + 回复上限"整段计算。上限一旦按 eval 放到 13 万以上就算不动。
+2. **整段 logits**：非 rmpad 分支先算整条序列的 logits 再切出回复段(`dp_actor.py`)，13.5 万 × 248,320 词表，bf16 也要约 67 GB。Qwen3.5 前向支持 `logits_to_keep`(transformers 5.16.1 `modeling_qwen3_5.py:1786`)，可以只算回复段。
+3. **每步更新次数**：verl 把 `ppo_mini_batch_size` 乘 n 再除以卡数(`fsdp_workers.py:163-164`)，2×4/8 = 1、2×5/8 也取整为 1，于是每张卡每 1 条轮次样本更新一次参数，一步约 20–25 次优化器更新、每次全局 8 条样本(`dp_actor.py:435`)，与设计 §5"每次更新收集若干有效 task groups"不符。
+
+**扩展编译**：339202 成功(causal_conv1d 1.7.0、flash_attn 2.8.3.post1，FA2 前向通过)。
+
 ## 2026-10-01：Arijit 的 CUA RL 能否训 r5(只读核对)
 
 依据：`cua-rl-local/sources/multi-agent-framework`(`cac0a51`，2026-09-09；`git ls-remote` 显示远端 main 仍是这个提交，Arijit 未推送的本地改动看不到)。逐项核对 `CLAUDE.md`、`README.md`、`experiments/cuagym_sft35_gigpo_r2.yaml`、`experiments/cuagym_sft35_native_h10_osworld_v1.yaml`、`third_party/molmoweb-rl/agent_system/environments/env_package/cuagym/action_space.py`：
