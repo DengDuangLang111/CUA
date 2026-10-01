@@ -204,6 +204,39 @@ Actionable borrow: best-of-4 harvesting on our failed tasks (especially the
 demonstrations) — 3–4 rerolls per failed task, shortest-success curation,
 zero pipeline change, run when VMs free up.
 
+## 动作级 reward model(ARM)与轨迹级视频 RM(2026-09-30 读)
+
+两份材料讲的不是同一类 reward model:
+
+| | 打分对象 | 输入 | 对 SFT 数据的作用 |
+|---|---|---|---|
+| 我们的 strongjudge | 整条轨迹 | 题面+末 8 帧+动作+自述 | 决定整条轨迹收不收 |
+| ExeVRM(arXiv 2603.10178) | 整条轨迹 | 题面+1 FPS 关键帧视频 | 成功/失败 + 首错时间段;论文未用于筛数据/RL |
+| **ARM**(github piotr-teterwak/action-reward-models) | **同一状态下的 K 个候选动作** | 截图+题面+5 个候选 | **决定这一步的训练目标写哪个动作** |
+
+**ARM(原文 README / actor_distillation/RESULTS.md 核实)**:actor 每状态自采 5 个候选
+(RM 训练数据 temp 0.7,蒸馏时 1.0),GPT-5.5 选一个作标签(~3k 状态重复采样→49.5k 组);
+训两种 RM:selection ARM(看全部候选选一个)与 BT scalar(逐个打分)。推理时 best-of-5:
+OM2W MolmoWeb-4B 25.1→37.1%,OpenWebRL-4B 33.8→51.1%(超过 GPT-5.5 教师 47.1%);
+OSWorld Qwen3.5-4B 10.0→21.0% 是 **GPT-5.5 直接当选择器**,训练出的 ARM 没有 OSWorld 数字。
+
+**蒸馏回 SFT(= RM 决定 SFT 数据)**:状态取自 gold 轨迹,目标 = 被选中的候选;
+`--only-changed` 只留"选中 ≠ 学生多数票"的状态;预检 off-plurality <10% 不值得做,>25% 值得。
+- 在线、训练的 4B ARM、无门槛:**−4.2pp**(31.1→26.8)。学会原地滚动不提交:终止率
+  100%→27%,撞步数上限 7%→67%,scroll 占比 24%→61%。作者诊断:5 个都差时"最好的差动作"
+  仍被训;局部评判下犹豫类动作看起来比提交类动作更安全。
+- 离线、GPT-5.5 PRM 分数 argmax + **最佳分 <0.7 丢弃该状态** + 平局取学生多数票:
+  **+8.7pp**(95% CI 2.4–15.0);对"同状态随机候选 SFT"对照 **+7.2pp,p≈0.001,n=190**,
+  随机对照本身≈基线 → 收益来自"选择",不是来自"训学生自己的输出"。
+- **混淆(我们的判断)**:成败两轮同时改了选择器、在线/离线、门槛、平局规则;作者说门槛
+  贡献最大,但没有单独隔离。
+
+**ExeVRM 要点(HTML 版经摘要读取,未逐表核对)**:ExeVR-53k = OSWorld 23k(361 题、30 个
+agent、规则判分)+ AgentNet 23k + ScaleCUA 7k;负样本 = 对成功片段改写一个"界面上合理但
+不匹配"的指令,并标出第几步开始不匹配 → 首错时间标签;时空 token 裁剪;Qwen3-VL-4B/8B;
+8B acc 84.7 / P 82.9 / R 87.7(GPT-5.2 75.0,Gemini-3 Pro 75.1)。**对我们**:训练集用了
+OSWorld 361 题,拿它评 OSWorld 轨迹有污染;标签继承 checker 过严的 bug(JUDGING §6)。
+
 <!-- REPO NAV -->
 [Repository map](../README.md)
 <!-- /REPO NAV -->
