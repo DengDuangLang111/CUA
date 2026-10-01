@@ -243,6 +243,13 @@ David(Klone `dan29`)的做法:先在推理时让强模型从 actor 的 5 个候�
   Tillicum srv-h4 Slurm 估计 23:35 开始 → 保持 Tillicum。
 - Qwen-CUA API key 复制到 workstation `~/.config/cua-v2/tillicum_vllm_key`(600,md5 前缀两端一致);
   删除首轮下载残留 8 个 `.incomplete`(9.1G)。
+- **a2 就绪 23:21**:A40 KV 1,273,270 token(262k 上下文并发 4.86×)。workstation 转发 127.0.0.1:18031 → g3074:8031
+  (klone-login 主连接),`/v1/models` 正常,开思考的短请求正常结束。
+- ⚠ vLLM 把 `--api-key` 明文写进启动日志("non-default args");已对该日志 chmod 600。`serve-teacher-held.sh` 同样用
+  `--api-key`,其日志有同样问题(未改动他人日志);Qwen-CUA 的 sbatch 用 `VLLM_API_KEY` 环境变量,不入日志。
+- 冒烟题集 `evaluation_examples/armsel_smoke1.json`(worktree 未跟踪文件):os/13584542(终端 132x43 重启保持)。
+- 后续 SFT 显卡:选择器 SFT(单截图,约 5–15k token,9B LoRA)用 Klone 已占的 A40/A100 即可,估 1–2h;
+  actor 蒸馏(10–20 图、≤58k token)需单节点 4×H200,每臂 2–3.5h。
 
 <!-- REPO NAV -->
 [Repository map](../../README.md)
