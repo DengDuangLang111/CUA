@@ -169,6 +169,19 @@ conv1d/in_proj_a/in_proj_b、MoE gate、shared_expert_gate…)。逐分片 CPU �
   估算(低置信度):采样 ~3–3.5h,打分 1.5–3.5h(未实测),训练 2–3.5h → SFT 完 ~明早 05–08 点;
   训练 sbatch 尚未写,写好先给用户审 diff 与参数表。
 
+**22:5x 用户改选择器为 selection ARM(仿 David An),并改为先只做 r5**
+
+- selection:cua-arm `67e8ee6`(`select_candidates.py` 移植上游 run_selector_offline.py + `report_selection.py`)、
+  `809e6df`(服务名 `qwen-cua-qwen3.5-397b` 使上游按前沿模型处理:普通 prompt、temperature 0、无强制 JSON;
+  Qwen-CUA 模板默认开思考;selftest 覆盖 selection prompt)。无 0.7 门槛(selection 无分数)。
+- r5 在语料中连续(行 0–6,473),v16 在后(6,474–10,141)。原 4 片(338853–6,31 min)取消:已完成
+  s00 384 / s01 384 / s02 320(均 r5)/ s03 320(v16),无截断行;采样代码 ded5293→809e6df 无差异。
+  剩余 r5 5,386 状态重切 4 片(`states.r5rest.s0{0..3}`)→ **338871–338874**;1,088 + 5,386 = 6,474 核对无漏无重。
+- **严谨性**:与上游同构 —— Piotr 的选择数据(HF `PTeterwak/action-reward-models-data`
+  `openwebrl_actor/selection_sft`)取自 OpenWebRL 公开 SFT 轨迹的 3,085 个状态(`states_full.jsonl`,带 `demo_action`),
+  训练集 39,155 例 / 2,557 个不同截图;David 的 8,731 = 每状态取 3 组(`_3ps`)。即上游的状态也来自 actor 自己的
+  SFT 数据,r5 对 a2 正是同样关系;v16 是我们额外加的。
+
 <!-- REPO NAV -->
 [Repository map](../../README.md)
 <!-- /REPO NAV -->
