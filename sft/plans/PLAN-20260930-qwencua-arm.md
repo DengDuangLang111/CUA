@@ -6,7 +6,17 @@
 
 | 时间 | eval50 B 臂(a2 每步 5 选 1,GPT-6.1-sol high,20/10) | r5 提纯(PRM 打分) | ARM-LoRA 训练 |
 |---|---|---|---|
+| 10-01 00:35 | 在跑(上次 8/50) | 第一批约 1,000/4,992、0 失败;采样 ~01:00 完后自动起第二批(scored.part2) | 4 卡 interactive 作业因 QOS(cpu≤16、gpu≤2)永不启动 → 改 2×H200、累积 4(全局 batch 8 不变)、加 LoRA 合并 → **339006** 排队;随机对照臂后补 |
 | 10-01 00:27 | 完成 8/50(ws1+win+ws2a),8 题在跑;选择 127 次、0 退回;已完成 8 题 B 8/8 vs 基线 7/8,翻转 +1/−0(gimp/62f7fd55 不可完成题,B 正确 FAIL) | 候选采样剩 ~35%(~01:00 完);第一批 4,992 状态打分中 320 完成、0 失败、平均分 0.94(偏高,0.7 门槛可能挡不住多少) | 338949(interactive 2×H200,ARM 臂)排队中;随机对照臂后补 |
+
+**打分 prompt 溯源(00:30–00:35,用户要求查分支/历史)**:用的是上游 `build_catts_vision_prompt_v2`(单候选)+
+`scalar_server._to_prm_format` + `templates/prm2_templates.json`(= Piotr 训 `reward_bt_prm2_ep2` 的格式)+ 4 处 CUA 替换。
+**产生 GPT-5.5 PRM 分数的脚本/prompt 在任何可访问处都没有**:GitHub 只有 main;12 个 commit 中 selection_prompt.py 仅在
+首个 commit `a377862` 出现且 PRM 模式自始即"repro build 已删";HF 数据集 `code/` 与两个 .pyc 同为删减版;HF
+`distillation_data/` 是 rollout 记录;Klone 上 dan29 克隆无分支、piotrt 只有 OpenWebRL 代码。原件在作者 BU SCC 生产树
+(`/projectnb/ivc-ml/piotrt/browser_agents/browser-environment`)。HF `selections_distill_a.jsonl`(蒸馏成功版实际用的选择):
+39,160 条保留,top_score p10 0.8 / 中位 0.95,0.7 档仅 1.5%;按连续编号的空缺估计 0.7 门槛约丢 8% 状态(保留 ~92%)
+→ GPT-5.5 同样打高分,我们平均 0.94 属同一现象,预计保留率也在九成左右。
 
 运行位置:B 臂结果 workstation `~/research/OSWorld-armsel/results_generated/armsel-eval50-gpt61sol-high-20261001/{ws1,ws2a,ws2b}`、
 Windows `/mnt/d/research/OSWorld-armsel/results_generated/.../win`;打分 Tillicum `arm/runs/r5-prm-gpt61-20261001/scored.jsonl`;
