@@ -239,6 +239,32 @@ VM crash、reset 失败、截图服务不可用、evaluator crash 标为 infrast
 - [x] 重叠审计(对 OSWorld-Verified)与家族划分(09-22)；P2 题单：train 64、dev 24(Impress dev 仅 1)，每题经审题、四态检查与 VM 往返检查。
 - [ ] 按 P0/P1 实测吞吐批准 P2/P3 预算。
 
+## 11. 用户任务清单(2026-10-01 记录)
+
+用户列出的 RL 任务(用户注明"这些也可以让 Arijit 做")：
+1. 把 CUA 环境加进 OpenWebRL 仓库并跑通。
+2. 把 Arijit 那边 CUA RL 较好的 setup 拿来，在 OpenWebRL 上试。
+
+用户 10-01 指示：**暂不往 OpenWebRL 里加**；先看 Arijit 现有的 CUA RL 能否直接对 r5 模型做 RL。评估结论(只读核对 `arijitray1993/multi-agent-framework` `cac0a51`，与远端 HEAD 一致；证据与细节见 RL_ENV_PLAN "10-01：Arijit 的 CUA RL 能否训 r5")：
+
+- **能加载，但不能直接用**。训练栈(vendored verl/GiGPO，`verl-qwen35` 环境：transformers 5.15.1 + vLLM 0.27.1)能加载 Qwen3.5。它的起点本来就是用户的 SFT 模型(`DanielYanCua/osworld-verified-sft-qwen3.5` 的 4b 版本)。
+- **主要障碍**：
+  1. **RL 采样格式与 r5 不同**：截图缩到 1280×736；坐标用 0–999 相对网格并以 JSON 工具调用输出；每步 1 张历史截图；`max_tokens=1500`。r5 训练时是原尺寸截图、`pyautogui` 像素坐标、10 张历史截图。Arijit 自己测过：在他的格式下，4B SFT 模型 12% 的步骤给不出可用输出；用原生格式时，2 张图 5.0%、最多 15 张图 22.2%。原生格式只接进了评测，没接进训练采样。
+  2. **硬件**：4B 在 2×H200 上峰值 102GB，每步约 24 分钟。r5 是 9B，原生格式又要 10 张历史截图，需要 8×80GB 级别的机器；L40S(48GB)他已实测会 OOM。
+  3. **桌面环境跑在 AWS EC2**(`worker_bridge.py` 写死 `provider_name="aws"`)，要花钱、要凭据；我们现有的是 WSL/workstation 上的 docker。
+  4. **题没有做 OSWorld 重叠审计**：从 CUA-Gym 四个应用的 7,249 题里随机抽 282 道，包含 `osworld_` 家族。
+- **它的结果**：截至 09-08，4B 跑了 36 步 RL，在 OSWorld 19 道共同题上没有可测提升(基座 2/19，第 17/24/36 步分别为 2、3、1)。作者自己写的是还不知道是 setup 问题还是方法问题。
+- **值得借鉴的 setup**：
+  - 奖励 v2：按最终状态给 [0,1] 分，不减初始分；
+  - 零优势过滤按真实除数取整，不丢掉带梯度的行；
+  - 卡死循环提前终止并扣分；
+  - GiGPO 步级分组；
+  - 实测瓶颈在多模态样本的 old_log_prob/ref/update 三遍前向，占每步 97.8%，环境只占 2.2%。
+
+**下一步待用户决定**：
+- (a) 在 Arijit 的栈里把 r5 的原生格式接进训练采样，并换成本地 docker 环境，需要 8×80GB 的卡；
+- (b) 先在我们自己已验证的单卡更新链路上补齐自动循环(r5 原生格式已跑通两次更新)，把 Arijit 的 GiGPO、奖励和过滤做法移植过来对比。
+
 ## 源码依据
 
 - [Zixian OpenWebRL](https://github.com/zixianma/OpenWebRL)：固定 `9da6dc1`；主 launcher 的 GRPO/custom generate/custom rm，`slime/ray/rollout.py` 的 trajectory reward grouping 与 turn weighting。

@@ -2,6 +2,28 @@
 
 更新：2026-09-22，America/Los_Angeles。
 
+## 2026-10-01：Arijit 的 CUA RL 能否训 r5(只读核对)
+
+依据：`cua-rl-local/sources/multi-agent-framework`(`cac0a51`，2026-09-09；`git ls-remote` 显示远端 main 仍是这个提交，Arijit 未推送的本地改动看不到)。逐项核对 `CLAUDE.md`、`README.md`、`experiments/cuagym_sft35_gigpo_r2.yaml`、`experiments/cuagym_sft35_native_h10_osworld_v1.yaml`、`third_party/molmoweb-rl/agent_system/environments/env_package/cuagym/action_space.py`：
+
+- **起点是用户的模型**：`DanielYanCua/osworld-verified-sft-qwen3.5`，快照 `b9de2332…/4b`；仓库内另有 9b 版本。配置注释引用了用户的数字：在改过的 OSWorld 361 题、50 步、20 图条件下，骨干 31.67% → SFT 47.00%。
+- **训练采样不用原生格式**：
+  - 他的环境把截图缩到 1280×736，坐标是 0–999 相对网格，动作用 JSON 工具调用，先 `<think>` 再出动作；
+  - 每步只带 1 张历史截图(从 4 张降到 1 张，因为多模态前向太慢)，`max_tokens=1500`；
+  - 他的原生格式实验(`OSWORLD_AGENT=qwen35vl`，用 mm_agents/qwen35vl_agent.py)只做了评测：4B 在 2 图 5.0%、最多 15 图 22.2%；在他自己的格式下 12%(37/308)的步骤无可用输出。
+- **硬件**：4B 在 2×H200 上分配 102GB、保留 119GB，每步约 24 分钟，764 题按每步 4 题算一个 epoch 要 191 步(约 76 小时)。他实测 48GB L40S 会 OOM，80/96GB 档在 vLLM 占用后也放不下。9B 没有在这套栈上训过。
+- **环境**：桌面题跑在 AWS EC2(`DesktopEnv`，provider 写死为 aws)，网页 mock 跑在 BU SCC，另有 WebGym 实网(LLM 裁判打分)。训练题为 CUA-Gym 桌面 282 + mock 网页 282 + WebGym 200；桌面题从四应用 7,249 题中随机抽取，没有做 OSWorld 重叠审计(其中会有 `osworld_` 家族)。
+- **结果**：36 步没有可测提升(OSWorld 1.0 共同 19 题：SFT 2/19，step17 2/19，step24 3/19，step36 1/19；训练成功率 0.106 vs 前一次 0.108)。作者写明不确定是 setup 还是方法的问题，并建议下一步在 OpenWebRL 的题集上做阳性对照。
+- **可借鉴**：
+  - 奖励 v2：按最终状态给 [0,1] 分，不减初始分；之前 `r_end - r0` 会让"开局即满足"的题得 0；
+  - 零优势过滤向上取整到真实除数；
+  - 卡死循环提前终止并扣分；
+  - 训练和评测的推理格式必须一致；
+  - 比较 checkpoint 时，评测配置只能改模型路径；
+  - 每步耗时主要在多模态样本的三遍前向(97.8%)。
+
+**结论**：Arijit 的训练栈能加载 Qwen3.5，但要拿来训 r5，至少还要做四件事：把 r5 的原生格式接进训练采样、换一台 8×80GB 级别的机器、把 AWS 换成本地 docker、换成审计过的题单。对比之下，我们自己的单卡链路已经在原生格式下对 9B 做过两次更新(update1/2)，缺的是自动循环。两条路的取舍已写入设计文档 §11。
+
 ## 2026-09-22 23:57：P1 训练信号探测完成(π0，16 题 × 4 条)
 
 12 道新题 × 4 轮 = 48 回合(17:51–23:57，workstation 单 VM 串行，平均每题约 7.5 分钟)，全部评分，failed/blocked/interrupted 为 0。与 09-18 的 4 题(同协议)合成 16 题。证据在 `cua-rl-local/artifacts/p1-pi0-20260922b/`(summary.json、episodes.json)。
