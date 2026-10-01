@@ -21,6 +21,7 @@
 → GPT-5.5 同样打高分,我们平均 0.94 属同一现象,预计保留率也在九成左右。
 
 **API 缓存与 token 量(00:45 实测)**:记录里原本没存 `cached_tokens`,另抽 20 个状态重打 100 次实测:现做法(每状态 5 个候选同时发)缓存命中 **4.0%**;先发 1 个、回来后再同时发 4 个 → **22.1%**。已打 3,392 状态 = 16,960 次调用,平均输入 3,988 / 输出 90 token。全量 6,474 状态 × 5 ≈ 32,370 次 → **输入 ~129M、输出 ~2.9M token,~$280**;eval50 选择 ~700–1,000 次 → 输入 ~3–6M,~$10–20。合计 ~$290–300。
+选择调用另测 8 次:平均输入 **9,147**(最大 23,590,5 个候选的思考都在 prompt 里)、输出 58 token。**截至 00:51 实际已用 ≈ $187**:打分 21,280 次(输入 84.3M、输出 1.90M,≈$181)+ eval 选择 222 次(≈2.0M 输入,≈$4)+ 测试 ~110 次(≈$1)。这把 key 无 `api.usage.read` 权限,余额接口只能浏览器登录查,**总额度看不到**。
 
 运行位置:B 臂结果 workstation `~/research/OSWorld-armsel/results_generated/armsel-eval50-gpt61sol-high-20261001/{ws1,ws2a,ws2b}`、
 Windows `/mnt/d/research/OSWorld-armsel/results_generated/.../win`;打分 Tillicum `arm/runs/r5-prm-gpt61-20261001/scored.jsonl`;
