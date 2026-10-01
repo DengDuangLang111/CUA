@@ -233,6 +233,17 @@ David(Klone `dan29`)的做法:先在推理时让强模型从 actor 的 5 个候�
   无 urgent。采样 338871–4 约 4.4 s/状态,预计 ~00:35 完。
 - workstation 内存:总 54G、可用 35G,OSWorld2 三台 VM 实占 3.3–6.8G;B 臂 3 台 VM(默认 4G)可共存。
 
+**23:15–23:25 执行**
+- 用户批准两脚本 → cua-arm `1c91332`,Tillicum / Klone(`/gscratch/cse/jy050706/arm/cua-arm`)/ workstation 三处同步(bundle md5 一致)。
+- a2 起于 Klone 占位 40897922(g3074,step 40897922.0,端口 8031),日志 `/gscratch/cse/jy050706/arm/logs/srv_actor_40897922_8031.log`;
+  引擎配置 kv fp8、prefix caching 关、CUDA Graph FULL_AND_PIECEWISE(与旧基线服务一致)。
+- 用户问能否把 Qwen-CUA 放在"已有的 4 张 H200"上:那是 4 个 1 卡采样作业,分在 g006/g008×2/g010 三个节点,
+  张量并行要求同节点,不行。Klone:FP8 403G 需单节点显存 ≳480G → L40S/A40(8×48G=384G)放不下;ckpt 分区
+  8×A100(g3080–87)与 8×H200(g3125–32)当时均几乎满(各仅 1 节点空 1 卡);krishna A100 额度 6、cse 4,凑不出 8 张。
+  Tillicum srv-h4 Slurm 估计 23:35 开始 → 保持 Tillicum。
+- Qwen-CUA API key 复制到 workstation `~/.config/cua-v2/tillicum_vllm_key`(600,md5 前缀两端一致);
+  删除首轮下载残留 8 个 `.incomplete`(9.1G)。
+
 <!-- REPO NAV -->
 [Repository map](../../README.md)
 <!-- /REPO NAV -->
