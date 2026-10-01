@@ -182,6 +182,37 @@ conv1d/in_proj_a/in_proj_b、MoE gate、shared_expert_gate…)。逐分片 CPU �
   训练集 39,155 例 / 2,557 个不同截图;David 的 8,731 = 每状态取 3 组(`_3ps`)。即上游的状态也来自 actor 自己的
   SFT 数据,r5 对 a2 正是同样关系;v16 是我们额外加的。
 
+## 9 仿 David An 的 CUA 版流程(2026-09-30 23:0x 用户定)
+
+David(Klone `dan29`)的做法:先在推理时让强模型从 actor 的 5 个候选里挑(GPT-6/GPT-5.5 当 selection ARM),
+再把挑选能力蒸馏成 actor 自己 checkpoint 上的 LoRA 选择器;他尚未把选中动作 SFT 回 actor。CUA 版:
+
+| 步 | 内容 | 状态 |
+|---|---|---|
+| ① | a2 在 r5 6,474 状态上每状态采 5 个候选(离线,不执行) | 338871–4 在跑,~00:55 完 |
+| ② | Qwen-CUA 4×H200 FP8 | 下载 ~23:20 完后提交 srv-h4 |
+| ③ | 试点 200 状态 selection 报告 | 服务起后 |
+| ④ | **推理时检验 eval50**:a2 每步采 5 + Qwen-CUA 挑,对比 a2 单次 | 代码已提交,待部署 |
+| ⑤ | 全量标签(Qwen-CUA 给 r5 状态选) | 可与 ④ 并行 |
+| ⑥⑦ | 在 a2 上 LoRA 训选择器、离线一致率 + 在线 eval50 | ④ 有提升再做 |
+
+**④ 的实现**(用户审 diff 批准):
+- cua-arm `91c7167`:`build_inputs` 供离线标注与在线 `select_live` 共用(同 prompt/打乱/上游调用);
+  离线 prompt 前后 30 状态哈希一致(`6d404e3a…`)。
+- OSWorld worktree(workstation `/home/yanji/research/OSWorld-armsel`,分支 `armsel-select`):
+  `b7dce12` = 主 eval 工作区快照(3df1ef4 + 17 个未提交魔改 + 8 个未跟踪文件 + .env + cache 322M;26 文件哈希逐一
+  一致,registry 钉的 3 个哈希一致);`a8b2448` = `mm_agents/qwen/main.py` 加 `_respond`:`OSTG_ARM_SELECT=N`
+  时同一 payload 并发采 N 个,`select_live` 挑,仅选中者进历史并执行,`ARM_SELECT` 日志记 5 个动作/展示顺序/选择器回复;
+  不设开关 = 原代码路径。主工作区未动(main.py 仍 `e3aba4b1`,status 25 行)。运行用主工作区 venv 的 python。
+- 题集:`verified_eval50_nonproxy.json`(10 个应用分层,eval50 ∪ eval50b = eval100),非"前 50 题"。
+- **基线口径**:a2 现有 Verified 结果全是 20/10(`eval50-a2-20260823`,100 题,旧 Windows);a2 从未按 10/1 跑过
+  Verified。B 臂若按 10/1 跑会混入窗口差(同权重 20/10 比 10/1 低约 8pp,RESULTS §5.34)。用户称"A 已有、只跑 B",
+  已提示两个选项(B 用 20/10 对齐现有基线 / B 与 A 都按 10/1),**待用户定**。
+- 连通:Tillicum `~/.ssh/cm/klone` 与 workstation `~/.ssh/cm/klone-login` 均落 klone-login01 → 在该登录节点回环端口
+  中转(Tillicum 登录节点 ssh -L 到计算节点 127.0.0.1,再 -R 到 klone-login01;workstation -L 取回);服务均需 API key。
+- a2 服务 `cua/serve_actor.sbatch`(待审 diff):eval 部署档案同参(bf16/TP1/262144/图 10/像素/override generation
+  config),仅 max_num_seqs 3→32、max_num_batched_tokens 2048→8192(无注意力采集;只影响吞吐)。
+
 <!-- REPO NAV -->
 [Repository map](../../README.md)
 <!-- /REPO NAV -->
