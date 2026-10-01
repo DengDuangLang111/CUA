@@ -150,6 +150,24 @@ conv1d/in_proj_a/in_proj_b、MoE gate、shared_expert_gate…)。逐分片 CPU �
   重投 **338835** `gen-h1`(g008)。
   教训:"同 eval"要对 eval 服务的实际启动参数核,不能只对 registry 的 protocol 字段。
 - **下载**:22:00 时 145 GB,~135 MB/s,预计 ~23:20 完成;完成后提交 `srv-h4`。
+- **试点采样完成**(338835,22:03–22:19,16.5 min 含 ~3 min 加载 → **4.05 s/状态/H200**):
+  首批 64 状态 320 候选 0 不可解析、格式全对、全部正常结束(无截断),生成长度中位 140 / p90 555 /
+  最长 3545 token;72% 状态的 5 个候选不全相同(按 action_str 全等,点击 1 像素差也算不同)。
+
+**2026-09-30 22:2x 用户定全量:8 张卡、r5+v16、立即采样**
+
+- 语料 `sft/data/r5-v16save143-tf/train_swift_abs.jsonl`:10,142 行(r5 6,474 + v16 3,668,v16 多应用
+  1,128),sha256 `3d2881f2…` 与其 manifest 一致;selftest 三项在该语料上通过
+  (`arm/runs/selftest-r5v16-2220`)。a2 未在 v16 上训过;ARM 只用 v16 的状态,不用其教师目标。
+- `sample_actor.sbatch` 改为 `CORPUS=${CORPUS:-<r5 默认>}`(cua-arm `ded5293`,一行参数化、默认不变;
+  因用户令"立即开始"先提交后报 diff 复核)。
+- 全量状态 `arm/runs/full-r5v16-20260930/states.jsonl`(10,142),按字节均分 4 片
+  s00 2,719 / s01 2,692 / s02 2,506 / s03 2,225;Slurm **338853–338856** `gen-h1` 各 1×H200
+  (g008×2、g010×2),输出 `candidates.s0{0..3}.jsonl`。
+- 排程(8 卡):采样 4 卡 → 下载完成后 Qwen-CUA 4 卡(srv-h4),先打试点 200 状态给用户看分布,
+  再流式打全量;采样结束后空出的 4 卡起第二个 Qwen-CUA 副本分担打分;两臂(ARM / 随机)各 4 卡并行 LoRA。
+  估算(低置信度):采样 ~3–3.5h,打分 1.5–3.5h(未实测),训练 2–3.5h → SFT 完 ~明早 05–08 点;
+  训练 sbatch 尚未写,写好先给用户审 diff 与参数表。
 
 <!-- REPO NAV -->
 [Repository map](../../README.md)
