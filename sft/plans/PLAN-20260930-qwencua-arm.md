@@ -269,6 +269,25 @@ David(Klone `dan29`)的做法:先在推理时让强模型从 actor 的 5 个候�
 - 题目切分(round-robin by i%10,按题集顺序):`armsel_eval50_ws1.json` 20 题 / `_win` 15 / `_ws2` 15,并集 = 50;两机 md5 一致。
   runner 计划:ws1 4 VM → 18031;win 3 VM → 18032;ws2 3 VM(OSWorld2 腾空后)→ 18033。
 
+## 10 选择器改为 GPT-6.1-sol(2026-09-30 23:5x 用户定;Qwen-CUA 弃用)
+
+- 用户给两个 OpenAI key(均有效、174 个模型,含 gpt-6-astra/luna/sol、gpt-6.1-sol、gpt-5.5;无 Qwen)。用第二个
+  (非 Prior),存两机 `~/.config/cua-v2/openai_key`(600)。Qwen-CUA 作业 338913 已 scancel;FP8 说明(官方仅 BF16,
+  我们是 vLLM 加载时按官方 FP8 格式在线量化)留档备查。David 用的是 `gpt-6-astra`、effort medium、Responses API、自写 prompt。
+- **关键发现**:上游 `catts_vision_select_v2` 只把含 `gpt-5`/o 系列的模型名当推理模型;`gpt-6.1-sol` 走普通路径带
+  `max_tokens` → OpenAI 400 → 上游 **静默退回第一个展示的候选(即随机)**。修:`selection_prompt.py` 的模型名判断加
+  `"gpt-6"`,并加 `ARBITER_REASONING_EFFORT`(cua-arm `ea609ed`,已登记 PROVENANCE.md)。`run_armsel_eval.sh` 选择器
+  url/model/key/effort 走环境变量,结果目录写 `SELECTOR`(`475b838`)。
+- 实测(试点状态,gpt-6.1-sol):effort 只支持 low/medium/high/xhigh(无 max);思考 token default/medium 0–27、
+  high 46–59、xhigh 76–133;每次 3–6 s;输入 3.8–7.2k、输出 ≤150 token。上游完整路径 high/xhigh 均 `ok=True`。
+- **配置**:gpt-6.1-sol、Chat Completions、effort **high**、`max_completion_tokens=2048`、无 temperature/无 JSON schema
+  (上游推理模型路径),prompt = ARM canonical(Piotr selection prompt)+ 4 处 CUA 文字替换。用户定"ARM 版 + CUA 最小改动";
+  David 的 `ours` prompt(含 URL、页面观察文本、工具反馈)为网页设计,不用。与 David 推理循环的差异:候选全相同时
+  仍调用(他跳过)、不剔除不可解析候选(他剔除;试点 0/1000)。
+- **开跑 23:58**:workstation `results_generated/armsel-eval50-gpt61sol-high-20261001/ws1`(4 VM,a2 18031,20 题);
+  Windows `/mnt/d/research/OSWorld-armsel/results_generated/armsel-eval50-gpt61sol-high-20261001/win`(3 VM,a2 18032,15 题)。
+  两边记录 cua-arm `475b838`、OSWorld `a8b2448`。ws2(15 题,3 VM,a2 18033)待 OSWorld2 的 workstation VM 腾空后启动。
+
 <!-- REPO NAV -->
 [Repository map](../../README.md)
 <!-- /REPO NAV -->
