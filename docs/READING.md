@@ -242,6 +242,19 @@ OSWorld Qwen3.5-4B 10.0→21.0% 是 **GPT-5.5 直接当选择器**,训练出的 
 - **蒸馏成功那版用了多少状态,仓库与 dashboard 都没写**;已知只有:失败的在线版 8k 状态,
   ARM 训练标签 ~3k 状态 × 重复抽样 → 49.5k 组。
 
+**David An(Klone `dan29`)的 OM2W ARM 实验(2026-09-30 只读核查 `/gscratch/krishna/dan29/evals/om2w/*score*.json`)**:
+- **Full / Valid 定义**:GPT-4.1 判官版(`armsel_score_20260926.json`,即 Slack 9-24 数字出处):Full = 成功/300
+  (中止算失败);Valid = "v2" = 成功/(300 − 中止 − confirmed_excluded)。Zixian 正式口径(o4-mini + OSU
+  AgentTrek prompt,Zixian `850d33b`;`armzx_*`、`selectorzx_score_20260927.json`):Full = 成功/300,
+  Valid = 成功/(300 − 中止 − 缺失 − 判官失败)。
+- Slack "SFT + GPT-6:Full 41% +8.2 / Valid 49.4% +9.4" = GPT-6 选择器单次 123/300、123/249(中止 30、排除 21),
+  对 3 次 n=1 基线均值 32.78 / 40.0。
+- **正式判官下 GPT-6 ≈ GPT-5.5 当选择器**:SFT ckpt 42.67 vs 43.67(full,Δ −1.0,p=0.79);4B RL ckpt
+  58.33 vs 58.33;GPT-6 每题成本约 2 倍($0.67 vs $0.33,SFT)。
+- 蒸馏成 4B 选择器:GPT-6 标签 37.56/41.57、GPT-5.5 标签 38.44/42.61、Piotr 公开 ARM 39.22/43.58,均低于
+  Zixian 参考 SelectionARM 42.67/50.0(参考基线 30.0/33.71)。
+- 另有 `arm_gpt6/teacher126`、`student126`(teacher/student 生成候选重标注)与 `teacher_takeover/`(09-30 在跑),未细看。
+
 **ExeVRM 要点(HTML 版经摘要读取,未逐表核对)**:ExeVR-53k = OSWorld 23k(361 题、30 个
 agent、规则判分)+ AgentNet 23k + ScaleCUA 7k;负样本 = 对成功片段改写一个"界面上合理但
 不匹配"的指令,并标出第几步开始不匹配 → 首错时间标签;时空 token 裁剪;Qwen3-VL-4B/8B;
