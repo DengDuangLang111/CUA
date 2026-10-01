@@ -287,6 +287,11 @@ David(Klone `dan29`)的做法:先在推理时让强模型从 actor 的 5 个候�
 - **开跑 23:58**:workstation `results_generated/armsel-eval50-gpt61sol-high-20261001/ws1`(4 VM,a2 18031,20 题);
   Windows `/mnt/d/research/OSWorld-armsel/results_generated/armsel-eval50-gpt61sol-high-20261001/win`(3 VM,a2 18032,15 题)。
   两边记录 cua-arm `475b838`、OSWorld `a8b2448`。ws2(15 题,3 VM,a2 18033)待 OSWorld2 的 workstation VM 腾空后启动。
+- 00:00 首步核查(workstation 4 VM):ARM_SELECT 均 `ok: true`、每步 5 候选、展示位置→原编号映射正确;执行的 pyautogui
+  坐标与选中候选一致(484,82 → click(930,88));首步即出现选少数派动作。Windows 3 VM 已起。
+- **a2 基线 eval50**(dashboard `traj/qwen35-9b-sft/eval50-a2-20260823/<domain>/<task>/result.txt`,= dashboard
+  "seen50" 切片):满分 34/50 = 68.0%,均分 69.81%;chrome 3/3、writer 3/3、multi_apps 9/12、os 3/4、calc 5/7、
+  thunderbird 2/3、vlc 2/3、impress 3/7、gimp 2/4、vs_code 2/4。单次运行(temp 1.0),对比用逐题配对 + 符号检验。
 
 <!-- REPO NAV -->
 [Repository map](../../README.md)
