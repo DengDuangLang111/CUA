@@ -2,6 +2,20 @@
 
 更新：2026-09-22，America/Los_Angeles。
 
+## 2026-10-01：Zixian(OpenWebRL)的 RL 算法与结果，和 Arijit GiGPO 的对比
+
+依据：`zixianma/OpenWebRL` 的 `arm` 分支 `openwebrl/docs/ARM_SUMMARY.md`(10-01 06:54 版本 `2ed62d1`；main 仍停在 `9da6dc1`)。
+
+- **算法**：outcome-only 的 GRPO 式 PPO。
+  - 每题 5 条轨迹为一组，终局结果做组内归一化，得到优势值 A；同一条轨迹的每个 turn 用同一个 A。
+  - 每次迭代 48 组(约 240 条轨迹)，batch 256，PPO 2 个 epoch，lr 1e-6。
+  - 网页任务在实网上跑，由 VLM 裁判打分。
+  - ARM 系列在此基础上，给部分 turn 加上动作奖励模型的加分(β=0.5，抽样 20% 的 turn)。
+- **outcome-only 基线**(本地浏览器，GPT-4.1 裁判，Online-Mind2Web 全 300 题)：迭代 10 为 23.33%，20 为 31.67%，50 为 35.00%，80 为 38.00%，100 为 34.67%。迭代 0(SFT 起点)在同一口径下没有列出，所以 RL 相对 SFT 的增量无法从这张表读出。
+- **ARM 在线变体**：迭代 90 在 stealth 浏览器上各评 3 次，基线 55.22%，Additive 58.44%(+3.2pp)，Gate B 58.78%(+3.6pp)。校正多重比较后不显著(Holm p=0.22)；WebVoyager 上持平或更低。作者结论：ARM 最可靠的用法是推理时多选一(30.0% 提到 42.7%)，在线 RL 加分尚未达到这个效果。
+- **与 Arijit GiGPO 的对比**：Arijit 4B 跑了 36 步，每步 16 个回合，共约 576 个回合，OSWorld 19 题上没有提升。Zixian 每次迭代约 240 条轨迹、跑了约 100 次迭代，约 2.4 万条轨迹，曲线有上升。**两者的规模、环境、模型、评测口径都不同，不能据此判断算法本身孰优孰劣。**能说的只是：**有正面信号的是大规模的 outcome-only GRPO**。
+- **对本项目的含义**：P2 计划每组 256 个回合，比 Zixian 小两个数量级。8 台 VM、平均每回合约 7.5 分钟，一小时约 64 个回合，跑到 2.4 万个回合要约 375 小时。
+
 ## 2026-10-01：cua-rl-gigpo——Arijit 的 GiGPO 框架改为本地 docker VM + r5 原生格式
 
 用户要求：把 Arijit 的环境复制进自己的私有仓库，9B、截图不缩放、用原生格式，VM 改成本地 docker；两台 Windows 跑 VM，Tillicum 只做 GPU 训练和推理；训练题不要只限于 64 道。
