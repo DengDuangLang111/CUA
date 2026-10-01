@@ -6,6 +6,7 @@
 
 | 时间 | eval50 B 臂(a2 每步 5 选 1,GPT-6.1-sol high,20/10) | r5 提纯(PRM 打分) | ARM-LoRA 训练 |
 |---|---|---|---|
+| 10-01 02:38 | 完成 36/50,同 36 题 B 32 vs 基线 28(+5/−1;唯一 −1 题 04d9aeaf 该步 5 候选全是 terminate,非选择器问题)。**尾部重分配**:ws2b 剩余队列拆出 → ws2c(a462a795、7aeae0e2、7c4cc09e,ws 3 VM)、ws2d(510f64c8,ws 1 VM)、win2(6f56bf42,Windows 1 VM);ws2b 只做 5d901039/70bca0cc/48d05431,完成后由 stop_ws2b.sh 停进程与其 2 容器。**预登记规则**:被移走的题一律用新组结果,ws2b 若重复跑则作废。VM:ws 7、Windows 3 | — | 339130 将训完 |
 | 10-01 02:15 | B 臂只跑 eval50(用户定);**only-changed 臂改用 eval100**(a2 基线 eval50-a2-20260823 实为 eval100 61/100,可逐题配对)。eval 配置核对:①runner 参数与基线 args.json 只差 model/base_url/路径(enable_proxy、num_envs 等一致);②OSTG_ARM_SELECT=0 走原 call_llm,与基线代码路径相同;③与基线树相比 mm_agents/qwen 仅 main.py(该钩子)与 images.py(主树 09-05 才加 min_pixels 环境变量,不影响 1920×1080)不同;④eval100 题集与 100 个任务 JSON 两机与基线树 md5 全同;⑤切分 armsel_eval100_ws(70)/_win(30),两机 md5 同 | publish_to_klone.sh(cua-arm 8f64a44)等 oc 合并后传 Klone 并逐文件核 sha256 | 339130 ~02:35 训完 |
 | 10-01 01:57 | **加速**:Klone 新起 6 个 a2 副本(A100×2 @40897923 端口 8034–35;L40S GPU4–7 @39608331 8036–39,同 serve_actor_held.sh 基线参数),workstation 用 `cua-arm/cua/rr_proxy.py`(b865bac,按最少在途请求分发、每条记日志)接管 18031/18033(池:A40×2+A100×2+L40S×2)与 18032(Windows 经 workstation 转发;池:A40+L40S×2),共 9 卡 10 VM;切换后 2 分钟 17 次请求全 200、0 失败,单请求 16–25 s(此前每步 2–4 min)。ws2b 01:52 用空出的 2 台 VM 启动(原等 ws1 的脚本已停) | — | 339127 / 339130 在跑 |
 | 10-01 01:35 | 完成 18/50,同 18 题 **B 17/18 vs 基线 14/18**,翻转 +3/−0(gimp/62f7fd55、gimp/2a729ded、impress/05dd4c1d);0 退回、0 Traceback。ws2b(10 题)改为 ws1 结束后用其 4 个 VM 槽、接 Klone a2 副本 18033 自动启动(workstation 脚本 ws2b_after_ws1.sh) | **全部 6,474 状态打完**、0 失败;0.7 门槛保留 6,253(96.6%),选中≠a2 最常动作 19.0%;数据 swift_arm.jsonl sha256 0f41c8e5…;only-changed 子集 1,191 行 swift_arm_oc.jsonl sha256 9cef5cad… | 339006 因 8h 上限风险取消;**339127**(全量,ARM 臂 9b-full-r5-armg61,每 100 步存,~08:17 完)+ **339130**(only-changed 臂 9b-full-r5-armg61oc,149 步)均在跑;代码 265812b |
@@ -330,6 +331,23 @@ David(Klone `dan29`)的做法:先在推理时让强模型从 actor 的 5 个候�
 - **a2 基线 eval50**(dashboard `traj/qwen35-9b-sft/eval50-a2-20260823/<domain>/<task>/result.txt`,= dashboard
   "seen50" 切片):满分 34/50 = 68.0%,均分 69.81%;chrome 3/3、writer 3/3、multi_apps 9/12、os 3/4、calc 5/7、
   thunderbird 2/3、vlc 2/3、impress 3/7、gimp 2/4、vs_code 2/4。单次运行(temp 1.0),对比用逐题配对 + 符号检验。
+
+## 11 与 Piotr 成功版("option A")完整做法的差异(2026-10-01 对照 HF 数据 + cua-arm 代码)
+
+相同:状态取自 actor 自己的 SFT 训练集;actor 自采 5 个、只生成不执行;强 API 模型逐候选打 0–1 分,上游 PRM prompt;
+最佳 <0.7 丢状态、平局取 actor 多数票(action_str 全等);离线一轮;LoRA r16/α32/dropout 0.05/all-linear、视觉塔不训、
+lr 1e-4、1 epoch、全局 batch 8、只对目标回合算 loss;不排除末步。
+
+| 项 | Piotr 成功版 | 我们 | 影响判断 |
+|---|---|---|---|
+| actor / 任务 | MolmoWeb-4B,网页 | a2 = Qwen3.5-9B r5 SFT,桌面 | 桌面单步后果更难看见 |
+| 判官 | GPT-5.5 | GPT-6.1-sol effort high + 4 处 CUA 文字替换 | 两者都给高分(上游丢 ~8%,我们丢 3.4%) |
+| 状态数(过门槛后) | 39,160 | 6,253 | 我们约 1/6 |
+| 候选采样 | temp 1.0 / top_p 1.0 | temp 1.0 / top_p 0.95 / top_k 20,开思考(= eval 协议) | 我们多样性更低;41% 状态 5 个动作全同 |
+| 训练形式 | 单截图 + 文本历史 | 多图历史(img10)、max_length 65,536、preserve_thinking,目标含思考 | 目标更长 |
+| only-changed 臂 | 有此开关,成功版是否开未写明 | 全量臂 + only-changed 臂(1,191 行)都在训 | 我们多一个臂 |
+| **随机候选对照** | **有**(distill_rand,+7.2pp 的因果依据) | **未投**(`random_selections.py` 已写) | 缺它就无法归因 |
+| 评测 | 贪心 n=1,多次运行,配对 n≈190–240 | eval50,temp 1.0,单次 | +8.7pp ≈ 4 题,50 题单次测不出显著 |
 
 <!-- REPO NAV -->
 [Repository map](../../README.md)
