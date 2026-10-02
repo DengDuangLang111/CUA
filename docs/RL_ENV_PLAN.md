@@ -73,7 +73,7 @@
 - `orchard_gui/reward_post_process.py` 读 `Sample.rollout_id`，但同仓库 slime 核心已把它改为只写(读即 AttributeError)→ 照原样会崩。我们用自己的 `reward_post_process.grpo_normalize_per_trajectory`(同一规则，轨迹键改为 `metadata["trajectory_id"]`)；单元测试通过，含"计入被剔除轨迹会改变结果"的对照。
 - 上游 9B 启动脚本 `source scripts/models/qwen3.5-9B.sh`，仓库里没有这个文件；用我们按 r5 config 核对过的那份。
 
-**loss 聚合单位(待用户定)**：MSR slime 在每个 `Sample.group_id` 内做 token 平均、再在 group 间平均，`--global-batch-size` 数的是 group 数。`CUA_LOSS_GROUP=trajectory`(默认，MSR orchard_gui 的做法)= 每条轨迹等权、与轮数无关，全局批默认 40 条轨迹(上游 9B 配方)，与设计文档 §5"长轨迹权重：启用 turn_level_loss_weight_by_num_turns"一致；`=turn` = 每轮等权，全局批 256 轮次样本，与 Zixian 基线一致。
+**loss 聚合单位(10-02 用户定：按 Zixian 基线，每轮等权 = `CUA_LOSS_GROUP=turn`，全局批 256 轮次样本；slime-cua `a44fc0c` 设为默认；设计文档 §5 已同步)**：MSR slime 在每个 `Sample.group_id` 内做 token 平均、再在 group 间平均，`--global-batch-size` 数的是 group 数。`CUA_LOSS_GROUP=trajectory`(默认，MSR orchard_gui 的做法)= 每条轨迹等权、与轮数无关，全局批默认 40 条轨迹(上游 9B 配方)，与设计文档 §5"长轨迹权重：启用 turn_level_loss_weight_by_num_turns"一致；`=turn` = 每轮等权，全局批 256 轮次样本，与 Zixian 基线一致。
 
 **环境**：MSR slime 在 sglang 0.5.15 镜像上同样倒在 `sglang_data_parallel_size`(参数解析到 sglang 校验处)。查镜像仓库构建记录：官方 `slimerl/slime:v0.3.0`(05-30)= sglang v0.5.12.post1 + Megatron `1dcf0daf` + mbridge `89eb108` + fla 0.4.1 + TE 2.10 + `Megatron-Bridge@bridge` —— 与 MSR `docker/Dockerfile` 固定版本完全一致(07-07 起升 0.5.13，v0.3.1 起 0.5.15)。改用 v0.3.0，不再需要自装 Megatron-Bridge。构建作业 340454。
 - 在 0.5.15 镜像里已验证：逐 token 对照(经 MSR 约定的 `encode_prompt`)85/85 一致；归一化单元测试通过。

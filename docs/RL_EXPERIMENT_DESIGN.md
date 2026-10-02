@@ -111,7 +111,7 @@ Zixian fork 的现有主要 launcher / model presets 是 Qwen3-VL 路线；READM
 | 分组 | 同 task、同 reset seed / 初始状态、同 policy version；单 VM 串行也可 |
 | 训练样本 | turn-level；终局 reward 传播给该 trajectory 的各 turn |
 | 归一化 | 按 task group 中的独立 trajectory 分数归一化；不能把 30 个 turn 当 30 条独立 episode |
-| 长轨迹权重 | B/C 同时启用现有 `turn_level_loss_weight_by_num_turns`；检查 sample_weights 真的进入 loss，避免长轨迹仅因 turn 多获得更多权重 |
+| 长轨迹权重 | **2026-10-02 用户改定：按 Zixian OpenWebRL 基线，每个 turn 等权**(slime-cua `CUA_LOSS_GROUP=turn`：每轮一个 group_id，全局批 256 个 turn 样本)。原写法"启用 `turn_level_loss_weight_by_num_turns`、长轨迹不因 turn 多获更多权重"作废；B/C 仍须相同 |
 | PPO epochs | **1**，先减少同批旧策略数据复用 |
 | Learning rate | **5e-7**，constant；第一轮不扫 LR |
 | Clip | 0.2，B/C 相同 |
