@@ -78,6 +78,17 @@
 **环境**：MSR slime 在 sglang 0.5.15 镜像上同样倒在 `sglang_data_parallel_size`(参数解析到 sglang 校验处)。查镜像仓库构建记录：官方 `slimerl/slime:v0.3.0`(05-30)= sglang v0.5.12.post1 + Megatron `1dcf0daf` + mbridge `89eb108` + fla 0.4.1 + TE 2.10 + `Megatron-Bridge@bridge` —— 与 MSR `docker/Dockerfile` 固定版本完全一致(07-07 起升 0.5.13，v0.3.1 起 0.5.15)。改用 v0.3.0，不再需要自装 Megatron-Bridge。构建作业 340454。
 - 在 0.5.15 镜像里已验证：逐 token 对照(经 MSR 约定的 `encode_prompt`)85/85 一致；归一化单元测试通过。
 
+### 10-02 晚：slime v0.3.0 上的冒烟进展
+
+- **v0.3.0 镜像**(`rl/images/slime-v0.3.0.sif`)：sglang 0.5.12.post1、megatron.core 0.16.0rc0、megatron.bridge 0.5.0(镜像自带)、mbridge 0.15.1、fla 0.4.1、TE 2.10；transformers/sglang 均有 qwen3_5，`AutoBridge.supports(r5)` 为真；逐 token 对照 85/85；参数解析过 sglang 校验(PARSE_OK)。
+- **单卡冒烟逐步推进**(debug QOS)：
+  - 340481：bridge 建 MTP 层但 r5 无 `mtp.*` 权重(r5 760 个键 vs Qwen3.5-9B 775，差 15 个 MTP)→ 训练改用 `rl/models/r5-9b-s306-rl`(其余文件软链原 checkpoint，仅 `config.json` 的 `mtp_num_hidden_layers` 1→0，附 NOTE.txt；MTP 只用于投机解码，eval 不用)。
+  - 340486：加载与首次权重同步通过(`Converting to HuggingFace 640/640 Qwen35VLBridge`)；导入 `examples.orchard_gui.filters` 会执行该包 `__init__`，要 playwright → 过滤器复制进 `examples/cua_desktop/filters.py`(`2ff4dd7`)。
+  - 340493：假 bridge 接入、**4 条轨迹 rollout 完成(38 s)**；倒在 slime 校验"同一次生成返回的样本必须共用 group_id"——MSR slime 规定一次 rollout 的多个样本是一个 group(loss 只算一次)，按轮分组(`CUA_LOSS_GROUP=turn`)被拒。
+  - 340499(按轨迹分组)：取数据、算 advantage、进入前向反向后单卡 OOM(Megatron 进程 133.7 GB；9B 全参 TP1 放不下，上游配方本就是 8 卡 TP4)。日志确认提示为 r5 原生格式、奖励挂上样本。
+- **"每轮等权"在 MSR slime 的实现方式(待用户定)**：a 用原生按轨迹聚合；b 自定义 loss 归约插件(同步内每轮等权，但梯度整体乘以"平均每轨迹轮数"，默认梯度裁剪 1.0 下几乎每步都裁)；c 小补丁：新增参数 `--allow-split-rollout-groups`(默认关)，开启时跳过该断言，每轮一个 group → 分母按轮、外层除以轮次数、全局批数轮次，与 Zixian 完全等价。推荐 c，单独一个提交。
+- **8 卡冒烟 340509** 排队中(1.5 h，约 $10.8，按轨迹分组)：验证训练半程，并在每回合 20 步、20/10、上下文上限 14 万下测显存。2 卡/4 卡普通队列估计 22:26 开始，与 8 卡相近。
+
 **时间估算**(待实测)：10 台 VM 跑 240 条轨迹，每条平均约 15 步 × 约 25 秒 ≈ 6 分钟，一轮约 24 批 ≈ 2.4 小时，未计入 50 步长尾。
 
 ## 2026-10-01：Zixian(OpenWebRL)的 RL 算法与结果，和 Arijit GiGPO 的对比
