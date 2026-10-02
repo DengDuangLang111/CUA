@@ -25,6 +25,29 @@
 - D 训练栈(先验证)：她的 fork 有 Qwen3.5 的 Megatron 插件和权重桥(含 GatedDeltaNet)，没有 9B 启动配置，需从上游 `MSR-Orchard/slime` 的 `run_browser_qwen3.5_9b.sh` 移植；视觉塔权重能否加载/训练待验证；SGLang 与 Megatron 的 logprob 对一次；14 万 token 的显存实测；照她的 `scripts/h200_env.sh` 在 Tillicum 自建环境。
 - E 评测：她的训练中评测换成 P2 dev 24 题或关闭；checkpoint 转 HF 后用我们的 OSWorld 流程评。
 
+### 10-02 进展(私有仓库 `DengDuangLang111/openwebrl-cua`，分支 `cua-desktop`)
+
+**仓库**：`arm` = Zixian `e3bbd52` 原样；适配只**新增**文件(`openwebrl/cua/`、`scripts/cua/`、`scripts/model_configs/qwen3.5-9B.sh`、`tests/cua/`)，不改她的文件，便于以后合回她的仓库。Zixian 仓库从未推送过(本地对应 remote 的 push 地址为 DISABLED)。用户要求先在私有仓库测好。
+
+**代码**(提交 `66a7cee`…`9a344be`)：
+- `openwebrl/cua/native_session.py` + `native_vendor/`、`remote_bridge.py`、`worker.py`：从 cua-rl-gigpo 原样复制，`SOURCE.json` 记 sha256。
+- `desktop.py`：10 个常驻 worker 的 VM 池(VM 跨回合保持热状态)。
+- `generate_desktop.py`：每轮一条样本，沿用她 rollout 的样本记录；提示/fold/思考/动作解析走 eval agent；断言 SGLang 的提示 token 数等于训练端；基础设施或超限的轨迹奖励记 `None`。
+- `reward_desktop.py`：`reward.py` 部分分；`None` 由她现成的 `check_reward_nonempty_nonzero_std` 移出所在组的统计(她提交的代码里被剔除样本仍参与组内统计，这样处理不用改她的代码)。
+- `scripts/cua/build_task_parquet.py`、`run_cua_desktop.sh`、`install_overlay.sh`；`tests/cua/native_parity.py`、`fake_desktop_bridge.py`、`smoke.sbatch`。
+- 9B Megatron 参数：上游 MSR-Orchard 只有 Qwen3.5 0.8B/4B/27B/35B-A3B，9B 按 r5 `config.json` 填(32 层、4096/12288、16 头/4 组、head_dim 256、不共享 embedding、词表 248,320、rope 1e7、partial 0.25)。
+
+**她的代码里两个 Qwen3.5 不兼容点**(我们的 rollout 不走这些路径)：`_ensure_im_end_w_new_line` 写死 Qwen2/3 的 `<|im_end|>` = 151645(r5 为 248046)；她现成环境 transformers 4.57.1 / sglang 0.5.6.post2 无 `qwen3_5`、未装 mbridge，不能训 r5。
+
+**环境**：镜像 `slimerl/slime:nightly-dev-20260930a-cu129` → `rl/images/slime-nightly-20260930a-cu129.sif`(18.3 GB)。GPFS 上解包太慢(1.5 h 未完)、登录节点 mksquashfs 被杀(137)，最终在计算节点本地盘构建(debug 作业 340356，约 $0.9)。容器内：Python 3.12.3、torch 2.11.0+cu129、**transformers 5.12.1(有 qwen3_5)**、**sglang 0.5.15.post1(有 qwen3_5)**、Megatron-LM `1dcf0daf`(= 上游固定提交，带 slime 补丁)、fla 0.4.2、TE 2.16.1、flash_attn 2.8.3、ray 2.58.0。**缺 megatron-bridge 与 mbridge**(bridge 模式训视觉塔必需)→ 用 `install_overlay.sh` 装进 `rl/envs/slime-overlay`(不改镜像)。radixark `Megatron-Bridge@bridge` 最新提交 `8cd3466` 需要 `megatron.training.models`，镜像的 Megatron-LM 没有 → 正在找与 `1dcf0daf` 兼容的提交。
+
+**已验证**：
+- **逐 token 对照(容器内，她的 processor 编码路径，transformers 5.12.1)：85 决策 / 8 轨迹全部一致**。
+- **真 VM 冒烟**(Mac → 中转 → 工作站 1 台 VM，P2 dev Calc 题 `5143f1f7`)：reset 51.2 s(开机+setup)、点击 3.6 s(含 3 s 停顿)、DONE 后 `reward.py` 0/4 项、r0 = 0；截图确认 Calc 打开题目文件。途中修了两处(cua-rl-gigpo `770d6bb`)：主机 OSWorld 的 `DesktopEnv` 不收 `force_disable_recording`/`volume_size`(改为只传支持的参数并记日志)；VM 内 Python 缺 openpyxl/docx/pptx(沿用 P0–P2 的 6 个纯 Python wheel，每次 reset 上传解压，setup/打分走 `PYTHONPATH`，镜像不改)。动作后停顿改为 3 s(`eff2cd9`)。
+- 训练/验证 parquet：`rl/cua-data/train_20261001.parquet`(2,366)、`val_20261001.parquet`(24)。
+
+**排队中**：8 卡冒烟 340365(假 bridge、完整协议、每 10 s 记显存，2 h，约 $14.4)。
+
 **时间估算**(待实测)：10 台 VM 跑 240 条轨迹，每条平均约 15 步 × 约 25 秒 ≈ 6 分钟，一轮约 24 批 ≈ 2.4 小时，未计入 50 步长尾。
 
 ## 2026-10-01：Zixian(OpenWebRL)的 RL 算法与结果，和 Arijit GiGPO 的对比
