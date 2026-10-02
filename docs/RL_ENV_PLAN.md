@@ -48,6 +48,21 @@
 
 **排队中**：8 卡冒烟 340365(假 bridge、完整协议、每 10 s 记显存，2 h，约 $14.4)。
 
+### 10-02 下午：修掉的环境 bug、Megatron-Bridge 版本、Zixian 的 slime 跑不了新版 sglang
+
+**修掉的 bug**(都有对照实验)：
+- **回合间 VM 不还原**(cua-rl-gigpo `6c76da4`)：主机 OSWorld 的 `DesktopEnv.reset` 只在自己的 step/setup/evaluate 标记"用过"时才还原快照，bridge 直接操作 VM，从不触发 → 上一题的文件/窗口带进下一题。探针(同一 worker 两回合，第 1 回合在 VM 写标记文件，reward.py = 标记存在)：修前第 2 回合 reset 15.7 s、r0 = 1.0(状态泄漏)；修后 36.9 s、r0 = 0、final 0。docker 下复用前强制还原 = 全新容器，同 eval 每题还原；每回合约多 20 s。
+- **取消的轨迹抢同一台 VM**(openwebrl-cua `1914fa4`)：slime 凑够组会取消在跑的轨迹，线程里的 VM 调用不会停，旧代码立即把 worker 放回池子。`desktop.lease()` 改为等调用结束再归还；`tests/cua/test_desktop_lease.py` 通过，去掉等待的对照组失败(两条轨迹同时操作一台 VM)。
+- **初始状态已得分的题**：setup 后 r0 > 0 的轨迹奖励记 None(P2 规则：初始分必须为 0)。
+
+**Megatron-Bridge**(bridge 模式训视觉塔必需；slime 自带的 direct 转换器没有视觉映射)：radixark `bridge` 分支最新版要求新版 Megatron(`megatron.training.models`、`get_hybrid_total_layer_count`)，镜像 Megatron-LM `1dcf0daf` 没有；Zixian 环境的 fzyzcjy `35b4ebf`(01-20)没有 Qwen3.5 VL。可用窗口 `872c6ec1`(02-27，Qwen35VLBridge)～`2a0388cc`(03-09)→ 固定 `9fe8e360`(03-07)：容器内 import 成功、`AutoBridge.supports(r5)` 为真(openwebrl-cua `5d1092f`)。真实建模型/训视觉塔待 GPU 验证。
+
+**8 卡冒烟 340365 被回填提前运行(04:27–04:31，约 $0.5)，失败**：Megatron 参数全部解析通过(含 9B 参数与 `--attention-output-gate`)，但 Zixian 的 slime 在 `sglang_utils/arguments.py` 访问 `sglang_data_parallel_size`，sglang 0.5.15 已改名。她的 slime 按 sglang 0.5.6 写，与新版差距大(与镜像官方 slime 比：`ray/rollout.py` 1614 vs 385 行，`sglang_engine.py` 差 277 行)；Qwen3.5 又必须新版 sglang。单卡冒烟 340436 同因取消。
+
+**排队估算**(04:18)：已排 8 卡 14:05 开始；新 8 卡 21:34；16 卡(2 节点)10-03 09:02，比 8 卡晚约 19 h(只用 `--test-only` 估算，未提交)。
+
+**待用户定**：A 给 Zixian 的 slime 打新版 sglang 兼容补丁(改她的文件，工作量未知)；B 以 OpenWebRL 作者跑 Qwen3.5-9B 的 MSR-Orchard/slime(`462ade6`，08-24)为底，CUA 代码作插件、Zixian 的 GRPO 基线作参数(同一算法：轮次样本、按轨迹组内归一化在 `orchard_gui/reward_post_process.py`、同名过滤器)。
+
 **时间估算**(待实测)：10 台 VM 跑 240 条轨迹，每条平均约 15 步 × 约 25 秒 ≈ 6 分钟，一轮约 24 批 ≈ 2.4 小时，未计入 50 步长尾。
 
 ## 2026-10-01：Zixian(OpenWebRL)的 RL 算法与结果，和 Arijit GiGPO 的对比
