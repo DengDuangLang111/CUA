@@ -119,7 +119,7 @@ def teacher_status(host, model, definitions, connect=False):
             except HTTPError as exc:
                 capture = exc.code == 405 and "GET" in exc.headers.get("Allow", "")
             item.update(served_model=served, capture=capture)
-            require(capture, "This evaluation requires the CUA attention collector")
+            require(capture or model.get("capture") is False, "This evaluation requires the CUA attention collector")
             with urlopen(Request(base + "/metrics", headers=headers), timeout=10) as response:
                 metrics = response.read().decode()
             def count(metric):
@@ -473,7 +473,7 @@ def _work_locked(plan, host_id):
     config = dict(results_root=str(root), output_dir=str(Path(host["output_dir"]).expanduser()), source=host["source"],
                   run_dir=str(run), collection=plan["collection"], postprocess="deferred", raw_retention=plan.get("raw_retention", "keep"),
                   evaluator_source=str(Path(spec["root"]) / "desktop_env/desktop_env.py"),
-                  capture={"enabled": True, "backend": "vllm", "attention_every": 1, "top_logprobs": 5,
+                  capture={"enabled": plan["model"].get("capture", True), "backend": "vllm", "attention_every": 1, "top_logprobs": 5,
                            "attention_download": "background", "key_file": endpoint["key_file"],
                            "download_queue": str(root / ".attention-downloads"),
                            "download_min_free_gib": host.get("min_free_gib", 50),
