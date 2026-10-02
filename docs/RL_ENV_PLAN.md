@@ -2,6 +2,31 @@
 
 更新：2026-09-22，America/Los_Angeles。
 
+## 2026-10-02：改走 Zixian 的 OpenWebRL 框架做 CUA 适配(用户确认)
+
+**框架**：`zixianma/OpenWebRL` 的 `arm` 分支(`e3bbd52`)，slime(Megatron + SGLang)。本地工作区 `openwebrl-cua/`，分支 `cua-desktop`，Zixian 仓库的推送已禁用。cua-rl-gigpo(verl)那条线暂停，不再投 8 卡。
+
+**她的 GRPO 基线**(`scripts/run_small_baseline.py --profile reference` → `scripts/run_h200_browser.sh`)：OpenWebRL-4B-SFT(Qwen3-VL-4B)全参数，2×H200 TP2 共卡；48 组 × 5 条，组内同分过滤后补采到 48 组；全局 256 轮次样本/次更新，micro 1，PPO 2(用 rollout logprob)；clip 0.2/0.28；KL 0、entropy 0；Adam lr 1e-6 常数、wd 0.1、β(0.9, 0.98)；temperature 0.8、回复 1024、上下文 32,768；上下文只放 1 张截图、思考全保留；步数课程 90 轮×15 步 → 50 轮×30 步；GPT-4.1 判 0/1；每 10 轮评 Online-Mind2Web 300。advantage(`slime/ray/rollout.py:752-816`)：每轮一条样本，按轨迹取最终奖励、组内减均值除标准差，同一轨迹每轮相同 —— 与我们的 `grpo_episode_level` 同一算法。第 90 轮 stealth full300 三次均值 55.22 ± 2.14%。
+
+**用户 10-02 确认的 CUA 设定**：
+| 项 | 定为 |
+|---|---|
+| 截图历史 | **20/10，按 eval agent 的 fold 规则**(满 20 张时把最老 10 张折叠成文字)，不用她的"只留最近 K 张" |
+| 每回合步数 | **50**(= r5 eval) |
+| 奖励 | **部分分**(任务 `reward.py` 的 [0,1] 分数)，不用判官；基础设施出错的轨迹整条剔除 |
+| 每轮规模 | **48 组 × 5 条 = 240 条轨迹**(= 她的基线) |
+| 视觉塔 | **训练**(= 她的基线) |
+| 卡数 | 用户写"9 张卡"，待澄清 |
+| 其余 | 对齐：采样按 r5 eval(temperature 1.0、top_p 0.95、top_k 20)；回复上限 32,768、上下文约 14 万(实测见上)；GRPO 部分沿用她的基线(PPO 2、clip 0.2/0.28、lr 1e-6、全局 256、动态过滤) |
+
+**适配清单**：
+- A 提示：rollout 改用 `native_session.build/record`(r5 原生格式、XML 工具调用、0–999 坐标、20/10 fold、保留思考)，只沿用她的样本记录；绕开她的思考标签处理和历史压缩；在她的 token 管线上重跑 85 决策逐 token 对照。
+- C 环境：与 `RemoteWebEnv` 同接口的桌面环境，后端是现有 bridge(VM 在两台 Windows，Mac 中转)，动作后停 3 秒；并发 10；题目转 parquet；奖励函数读 `reward.py` 分数。
+- D 训练栈(先验证)：她的 fork 有 Qwen3.5 的 Megatron 插件和权重桥(含 GatedDeltaNet)，没有 9B 启动配置，需从上游 `MSR-Orchard/slime` 的 `run_browser_qwen3.5_9b.sh` 移植；视觉塔权重能否加载/训练待验证；SGLang 与 Megatron 的 logprob 对一次；14 万 token 的显存实测；照她的 `scripts/h200_env.sh` 在 Tillicum 自建环境。
+- E 评测：她的训练中评测换成 P2 dev 24 题或关闭；checkpoint 转 HF 后用我们的 OSWorld 流程评。
+
+**时间估算**(待实测)：10 台 VM 跑 240 条轨迹，每条平均约 15 步 × 约 25 秒 ≈ 6 分钟，一轮约 24 批 ≈ 2.4 小时，未计入 50 步长尾。
+
 ## 2026-10-01：Zixian(OpenWebRL)的 RL 算法与结果，和 Arijit GiGPO 的对比
 
 依据：`zixianma/OpenWebRL` 的 `arm` 分支 `openwebrl/docs/ARM_SUMMARY.md`(10-01 06:54 版本 `2ed62d1`；main 仍停在 `9da6dc1`)。
