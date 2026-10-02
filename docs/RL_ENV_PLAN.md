@@ -63,6 +63,21 @@
 
 **待用户定**：A 给 Zixian 的 slime 打新版 sglang 兼容补丁(改她的文件，工作量未知)；B 以 OpenWebRL 作者跑 Qwen3.5-9B 的 MSR-Orchard/slime(`462ade6`，08-24)为底，CUA 代码作插件、Zixian 的 GRPO 基线作参数(同一算法：轮次样本、按轨迹组内归一化在 `orchard_gui/reward_post_process.py`、同名过滤器)。
 
+### 10-02 晚：用户选 B —— 以 MSR-Orchard/slime 为底(私有仓库 `DengDuangLang111/slime-cua`)
+
+**仓库**：`msr-main` = MSR-Orchard/slime `462ade6`(OpenWebRL 作者跑 Qwen3.5-9B RL 的代码)原样；`cua-desktop` 分支只新增 `examples/cua_desktop/`(与作者的 `examples/orchard_gui/` 并列)和 `scripts/models/qwen3.5-9B.sh`。`openwebrl-cua` 仓库保留作上一次尝试的记录。
+
+**按 MSR 约定改了插件**(`def2db4`、`693363a`)：每轮样本共用轨迹的 `index`；发 SGLang 用展开后的 `input_ids`(引擎与训练端 token 完全一致)；processor 用 `return_tensors="pt", return_mm_token_type_ids=False`；被剔除轨迹 = `remove_sample` + 0.0 占位，过滤器用作者的 `orchard_gui.filters.check_reward_nonempty_nonzero_std`(排除被剔除轨迹，至少 2 条可训练且有分差)；`max_steps` 经 `--custom-config-path` 生成的 YAML 传入(MSR slime 没有 `--max-steps`)。
+
+**上游两处问题**：
+- `orchard_gui/reward_post_process.py` 读 `Sample.rollout_id`，但同仓库 slime 核心已把它改为只写(读即 AttributeError)→ 照原样会崩。我们用自己的 `reward_post_process.grpo_normalize_per_trajectory`(同一规则，轨迹键改为 `metadata["trajectory_id"]`)；单元测试通过，含"计入被剔除轨迹会改变结果"的对照。
+- 上游 9B 启动脚本 `source scripts/models/qwen3.5-9B.sh`，仓库里没有这个文件；用我们按 r5 config 核对过的那份。
+
+**loss 聚合单位(待用户定)**：MSR slime 在每个 `Sample.group_id` 内做 token 平均、再在 group 间平均，`--global-batch-size` 数的是 group 数。`CUA_LOSS_GROUP=trajectory`(默认，MSR orchard_gui 的做法)= 每条轨迹等权、与轮数无关，全局批默认 40 条轨迹(上游 9B 配方)，与设计文档 §5"长轨迹权重：启用 turn_level_loss_weight_by_num_turns"一致；`=turn` = 每轮等权，全局批 256 轮次样本，与 Zixian 基线一致。
+
+**环境**：MSR slime 在 sglang 0.5.15 镜像上同样倒在 `sglang_data_parallel_size`(参数解析到 sglang 校验处)。查镜像仓库构建记录：官方 `slimerl/slime:v0.3.0`(05-30)= sglang v0.5.12.post1 + Megatron `1dcf0daf` + mbridge `89eb108` + fla 0.4.1 + TE 2.10 + `Megatron-Bridge@bridge` —— 与 MSR `docker/Dockerfile` 固定版本完全一致(07-07 起升 0.5.13，v0.3.1 起 0.5.15)。改用 v0.3.0，不再需要自装 Megatron-Bridge。构建作业 340454。
+- 在 0.5.15 镜像里已验证：逐 token 对照(经 MSR 约定的 `encode_prompt`)85/85 一致；归一化单元测试通过。
+
 **时间估算**(待实测)：10 台 VM 跑 240 条轨迹，每条平均约 15 步 × 约 25 秒 ≈ 6 分钟，一轮约 24 批 ≈ 2.4 小时，未计入 50 步长尾。
 
 ## 2026-10-01：Zixian(OpenWebRL)的 RL 算法与结果，和 Arijit GiGPO 的对比
