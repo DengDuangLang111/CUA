@@ -51,7 +51,7 @@ A→B/C 回答继续 RL 的增量；B→C 回答部分分是否有用。它们�
 
 优先沿用该 SFT 模型已经验证的 CUA 格式，不能直接把 OpenWebRL 的 browser 工具定义或 Arijit 的 `computer_use` prompt 拼进去。底层实际执行仍是 OSWorld PyAutoGUI。
 
-**2026-10-02 用户定稿(slime-cua 实现)**：截图 **10 张 / fold 1**(r5 SFT 窗口；曾按 a2 eval 定 20/10，为速度改回)、history 100、思考保留、temperature 1.0 / top_p 0.95 / top_k 20、每回合最多 50 步、**动作后不停顿**(eval 协议为 3 秒，可能截到未稳定的界面，若出现重复操作改 1 秒)、部分分奖励；**RL checkpoint 与 r5 基线都必须在同一协议(10/1)下评测后再配对比较**，a2 的 61.0% 是 20/10，不能直接对比。以下为原设计起点，仅存档：1920×1080 原生桌面；图像 history 10 张 / fold 1；每轮最多 4,096 个生成 token、总 context 65,536；训练最多 30 个 environment steps，temperature 0.8 / top-p 0.95。除原生桌面尺寸外，以上均为待显存/截断测量确认的起点，不冒充已核实的旧 SFT 配置。若必须降低预算，应在三个臂的正式 baseline 前统一冻结并重新测 baseline。
+**2026-10-02 用户定稿(slime-cua 实现)**：截图 **10 张 / fold 1**(r5 SFT 窗口；曾按 a2 eval 定 20/10，为速度改回)、history 100、思考保留、temperature 1.0 / top_p 0.95 / top_k 20、每回合最多 50 步、**动作后停 0.5 秒**(eval 协议为 3 秒；更短可能截到未稳定的界面，若出现重复操作再调大)、部分分奖励；**RL checkpoint 与 r5 基线都必须在同一协议(10/1)下评测后再配对比较**，a2 的 61.0% 是 20/10，不能直接对比。以下为原设计起点，仅存档：1920×1080 原生桌面；图像 history 10 张 / fold 1；每轮最多 4,096 个生成 token、总 context 65,536；训练最多 30 个 environment steps，temperature 0.8 / top-p 0.95。除原生桌面尺寸外，以上均为待显存/截断测量确认的起点，不冒充已核实的旧 SFT 配置。若必须降低预算，应在三个臂的正式 baseline 前统一冻结并重新测 baseline。
 
 最终 OSWorld 评测保留选定 benchmark 的统一任务预算；可以与训练的 30 steps 不同，但 A/B/C 的评测预算必须一致。不能把当前 27B Teacher 的 81,920-token 上限照搬给学生。
 
