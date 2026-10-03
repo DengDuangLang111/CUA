@@ -246,7 +246,13 @@ rollout 与训练重叠(用户 10-02 23:00 问"能不能并行")：做法是训�
 
 **工作站 12 台 + 快照重测(10-03 00:25 起，swap 阈值放宽到 2 GiB)**：第 16.8 分钟仍被切断，swap 从第 8 分钟起一直涨，共 +2.2 GiB。负载 42–47；单步 p50 4.4 s(8 台 2.5 s)，p99 21.8 s。完成 31 个回合、736 步，折合 20 分钟约 37 个回合、876 步，仍比 8 台 + 快照(43 个、923 步)少。载回一次的 reset 中位 58.5 s(8 台 34 s)，整体 reset 中位 89 s。失败的 7 步、3 次 reset 都发生在最后被切断的那一刻。
 
-**结论**：工作站上限定 8 台，配快照。**用户 10-03 00:50 确认 12 → 8**(cua-rl-gigpo `59661fc`，不开 KSM 时也是 8)；341689 的 follow 已按新上限重新挂上(PID 2199)。341689 提交时是 `SLOTS=16`，现在两台主机一共 12 台，多出的 4 个 slot 会等满 `CUAGYM_BRIDGE_WAIT` 1800 s 后被撤掉，第 0 轮作废 4 条轨迹；重新提交要排到 10-04 07:13，所以不重交。快照版 bridge 还没部署到生产目录。快照让 reset 快一倍，内存和 CPU 与冷启动相同。12 台不行，原因是 CPU 和内存，不是 reset。
+**结论**：工作站上限定 8 台，配快照。**用户 10-03 00:50 确认 12 → 8**(cua-rl-gigpo `59661fc`，不开 KSM 时也是 8)；341689 的 follow 已按新上限重新挂上(PID 2199)。341689 提交时是 `SLOTS=16`，现在两台主机一共 12 台，多出的 4 个 slot 会等满 `CUAGYM_BRIDGE_WAIT` 1800 s 后被撤掉，第 0 轮作废 4 条轨迹；重新提交要排到 10-04 07:13，所以不重交。快照版 bridge 还没部署到生产目录。
+
+**relay 改由 Windows WSL 承担(用户 10-03 01:00 同意，Mac 不能一直开着)**：cua-rl-gigpo `7d666c7` 给 `vmhosts.py` 加了 `CUA_RELAY_STATION=<主机>`。设了它，每条 route 去掉"从 Mac 到这台主机"的前缀：这台主机自己的命令在本机执行，其他主机少绕一跳。不设时在 Mac 上的行为不变；caffeinate 只在 macOS 上用。
+- WSL 上的独立目录 `~/cua-rl-station`(scripts/vmhosts.py、scripts/bridge_relay.py、envs/vm_hosts.json，md5 已核对)；`~/.ssh/config` 加了 `tillicum2`(主连接 socket 在 `~/.ssh/cm`，ControlPersist 30d，原配置备份为 `config.bak-20261003`)。
+- 从 WSL 跑 `check` 已通过：Windows 本机、工作站直连，工作站上限 8。
+- 还差两步：用户在 WSL 里登录一次 Tillicum(密码 + Duo)；之后从 GPFS 拷 bridge token 到 WSL 的 `~/.cua-rl/relay/`。
+- 341689 仍由 Mac 带。正式接力作业改由 WSL 上的 follow 带。快照让 reset 快一倍，内存和 CPU 与冷启动相同。12 台不行，原因是 CPU 和内存，不是 reset。
 
 还没验证：OSWorld 任务那条路径(评测用)；连续几小时的稳定性。
 
