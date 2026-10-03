@@ -1,6 +1,6 @@
 # Synthetic task generation for OSWorld — design, experiments, results
 
-## RL(GRPO)正式训练 `grpo-r5-cuagym-v1`(2026-10-03 02:40 PDT 提交)
+## RL(GRPO)正式训练 `grpo-r5-cuagym-v1`(2026-10-03 01:50 PDT 提交)
 
 - 9B r5 在 CUA-Gym 2366 道桌面题上做 GRPO，算法与 Zixian 的 OpenWebRL 基线对齐。作业 341861 → 341864(4 × 24 h 接力，2 节点 16 卡)，341861 预计 10-03 08:55 开始；预演 341689 预计 05:52 开始。
 - VM：工作站 8 台 + Windows 4 台，reset 用内存快照；relay 已从 Mac 挪到 Windows WSL，**Mac 不必开着**。训练期间两台主机被 RL 占用，**不要跑 eval 链**。
