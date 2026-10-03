@@ -80,6 +80,8 @@
 |---|---|---|---|
 | 张量并行(TP) | 把每层的权重矩阵切成 N 份放到 N 张卡上，每张卡算一部分，逐层合并结果；省的是权重和每层中间结果的显存。RL 用 TP=4 | run_cua_desktop.sh `--tensor-model-parallel-size` | — |
 | 数据并行(DP) | 每组卡各放一份完整模型，分别处理不同样本，最后把梯度求平均；8 卡 / TP4 = DP2 | 由卡数 ÷ TP 推出 | — |
+| rollout(采样) | RL 每轮的前半段：用当前模型在 VM 里实际做题，收集训练数据。48 题 × 5 次 = 240 条轨迹；每条轨迹 = reset VM → 反复"截图 + 历史拼成 prompt → SGLang 生成思考和动作 → VM 执行 → 新截图"直到结束或 50 步 → reward.py 打分。产出每一轮的 turn 样本(prompt、回复、采样时的 logprob、奖励)。后半段是训练；训练完把新权重同步给 SGLang，下一轮 rollout 用新模型 | slime `generate_desktop.py` | — |
+| turn 样本 | 轨迹里的一步 = 一条训练样本：这一步的 prompt + 模型这一步的回复；loss 只算回复部分 | `CUA_LOSS_GROUP=turn` | — |
 | logits | 模型在序列的每个位置给词表里每个 token(r5 共 248,320 个)打一个分，预测下一个 token；经 softmax 变成概率，取实际生成那个 token 的对数概率即 logprob，GRPO 的 loss 用它。尺寸 = 位置数 × 248,320，fp32 下 2 万个位置约 20.7 GB(TP 会按词表切到各卡) | slime `loss.py` `get_log_probs_and_entropy` | — |
 | 只算回复位置的 logits | 只对本轮回复(约 500 个位置)跑输出层和 logprob；prompt(截图 + 历史，约 2 万个位置)的 logits 不进 loss，不再计算。prompt 仍要完整过一遍模型，只省最后打分这一步 | `--response-only-logits`，`response_logits.py` | — |
 | 舍入级差异 | 数学上是同一个计算，只是浮点数相加的顺序或分块不同，结果在末几位不同(bf16 约第 3 位有效数字、fp32 约第 7 位)。例：bf16 里 (256+1)+1 = 256，256+(1+1) = 258。改 TP、换 GPU/CPU 实现、改分块大小都会产生；单步差异极小，但多步之后两次训练会像换了随机种子一样逐渐分开，预期效果不变 | RL_ENV_PLAN.md 提速总表"训练结果"列 | 数值噪声(未说明量级时) |
