@@ -193,6 +193,19 @@ rollout 与训练重叠(用户 10-02 23:00 问"能不能并行")：做法是训�
 1. 镜像的启动脚本(`/run/proc.sh`)给 CPU 加了 `migratable=no,+invtsc`，QEMU 拒绝保存内存状态("State blocked by non-migratable CPU device (invtsc flag)")。修法：容器环境变量 `CPU_MODEL=host`(于是不加 `migratable=no`)、`CPU_FLAGS=-invtsc`。已验证生效，qemu 命令行为 `-cpu host,kvm=on,l3-cache=on,+hypervisor,+invtsc,-invtsc`，减号优先。
 2. 固件以 `-pflash /storage/uefi.rom` 挂载，是可写的 raw 盘，监视器的 `savevm` 拒绝保存("Device 'pflash0' is writable but does not support snapshots")。修法：用 `ARGUMENTS` 另开一个 QMP 口，改用 QMP 的 `snapshot-save` / `snapshot-load`，只对系统盘(`ide0-hd0`)做快照，跳过固件盘。VM 本身不变；运行中的 UEFI 变量基本不变。
 
+原型 v3 结果(10-02 23:38，Windows WSL，单台 VM，无其他负载)：
+
+| 步骤 | 结果 |
+|---|---|
+| 存快照 | 12.8 s，内存状态 2.8 GiB，存在容器内的 `/boot.qcow2` 里 |
+| 模拟一回合 | 写 `/home/user/marker.txt`，打开 gedit，等 30 s |
+| 载回快照 | 10.1 s 后 VM 恢复运行，10.8 s 后 guest 服务能截图(冷启动 reset 在 8 台时中位 75 s，12 台时 228 s) |
+| 是否回到初始状态 | marker 文件不在了(磁盘已回滚)；gedit 进程 0 个(内存已回滚) |
+| 时钟 | guest 比宿主慢 50 s(停在存快照那一刻)，载回后**必须校准时钟** |
+| 载回后的 CPU | 容器 1–7%(冷启动约 3.3–3.5 核，持续 1 分钟以上) |
+
+还没验证：多台同时载回时的磁盘读写(每次读 2.8 GiB)；每个容器多占 2.8 GiB 磁盘(12 台约 34 GiB)；连续载回几十次是否稳定；载回后 OSWorld 的任务初始化和打分是否照常。
+
 ## 2026-10-02：改走 Zixian 的 OpenWebRL 框架做 CUA 适配(用户确认)
 
 **框架**：`zixianma/OpenWebRL` 的 `arm` 分支(`e3bbd52`)，slime(Megatron + SGLang)。本地工作区 `openwebrl-cua/`，分支 `cua-desktop`，Zixian 仓库的推送已禁用。cua-rl-gigpo(verl)那条线暂停，不再投 8 卡。
