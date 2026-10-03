@@ -18,8 +18,77 @@
 - **CUA-Gym 给每道题设的 `max_steps` 都是 30**，v2 的 30 步上限和题库的设计一致。
 - 训练题只有四个应用；eval-50 里这四个应用只占 21 道(Calc 7、Impress 7、VS Code 4、Writer 3)，其余 29 道(Chrome、GIMP、Thunderbird、VLC、os、多应用)在 eval 上的提升只能来自迁移。
 
+**扩充训练题池：用户 10-03 11:55 定"新增的 2,924 道要加进去"**。以下为 11:45 的方案，代码已在分支上，尚未部署。用户要求把以下几类加回来：PDF、VLC、GIMP、桌面多应用；"不符合运行协议"的题；与留出集过于相似的题。
+- 上线前还剩三件事：
+  - 真 VM 抽样检查；
+  - 部署新 bridge。新数据必须配新 bridge，旧 bridge 会把 sh 初始化、open 步骤和 Ctrl+S 都漏掉；
+  - 定在哪个作业换数据。
+- 抽样检查要占 VM：两台主机都已开到用户定的上限(Windows 4、工作站 8)，训练期间没有空余 VM。
+- **更正**：11:45 的回复里说"在 Windows 开第 5 台 VM 不超上限"，这是错的。上限是 4 台(10-03 用户定，`vm_hosts.json`)。
+- **为什么没有 Chrome 题**：CUA-Gym 的桌面部分没有 Chrome 这个类别。浏览器题都在 web 平台。
+  - 题量：1,075 道，分布在 29 个模拟网站(Instagram、HubSpot、Google Docs/Sheets/Calendar/Drive、Outlook 网页版、GitLab、Postman、Teams、Trello 等)；另有跨应用题 430 道。
+  - 运行方式：初始化把初始状态写进模拟网站，用 `google-chrome` 打开 `<站点>/?sid=…`；打分从站点的接口读回状态。站点地址在脚本里是 `__CUA_GYM_<APP>_URL__` 占位符。
+  - 要跑这些题，需要在 VM 能访问到的地方启动 29 个 Node 模拟站点(`CUA-Gym-Hub/websites`)，并替换占位符。
+  - 这些题练的是"用网站办事"，不是 OSWorld Chrome 题考的浏览器设置。eval-50 里有 Chrome 题 3 道。
+  - 新题池里另有 197 道题的初始化会打开 Chrome(多为多应用题)。
+- **用户 10-03 12:00 定：加网页模拟题和跨应用题**(理由：OSWorld-Verified 有 Chrome 题)。12:05 测量结果：
+  - 按同一套审计跑(`overlap_audit.py` 改一行，跨应用题的 app_type 是多个应用拼起来的，任一应用在列表里就审；原 8 个应用的 9,398 道结论全部不变)：1,507 道里 16 道与 OSWorld 相似度 ≥0.25，被排除。
+  - 再去掉 15 道不打印 REWARD、5 道把站点地址写死成 172.17.46.46、2 道站点占位符拼错(`NOTION_MOCK`)：**可用 1,467 道**(网页 1,041、跨应用 426)，用到 31 个模拟站点。最多的是 Slack 349、Gmail 281、Notion 266。
+  - 只有 320 道带 TASK_ID，其余 1,147 道没有，只能靠文本相似度把关。
+  - 站点源码：`CUA-Gym-Hub`(xlang-ai，`5320568`)，每个站点是一个 Vite 项目，状态接口(`/post`、`/go?sid=`)由 `shared/secureMockApiPlugin.mjs` 挂在 `vite preview` 上；状态按 sid 存文件。
+  - 两台主机都没有 Node。Docker 都是 Docker Desktop。
+  - **VM 能访问主机上的服务**：Windows 实测，在 WSL 起临时 HTTP 服务，VM 里用 `host.docker.internal`(192.168.65.254)和 WSL 的 IP 都能拿到 200；10.0.2.2、172.17.0.1 不通。工作站未测。
+  - 风险：题目脚本用的是不带口令的旧接口，agent 在终端里能直接改站点状态(`/post`)，存在钻空子拿分的可能。
+- 加上网页和跨应用题后，题池为 5,290 + 1,467 = **6,757 道**(未计 A/B 两类)。
+- **最终题库 `rl-pool-20261003d`：6,847 道**。构成、筛选条件和复现方法统一写在 **`docs/RL_TASK_POOL.md`**，本文不再重复。
+  - 训练数据：Tillicum `cua-data/train_20261003d.parquet`。
+  - 与 6,757 道版本相比，按用户要求补回了 GIMP、VLC、Thunderbird 题，但去掉了在 OSWorld 中最像的题落在 eval-50 里的 15 道。
+- **v2 已重新提交(10-03 12:35)**：作业 **342150 → 342151 → 342152 → 342153**，每个 24 小时接力。
+  - 设置：2 节点 16 卡；`TRAIN_DATA=train_20261003d.parquet`；`OPTIMIZER_OFFLOAD=1`；`SLOTS=12`；`EVAL_INTERVAL=10`；`REPLACES_JOB=341861`；`NUM_ROLLOUT=100`。
+  - 代码：Tillicum `rl/slime-cua-pool`(git worktree，`pool-expand` `099c3f9`)。
+  - 342150 已排到队首，原因"Resources"，预计 14:12 开始。
+  - 站点(Windows WSL)上跟着作业链切换转发的进程换成了 `follow 342150 … --up`(pid 78728，日志 `~/.cua-rl/relay/follow-342150.log`)，旧的 72715 已停。
+  - 新 bridge(`099c3f9`)12:40 推到两台主机的正式目录，md5 一致；`check`：bridge 能加载，模拟站点 31/31，KSM 开着。正在跑的 v1 的 bridge 仍是旧版，v2 连上时才会启动新版。
+  - 用户 12:50 定：v1 做完第一步训练就取消，好让 v2 早点开始。后台监控每 5 分钟查一次，见到第一条 `train/grad_norm` 就 `scancel 341861`。v1 取消后要做的事：确认两台主机的 VM 都已关掉、把 Windows 的 relay 恢复成 4 台。
+- **v2 重排(用户 10-03 12:30)**：
+  - 原排队的 342114–342117 已取消，等数据检查通过后用 `train_20261003d` 重新提交。
+  - 新作业加 `OPTIMIZER_OFFLOAD=1`：优化器放 CPU，每卡省约 13.5 GB 显存，用来防 OOM。估计每轮多 1.5–5 分钟，约占整轮的 1–2%。
+  - 20/10 下单个样本的长度仍以 122,880 token 为上限；视觉部分最多 20 张图，长样本的显存从没实测过。
+- **真 VM 检查(Windows，借训练 1 台 VM，新 bridge 在测试目录 `/mnt/d/research/cua-rl-bridge-pool`)**：
+  - 第一轮 9 道：7 道通过(初始分和最终分都是 0)。VM 开机时 pip 装库 20 秒；从快照恢复的 reset 用 21–36 秒。
+  - 发现并修复 bridge 问题(slime-cua `099c3f9`)：sh 初始化脚本在后台开应用时，VM 服务的 `/execute` 会等这些进程放开输出管道，最多 120 秒，超时后报 500。989 道 sh 题里有 317 道是这种写法。修复办法是初始化输出改写到 VM 里的文件。
+  - 题目本身的问题：
+    - `ca775249` 假设 Python 有 `site-packages` 目录，Ubuntu 上没有，题库里同类 5 道，训练时会被丢掉；
+    - `6744967d` 修复后能初始化，但初始状态就得 0.4 分，训练时按"初始已得分"丢掉。
+  - 截图核对：网页题 Chrome 打开了 `host.docker.internal:18527` 上的模拟 Trello，GIMP 题打开了题目文件。
+- 清理：Windows 上有一个 10:00 左右 eval-50 检查留下的孤儿 bridge(父进程是 WSL 的 init)，一直占着 1 台 VM 两个小时，已用 SIGINT 停掉。
+- **结果：5,290 道，原来是 2,366 道(全部包含在内)，新增 2,924 道。**
+  - 按应用：Calc 1,421、Writer 793、Impress 503、VS Code 650、PDF 622、多应用 1,208、VLC 65、GIMP 28。
+  - 草案产物在 scratchpad，正式产物等批准后写入 `artifacts/`。
+- **规则**(`rl_pool.py` 草案在 `cua-rl-local` 的 `pool-expand` 工作树)：
+  - 仍然排除：OSWorld 衍生家族、与 OSWorld 相似度 ≥0.25 的题、CUA-Gym 自己的 Dev/留出家族、`exclude.json` 里人工审过并否决的 7 道。
+  - 不再剔除与留出集相似的题。
+  - 新的四个应用没有按家族划分 Dev/留出，所以缺 TASK_ID 也收(999 道)。
+  - 协议检查改成按 bridge 实际能执行的来判：初始化文件必须是 py 或 sh 脚本；初始化步骤只能是 download、execute、launch、open、sleep；打分前的步骤只能是 execute、sleep；reward.py 要打印 `REWARD:`；初始化不能上传答案文件(文件名含 golden/solution 等)。
+  - 因协议另外剔除 29 道：20 道 reward 不打印 `REWARD:`，9 道上传答案文件。
+- **审计重跑**：`overlap_audit.py` 代码未改，参数相同，应用从 4 个扩到 8 个。原四个应用的结果与 09-22 完全一致(Calc 1,827、Impress 751、Writer 1,450、VS Code 974)。
+- **更正**：之前把 `audit_excluded` 的 2,247 道都说成"和 OSWorld 重叠"，这不准确。
+  - 其中 929 道是因为没有 TASK_ID、无法确定家族而被排除，并不是因为相似。
+  - 这 929 道里有 837 道相似度低于 0.25，用户未要求加回，暂未加。
+- **Bridge 改动**(slime-cua `pool-expand` 工作树，基于 `v2-protocol` `ba39f14`)：
+  - 按题目自带的 config 执行初始化步骤；打分前先执行 evaluator 的 postconfig(Ctrl+S)。r0 不执行 postconfig。
+  - 在 VM 开机后、存快照之前，用 pip 安装 `guest_requirements.txt` 里固定版本的库(pymupdf、pikepdf、PyPDF2、pandas、odfpy、fpdf2、gimpformats 等)。这些库只对初始化和打分脚本可见，policy 自己开的终端看不到。原来的 6 个 wheel 改为写进这份清单，版本不变。
+  - `osworld_check.py` 改名为 `task_check.py`，也能检查 CUA-Gym 题。
+  - **旧题行为不变**：2,366 道旧题的 config 全部等于"上传 `/home/user/initial_setup.py` 并执行"；用假 VM 测过，执行的命令与原 bridge 逐条相同。
+- **VM 内环境实测**：只读查询了 Windows 一台训练中的 VM(5003 端口)。
+  - Python 3.10.12，自带 numpy 1.26.2、Pillow 10.1.0、lxml 4.8.0、reportlab 3.6.8、PyYAML、bs4、requests、pyautogui、pip 22。
+  - 缺 pymupdf、pandas、PyPDF2、pikepdf、odfpy、fpdf、gimpformats。
+  - 有 gimp、vlc、evince、ffmpeg、pdftotext、gs；没有 ImageMagick、qpdf、pandoc。
+  - VM 能访问 PyPI(0.2 s)。
+- **未做**：真 VM 抽样检查(初始化是否成功、r0=0、能否打分)；检查结果出来前，不确定新题里有多少是坏题。
+
 **v2 已提交(10-03 11:20，用户定，取代 v1)** `grpo-r5-cuagym-v2`：
-- 作业：342114 → 342115 → 342116 → 342117(各 24 h 接力，2 节点 16 卡)，预计 10-04 23:00 开始。
+- 作业：342114 → 342115 → 342116 → 342117(各 24 h 接力，2 节点 16 卡)；11:43 查 Slurm 预计 10-03 14:15 开始(估计值，不保证)。
 - 代码：slime-cua `v2-protocol` `ba39f14`，放在 Tillicum 的另一个工作目录 `rl/slime-cua-v2`(git worktree)；341861 用的主目录 `rl/slime-cua` 没动。
 - 与 v1 的差别：截图窗口 20 张 / 每次折叠 10 张(前缀缓存在 10 步里有 9 步能命中；r5 在这个窗口下评测最好)；最多 30 步；训练中的 eval-50 也用同样的窗口和步数；SGLang 截图编码缓存打开(2 GB，每次权重更新清空)。其余与 v1 相同(48×5、`NUM_ROLLOUT=100`、`SLOTS=12`、`EVAL_INTERVAL=10`)。
 - 为什么改：v1(341861)第 0 轮实测每步约 19 s，其中生成约 15 s、首 token 前就等 10.7 s。原因是 10/1 窗口从第 11 步起每步都改变提示前缀，前缀缓存只命中约 15%；另外每条轨迹平均约 35 步(估算)。思考长度：r5(a2)的长尾比 mixb9b 重(每步 p99 1.7 万字符 vs 1.1 万，每题总长 p90 14 万 vs 7.7 万)，但中位数相近。
