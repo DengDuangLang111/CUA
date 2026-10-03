@@ -43,6 +43,17 @@
 - **最终题库 `rl-pool-20261003d`：6,847 道**。构成、筛选条件和复现方法统一写在 **`docs/RL_TASK_POOL.md`**，本文不再重复。
   - 训练数据：Tillicum `cua-data/train_20261003d.parquet`。
   - 与 6,757 道版本相比，按用户要求补回了 GIMP、VLC、Thunderbird 题，但去掉了在 OSWorld 中最像的题落在 eval-50 里的 15 道。
+- **v2 双节点重排(用户 14:40 定"都加上，用双节点"，"连上 10 个 job")**：作业 **342296 → … → 342305**，10 个接力，每个 24 小时，2 节点 16 卡。
+  - 代码：Tillicum `rl/slime-cua-v2b`(`pool-expand` `487cd6e`)。
+  - 设置：`OPTIMIZER_OFFLOAD=1`，`SKIP_EVAL_BEFORE_TRAIN=1`(第 0 步的 eval-50 已由 342167 记过：54%)，`REPLACES_JOB=342167`(拿到双节点时取消单节点版)，其余同前。
+  - 站点跟踪进程：`follow 342167 342296 … 342305`(pid 80775)。342167 跑到被接管为止；它的 3 个接力作业 342169–342171 已取消。
+  - 相比 342167 新加的改动，都不改变训练结果：
+    1. **图片特征走共享内存**(`patches/usercustomize.py` 第 4 项，`333fa27`)。py-spy 显示 SGLang 前端 CPU 时间的 86% 花在把请求整包 pickle 后经 ZMQ 发出：每次 20 张截图，约 1 GB 的 float32 像素块。原因是 slime 给每个引擎都设了 `dist_init_addr`，SGLang 就按跨节点处理。首 token 平均 14.1 s，其中调度器内只占 0.74 s。单卡对比测试(342285，19 张截图，贪心解码)：默认方式每次请求 57.5 / 28.9 / 28.6 s，共享内存 26.4 / 2.96 / 2.86 s，三次输出逐字相同。
+    2. **截图压缩**(`screenshots.Screenshot`，zlib 级别 1，`8c4c8ac`)：每张 6.3 MB → 约 0.8 MB；用真实处理器测过，像素逐位相同(`tests/test_screenshots.py`)。
+    3. **全 0 分的题不再抽**(`zero_tasks.py`，`3bf8d66`；用户只要这一种做法)：5 条轨迹都正常结束、都是 0 分的题，记到 `<save>/cua_zero_tasks.jsonl`，再抽到时不占 VM，直接跳过(broken = `skipped_zero_task`)。从第二遍过题库开始才起作用。
+    4. `--distributed-timeout-minutes 60`(`487cd6e`)。
+  - 用户决定**不改重算设置**(重算约占训练计算的 25%；少重算几层估计只省 3–5%，还有 OOM 风险)。
+- **双节点调试(342173，14:08–14:22)**：用小数据(1.9 GB)只训练，双节点**正常完成**，38 步。逐 rank 日志显示：第二台节点的 8 个 rank 取数据要 7–20 秒，第一台几乎立刻；偶数 rank 的 gloo 汇总在最后一个 rank 到达时就完成了，代码没有死锁。结论：341861 卡死是因为数据太大(约 50 GB)、跨节点传得慢，撞上了 10 分钟超时。
 - **v1(341861)12:52 失败：第一步训练卡死，不是 OOM**。之后 v2 改为单节点(用户 13:00 定)。
   - 经过：12:42 第 0 轮 rollout 结束(6 小时 25 分钟)，16 个 rank 取数据。第一台节点(g005)21 秒拿到，第二台(g009)用了约 4 分钟。之后每对 TP 卡里的偶数 rank 在 `log_rollout_data` 里用 gloo 跨节点汇总统计(`gather_and_reduce_log_dict`)，奇数 rank 跳过这一步直接进前向、等它的搭档。12:52:32 两处同时超时(10 分钟，`--distributed-timeout-minutes` 默认值)：rank 7 等 c10d store，rank 4 的 gloo 汇总报 "Connection closed by peer"。出错时显存 32.8/140 GB。
   - **两节点训练从未跑通过**：10 月以来的双节点作业只有 341689(配置错误，没到训练)和 341861；之前做到训练的作业(341645、341727 等)都是单节点。
