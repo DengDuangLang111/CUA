@@ -139,6 +139,18 @@ rollout(每个 turn = 准备 + 生成 + 环境一步；每条轨迹另加一次 
 
 rollout 与训练重叠(用户 10-02 23:00 问"能不能并行")：做法是训练第 N 轮数据的同时，用还没更新的权重采第 N+1 轮，所以数据比模型旧一轮(离策略)，与 Zixian 的同策略基线不同，按"不影响训练结果"的原则不做。收益：一轮的时间从"rollout + 训练"变成两者中较长的那个，S1 修好后估计每轮省 25–35 min(rollout 那段)。代价：两段必须用不同的卡(不能再轮流共用同一批卡)，各自可用的卡变少。8 卡上不划算；16 卡时可以考虑，需用户决定。离策略的程度：同步时一轮数据要用于约 40 次更新(5188 个 turn ÷ 全局批 256 × 2 个 epoch)，到最后一次更新时，模型已比采样时多更新了 39 次。这部分由 loss 里的概率比(当前模型 ÷ 采样模型)修正，比值超出 0.8–1.28 的 token 被截断、不再贡献梯度。异步后再旧一轮(约 40–80 次更新)，被截断的 token 会更多，学习信号更弱，也可能更不稳定。要用的话需要对照实验，看 `pg_clipfrac` 和 `ppo_kl` 涨多少。
 
+## wandb 记录方案(10-02 22:40；参照 Zixian `arm` 分支 e3bbd52 的代码)
+
+**Zixian 记了什么**(`slime/ray/rollout.py`、`slime/utils/trajectory_metrics.py`、`slime/utils/training_reward_metrics.py`、`scripts/run_small_baseline.py`)：
+- 组织：训练 run 在 `zixianma/openwebrl`(基线 `qcq7i4ug`)，run 名固定、不加随机后缀，续跑传同一个 `--wandb-run-id`；checkpoint 评测另建项目 `openwebrl-evals`，每个 checkpoint 一个 run，归到 `<训练run>-checkpoint-evaluation` 组。训练中评测：基线每 10 轮测 Online-Mind2Web；论文版每 5 轮测 WebVoyager 验证集，都是贪心解码(温度 0)，每题 1 次。另写一份文本进度日志(`[RolloutReward]`、`[EvalMetrics]`)。
+- 训练奖励(每轮一个点，横轴是 rollout 轮次，避免 PPO 2 遍重复计)：`train/reward`、`train/task_success_rate`(reward == 1 的轨迹 ÷ 完成的轨迹)、`train/task_success_rate_valid`、`train/task_invalid_rate`、`train/task_reward_accepted`。
+- 轨迹级(每条轨迹算一次，不按步数加权)：轨迹数、有效数、成功数、无效率、平均和最大步数、平均 reward；采样效率：完成组数、被选中组数、接受率；`zero_std/count_<分数>`(得分全相同的组按分数计数)。
+- 健康：截断、中止、失败、超时、环境出错、判官超时的比例；有效 batch 比例。其他：回复长度、重复率、前缀缓存命中率、吞吐。
+- 评测：`eval/<数据集>` 平均分、成功数、中止数、排除中止后的成功率、轨迹级指标。
+- 这些大多改在她 fork 的 slime 核心里，我们用的 MSR slime 没有。
+
+**我们的方案**(待用户确认后实现)：启动脚本开 `--use-wandb`(项目 `cua-rl`，run 名和 id 都用 `EXP`，作业接力时接成一条曲线；认证用 Tillicum 上已有的 `~/.netrc` 登录；容器里有 wandb 0.27.0，计算节点能连通 api.wandb.ai)；`examples/cua_desktop/` 里加自定义日志函数(`--custom-rollout-log-function-path`，不改 slime 核心)，照搬她的轨迹级成功率、接受率、全同分组计数，口径一致(成功 = 部分分为 1；总成功率和排除无效后的成功率都记；按 rollout 轮次画)，另加按应用的成功率、作废原因分类、撤掉的 slot 数、每步准备/生成/环境耗时、题目进度(已用题数 / 2366)；训练中评测按她的做法(贪心、每题 1 次、每 10 轮)，用 `val_20261001.parquet` 的 24 道 dev 题；正式 OSWorld 评测结果另建评测项目。
+
 ## 2026-10-02：改走 Zixian 的 OpenWebRL 框架做 CUA 适配(用户确认)
 
 **框架**：`zixianma/OpenWebRL` 的 `arm` 分支(`e3bbd52`)，slime(Megatron + SGLang)。本地工作区 `openwebrl-cua/`，分支 `cua-desktop`，Zixian 仓库的推送已禁用。cua-rl-gigpo(verl)那条线暂停，不再投 8 卡。
