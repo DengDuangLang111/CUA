@@ -458,6 +458,9 @@ self.environment = {"DISK_SIZE": "32G", "RAM_SIZE": "4G", "CPU_CORES": "4"}
 | CPU | 4 核 | 5 个 |
 | 磁盘 | ~24.5 GB overlay | 30+ 个 |
 
+RL 的 desktop bridge(cua-rl-gigpo `vm_hosts.json` 的 `max_vms`)按另一套实测:开 KSM 时 Windows 5 / 工作站 15,
+不开时 4 / 10,KSM 随 WSL 重启失效。容量表和测法见 `docs/RL_ENV_PLAN.md`(10-02 傍晚);RL 与 eval 不同时跑满。
+
 ### 内存实测(2026-08-14,3 VM 跑 v11-500 稳态)
 
 之前那个"每 env ≈ 6 GB"是估的,**偏高**。`docker stats` + `free` 实测:
