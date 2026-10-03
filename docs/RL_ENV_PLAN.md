@@ -110,6 +110,41 @@ KSM 运行时设置，WSL 重启即失效，需重新执行；开启须 root，�
 
 **时间估算**(待实测)：10 台 VM 跑 240 条轨迹，每条平均约 15 步 × 约 25 秒 ≈ 6 分钟，一轮约 24 批 ≈ 2.4 小时，未计入 50 步长尾。
 
+### 10-02 夜：训练路径 bug 审查(341159 OOM 之后，用户要求"仔细检查")
+
+**341159**(16:10–16:25)：rollout 通过，**训练第一个前向 8 张卡全部 OOM**(不只 GPU0)。PyTorch 已分配 101 GiB，在 `float16_to_fp32` 申请 8.76 GiB 时失败；样本约 38–41k token(按 logits 大小反推)。方法：把启动参数按非 bridge 路径生成的 TransformerConfig(`core_transformer_config_from_args`)和 bridge 实际用的 provider 逐字段对比，再读代码，另开一个只读审查。下面每条都按代码或实测核实过。
+
+已修(slime-cua `922e217`、`eccf861`、`8fca890`)：
+
+| # | 问题 | 证据 / 影响 | 修法 |
+|---|---|---|---|
+| 1 | bridge 模式下 `model_provider.py` 只拷 TP/PP/CP 等，**`--recompute-*` 被静默丢弃** | 对比结果为 `recompute_granularity full→None`；视觉塔配置从 provider 拷这些值，所以语言模型(32 层)和视觉塔(27 层)都没有重算 → OOM 主因 | 把 recompute_*、cp_comm_type 传进 provider；在 slime 真实构建路径上复验：LM 和视觉塔都是 full/uniform/1 |
+| 2 | `actor.py` 训练前把整轮所有样本的 pixel_values 搬上 GPU | 冒烟规模每卡约 28 GB 闲置 | 留在 CPU，`get_batch` 按微批次搬 |
+| 3 | bshd 把每个样本 pad 到整轮最长 | 平均 19.9k 被 pad 到约 40k，算力和显存约浪费一倍 | 按微批次取最长(所有迭代器共用 micro_batch_indices，每个样本只属一个微批次) |
+| 4 | **主机内存**：每个 turn 存一份 fp32 pixel_values(每张截图 50 MB)，同一截图在最多 10 个 turn 里重复 | 按 r5 eval 100 条真实轨迹(截到 50 步，平均 21.6 轮)，48×5 一轮约 5188 个 turn，**约 1945 GB**；节点 2 TB、作业 1.6 TB、Ray 对象存储上限 186 GB | `screenshots.py`：每条轨迹每张截图只存一份 uint8(6.3 MB)，各 turn 共享同一对象(pickle 去重已验证)；新核心钩子 `--custom-multimodal-train-inputs-path` 在 GPU 上按微批次还原。实测还原**逐位相同**，篡改一个像素能检出；一轮降到约 30 GB |
+| 5 | 每个 turn 的 `multimodal_inputs` 挂着 10 张每轮重新解码的 PIL 图 | rollout 进程每轮约 260 GB，自定义 generate 用不到 | 去掉 |
+| 6 | 坏轨迹的 reward 一直是 None：slime 对含 ABORTED 的列表跳过 reward 函数(`sglang_rollout.py:301`) | 只要保留的组里有一条坏轨迹，训练侧 `sum()` 就 TypeError；上游 orchard 有 `reward=0.0`，插件漏了 | 坏轨迹设 reward 0.0 |
+| 7 | reset 失败时返回空 token 的数据集样本 | 遇到 `rollout_log_probs=None`、`F.pad(-1,1)` 都会崩 | 坏轨迹统一返回一个带 1 个 token 的掩码占位样本，不再返回被掩码的各轮(省掉每轮一次前向反向和全局批名额) |
+| 8 | abort 后在途轨迹不停：`abort()` 会等所有在途任务跑完(`sglang_rollout.py:600`)，插件从不查 `aborted` | 最多 80 条已进入 generate 的轨迹会在 VM 上跑完整个 episode 再被丢掉，rollout 被拉长 | 每轮开始检查 `state.aborted` |
+| 9 | 插件没有 try/except | 任何一条轨迹抛异常(例如坐标解析)就会让整个 run 挂掉 | 只断这一条轨迹，带 traceback 记日志，原因记为 `exception_<类型>` |
+| 10 | 只检查 prompt 长度，回复固定 32768 | prompt + 回复最长可达约 155k | 每轮 `max_new_tokens = min(32768, 上限 − prompt)` |
+| 11 | **CP>1 不可用** | bridge Qwen3-VL 在 CP>1 时初始化就 assert `calculate_per_token_loss`(`model.py:202`)；它自己还按 CP 再切一次 embedding(`:504`)，与 slime 的 bshd 切分重复 | CP 固定为 1，已取消排队的 341219(CP2) |
+
+核实后排除：
+- **rollout 与训练像素不一致**：截图在发出前已 smart_resize 到 1920×1088，处理器不再缩放。CPU-fast 与 CUDA-fast 逐位相同；slow 处理器 fp32 差 ≤5.9e-8，转 bf16 后相同。
+- **GDN + CP**：Megatron 会撤销 zigzag 重排，数学上支持，但被第 11 条挡住。
+- **M-RoPE、视觉权重同步、logprob 对齐、SGLang logprob 口径**：只读审查逐项核对，均无问题。
+
+为什么 Zixian 没遇到：她的基线是 4B 标准注意力模型(可用 thd 打包)，每轮 1 张截图，上下文 8k，默认 3 步，重算默认关。第 1 条在她的 slime 里同样存在，只是在她的规模下不需要重算。第 6、7、9 条上游 orchard 都有防护，是我们的插件漏抄了。
+
+未修 / 待定：
+- **GPU0 多 27 GB**：SGLang 在 tokenizer 侧用 fast 处理器时 `device="cuda"`(`base_processor.py:439`)，8 个引擎的预处理都落在 cuda:0。改用 slow 处理器能消除，但每个 10 图请求从 0.06 s 变成 1.03 s。先看修复后 GPU0 是否仍是瓶颈。
+- **长上下文显存**：CP 只能为 1；slime 对整段 `[T, V]` 计算 fp32 logits 和 logprob。122k 时 logits 加反向需要保存的 softmax 约 61 GB，`--log-probs-chunk-size` 只降瞬时峰值。10/1 窗口下 turn 长度分布：p90 53k、p99 95k、最长 114k，超过 64k 的占 6%。需用保存的 rollout(`--load-debug-rollout-data`)构造长样本实测。不够的话，下一步是只对回复位置算 logits(核心改动)。
+- **全局批末尾丢弃**：每轮凑不满 256 的 turn 会被丢掉(最多约 5%)，与 Zixian 基线相同，暂不动。
+- **`--get-mismatch-metrics` 会改 loss**(会调用 TIS 函数)，不能当成纯测量开关。训练/推理不一致看 epoch0 的 `ppo_kl` / `pg_clipfrac`；在 `--use-rollout-logprobs` 下，`train_rollout_logprob_abs_diff` 恒为 0。
+
+验证：CPU 测试(截图还原、reward 后处理、VM 租约)全部通过；启动参数解析确认 CP=1、钩子生效、视觉塔 recompute=full。8 卡冒烟 **341265**：按轮分组，假 bridge 轮换 82 张真实截图并按 3% 概率注入 step 失败，保存 rollout 供只训练复跑。
+
 ## 2026-10-01：Zixian(OpenWebRL)的 RL 算法与结果，和 Arijit GiGPO 的对比
 
 依据：`zixianma/OpenWebRL` 的 `arm` 分支 `openwebrl/docs/ARM_SUMMARY.md`(10-01 06:54 版本 `2ed62d1`；main 仍停在 `9da6dc1`)。
