@@ -225,6 +225,24 @@ KSM 运行时设置，WSL 重启即失效，需重新执行；开启须 root，�
 | S7 | 冒烟本身 | 全局批 8 → 每卡每 4 个微批次就做一次 CPU 上的 Adam | 只影响冒烟的耗时(正式为 256) | 无需处理 |
 | S8 | rollout 尾部 | abort 之后，在途轨迹会把整个 episode 跑完 | 每轮白跑最多一整个 episode | 已修(`c1ce929`) |
 
+**提速 1–9 的实施(用户 10-02："都加上，1-9 都做，尽可能地加速"；原则不变：不改变训练结果)**
+
+| # | 项 | 状态 | 位置 / 验证 |
+|---|---|---|---|
+| 1 | S1 训练 30 s/微批次 | 诊断中 | `train_only.sbatch` + `stack_sampler.py`(调用栈采样 + rank 0 单步 profiler)；8 卡作业 341399 预计 10-03 00:22 |
+| 2 | 优化器状态放回 GPU | 已在提速分支 | slime-cua `cua-desktop-speed`：去掉 `--optimizer-cpu-offload`(`OPTIMIZER_OFFLOAD=1` 可恢复)，保留 precision-aware(fp32 主权重和动量)。分布式优化器原本就开着，每卡多约 13.5 GB |
+| 3 | NCCL P2P | **无需改动** | slime 这条线从未设 `NCCL_P2P_DISABLE`(那是 GiGPO/SFT 的设置：SFT 在显存 137.8/141 GB 时 P2P 注册报 invalid access，CUA `c4306e05`)。RL 的 smoke 峰值约 80 GB，保持开启 |
+| 4 | 16 卡(2 节点) | 已在提速分支 | `examples/cua_desktop/train.sbatch`：`--nodes=2`；启动脚本在批处理节点起 Ray head，其余节点各起 worker，等所有 GPU 到齐后再开始训练。hub 把"节点:端口"写进 `cua-runs/hub-<作业号>.addr`，`vmhosts up` 读它转发(cua-rl-gigpo `210f849`)，因为多节点时 hub 不一定在第一个节点上。QOS normal 单作业上限 24 h、16 卡，正式运行靠 checkpoint 续跑 |
+| 5 | TP4 → TP2 | 已在提速分支 | `TP_SIZE` 默认 2(8 卡时 DP 4)；参数校验通过(视觉塔也是 TP2 + 完整重算) |
+| 6 | SGLang 视觉编码缓存 | 已在提速分支 | SGLang 的 `flush_cache`(每次权重更新、显存释放都会调用)**不清**视觉编码缓存，直接打开会用旧权重的视觉特征。`sglang_patch/usercustomize.py` 在调度器进程里给 `flush_cache` 补上清空缓存。GPU 节点测试(341467)：导入时补丁自动挂上；flush 成功则换成空缓存，失败则保持。`VLM_CACHE_MB` 默认 2048，设为 0 即关闭 |
+| 7 | S5 只对回复位置算 logits | 已在分支 | `--response-only-logits`(`cua-desktop-response-logits`，已并入提速分支) |
+| 8 | checkpoint 间隔 | 已在提速分支 | `SAVE_INTERVAL` 默认 5(原为 1) |
+| 9 | S3 路由、S4 重置 | S3 已在主线、待实测；S4 已上线 | S4：截图稳定等待(−3 s，`f5a15de`)+ 去掉 provider 停容器后的 3 s(`28a37f2`)，工作站 10 题中位重置 34.5 → 28.4 s。内存快照恢复**不做**：冷启动 17.4 s 是大头，但快照恢复会让时钟、随机数状态、开机时长都不同于全新开机，偏离 eval |
+
+**提速分支的验证**(合入主线前)：
+- 只训练对比 341461：同一份 rollout_0.pt，提速配置 vs 基线 341399。比较 step0 的 `ppo_kl`/`pg_loss`(应在数值噪声内一致)、`grad_norm`，以及每个微批次的耗时和显存。
+- 完整 smoke 341470：检查路由是否均匀、缓存清空日志的次数是否与权重更新次数一致，以及第二轮 step0 的 `ppo_kl` 是否没有变大(变大就说明缓存没清干净)。
+
 当前冒烟按 30 s/微批次算，训练要约 85 分钟，会在 1.5 小时的时限内超时，第二轮 rollout 跑不到。它要验证的(不 OOM、坏轨迹路径、首批指标)都已拿到。
 
 ## 2026-10-01：Zixian(OpenWebRL)的 RL 算法与结果，和 Arijit GiGPO 的对比
