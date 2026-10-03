@@ -2,7 +2,7 @@
 
 更新：2026-10-03，America/Los_Angeles。
 
-## 现状(10-03 02:40；本块随进展更新，证据和讨论在下方各节)
+## 现状(10-03 02:15；本块随进展更新，证据和讨论在下方各节)
 
 **正式训练** `grpo-r5-cuagym-v1`：
 - 作业：341861 → 341862 → 341863 → 341864，每个 24 h，`afterany` 接力；341861 预计 10-03 08:55 开始。
@@ -19,9 +19,9 @@
 
 | 部分 | 位置 | 版本 |
 |---|---|---|
-| 训练代码 | Tillicum `rl/slime-cua`(git bundle 同步) | 分支 `align-zixian` `bf49095` = `cua-desktop` `3d2c81d` + Zixian 对齐第 1、3 项 |
+| 训练代码 | Tillicum `rl/slime-cua`(git bundle 同步) | 分支 `align-zixian` `fb2a94e` = `cua-desktop` `3d2c81d` + Zixian 对齐第 1、3 项 + 去掉 `RESPONSE_ONLY_LOGITS` 开关(始终只算回复位置) |
 | VM bridge | 两台主机的 `cua-rl-bridge`(生产目录) | cua-rl-gigpo `native-docker` `5e73a83`：上限 8/4、relay 站、内存快照、OSWorld 题固定等待 |
-| relay 站 | Windows WSL `~/cua-rl-station`，`CUA_RELAY_STATION=win` | `vmhosts.py` `7d666c7`；follow 跟 341689、341861–341864 |
+| relay 站 | Windows WSL `~/cua-rl-station`，`CUA_RELAY_STATION=win` | `vmhosts.py` `3565cf5`(follow 进程 63965 启动时载入的是 `7d666c7`，两版只差输出标签)；follow 跟 341689、341861–341864 |
 
 **链路**：Tillicum GPU 节点(trainer 与 hub) ← ssh 端口转发 ← Windows WSL 上的 relay 站(Tillicum 主连接已过 Duo，ControlPersist 30 天) → 本机 4 台 VM，以及 ssh 到工作站的 8 台 VM。Mac 不用再开着。
 
@@ -43,9 +43,14 @@
 
 **未完成：**
 1. 看 341689 的预演结果；通过后在本地把 `align-zixian` 合进 `cua-desktop`。
-2. 两个仓库推到 GitHub(本地 slime-cua 领先 35 个提交，cua-rl-gigpo 领先 20 个)，待用户同意。
+2. 两个仓库推到 GitHub(本地 slime-cua 领先 36 个提交，cua-rl-gigpo 领先 21 个)，待用户同意。
 3. 接力作业之间的排队空档(集群没开 ACCRUE_ALWAYS)：要不要用"提前交接"，待用户决定。
 4. 两台主机上的测试目录 `cua-rl-bridge-snap` 已不再需要，可以删。
+
+**代码整理(02:10)**：
+- slime-cua：删掉已合并的分支 `cua-desktop-speed`、`cua-desktop-response-logits`；去掉 `RESPONSE_ONLY_LOGITS` 开关(已验证不影响梯度)，同步到 Tillicum(`fb2a94e`)，341689 用的就是这一版。
+- cua-rl-gigpo：删掉已合并的 `vm-snapshot`；`check` 和 forward 的输出写的是实际运行位置，不再写死 "mac"；一次性的 eval 检查收进仓库，成为 `scripts/osworld_check.py`(参数：主机、题目文件、VM 数、每台题数、bridge 目录；会先检查主机上限，结果不符时以非 0 退出)。
+- 用 `osworld_check.py` 在 Windows 生产目录(`5e73a83`，已含固定等待)上跑 4 台 VM × 2 道题：**8/8 符合预期**。第一张截图都正常(127 KB–1.65 MB)，不再出现黑屏。第二道题 reset 73–76 s(载回快照 + 初始化 + 等 60 s)，第一道题 143–227 s(冷启动 + 存快照 + 排开机名额 + 等 60 s)。
 
 ## 提速做法总表(10-02 21:00 汇总，持续更新；每项的证据和讨论见下方 10-02 各节)
 
@@ -302,7 +307,7 @@ rollout 与训练重叠(用户 10-02 23:00 问"能不能并行")：做法是训�
 
 **正式训练已提交(10-03 01:50，用户确认 48×5)**：`grpo-r5-cuagym-v1`，4 个 24 h 作业接力 341861 → 341862 → 341863 → 341864(`afterany`)，2 节点 16 卡，`NUM_ROLLOUT=100`，`SLOTS=12`，`EVAL_INTERVAL=10`，其余用默认值(48 组 × 5、全局批 256、lr 1e-6、PPO 2 个 epoch、最多 50 步)。集群估价每个作业约 $346。提交时 Tillicum 上的代码是 `3d2c81d`，但作业开跑那一刻才读代码，开跑前可以换成最终版本。WSL 上的 follow 已改为依次跟 341689、341861–341864(pid 63965)。
 
-开跑前必须完成(01:46 核对：341861 的预计开始时间提前到 10-03 08:55)。02:40 的进度：eval-50 已在真实 VM 上测过(12/12)；快照和 `0b65229` 已部署到生产目录；`align-zixian` 已同步到 Tillicum，不再单独做 GPU 只训练测试，改由 341689 预演；只剩 341689 的结果。
+开跑前必须完成(01:46 核对：341861 的预计开始时间提前到 10-03 08:55)。02:00 的进度：eval-50 已在真实 VM 上测过(12/12)；快照和 `0b65229` 已部署到生产目录；`align-zixian` 已同步到 Tillicum，不再单独做 GPU 只训练测试，改由 341689 预演；只剩 341689 的结果。
 
 **eval-50 在真实 VM 上的检查(10-03 02:00，工作站测试目录，bridge `d56436d` = 快照 + `0b65229`)**：5 道"做不到"的题 + 7 道各应用的普通题，6 台 VM 各跑 2 道(第二道走"载回快照 + OSWorld 初始化")。做不到的题回答 FAIL 全部得 1，普通题回答 DONE 全部得 0，**12/12 符合预期，0 错误**；reset 21–121 s(含任务自己的初始化)。脚本在 scratchpad `evalcheck.py`(一次性检查)。
 - 疑点：3 道题(Chrome、VLC 冷启动后的第一道，以及一道 os 题)初始化后的截图只有 6.5–9 KB，正常桌面约 1.6 MB，基本是黑屏或纯色，说明应用还没画完就截图了。
