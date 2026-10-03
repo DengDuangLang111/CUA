@@ -66,9 +66,9 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && set -a && . 
 ## 4 三条铁律
 
 1. **并发上限:eval 链 3 个 VM**(22GB WSL 实测红线;改上限要 `wsl --shutdown`,会杀隧道、重过 Duo
-   ——只在两个 campaign 之间做)。明细 `CUA/docs/OPS.md` §5。**RL bridge 另算**:开 KSM 时
-   Windows 5 / 工作站 15(10-02 实测并经用户确认;KSM 随 WSL 重启失效,须由用户重开),
-   不开 KSM 时 4 / 10;两者不同时跑满。表在 `CUA/docs/RL_ENV_PLAN.md`(10-02 傍晚)。
+   ——只在两个 campaign 之间做)。明细 `CUA/docs/OPS.md` §5。**RL bridge 另算**:Windows 4 /
+   工作站 8(10-03 用户定;工作站受 20 线程 CPU 限制,12 台吞吐反而低;KSM 随 WSL 重启失效,
+   须由用户重开)。权威值在 `cua-rl-gigpo/envs/vm_hosts.json`,压测表在 `CUA/docs/RL_ENV_PLAN.md`。
 2. **别在 Mac 上分析轨迹/进度**:一律 ssh 现查,先 `pgrep -af run_multienv_qwen`
    看 runner 命令行(**result_dir 在哪个 model 目录下以这行为准,数结果别数错目录**)。
    命令模板 `CUA/docs/OPS.md` §3.1。
