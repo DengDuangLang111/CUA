@@ -153,7 +153,45 @@ rollout 与训练重叠(用户 10-02 23:00 问"能不能并行")：做法是训�
 - 评测：`eval/<数据集>` 平均分、成功数、中止数、排除中止后的成功率、轨迹级指标。
 - 这些大多改在她 fork 的 slime 核心里，我们用的 MSR slime 没有。
 
-**我们的方案**(10-02 22:40 实现，slime-cua `3677bba`，用户："直接加入，我要看"；22:42 起 341645 已在线上报 `https://wandb.ai/yanjiayuan/cua-rl-tests/runs/train-341645`；正式作业在项目 `cua-rl`，16 卡测试为 `cua-rl/runs/e2e-real-20261002`；同一账户也可从 `forge.coreweave.com/wandb/yanjiayuan/...` 打开)：启动脚本开 `--use-wandb`(项目 `cua-rl`，run 名和 id 都用 `EXP`，作业接力时接成一条曲线；认证用 Tillicum 上已有的 `~/.netrc` 登录；容器里有 wandb 0.27.0，计算节点能连通 api.wandb.ai)；`examples/cua_desktop/` 里加自定义日志函数(`--custom-rollout-log-function-path`，不改 slime 核心)，照搬她的轨迹级成功率、接受率、全同分组计数，口径一致(成功 = 部分分为 1；总成功率和排除无效后的成功率都记；按 rollout 轮次画)，另加按应用的成功率、作废原因分类、撤掉的 slot 数、每步准备/生成/环境耗时、题目进度(已用题数 / 2366)；训练中评测按她的做法(贪心、每题 1 次、每 10 轮)，用 `val_20261001.parquet` 的 24 道 dev 题；正式 OSWorld 评测结果另建评测项目。
+**我们的方案**(10-02 22:40 实现，slime-cua `3677bba`，用户："直接加入，我要看"；22:42 起 341645 已在线上报 `https://wandb.ai/yanjiayuan/cua-rl-tests/runs/train-341645`；正式作业在项目 `cua-rl`，16 卡测试为 `cua-rl/runs/e2e-real-20261002`；同一账户也可从 `forge.coreweave.com/wandb/yanjiayuan/...` 打开)：启动脚本开 `--use-wandb`(项目 `cua-rl`，run 名和 id 都用 `EXP`，作业接力时接成一条曲线；认证用 Tillicum 上已有的 `~/.netrc` 登录；容器里有 wandb 0.27.0，计算节点能连通 api.wandb.ai)；`examples/cua_desktop/` 里加自定义日志函数(`--custom-rollout-log-function-path`，不改 slime 核心)，照搬她的轨迹级成功率、接受率、全同分组计数，口径一致(成功 = 部分分为 1；总成功率和排除无效后的成功率都记；按 rollout 轮次画)，另加按应用的成功率、作废原因分类、撤掉的 slot 数、每步准备/生成/环境耗时、题目进度(已用题数 / 2366)；训练中评测(10-02 23:10 用户改定，`fd5612e`)：OSWorld-Verified eval-50(`osworld_eval50_20261002.parquet`)，标准 eval 配置(温度 1.0、top_p 0.95、top_k 20、每轮最多 81920 token)，动作后停顿 0.5 s，每题 1 次；`EVAL_INTERVAL=10` 时训练前先测一次，之后每 10 轮一次(slime 默认训练前评测，与她相同)。
+
+## 与 Zixian 基线的逐项对照(10-02 23:40)
+
+对照对象：Zixian = `openwebrl-cua` 的 `arm` 分支 e3bbd52。她的 `--profile reference` 由 `scripts/prepare_reference_baseline.py` 生成：reward、动态过滤、数据源三个文件取 9a12094；`rollout.py` 取 HEAD，并断言其中没有"作废轨迹不进归一化"的实验补丁；generate 取 9a12094，外加两处运行时防护。所以读 arm 等于读她的基线。我们 = slime-cua 3d2c81d。下表由子代理逐行比对，第 1、2 项我又对着源码核过一遍。
+
+**相同**：48 组 × 5；补采与 abort 逻辑；逐轨迹组内归一化公式((r − 均值)/(无偏 std + 1e-6))，每个 turn 取所在轨迹的值；被作废的 turn 照占 256 的名额，只是 loss_mask 为 0；loss 按 turn 内 token 平均，再除以 256；PPO 2 epoch；clip 0.2/0.28；KL 与熵系数均为 0；直接用 rollout 的 logprob；Adam lr 1e-6 恒定，β (0.9, 0.98)，wd 0.1，梯度裁剪 1.0；bf16 加 fp32 主权重；全量重算；seed 1234 / rollout_seed 42；每轮存 checkpoint；训练前评测一次。
+
+**有意不同**：模型(9B r5 vs 4B)；TP2 时 DP 4–8(loss 除以全局批，数学不变)；reward 用任务自带的 reward.py 给部分分，她用 GPT-4.1 判官给 {-1, 0, 1}；采样温度 1.0/0.95/20(她用 0.8/1.0/-1)；长度 32768/122880(她 1024/32768)；10 图折叠、历史 100(她 1 图)；最多 50 步(她 15 → 30)；评测集换成 OSWorld eval-50；VM 并发数属基础设施。
+
+**未对齐**(按对训练的影响排序)：
+
+| # | 项目 | Zixian | 我们 | 建议 |
+|---|---|---|---|---|
+| 1 | 训练步怎么切 | 每个(rollout, epoch)用固定种子(rollout_seed + id·1009 + epoch·9173)打乱，再切成 256 的整数倍；余下的样本随机，每个 epoch 不同(actor.py:219-248) | 按 rollout 顺序连续切 256 个 turn；末尾不够的丢掉，两个 epoch 丢的是同一批；第 2 个 epoch 按原顺序重放(dp_schedule.py:67-90，model.py:750-761) | **对齐**。轨迹最长 50 轮，一步的 256 个 turn 只来自少数几组题，每步梯度只代表这几道题；她的每步混了全部约 240 条轨迹。最小改法：在 `build_dp_schedule` 里按她的种子公式打乱组顺序再切；按 epoch 重洗需要每个 epoch 重建调度(model.py 的 epoch 循环)。属 slime 核心改动 |
+| 2 | 被作废的轨迹在组统计和过滤里 | 判官超时等被作废的轨迹 reward 仍是 0.0，过滤器和组均值/std 都把它算进去(rollout.py:783-817，filter 9a12094) | 不算(reward_post_process.py:25-34，filters.py:18-32) | **需用户决定**。她那边作废的只有判官超时和环境出错，很少；我们作废的多是 VM/环境故障，算成 0 会让同组其他轨迹的优势值随基础设施故障波动。她自己工作区里有一个与我们做法相同的实验补丁(`invalid_ids`)，但基线不用。另：启动脚本开头注释说"排除作废轨迹 = OpenWebRL 基线"，这句是错的，要改 |
+| 3 | 回复超长截断、上下文溢出 | 当作失败，reward 0，照常训练(generate_browser.py 1797-1991，reward_browser.py 的 `status != COMPLETED → 0`) | 作废，不训练(generate_desktop.py:98-101、123-126) | **对齐**。这两种是模型自己的行为(想得太长、走太多步)，应当得到 0 分信号；VM/环境/基础设施故障仍作废 |
+| 4 | 连续 3 次输出无法解析；到步数上限仍没 done() | 前者 reward −1(她唯一的 −1 来源)，后者判官不跑、reward 0 | 前者由 OSWorld 的 Qwen agent 转成 DONE/FAIL，按终态打分；后者照常按终态给部分分 | **建议保持**：我们沿用 OSWorld 评测协议，训练和报分的口径一致 |
+| 5 | `--response-only-logits` | 全部位置都算 logits | 只算回复位置 | 数学上等价。step 0 的梯度范数：新代码开 72–74，关 73.9，说明这个开关不影响。旧代码 130.6 与新代码的差距来自别处，旧代码对照 341727 在排队 |
+| 6 | 时间上限 | 单条轨迹 600 s、单步 30 s，超时作废 | 无 | 不对齐：桌面任务一步就要几秒，套用会大量作废 |
+
+## VM 并发数实测：工作站 8 台比 12 台快(10-02 23:30)
+
+方法：`vm_capacity.py --soak-min 20`，每台 VM 按 rollout 的节奏驱动(每步思考 5 s，每回合 20 步，结束后 reset)，工作站开 KSM，各跑 20 分钟。
+
+| 工作站 VM 数 | 20 分钟完成回合 | 完成步数 | 单步延迟 p50 / p99 / 最大 | reset 中位 / 最大 | 负载峰值 | 最低可用内存 |
+|---|---|---|---|---|---|---|
+| 12 | 25 | 553 | 4.0 / 22.7 / 34.7 s | 228 / 635 s | 43.5 | 10.9 GiB |
+| 8 | **38** | **798** | 2.7 / 7.1 / 8.9 s | **75 / 149 s** | 25.6 | 22.0 GiB |
+
+结论：12 台时 CPU 已饱和(20 线程，负载 43)，主要卡在 reset(冷启动一台 VM 要 3.3–3.5 核)，8 台的吞吐反而多 52%。两次都没有失败。工作站上限应设 8(9–10 台未测)。根本修法是不再冷启动，见下一节。
+
+## reset 改用内存快照(进行中，10-02 23:40)
+
+做法：每台 VM 第一次开机就绪后存一次"开机完成"快照(内存 + 系统盘)，之后每次 reset 直接载回快照，跳过冷启动；载回后校准时钟、重置随机数种子，失败就退回冷启动。官方 OSWorld 在 VMware 上也是每题载回快照。
+
+原型(Windows WSL，`/tmp/snapproto.py`)遇到的两个阻碍：
+1. 镜像的启动脚本(`/run/proc.sh`)给 CPU 加了 `migratable=no,+invtsc`，QEMU 拒绝保存内存状态("State blocked by non-migratable CPU device (invtsc flag)")。修法：容器环境变量 `CPU_MODEL=host`(于是不加 `migratable=no`)、`CPU_FLAGS=-invtsc`。已验证生效，qemu 命令行为 `-cpu host,kvm=on,l3-cache=on,+hypervisor,+invtsc,-invtsc`，减号优先。
+2. 固件以 `-pflash /storage/uefi.rom` 挂载，是可写的 raw 盘，监视器的 `savevm` 拒绝保存("Device 'pflash0' is writable but does not support snapshots")。修法：用 `ARGUMENTS` 另开一个 QMP 口，改用 QMP 的 `snapshot-save` / `snapshot-load`，只对系统盘(`ide0-hd0`)做快照，跳过固件盘。VM 本身不变；运行中的 UEFI 变量基本不变。
 
 ## 2026-10-02：改走 Zixian 的 OpenWebRL 框架做 CUA 适配(用户确认)
 
