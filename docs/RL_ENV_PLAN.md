@@ -159,7 +159,7 @@ KSM 运行时设置，WSL 重启即失效，需重新执行；开启须 root，�
 | A4 | `arguments.py`、`data.py`、`model.py`(核心) | 新参数 `--custom-multimodal-train-inputs-path`：可选函数，按微批次构建模型的图像输入 | F4 需要"样本里存紧凑形式、训练时还原" | 默认关闭，不设就和原来完全一样 | 参数解析通过 |
 | A5 | `screenshots.py`(新)、`generate_desktop.py`(插件) | 每条轨迹每张截图只存一份 uint8，各 turn 引用同一对象；训练时在 GPU 上还原 pixel_values | 原来一轮 rollout 约 1945 GB，超过节点内存 | 主机内存 1945 GB → 约 30 GB。还原结果与处理器输出**逐位相同**，数值不变 | 真实截图测试：去重、逐位还原、两样本微批次、pickle 体积(23.9 vs 430 MiB)，篡改一个像素能检出 |
 | A6 | `generate_desktop.py`(插件) | turn 样本不再挂 `multimodal_inputs`(10 张 PIL 图) | 每轮重新解码，约 260 GB，自定义 generate 用不到 | 只省内存，不影响任何计算 | slime 里没有其他使用方(已 grep) |
-| A7 | `generate_desktop.py`(插件) | 坏轨迹返回 **1 个**掩码占位样本(1 个 token，reward 0.0，remove_sample)，而不是返回它的每一轮 | reward 为 None 会让训练侧崩溃；空 token 的兜底样本也会崩 | 坏轨迹本来就不进组统计、loss 也被掩码。**与 Zixian 基线的差异**：她那边坏轨迹的各轮仍以掩码样本占用 256 的全局批名额，相当于把该步梯度按坏 turn 占比缩小；我们这边不占名额。坏轨迹少时两者等价 | 审查追踪了占位样本的全路径：形状、空张量、分母 `clamp_min(1)`、组大小断言都没问题 |
+| A7 | `generate_desktop.py`(插件) | 坏轨迹的 reward 设为 0.0；每一轮都以掩码样本返回(`8ce679f`，**与 OpenWebRL 一致**：照常占用 256 的全局批名额，该步梯度按坏 turn 占比缩小)；一轮都没跑出来时(例如 reset 失败)，返回 1 个带 1 个 token 的掩码占位样本 | reward 为 None 会让训练侧崩溃；空 token 的兜底样本也会崩 | 坏轨迹不进组统计、loss 被掩码。用户 10-02 定：坏轨迹计数与基线一致(`c1ce929` 及之前的版本曾只返回 1 个占位样本，冒烟 341265 跑的是那一版) | 审查追踪了占位样本的全路径：形状、空张量、分母 `clamp_min(1)`、组大小断言都没问题 |
 | A8 | `generate_desktop.py`(插件) | 每次发生成请求前检查 `state.aborted`；reset 前也检查 | `abort()` 会等所有在途轨迹；`abort_all` 只停正在跑的请求 | 只缩短 rollout 墙钟时间。被 abort 的数据本来就会丢掉，数值不变 | 读 `sglang_rollout.py` 的 abort 流程 |
 | A9 | `generate_desktop.py`(插件) | 单条轨迹的异常只断这一条(带 traceback 记日志)；我们自己写的断言(token 对齐、截图压缩)直接抛出、让 run 崩；连续 2×VM 数条轨迹都因异常失败也让 run 崩；每条坏轨迹打一行日志(原因、跑了几轮) | 原来任何异常都会杀掉整个 run；但全部吞掉的话，系统性错误会让 rollout 永远凑不满组、空转 | 只影响出错时的行为 | 代码路径核对 |
 | A10 | `generate_desktop.py`(插件) | 每轮 `max_new_tokens = min(32768, 上限 − prompt 长度)` | 原来 prompt + 回复最长可达约 155k，超过 12 万上限 | 只影响贴近上限的轮：生成被截断 → 标为 `generation_length` → 整条轨迹排除(与 context_limit 规则一致) | — |
@@ -173,11 +173,11 @@ KSM 运行时设置，WSL 重启即失效，需重新执行；开启须 root，�
 | B1 | `worker_bridge.py`：setup 后的固定 8 s 等待改成"截图稳定即继续"。setup 前拍基线，画面相对基线有变化之后，连续两个 1 s 间隔不变即返回；一直不变就等满 8 s。变化判据为全分辨率下灰度变化超过 16 级的像素超过 200 个；`CUAGYM_SETUP_WAIT=fixed` 可恢复原行为 | 每次 reset 约 34 s，其中 8 s 是固定等待 | 只影响 RL 的 reset 时长，不影响 eval。起始画面要求与固定 8 s 一致 | 旧版判据(无基线、缩略图)在工作站 10 道 dev 题(4 种应用即训练集全部应用)上：等待 4.5 s，返回 8 s 后再截图画面变化为 0(对比度 50–65，非空白帧)；reset 中位 34.5 → 30.5 s。新版判据单元检查：光标闪烁不算变化，100×50 小对话框能检出。新版尚未上 VM 实测 |
 | B2 | `scripts/reset_settle_check.py`(新) | 测量上面这件事：两种模式、按应用取题、返回后再截图、对比度对照、核对远端 md5、坏 VM 记为失败、计时逐次配对 | — | 只读测量工具 | 已在工作站跑 3 次 |
 
-**C. 待你决定**
-1. B1 测完新版后是否推到两台主机(会改变所有后续 RL 的 reset 行为)。
-2. GPU0 多出的 27 GB：换 slow 处理器能消除，代价是每个 10 图请求多约 1 s。
-3. 长上下文显存：看 341265 的结果；不够的话考虑"只对回复位置算 logits"(要改 slime 核心 loss)。
-4. A7 与 Zixian 基线在坏轨迹计数上的差异：保持现状(更准确)，还是改回占名额(与基线一致)。
+**C. 用户决定(10-02)**
+1. B1 采用：新版判据在 VM 上测过后推到两台主机。
+2. GPU0 多出的 27 GB：**不换** slow 处理器。
+3. A7 改回与基线一致(`8ce679f`)。
+4. 长上下文显存：先看 341265(样本 ≤ 约 40k)。约 115k 的最长样本冒烟覆盖不到，要用它保存的 rollout 构造长样本只跑训练实测。估算普通卡约 105–110 GB / 140 GB；GPU0 少 27 GB，很可能 OOM。不够的话，做"只对回复位置算 logits"(改 slime 核心 loss；prompt 部分的 logits 用不上，却占序列的 99%)。
 
 ## 2026-10-01：Zixian(OpenWebRL)的 RL 算法与结果，和 Arijit GiGPO 的对比
 
