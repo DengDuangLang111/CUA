@@ -145,6 +145,40 @@ KSM 运行时设置，WSL 重启即失效，需重新执行；开启须 root，�
 
 验证：CPU 测试(截图还原、reward 后处理、VM 租约)全部通过；启动参数解析确认 CP=1、钩子生效、视觉塔 recompute=full。8 卡冒烟 **341265**：按轮分组，假 bridge 轮换 82 张真实截图并按 3% 概率注入 step 失败，保存 rollout 供只训练复跑。
 
+### 10-02 夜：改动清单(改什么 / 为什么 / 影响什么 / 验证到哪)
+
+"核心"指 slime 框架本身的文件，会影响用这份 slime 的所有示例；"插件"只影响 `examples/cua_desktop/`；"VM 侧"指两台主机上运行的 bridge。数值是否变化，指同一批数据算出的梯度是否不同。
+
+**A. slime-cua，已在 Tillicum 主目录(`c1ce929`)，冒烟 341265 用的就是这版**
+
+| # | 文件(范围) | 改什么 | 为什么 | 影响 | 验证 |
+|---|---|---|---|---|---|
+| A1 | `model_provider.py`(核心) | bridge 模式把 recompute_granularity/method/num_layers/modules 传给 provider；`cp_comm_type` 的单元素列表按 Megatron 非 bridge 路径的做法解包成字符串 | 之前被静默丢弃，LM 和视觉塔都不做重算 → OOM | 只影响 `--megatron-to-hf-mode bridge` 的运行(包括 Zixian 那种用法)。显存大降，前向多算约 1/3(重算)。数学上不变 | 在 slime 真实构建路径上读回配置：LM 和视觉塔都是 full/uniform/1 |
+| A2 | `actor.py`、`data.py`(核心) | 多模态输入不再在训练开始前整轮上 GPU；`get_batch` 每个微批次单独转换、搬运 | 整轮 pixel_values 一直占着 GPU | 所有多模态示例都受影响：GPU 显存降；numpy 数组留在 Ray 对象存储里(同节点进程共享，不再每个进程各拷一份)；每个微批次多一次约 0.5 GB 的主机→GPU 拷贝(毫秒级)。数值不变 | 代码路径核对 + 审查追踪 |
+| A3 | `actor.py`(核心) | bshd 下每个微批次 pad 到**本微批次**最长，不再 pad 到整轮最长 | 平均 19.9k 被 pad 到约 40k | 只影响 `--qkv-format bshd`。补的 token 在序列末尾，注意力和 GDN 都是因果的，loss 掩码为 0，所以数值不变；算力和 logits 显存约减半 | 审查逐个核对了 `max_seq_lens` 的所有使用方(训练、logprob、loss、CP 分支)：都只要求同一微批次内一致 |
+| A4 | `arguments.py`、`data.py`、`model.py`(核心) | 新参数 `--custom-multimodal-train-inputs-path`：可选函数，按微批次构建模型的图像输入 | F4 需要"样本里存紧凑形式、训练时还原" | 默认关闭，不设就和原来完全一样 | 参数解析通过 |
+| A5 | `screenshots.py`(新)、`generate_desktop.py`(插件) | 每条轨迹每张截图只存一份 uint8，各 turn 引用同一对象；训练时在 GPU 上还原 pixel_values | 原来一轮 rollout 约 1945 GB，超过节点内存 | 主机内存 1945 GB → 约 30 GB。还原结果与处理器输出**逐位相同**，数值不变 | 真实截图测试：去重、逐位还原、两样本微批次、pickle 体积(23.9 vs 430 MiB)，篡改一个像素能检出 |
+| A6 | `generate_desktop.py`(插件) | turn 样本不再挂 `multimodal_inputs`(10 张 PIL 图) | 每轮重新解码，约 260 GB，自定义 generate 用不到 | 只省内存，不影响任何计算 | slime 里没有其他使用方(已 grep) |
+| A7 | `generate_desktop.py`(插件) | 坏轨迹返回 **1 个**掩码占位样本(1 个 token，reward 0.0，remove_sample)，而不是返回它的每一轮 | reward 为 None 会让训练侧崩溃；空 token 的兜底样本也会崩 | 坏轨迹本来就不进组统计、loss 也被掩码。**与 Zixian 基线的差异**：她那边坏轨迹的各轮仍以掩码样本占用 256 的全局批名额，相当于把该步梯度按坏 turn 占比缩小；我们这边不占名额。坏轨迹少时两者等价 | 审查追踪了占位样本的全路径：形状、空张量、分母 `clamp_min(1)`、组大小断言都没问题 |
+| A8 | `generate_desktop.py`(插件) | 每次发生成请求前检查 `state.aborted`；reset 前也检查 | `abort()` 会等所有在途轨迹；`abort_all` 只停正在跑的请求 | 只缩短 rollout 墙钟时间。被 abort 的数据本来就会丢掉，数值不变 | 读 `sglang_rollout.py` 的 abort 流程 |
+| A9 | `generate_desktop.py`(插件) | 单条轨迹的异常只断这一条(带 traceback 记日志)；我们自己写的断言(token 对齐、截图压缩)直接抛出、让 run 崩；连续 2×VM 数条轨迹都因异常失败也让 run 崩；每条坏轨迹打一行日志(原因、跑了几轮) | 原来任何异常都会杀掉整个 run；但全部吞掉的话，系统性错误会让 rollout 永远凑不满组、空转 | 只影响出错时的行为 | 代码路径核对 |
+| A10 | `generate_desktop.py`(插件) | 每轮 `max_new_tokens = min(32768, 上限 − prompt 长度)` | 原来 prompt + 回复最长可达约 155k，超过 12 万上限 | 只影响贴近上限的轮：生成被截断 → 标为 `generation_length` → 整条轨迹排除(与 context_limit 规则一致) | — |
+| A11 | `run_cua_desktop.sh` | CP 固定 1；加 A4 的钩子参数 | bridge Qwen3.5-VL 不支持 CP>1 | 无 CP 可用，长样本显存只能靠 A1/A3(以及以后可能的"只算回复 logits") | 读模型源码 |
+| A12 | `tests/`(仅测试) | 假 bridge 轮换真实截图、按概率注入 step 失败(默认 0.01/步)；冒烟保存 rollout | 原冒烟覆盖不到坏轨迹和去重路径 | 不影响训练代码 | 失败注入后 relay 会重连，冒烟不会卡住(读 relay 代码) |
+
+**B. VM 侧(cua-rl-gigpo)，未提交、未部署，生产 bridge 未动**
+
+| # | 改什么 | 为什么 | 影响 | 验证 |
+|---|---|---|---|---|
+| B1 | `worker_bridge.py`：setup 后的固定 8 s 等待改成"截图稳定即继续"。setup 前拍基线，画面相对基线有变化之后，连续两个 1 s 间隔不变即返回；一直不变就等满 8 s。变化判据为全分辨率下灰度变化超过 16 级的像素超过 200 个；`CUAGYM_SETUP_WAIT=fixed` 可恢复原行为 | 每次 reset 约 34 s，其中 8 s 是固定等待 | 只影响 RL 的 reset 时长，不影响 eval。起始画面要求与固定 8 s 一致 | 旧版判据(无基线、缩略图)在工作站 10 道 dev 题(4 种应用即训练集全部应用)上：等待 4.5 s，返回 8 s 后再截图画面变化为 0(对比度 50–65，非空白帧)；reset 中位 34.5 → 30.5 s。新版判据单元检查：光标闪烁不算变化，100×50 小对话框能检出。新版尚未上 VM 实测 |
+| B2 | `scripts/reset_settle_check.py`(新) | 测量上面这件事：两种模式、按应用取题、返回后再截图、对比度对照、核对远端 md5、坏 VM 记为失败、计时逐次配对 | — | 只读测量工具 | 已在工作站跑 3 次 |
+
+**C. 待你决定**
+1. B1 测完新版后是否推到两台主机(会改变所有后续 RL 的 reset 行为)。
+2. GPU0 多出的 27 GB：换 slow 处理器能消除，代价是每个 10 图请求多约 1 s。
+3. 长上下文显存：看 341265 的结果；不够的话考虑"只对回复位置算 logits"(要改 slime 核心 loss)。
+4. A7 与 Zixian 基线在坏轨迹计数上的差异：保持现状(更准确)，还是改回占名额(与基线一致)。
+
 ## 2026-10-01：Zixian(OpenWebRL)的 RL 算法与结果，和 Arijit GiGPO 的对比
 
 依据：`zixianma/OpenWebRL` 的 `arm` 分支 `openwebrl/docs/ARM_SUMMARY.md`(10-01 06:54 版本 `2ed62d1`；main 仍停在 `9da6dc1`)。
