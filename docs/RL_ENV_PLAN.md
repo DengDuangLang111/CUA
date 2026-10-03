@@ -179,6 +179,23 @@ KSM 运行时设置，WSL 重启即失效，需重新执行；开启须 root，�
 3. A7 改回与基线一致(`8ce679f`)。
 4. 长上下文显存：先看 341265(样本 ≤ 约 40k)。约 115k 的最长样本冒烟覆盖不到，要用它保存的 rollout 构造长样本只跑训练实测。估算普通卡约 105–110 GB / 140 GB；GPU0 少 27 GB，很可能 OOM。不够的话，做"只对回复位置算 logits"(改 slime 核心 loss；prompt 部分的 logits 用不上，却占序列的 99%)。
 
+### 10-02 夜：速度问题清单(先记录；修复原则：不改变训练结果)
+
+冒烟 **341265**(17:34 起，g003，`c1ce929`)：rollout 正常；训练**不再 OOM**；第一批指标正常(step0 `ppo_kl` 0.0041、`pg_clipfrac` 0.7%、`grad_norm` 131 → 裁剪到 1.0)。保存的 rollout 为 1.88 GB / 152 个样本(按原来的 fp32 存法约 60 GB)。
+
+| # | 环节 | 现象与证据 | 影响估计 | 状态 |
+|---|---|---|---|---|
+| S1 | **训练前向/反向** | 每个微批次约 **30 s**(样本平均约 2.1 万 token)；采样时 8 张 GPU 利用率 0–5%，偶尔冲到 100%；8 个训练进程各占满一个 CPU 核，最忙的是主线程(前向)和 `pt_autograd_0`(反向，含重算)。上一次 341159(本轮改动之前)第一个微批次跑了 47.7 s 还没完成，所以慢不是本轮改动引起的 | 正式规模每轮约 5188 个 turn × 2 epoch ÷ DP2 ≈ 每卡 5188 个微批次，×30 s ≈ **每轮 43 小时**，必须先解决。合理值约 1–2 s/微批次 | **原因未明**。已排除：FLA 的 GDN 内核走 Triton，调优键不含序列长度、长度也不是编译常量；slime 的 3 处 torch.compile 都是 `dynamic=True`。日志里能看到 Dynamo 在追踪 TransformerEngine 的算子。py-spy 被节点的 ptrace 限制挡住，下一步用 slime 自带的 PyTorch profiler 跑**只训练**的作业(`--load-debug-rollout-data` 读 341265 的 rollout_0.pt)，不需要 SGLang 和 VM |
+| S2 | 训练期间的 SGLang | 显存释放后，8 个 SGLang 进程在训练期间仍各占 100% CPU(每个已累计约 18 分钟) | 占 8 个核；是否拖慢 S1 待剖析确认 | 未处理 |
+| S3 | **rollout 路由** | 8 个引擎中，pid 18141 接了 114/137 个生成请求，其余 7 个合计 23 个。原因：路由器默认按前缀缓存分配，所有请求系统前缀相同；slime 设的再平衡阈值是"差 10 个请求"，而同时在跑的最多 10 个 | 一张卡同时跑 7–10 个请求，所有 prompt 的预填充在同一张卡上排队，7 张卡闲置 | 已改：每条轨迹固定一个引擎，新轨迹分给负载最小的(`--router-policy manual --router-assignment-mode min_load` + 请求头带轨迹号；slime-cua `eb609da`)。不影响结果(各引擎权重相同)。待下次冒烟验证 |
+| S4 | VM reset | 还原(删容器、重新开机)22–23 s 是大头；setup 后固定等 8 s | 每次约 34 s | 等待已改为"截图稳定"(−3 s，cua-rl-gigpo `f5a15de`，已部署)；"内存快照恢复"待试 |
+| S5 | 长上下文的 logits | slime 对整段 `[T, V]` 计算 fp32 logits 和 logprob，而 prompt 约占 99% | 显存(122k 时约 61 GB)外加约 10% 算力 | 待做："只对回复位置算 logits"(数值不变) |
+| S6 | checkpoint | `--save-interval 1`，每轮存一份含优化器状态的完整 checkpoint，约 125 GB；slime 不清理旧的 | 每轮多一次长时间写盘；几十轮就是 TB 级 | 需定存盘策略(多少轮存一次、留几份) |
+| S7 | 冒烟本身 | 全局批 8 → 每卡每 4 个微批次就做一次 CPU 上的 Adam | 只影响冒烟的耗时(正式为 256) | 无需处理 |
+| S8 | rollout 尾部 | abort 之后，在途轨迹会把整个 episode 跑完 | 每轮白跑最多一整个 episode | 已修(`c1ce929`) |
+
+当前冒烟按 30 s/微批次算，训练要约 85 分钟，会在 1.5 小时的时限内超时，第二轮 rollout 跑不到。它要验证的(不 OOM、坏轨迹路径、首批指标)都已拿到。
+
 ## 2026-10-01：Zixian(OpenWebRL)的 RL 算法与结果，和 Arijit GiGPO 的对比
 
 依据：`zixianma/OpenWebRL` 的 `arm` 分支 `openwebrl/docs/ARM_SUMMARY.md`(10-01 06:54 版本 `2ed62d1`；main 仍停在 `9da6dc1`)。
