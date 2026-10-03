@@ -68,7 +68,7 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && set -a && . 
 1. **并发上限:eval 链 3 个 VM**(22GB WSL 实测红线;改上限要 `wsl --shutdown`,会杀隧道、重过 Duo
    ——只在两个 campaign 之间做)。明细 `CUA/docs/OPS.md` §5。**RL bridge 另算**:Windows 4 /
    工作站 8(10-03 用户定;工作站受 20 线程 CPU 限制,12 台吞吐反而低;KSM 随 WSL 重启失效,
-   须由用户重开)。权威值在 `cua-rl-gigpo/envs/vm_hosts.json`,压测表在 `CUA/docs/RL_ENV_PLAN.md`。
+   须由用户重开)。权威值在 `slime-cua/examples/cua_desktop/vm/vm_hosts.json`,压测表在 `CUA/docs/RL_ENV_PLAN.md`。
 2. **别在 Mac 上分析轨迹/进度**:一律 ssh 现查,先 `pgrep -af run_multienv_qwen`
    看 runner 命令行(**result_dir 在哪个 model 目录下以这行为准,数结果别数错目录**)。
    命令模板 `CUA/docs/OPS.md` §3.1。
@@ -98,7 +98,7 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && set -a && . 
 | Dashboard/Vercel 契约 | `CUA/dashboard/README.md` |
 | 论文与创新点 | `CUA/docs/READING.md` |
 | 候选实验/改进方向的评估与排队 | `CUA/docs/IDEAS.md` |
-| **RL(GRPO)实验设计 / 环境与进度** | `CUA/docs/RL_EXPERIMENT_DESIGN.md` · `CUA/docs/RL_ENV_PLAN.md`;代码与证据 `cua-rl-local/`(本地 git,新工作在分支上);GiGPO 训练框架 `cua-rl-gigpo/`(私有 GitHub `DengDuangLang111/cua-rl-gigpo`,改动在 `native-docker` 分支) |
+| **RL(GRPO)实验设计 / 环境与进度** | `CUA/docs/RL_EXPERIMENT_DESIGN.md` · `CUA/docs/RL_ENV_PLAN.md`(开头"现状"块是入口);**代码全在私有仓库 `DengDuangLang111/slime-cua`**(本地 `slime-cua/`):`examples/cua_desktop/` 是训练端插件,`examples/cua_desktop/vm/` 是 VM 主机和 relay 站的代码,说明见该目录 `README.md`(含合进 OpenWebRL 的清单)。`cua-rl-gigpo/` 是 Arijit GiGPO 框架的存档,不再改;`cua-rl-local/` 是更早的单卡链路 |
 | ostg 分支史 / main 是谁 | `CUA/outdated/docs/TASKGEN_GIT_HISTORY_20260815.md` |
 | 官方 361/V2 任务运行条件(冻结参考) | `CUA/reference/OSWORLD_VERIFIED_RUNTIME_REQUIREMENTS.md` · `..._V2_...` |
 | 历史方案(v7 计划/配对组/旧状态页;v12–v15 datagen 方案在 `plans/`) | `CUA/outdated/` · `CUA/outdated/plans/` |
