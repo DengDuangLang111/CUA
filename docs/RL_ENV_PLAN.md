@@ -252,7 +252,8 @@ rollout 与训练重叠(用户 10-02 23:00 问"能不能并行")：做法是训�
 - WSL 上的独立目录 `~/cua-rl-station`(scripts/vmhosts.py、scripts/bridge_relay.py、envs/vm_hosts.json，md5 已核对)；`~/.ssh/config` 加了 `tillicum2`(主连接 socket 在 `~/.ssh/cm`，ControlPersist 30d，原配置备份为 `config.bak-20261003`)。
 - 从 WSL 跑 `check` 已通过：Windows 本机、工作站直连，工作站上限 8。
 - 还差两步：用户在 WSL 里登录一次 Tillicum(密码 + Duo)；之后从 GPFS 拷 bridge token 到 WSL 的 `~/.cua-rl/relay/`。
-- 341689 仍由 Mac 带。正式接力作业改由 WSL 上的 follow 带。快照让 reset 快一倍，内存和 CPU 与冷启动相同。12 台不行，原因是 CPU 和内存，不是 reset。
+- 01:00 用户在 WSL 登录(主连接 pid 63714，关终端后仍在)；bridge token 已拷到 WSL(md5 与 GPFS、Mac 一致，权限 600)。
+- 01:42 341689 的预计开始时间推迟到 05:52，Mac 撑不到它结束，所以 follow 改到 WSL(`CUA_RELAY_STATION=win`，pid 63905，用 setsid 启动，换一个 ssh 会话后仍在)，Mac 上的 follow 和 relay 都已停掉。341689 就是 WSL relay 的第一次实战。快照让 reset 快一倍，内存和 CPU 与冷启动相同。12 台不行，原因是 CPU 和内存，不是 reset。
 
 还没验证：OSWorld 任务那条路径(评测用)；连续几小时的稳定性。
 
