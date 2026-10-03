@@ -47,6 +47,43 @@
 3. 接力作业之间的排队空档(集群没开 ACCRUE_ALWAYS)：要不要用"提前交接"，待用户决定。
 4. 两台主机上的测试目录 `cua-rl-bridge-snap` 已不再需要，可以删。
 
+**版本追溯(10-03 02:30 整理；以后每个测试都按这个格式补一行)**
+
+VM 主机上的环境(两台共用；bridge 用的是 `host.env` 里 `HARNESS` 指向的那份)：
+
+| 主机 | harness 目录 | 提交 | 未提交改动(`git diff HEAD` 的 md5 前 12 位) | 未跟踪文件 | VM 磁盘镜像 | docker 镜像 |
+|---|---|---|---|---|---|---|
+| Windows | `/mnt/d/research/OSWorld`(也是 cua-eval 跑 Verified 评测用的那份) | `3df1ef4` = 官方 `091f5ef` + 2 个本地 AWS 提交 | `837d312b6af8`，16 个文件 | 22 | `Ubuntu.qcow2` 24,460,197,888 B(07-31) | `0e6497a92956` |
+| 工作站 | `/home/yanji/research/OSWorld` | `3df1ef4` | `01e84f1963c9`，17 个文件 | 8 | 同样大小(09-05) | `0e6497a92956` |
+
+两台的差别：工作站多改了 docker provider(内存和核数可以用环境变量 `OSWORLD_VM_RAM_SIZE` / `OSWORLD_VM_CPU_CORES` 设置，默认值同为 4G/4，bridge 不设这两个变量，所以效果相同)；`controllers/python.py` 校验截图的方式不同(Windows 只看 PNG/JPEG 文件头，工作站会把图完整解码，不完整的帧会被拒收)。其余改动的文件(`desktop_env.py`、`setup.py`、`lib_run_single.py` 等)两台的 md5 一致。
+
+GPU 测试(代码版本取自作业日志里的 `code` 行)：
+
+| 作业 | 用途 | 训练代码 | 结果 |
+|---|---|---|---|
+| 341265 | 8 卡冒烟(边采边训) | slime-cua `c1ce929` | step 0 梯度范数 130.6；CANCELLED |
+| 341631 / 341632 | 只训练重放 / 冒烟，去掉通信重叠之后 | `3b5155f` | 都 COMPLETED |
+| 341645 / 341646 | 只训练重放(wandb 接入) | `3677bba` | step 0 梯度范数 72.4；COMPLETED |
+| 341716 | 多节点环境变量下发检查 | 测试目录 `slime-cua-test` | COMPLETED |
+| 341717 | 只训练重放，`RESPONSE_ONLY_LOGITS=0` | `3d2c81d` | step 0 梯度范数 73.9；最终 FAILED(原因未查) |
+| 341727 | 只训练重放，旧代码对照 | `c1ce929`(测试目录) | step 0 梯度范数 73.4；COMPLETED |
+| 341689 | 16 卡真实 VM 预演 | `align-zixian` `fb2a94e`(待开跑) | — |
+| 341861–341864 | 正式训练 | 开跑时 Tillicum 运行目录的版本(作业日志会记录) | — |
+
+VM 测试(主机环境见上表)：
+
+| 时间 | 测试 | bridge 版本 | 结果 |
+|---|---|---|---|
+| 10-02 23:00 | 工作站 12 台冷启动压测 20 min | cua-rl-gigpo `06886ee`(当时的生产目录) | 25 个回合，reset 中位 228 s |
+| 10-02 23:06 | 工作站 8 台冷启动压测 20 min | `06886ee` | 38 个回合，reset 中位 75 s |
+| 10-02 23:31 | Windows 内存快照原型 v3 | 一次性脚本 `/tmp/snapproto.py`(md5 `b4800313…`) | 存快照 12.8 s，载回 10.8 s |
+| 10-02 23:52 | 工作站 12 台 + 快照 | `d56436d`(测试目录 `cua-rl-bridge-snap`) | 第 9 分钟被 swap 阈值切断 |
+| 10-03 00:03 | 工作站 8 台 + 快照 20 min | `d56436d`(测试目录) | 43 个回合，reset 中位 37 s |
+| 10-03 00:25 | 工作站 12 台 + 快照，swap 阈值 2 GiB | `d56436d`(测试目录) | 第 16.8 分钟被切断 |
+| 10-03 01:53 | 工作站 eval-50 检查，12 道题 | `d56436d`(测试目录) | 12/12 |
+| 10-03 02:05 | Windows eval-50 检查 `osworld_check.py`，8 道题 | `5e73a83`(生产目录) | 8/8，第一张截图正常 |
+
 **代码整理(02:10)**：
 - slime-cua：删掉已合并的分支 `cua-desktop-speed`、`cua-desktop-response-logits`；去掉 `RESPONSE_ONLY_LOGITS` 开关(已验证不影响梯度)，同步到 Tillicum(`fb2a94e`)，341689 用的就是这一版。
 - cua-rl-gigpo：删掉已合并的 `vm-snapshot`；`check` 和 forward 的输出写的是实际运行位置，不再写死 "mac"；一次性的 eval 检查收进仓库，成为 `scripts/osworld_check.py`(参数：主机、题目文件、VM 数、每台题数、bridge 目录；会先检查主机上限，结果不符时以非 0 退出)。
