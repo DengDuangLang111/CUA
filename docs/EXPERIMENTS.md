@@ -1,5 +1,11 @@
 # Synthetic task generation for OSWorld — design, experiments, results
 
+## RL(GRPO)正式训练 `grpo-r5-cuagym-v1`(2026-10-03 02:40 PDT 提交)
+
+- 9B r5 在 CUA-Gym 2366 道桌面题上做 GRPO，算法与 Zixian 的 OpenWebRL 基线对齐。作业 341861 → 341864(4 × 24 h 接力，2 节点 16 卡)，341861 预计 10-03 08:55 开始；预演 341689 预计 05:52 开始。
+- VM：工作站 8 台 + Windows 4 台，reset 用内存快照；relay 已从 Mac 挪到 Windows WSL，**Mac 不必开着**。训练期间两台主机被 RL 占用，**不要跑 eval 链**。
+- 每轮约 2.8 h，过一遍训练集约 71 h 计算；eval-50 每 10 轮一次。配置、代码版本、常用操作、未完成事项：`docs/RL_ENV_PLAN.md` 开头"现状"。
+
 ## OSWorld2 teacher 剩余91题续跑，仅workstation（2026-09-30 00:27 PDT启动）
 
 - **10-02 04:25 PT 改为每台VM独占一个teacher（用户定）**：A40 TP2实测TPOT约0.155s（~6.4 tok/s），长上下文因采集要求关闭prefix cache每步全量prefill（063第81步16万输入仅158输出耗时166s）；attention采集本身仅占每步1–2%。063两次attempt均exit 124（8小时task_timeout）failed。Qwen3.8-27B头数（KV 4、linear K 16）不允许TP6。用户选"能拿到的A100优先、其余A40双卡"：新hold krishna A100×2 `41055459`（g3087，A100 80GB，cpus4/mem160G）跑2个TP1副本（每卡KV 21.32GiB、262K 1.32×）；新hold A40×2 `41058221`（g3051）；A40 918/919/920保留。启动器`serve-teacher-held.sh`加TP参数（默认2，md5 e8c6d2eb…，旧版`.bak-tp2only`）。registry 6个teacher各capacity 1（WS：a100-g3087-r0/r1、a40-g3045/g3043；Win：a40-g3072/g3051，备份`registry.json.bak-20261002-pre-1vm1teacher`）。旧WS run按用户要求停止：pause_teachers、停controller 361458与078/081/082/083进程组及4容器（`INTERRUPTION.json`）；新WS run `27b-base--osworld2--remaining-ws-1vm1teacher-n19--20261002T111419Z-f1f4517a74b5`（19题，063不含）doctor ready，04:24实测4容器10G、四题分别落在四个teacher、首步attention=输出token。Windows run已pause_teachers，等079/080跑完后用g3072＋g3051开新run。另：WS上`busy_mirzakhani`(4G)为用户自己的测试VM，不属本eval。已向ARM请求归还A100 40897923（未回复）。

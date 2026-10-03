@@ -78,8 +78,8 @@
 
 | 标准词 | 一句话 | 代码锚点 | 禁用别名 |
 |---|---|---|---|
-| 张量并行(TP) | 把每层的权重矩阵切成 N 份放到 N 张卡上，每张卡算一部分，逐层合并结果；省的是权重和每层中间结果的显存。RL 用 TP=4 | run_cua_desktop.sh `--tensor-model-parallel-size` | — |
-| 数据并行(DP) | 每组卡各放一份完整模型，分别处理不同样本，最后把梯度求平均；8 卡 / TP4 = DP2 | 由卡数 ÷ TP 推出 | — |
+| 张量并行(TP) | 把每层的权重矩阵切成 N 份放到 N 张卡上，每张卡算一部分，逐层合并结果；省的是权重和每层中间结果的显存。RL 用 TP=2(10-02 起；TP=4 时每层的卡间通信更多) | run_cua_desktop.sh `--tensor-model-parallel-size` | — |
+| 数据并行(DP) | 每组卡各放一份完整模型，分别处理不同样本，最后把梯度求平均；16 卡 / TP2 = DP8 | 由卡数 ÷ TP 推出 | — |
 | rollout(采样) | RL 每轮的前半段：用当前模型在 VM 里实际做题，收集训练数据。48 题 × 5 次 = 240 条轨迹；每条轨迹 = reset VM → 反复"截图 + 历史拼成 prompt → SGLang 生成思考和动作 → VM 执行 → 新截图"直到结束或 50 步 → reward.py 打分。产出每一轮的 turn 样本(prompt、回复、采样时的 logprob、奖励)。后半段是训练；训练完把新权重同步给 SGLang，下一轮 rollout 用新模型 | slime `generate_desktop.py` | — |
 | GRPO | 同一题采样一组(我们 5 次)，每次得分减去组内平均、除以组内标准差得到优势值；优势值为正的回复被加强、为负的被削弱；不需要单独的价值模型。loss 是 PPO 的截断形式(概率比限制在 0.8–1.28)，KL、entropy 系数均为 0 | `--advantage-estimator grpo`，`reward_post_process.py` | — |
 | 组 / 优势值 | 组 = 同一题的 5 条轨迹；优势值 = (本条得分 − 组平均) ÷ 组标准差，同一条轨迹的每一轮、每个 token 都用这个值；5 条得分全相同的组没有信号，被过滤 | `--rollout-batch-size 48 --n-samples-per-prompt 5` | advantage |
@@ -88,6 +88,16 @@
 | 只算回复位置的 logits | 只对本轮回复(约 500 个位置)跑输出层和 logprob；prompt(截图 + 历史，约 2 万个位置)的 logits 不进 loss，不再计算。prompt 仍要完整过一遍模型，只省最后打分这一步 | `--response-only-logits`，`response_logits.py` | — |
 | 舍入级差异 | 数学上是同一个计算，只是浮点数相加的顺序或分块不同，结果在末几位不同(bf16 约第 3 位有效数字、fp32 约第 7 位)。例：bf16 里 (256+1)+1 = 256，256+(1+1) = 258。改 TP、换 GPU/CPU 实现、改分块大小都会产生；单步差异极小，但多步之后两次训练会像换了随机种子一样逐渐分开，预期效果不变 | RL_ENV_PLAN.md 提速总表"训练结果"列 | 数值噪声(未说明量级时) |
 | 上下文并行(CP) | 把**同一条样本的序列**按长度切开分给 N 张卡，各算一段，注意力层再互相交换；省的是长序列的显存。bridge 版 Qwen3.5-VL 不支持 CP>1，RL 固定 CP=1 | run_cua_desktop.sh `--context-parallel-size 1` | — |
+
+## RL 环境(2026-10-03 立；细节 docs/RL_ENV_PLAN.md)
+
+| 标准词 | 一句话 | 代码锚点 | 禁用别名 |
+|---|---|---|---|
+| 内存快照 | VM 第一次开机就绪时，存下它的内存和系统盘；之后每次 reset 直接载回，不再冷启动(约 16 s 对 75–228 s) | worker_bridge.py `_snapshot_resets` | savevm 快照、热重置 |
+| relay 站 | 替训练端连接 VM 主机的那台机器：Tillicum 端口转发 + 每台主机一个 relay 进程。现在是 Windows WSL | vmhosts.py `CUA_RELAY_STATION` | 中转机 |
+| 开机名额 | 一台主机上同时允许开机或载回快照、做任务初始化的 VM 数；其余排队，免得 CPU 被开机挤满 | worker_bridge.py `_boot_slot`，host.env `BOOT_SLOTS` | boot slot |
+| 补采 | 一轮 rollout 里有组被动态过滤丢掉时，再抽一批题(默认 48 道)补上；凑满 48 个合格组后，还没跑完的组作废，题目不放回 | slime `over_sampling_batch_size` | 过采样 |
+| eval-50 | OSWorld-Verified 的 50 道题(其中 5 道"做不到")，训练中每 10 轮评一次；reset 后等 60 s、打分前等 20 s，与标准评测相同 | `osworld_eval50_20261002.parquet` | dev 题 |
 
 ## 防臃肿立法(08-30 用户批准)
 

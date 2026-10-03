@@ -1,6 +1,51 @@
 # CUA RL 环境：源码副本、缺失项与进度
 
-更新：2026-10-02，America/Los_Angeles。
+更新：2026-10-03，America/Los_Angeles。
+
+## 现状(10-03 02:40；本块随进展更新，证据和讨论在下方各节)
+
+**正式训练** `grpo-r5-cuagym-v1`：
+- 作业：341861 → 341862 → 341863 → 341864，每个 24 h，`afterany` 接力；341861 预计 10-03 08:55 开始。
+- 规模：2 节点 16 卡(TP2 → DP8)。
+- 算法：48 组 × 5，全局批 256 个 turn，PPO 2 个 epoch，lr 1e-6，clip 0.2/0.28，无 KL。
+- 采样：温度 1.0 / top_p 0.95 / top_k 20，最多 50 步。
+- 轮数：`NUM_ROLLOUT=100`，约 4 遍训练集；4 个作业约 30 轮。
+- 评测：`EVAL_INTERVAL=10`，eval-50，训练前先测一次。
+- wandb：`yanjiayuan/cua-rl`，run 名 `grpo-r5-cuagym-v1`。
+
+**预演** 341689：2 节点，2 轮 × 4 组 × 5，全局批 64，`SLOTS=16`，无 eval；预计 05:52 开始。失败的话，08:55 前 `scontrol hold 341861`。
+
+**开跑时读取的代码：**
+
+| 部分 | 位置 | 版本 |
+|---|---|---|
+| 训练代码 | Tillicum `rl/slime-cua`(git bundle 同步) | 分支 `align-zixian` `bf49095` = `cua-desktop` `3d2c81d` + Zixian 对齐第 1、3 项 |
+| VM bridge | 两台主机的 `cua-rl-bridge`(生产目录) | cua-rl-gigpo `native-docker` `5e73a83`：上限 8/4、relay 站、内存快照、OSWorld 题固定等待 |
+| relay 站 | Windows WSL `~/cua-rl-station`，`CUA_RELAY_STATION=win` | `vmhosts.py` `7d666c7`；follow 跟 341689、341861–341864 |
+
+**链路**：Tillicum GPU 节点(trainer 与 hub) ← ssh 端口转发 ← Windows WSL 上的 relay 站(Tillicum 主连接已过 Duo，ControlPersist 30 天) → 本机 4 台 VM，以及 ssh 到工作站的 8 台 VM。Mac 不用再开着。
+
+**VM**：
+- 数量：工作站 8 台(瓶颈是 CPU，20 线程)，Windows 4 台(瓶颈是内存，WSL 限 22 GB)；两台都开 KSM。
+- reset：载回内存快照约 16 s，整个 reset 约 34 s；冷启动要 75–228 s。
+
+**与 Zixian 的关系**：算法已对齐(见"与 Zixian 基线的逐项对照")。保留的有意差异：作废轨迹不进组统计；没有 −1 奖励；到步数上限按终态打分；只算回复位置的 logits；没有时间上限。
+
+**估算**(以 341689 实测为准)：每轮约 2.8 h(rollout 约 1.7 h + 训练约 1.1 h)；过一遍 2366 道题约 25 轮，约 71 h 计算；eval-50 一次约 30 min。
+
+**常用操作：**
+- 看作业：`ssh tillicum2 squeue -u jy050706`；训练日志在 `rl/cua-runs/<EXP>/train-<作业号>.log`。
+- 看 relay：`ssh osworld-windows 'wsl -e bash -lc "tail ~/.cua-rl/relay/follow-341689.log; ls ~/.cua-rl/relay"'`。
+- WSL 的 Tillicum 主连接断了(断网或 WSL 重启)，分两步恢复：
+  1. 用户在 Mac 终端执行 `ssh -t osworld-windows wsl -e ssh tillicum2 true`(密码 + Duo)；
+  2. 在 WSL 重新挂 follow：`cd ~/cua-rl-station && CUA_RELAY_STATION=win setsid python3 -B -u scripts/vmhosts.py follow <作业号…> --up >> ~/.cua-rl/relay/follow-<作业号>.log 2>&1 < /dev/null &`。
+- 暂停 / 放行正式作业：`scontrol hold 341861` / `scontrol release 341861`。
+
+**未完成：**
+1. 看 341689 的预演结果；通过后在本地把 `align-zixian` 合进 `cua-desktop`。
+2. 两个仓库推到 GitHub(本地 slime-cua 领先 35 个提交，cua-rl-gigpo 领先 20 个)，待用户同意。
+3. 接力作业之间的排队空档(集群没开 ACCRUE_ALWAYS)：要不要用"提前交接"，待用户决定。
+4. 两台主机上的测试目录 `cua-rl-bridge-snap` 已不再需要，可以删。
 
 ## 提速做法总表(10-02 21:00 汇总，持续更新；每项的证据和讨论见下方 10-02 各节)
 
@@ -257,7 +302,7 @@ rollout 与训练重叠(用户 10-02 23:00 问"能不能并行")：做法是训�
 
 **正式训练已提交(10-03 01:50，用户确认 48×5)**：`grpo-r5-cuagym-v1`，4 个 24 h 作业接力 341861 → 341862 → 341863 → 341864(`afterany`)，2 节点 16 卡，`NUM_ROLLOUT=100`，`SLOTS=12`，`EVAL_INTERVAL=10`，其余用默认值(48 组 × 5、全局批 256、lr 1e-6、PPO 2 个 epoch、最多 50 步)。集群估价每个作业约 $346。提交时 Tillicum 上的代码是 `3d2c81d`，但作业开跑那一刻才读代码，开跑前可以换成最终版本。WSL 上的 follow 已改为依次跟 341689、341861–341864(pid 63965)。
 
-开跑前(估计 10-04 早上)必须完成：341689 通过；`align-zixian` 做 GPU 只训练测试后合并并同步到 Tillicum；快照版 bridge 部署到生产目录；部署 `0b65229`，并在真实 VM 上试跑 eval-50(训练前会先评测一次)。
+开跑前必须完成(01:46 核对：341861 的预计开始时间提前到 10-03 08:55)。02:40 的进度：eval-50 已在真实 VM 上测过(12/12)；快照和 `0b65229` 已部署到生产目录；`align-zixian` 已同步到 Tillicum，不再单独做 GPU 只训练测试，改由 341689 预演；只剩 341689 的结果。
 
 **eval-50 在真实 VM 上的检查(10-03 02:00，工作站测试目录，bridge `d56436d` = 快照 + `0b65229`)**：5 道"做不到"的题 + 7 道各应用的普通题，6 台 VM 各跑 2 道(第二道走"载回快照 + OSWorld 初始化")。做不到的题回答 FAIL 全部得 1，普通题回答 DONE 全部得 0，**12/12 符合预期，0 错误**；reset 21–121 s(含任务自己的初始化)。脚本在 scratchpad `evalcheck.py`(一次性检查)。
 - 疑点：3 道题(Chrome、VLC 冷启动后的第一道，以及一道 os 题)初始化后的截图只有 6.5–9 KB，正常桌面约 1.6 MB，基本是黑屏或纯色，说明应用还没画完就截图了。
