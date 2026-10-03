@@ -74,6 +74,14 @@
 | 完成度/证据度 | 要求项拆成两个独立字段:`done`(yes/partial/no/cannot_tell,做到了吗)与 `evidence`(seen/inferred,看见的还是推断的);旧的六值枚举把两者混在一起,`mostly_satisfied` 实为"按了保存但没拍到确认" | strongjudge REQ_PROPS16 | status、satisfied 六值(旧) |
 | 磁盘证据 | rollout 判分前把 VM 里 /home/user 最终状态转录成文字给判官(`OSTG_FINAL_STATE=1`);治"像素里看不见"的那类错放 | final_state.py + J2 | J2、final_state |
 
+## 训练并行(RL,2026-10-02 立)
+
+| 标准词 | 一句话 | 代码锚点 | 禁用别名 |
+|---|---|---|---|
+| 张量并行(TP) | 把每层的权重矩阵切成 N 份放到 N 张卡上，每张卡算一部分，逐层合并结果；省的是权重和每层中间结果的显存。RL 用 TP=4 | run_cua_desktop.sh `--tensor-model-parallel-size` | — |
+| 数据并行(DP) | 每组卡各放一份完整模型，分别处理不同样本，最后把梯度求平均；8 卡 / TP4 = DP2 | 由卡数 ÷ TP 推出 | — |
+| 上下文并行(CP) | 把**同一条样本的序列**按长度切开分给 N 张卡，各算一段，注意力层再互相交换；省的是长序列的显存。bridge 版 Qwen3.5-VL 不支持 CP>1，RL 固定 CP=1 | run_cua_desktop.sh `--context-parallel-size 1` | — |
+
 ## 防臃肿立法(08-30 用户批准)
 
 **每件进流水线的新东西,提案必须写明它替代或删除了什么。** 净增机器需专门论证。
