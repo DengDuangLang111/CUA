@@ -111,6 +111,8 @@ rollout(每个 turn = 准备 + 生成 + 环境一步；每条轨迹另加一次 
 | 训练期间预先 reset 下一轮的第一批 VM | 每轮省约 28 s | 不变 | 小 |
 | 不做(改变训练内容) | rollout 与训练重叠(异步/离策略)、FP8、量化 KV 缓存、减少 PPO epoch | 改变 | — |
 
+rollout 与训练重叠(用户 10-02 23:00 问"能不能并行")：做法是训练第 N 轮数据的同时，用还没更新的权重采第 N+1 轮，所以数据比模型旧一轮(离策略)，与 Zixian 的同策略基线不同，按"不影响训练结果"的原则不做。收益：一轮的时间从"rollout + 训练"变成两者中较长的那个，S1 修好后估计每轮省 25–35 min(rollout 那段)。代价：两段必须用不同的卡(不能再轮流共用同一批卡)，各自可用的卡变少。8 卡上不划算；16 卡时可以考虑，需用户决定。
+
 ## 2026-10-02：改走 Zixian 的 OpenWebRL 框架做 CUA 适配(用户确认)
 
 **框架**：`zixianma/OpenWebRL` 的 `arm` 分支(`e3bbd52`)，slime(Megatron + SGLang)。本地工作区 `openwebrl-cua/`，分支 `cua-desktop`，Zixian 仓库的推送已禁用。cua-rl-gigpo(verl)那条线暂停，不再投 8 卡。
