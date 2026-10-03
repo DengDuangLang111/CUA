@@ -84,6 +84,12 @@ VM 测试(主机环境见上表)：
 | 10-03 01:53 | 工作站 eval-50 检查，12 道题 | `d56436d`(测试目录) | 12/12 |
 | 10-03 02:05 | Windows eval-50 检查 `osworld_check.py`，8 道题 | `5e73a83`(生产目录) | 8/8，第一张截图正常 |
 
+**合并成一个仓库(10-03 02:20 起，用户同意，并要求以后能合进 Zixian 的 OpenWebRL)**：slime-cua 分支 `one-repo`。
+- `bc8eeb9`：VM 侧从 cua-rl-gigpo 搬进 `examples/cua_desktop/vm/`，内容和主机上正在跑的逐字节相同；路径改为相对这个目录；两个工具按目录所在位置推出包名，以后整个目录可以直接挪到 OpenWebRL 里和 `openwebrl/` 平级；去掉 `SOURCE.json` 这套"拷贝 + 哈希"。
+- `863d379`：精简 bridge 和 worker。`worker_bridge.py` 838 → 438 行：只支持 docker VM(AWS 启动、打标签、回收、取控制台日志都删了)；动作只认 pyautogui 代码；删掉 screen signature / hit test(和 `hit_test.py`)；reward.py 的分数直接读 `REWARD` 行(删掉 `reward_parse.py`)；删掉没人用的开关(reward baseline、settle 延时、固定 setup 等待)。训练端用到的 reset / step / close 和 info 里的三个字段不变。另外，bridge 每次启动会把 harness 的提交号和未提交改动的哈希打进日志。
+- `4816fa8`：注释改成 OpenWebRL 的写法(说明做什么、为什么，不写日期和作业号；循环里的步骤编号)，修正过时的路径和说法；新增 `examples/cua_desktop/README.md`，写目录结构、运行方法，以及合进 OpenWebRL 需要哪些 slime 改动(她的 slime 已经有哪些)。用语法树比对，所有 Python 文件的代码逻辑不变。
+- cua-rl-gigpo 不再改动，作为 Arijit 框架的存档。
+
 **代码整理(02:10)**：
 - slime-cua：删掉已合并的分支 `cua-desktop-speed`、`cua-desktop-response-logits`；去掉 `RESPONSE_ONLY_LOGITS` 开关(已验证不影响梯度)，同步到 Tillicum(`fb2a94e`)，341689 用的就是这一版。
 - cua-rl-gigpo：删掉已合并的 `vm-snapshot`；`check` 和 forward 的输出写的是实际运行位置，不再写死 "mac"；一次性的 eval 检查收进仓库，成为 `scripts/osworld_check.py`(参数：主机、题目文件、VM 数、每台题数、bridge 目录；会先检查主机上限，结果不符时以非 0 退出)。
