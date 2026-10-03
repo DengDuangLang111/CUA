@@ -179,6 +179,37 @@ KSM 运行时设置，WSL 重启即失效，需重新执行；开启须 root，�
 3. A7 改回与基线一致(`8ce679f`)。
 4. 长上下文显存：先看 341265(样本 ≤ 约 40k)。约 115k 的最长样本冒烟覆盖不到，要用它保存的 rollout 构造长样本只跑训练实测。估算普通卡约 105–110 GB / 140 GB；GPU0 少 27 GB，很可能 OOM。不够的话，做"只对回复位置算 logits"(改 slime 核心 loss；prompt 部分的 logits 用不上，却占序列的 99%)。
 
+### 10-02 夜：第二轮审查(全量扫描)的修复与待决定项
+
+原则(用户 10-02)：**修改一定不要影响训练结果**。只修不改变训练内容的问题；会改变训练内容的列为待决定。
+
+已修，已上线：
+
+| # | 问题(审查发现，已逐条读代码核实) | 修法 | 验证 |
+|---|---|---|---|
+| R1 | **relay 串线**：`downstream()` 通过闭包引用 `serve()` 的循环变量，bridge 死掉、slot 重拨后，旧连接的请求会写进**新** bridge(别的轨迹的 VM)，`finally` 还会关掉这个健康的 bridge；并且 `sock.close()` 时 makefile 仍开着，描述符不关，hub 收不到 EOF | 每条连接把自己的 reader 和进程作为参数传入；`hang_up()` 先 shutdown 再关；bridge 启动失败时挂断连接并重拨 | 本机用假 bridge 复现：修复前请求被新连接回复、健康 bridge 被杀；修复后旧连接被重置、新 bridge 不受影响 |
+| R2 | 请求处理中会话断开 → 写回复抛 BrokenPipeError → bridge 退出时**不关 VM**，容器留在共享主机上 | 主循环包在 try/finally 里，退出时一定关 VM；回复写不出去就跳出循环；启动时打印自身 md5 | 工作站 4 道 dev 题跑通 reset/step/close，结束后 0 台 VM |
+| R3 | 远程 bridge 的一行回复收到一半时 readline 无限阻塞；而 `abort()` 要等所有在途轨迹，于是整个 rollout 卡死 | 读取时把剩余的 RPC 预算设为 socket 超时，读完清除(避免后续写操作继承短超时)；hub 关闭连接时先 shutdown | 代码路径核对 |
+| R4 | `vmhosts.py down` 只用 `kill(pid, 0)` 检查 pidfile，PID 被复用时会误杀无关进程 | 先核对该 PID 的命令行确实是 `bridge_relay.py` | `vmhosts status` 正常 |
+| R5 | 启动脚本里 `PYTHONBUFFERED` 拼错(应为 `PYTHONUNBUFFERED`) | 改正 | — |
+
+提交：cua-rl-gigpo `cfa8b4e`(已推到两台主机)；slime-cua `eb609da`(重新拷贝 worker/remote_bridge 并更新 SOURCE.json；同时含速度项 S3)。
+
+**待用户决定(会改变训练内容，暂不改)**：
+
+| # | 现象(已核实) | 若改 | 影响 |
+|---|---|---|---|
+| D1 | 模型输出格式错误的坐标(如 `["500","300"]`、`NaN`)时，`parse_response` 抛异常(`qwen_internal_agent.py:358`)。eval 里任务崩溃记 **0 分**(OPS.md：08-18 起崩溃题写 result.txt=0.0)；RL 里现在是整条轨迹**排除**(A9) | 与 eval 一致：这一轮结束轨迹、记 0 分、**参与训练** | 策略能从这类输出得到负反馈；现在它学不到 |
+| D2 | 打初始分 r0 时运行任务的 reward.py：2390 个里有 **865 个**在模块顶层调用 `persist_app_state()`，会按 `ctrl+s` 再 sleep 0.8 s；r0 在第一帧截图之前执行 | r0 运行时用一个什么都不做的 pyautogui 替身 | RL 的起始状态是否与 eval 一致：文档被 LibreOffice 重存一遍、是否弹出"保持格式"对话框都**尚未实测**，先用一道这类题看首帧 |
+| D3 | reward.py 和 initial_setup.py 在整个 episode 期间都放在 `/home/user`，策略能看到(可读出判分条件)，也能删掉(删了轨迹被丢弃而不是记 0 分)；eval 环境里没有这些文件 | 打分时才上传、打完删除；setup 跑完即删 | 起始状态更接近 eval，堵住读判分条件的可能 |
+
+其余审查项(不改训练内容，后续处理)：
+- turn 模式每轮末尾不足 256 的 turn 被丢弃(与基线一致)；turn 总数少于 256 时 `dp_schedule` 断言会崩。
+- docker 端口分配锁(`/tmp/docker_port_allocation.lck`，超时 10 s)可能在第一波并发 boot 时超时，而且与 Windows 上的 eval 链共用同一把锁。
+- KSM 状态没有在 `vmhosts up` 时检查。
+- VM 中途死掉时，pyautogui 路径检测不到，轨迹会带着黑帧跑满步数。
+- relay 全部断掉时没有熔断(reset 会在 `take()` 里阻塞 2×1800 s)。
+
 ### 10-02 夜：速度问题清单(先记录；修复原则：不改变训练结果)
 
 冒烟 **341265**(17:34 起，g003，`c1ce929`)：rollout 正常；训练**不再 OOM**；第一批指标正常(step0 `ppo_kl` 0.0041、`pg_clipfrac` 0.7%、`grad_norm` 131 → 裁剪到 1.0)。保存的 rollout 为 1.88 GB / 152 个样本(按原来的 fp32 存法约 60 GB)。
