@@ -43,7 +43,7 @@
 
 **未完成：**
 1. 看 341689 的预演结果；通过后在本地把 `align-zixian` 合进 `cua-desktop`。
-2. 两个仓库推到 GitHub(本地 slime-cua 领先 36 个提交，cua-rl-gigpo 领先 21 个)，待用户同意。
+2. ~~两个仓库推到 GitHub~~ 已推(10-03 02:20，用户同意)：slime-cua `cua-desktop` `3d2c81d`、`align-zixian` `fb2a94e`；cua-rl-gigpo `native-docker` `3565cf5`。
 3. 接力作业之间的排队空档(集群没开 ACCRUE_ALWAYS)：要不要用"提前交接"，待用户决定。
 4. 两台主机上的测试目录 `cua-rl-bridge-snap` 已不再需要，可以删。
 
