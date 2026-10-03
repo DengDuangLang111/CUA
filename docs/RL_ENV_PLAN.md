@@ -247,7 +247,9 @@ KSM 运行时设置，WSL 重启即失效，需重新执行；开启须 root，�
 | B | SGLang 预填充分块 8192 → 32768，每批预填充上限 16384 → 32768 | 已在提速分支(一个 25k 的 prompt 一块算完) |
 | C | 重算范围 | 做成开关 `RECOMPUTE_METHOD`/`RECOMPUTE_LAYERS`，默认仍是全部层重算；等 341399/341461 的显存数据再决定 |
 | D | 梯度归约与参数收集与计算重叠；异步 checkpoint | 已在提速分支。参数校验发现 Megatron 在缺 `--use-persistent-ckpt-worker` 时会**静默关掉** `--async-save`，已补上 |
-| E | 作业接力 | `examples/cua_desktop/submit_chain.sh EXP NUM_ROLLOUT N [--nodes=2]`：N 个 24 h 作业，依次以 afterany 依赖排队，并从最新 checkpoint 续跑。normal QOS 对单个用户没有挂作业数量的上限，只限同时运行最多 48 卡。配套改动：每轮异步存一次，只保留每第 10 轮和最新一份(`--save-retain-interval`，24 h 被截断时最多丢一轮)；已完成的接力作业启动后直接退出；Mac 端 `vmhosts.py follow <各作业号>` 自动把转发切换到正在运行的那一段(cua-rl-gigpo `cd3471d`) |
+| E | 作业接力 | `examples/cua_desktop/submit_chain.sh EXP NUM_ROLLOUT N [--nodes=2]`：N 个 24 h 作业，依次以 afterany 依赖排队，并从最新 checkpoint 续跑。normal QOS 对单个用户没有挂作业数量的上限，只限同时运行最多 48 卡。配套改动：每轮异步存一次，只保留每第 10 轮和最新一份(`--save-retain-interval`，24 h 被截断时最多丢一轮)；已完成的接力作业启动后直接退出；Mac 端 `vmhosts.py follow <各作业号>` 自动把转发切换到正在运行的那一段(cua-rl-gigpo `cd3471d`；`ed80abd` 修了 follow 在某段没有 hub 时整体退出的问题)。**已验证**：3 段 debug 作业(341473–5)对一个已完成的实验依次运行，每段 5 s 退出，后一段在前一段结束后才开始；follow 逐段跟完 |
+
+**排队(10-02 19:20 实测)**：我们的 8 卡作业优先级约 1,000,9xx。账户 `video` 有效用量 0.259，份额只有 0.006，公平份额分只有 96，排在 hchopra3(1,023,302)、steveng0、rrrd、xiangfan 之后。H200 分区 22 个节点：10 个满载、10 个部分占用、2 个故障，排队 39 个作业。部分空闲节点上的卡已被调度器预留给更高优先级的作业：g003 空着 7 张卡，但一个 4 卡作业的预估开始时间是 10-03 08:40，比 8 卡作业(00:22)还晚。可做的只有缩短时限以吃到回填调度，以及用接力作业提前挂队(依赖满足后才开始累积排队时长)。
 
 **提速分支的验证**(合入主线前)：
 - 只训练对比 341461：同一份 rollout_0.pt，提速配置 vs 基线 341399。比较 step0 的 `ppo_kl`/`pg_loss`(应在数值噪声内一致)、`grad_norm`，以及每个微批次的耗时和显存。
