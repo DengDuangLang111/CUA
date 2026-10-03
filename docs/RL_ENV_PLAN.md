@@ -19,9 +19,9 @@
 
 | 部分 | 位置 | 版本 |
 |---|---|---|
-| 训练代码 | Tillicum `rl/slime-cua`(git bundle 同步) | 分支 `align-zixian` `fb2a94e` = `cua-desktop` `3d2c81d` + Zixian 对齐第 1、3 项 + 去掉 `RESPONSE_ONLY_LOGITS` 开关(始终只算回复位置) |
-| VM bridge | 两台主机的 `cua-rl-bridge`(生产目录) | cua-rl-gigpo `native-docker` `5e73a83`：上限 8/4、relay 站、内存快照、OSWorld 题固定等待 |
-| relay 站 | Windows WSL `~/cua-rl-station`，`CUA_RELAY_STATION=win` | `vmhosts.py` `3565cf5`(follow 进程 63965 启动时载入的是 `7d666c7`，两版只差输出标签)；follow 跟 341689、341861–341864 |
+| 训练代码 | Tillicum `rl/slime-cua`(git bundle 同步) | slime-cua 分支 `one-repo` `4816fa8` = `align-zixian` `fb2a94e`(Zixian 对齐第 1、3 项，去掉 `RESPONSE_ONLY_LOGITS` 开关)+ 合并仓库、精简、改注释(训练行为不变) |
+| VM bridge | 两台主机的 `cua-rl-bridge`(生产目录) | slime-cua `one-repo` 的 `examples/cua_desktop/vm/worker_bridge.py`(md5 `b6e6d9cc…`，`4816fa8`)：内存快照、OSWorld 题固定等待；与 `5e73a83` 行为相同 |
+| relay 站 | Windows WSL `~/cua-rl-station`(还是 cua-rl-gigpo 的目录结构) | `vmhosts.py` `3565cf5`(follow 进程 63965 载入的是 `7d666c7`，只差输出标签)；`bridge_relay.py` 与 slime-cua 里的只差说明文字；follow 跟 341689、341861–341864。等这条链跑完再换成 slime-cua 的 `vm/` |
 
 **链路**：Tillicum GPU 节点(trainer 与 hub) ← ssh 端口转发 ← Windows WSL 上的 relay 站(Tillicum 主连接已过 Duo，ControlPersist 30 天) → 本机 4 台 VM，以及 ssh 到工作站的 8 台 VM。Mac 不用再开着。
 
@@ -56,6 +56,8 @@ VM 主机上的环境(两台共用；bridge 用的是 `host.env` 里 `HARNESS` �
 | Windows | `/mnt/d/research/OSWorld`(也是 cua-eval 跑 Verified 评测用的那份) | `3df1ef4` = 官方 `091f5ef` + 2 个本地 AWS 提交 | `837d312b6af8`，16 个文件 | 22 | `Ubuntu.qcow2` 24,460,197,888 B(07-31) | `0e6497a92956` |
 | 工作站 | `/home/yanji/research/OSWorld` | `3df1ef4` | `01e84f1963c9`，17 个文件 | 8 | 同样大小(09-05) | `0e6497a92956` |
 
+**每台主机上，bridge 用的 harness 和这台主机做评测用的是同一份**(Windows 两者都是 `/mnt/d/research/OSWorld`；工作站的 `/mnt/d/research/OSWorld` 与 `/home/yanji/research/OSWorld` 指纹相同，都是 `01e84f1963c9`)。都不是官方原版：官方 `091f5ef` + 2 个本地 AWS 提交 + 16–17 个文件的本地改动(其中有打分代码 `getters/file.py`、`metrics/vscode.py`)，报官方分数时要披露。没有单独的"CUA-Gym 版 harness"：CUA-Gym 题也跑在同一个 DesktopEnv 上，初始化和打分由 bridge 自己做；训练只从 OSWorld-V2 `qwen38-v2` `d552441` 拷了 agent 代码(拼提示、解析动作，即 V2 agent)，而 Verified 评测用的是 `3df1ef4` 里的 `mm_agents/qwen/*`(V1 agent)，两者没有逐 token 对照过(已知多行输入的拆分方式不同，最终按键相同)。
+
 两台的差别：工作站多改了 docker provider(内存和核数可以用环境变量 `OSWORLD_VM_RAM_SIZE` / `OSWORLD_VM_CPU_CORES` 设置，默认值同为 4G/4，bridge 不设这两个变量，所以效果相同)；`controllers/python.py` 校验截图的方式不同(Windows 只看 PNG/JPEG 文件头，工作站会把图完整解码，不完整的帧会被拒收)。其余改动的文件(`desktop_env.py`、`setup.py`、`lib_run_single.py` 等)两台的 md5 一致。
 
 GPU 测试(代码版本取自作业日志里的 `code` 行)：
@@ -83,6 +85,9 @@ VM 测试(主机环境见上表)：
 | 10-03 00:25 | 工作站 12 台 + 快照，swap 阈值 2 GiB | `d56436d`(测试目录) | 第 16.8 分钟被切断 |
 | 10-03 01:53 | 工作站 eval-50 检查，12 道题 | `d56436d`(测试目录) | 12/12 |
 | 10-03 02:05 | Windows eval-50 检查 `osworld_check.py`，8 道题 | `5e73a83`(生产目录) | 8/8，第一张截图正常 |
+| 10-03 02:20 | Windows eval-50 检查，8 道题 | slime-cua `863d379` 精简版(测试目录，md5 `b6e6d9cc…`) | 8/8；日志 `[bridge] harness 3df1ef4 diff 837d312b6af8` |
+| 10-03 02:34 | 工作站 8 台压测 10 min(CUA-Gym 题) | 同上，`worker.py` 也是精简版 | 15 个回合、364 步、0 失败，快照载回无失败 |
+| 10-03 02:45 | 部署：两台主机生产目录换成精简版 bridge(md5 `b6e6d9cc…`)；Tillicum 切到 `one-repo` `4816fa8` | — | 341689 预演用的就是这一版 |
 
 **合并成一个仓库(10-03 02:20 起，用户同意，并要求以后能合进 Zixian 的 OpenWebRL)**：slime-cua 分支 `one-repo`。
 - `bc8eeb9`：VM 侧从 cua-rl-gigpo 搬进 `examples/cua_desktop/vm/`，内容和主机上正在跑的逐字节相同；路径改为相对这个目录；两个工具按目录所在位置推出包名，以后整个目录可以直接挪到 OpenWebRL 里和 `openwebrl/` 平级；去掉 `SOURCE.json` 这套"拷贝 + 哈希"。
