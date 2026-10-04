@@ -18,9 +18,7 @@
   - `perf/turn_*`(准备 / 生成 / 环境)、通过率、被丢弃的原因、有没有 `grader_error`；
   - **双节点第一步训练**有没有卡住：从来没在双节点上完整跑通过，见 §5。
 - **eval-50**：用户 10-03 说"先跳过"。链上设的是每 10 轮一次，第一次在第 10 轮。在那之前要验证 OSWorld 题能切回原版镜像(`RL_VM_ENVIRONMENT.md` §8)。
-- **待用户决定**：
-  - CUA 仓库要不要推送(推送就会上 Vercel 生产)；
-  - cua-rl-local 没有远端仓库。
+- **待用户决定**：cua-rl-local 没有远端仓库。
 
 ## 2 现行设置(以 342296 的启动参数为准)
 
@@ -74,7 +72,8 @@
 | rollout 准备 | 拼提示、跑 processor、PNG 编码放进线程；窗口里已有的截图直接复用 | 每步准备约 0.8 秒 | 不变 |
 | 生成路由 | 每条轨迹固定一个 SGLang 引擎，新轨迹分给负载最小的(`--router-policy manual --router-assignment-mode min_load`) | 默认策略把约 85% 的请求压在 1 个引擎上 | 不变 |
 | 图片特征传输 | 单节点引擎走共享内存，不再 pickle 后经 ZMQ 发送(`patches/usercustomize.py`) | 首 token 13.8 → 2.55 秒，每次请求 16.9 → 4.6 秒(342296 实测) | 不变(输出逐字相同) |
-| 视觉编码缓存 | 开启；权重更新时一起清空 | 每步只有 1 张新图要编码 | 不变 |
+| 视觉编码缓存 | 开启(`SGLANG_VLM_CACHE_SIZE_MB` 默认 2048)；权重更新时一起清空 | 每步只有 1 张新图要编码 | 不变 |
+| 图片预处理 | SGLang 的 fast 图片处理器改在 CPU 上跑(`patches/usercustomize.py`) | 原来 8 个引擎的预处理都落在 GPU0，GPU0 比其他卡多占约 57 GiB(341470 实测) | 不变 |
 | 预填充 | 分块和单批上限都是 32k | 少几轮调度 | 仅舍入级 |
 | 训练补齐 | 只补到本微批次最长的样本 | 计算量约减半 | 仅舍入级 |
 | 训练内核 | FLA 的 `l2norm`/`causal_conv1d` 按长度分档，不再每个新长度都重新编译调优 | 训练快 15–20 倍 | 仅舍入级 |
@@ -115,6 +114,7 @@
   - 只训练的双节点作业 342173 跑通了 38 步，但带真实 rollout 的还没验证。
 - **网页题可能被钻空子**：模拟网站的接口不防作弊，见 `RL_TASK_POOL.md` §7。训练中要留意网页题成功率。
 - **D 盘**：Windows 的 D 盘只剩 25 GB，不能再放镜像。
+- **接力作业之间有空档，而且不可控**：集群是 `PriorityFlags = MAX_TRES`，没开 ACCRUE_ALWAYS。带依赖的作业在前一个结束前不可调度，也不累积排队时间。前一个一结束，下一个才和新提交的作业一样去排 2 个节点，空出来的节点常被已经在排、优先级更高的作业拿走。可选做法：下一个作业用 `--dependency=after:<前一个>+1200`，在前一个开始 20 小时后就进入排队，拿到节点后用运行目录上的文件锁等前一个结束；代价是最多约 4 小时 16 卡空等。用户还没定。
 
 ## 6 常用操作
 
@@ -135,6 +135,7 @@ python3 examples/cua_desktop/vm/vmhosts.py push
   1. 用户在 Mac 终端执行 `ssh -t osworld-windows wsl -e ssh tillicum2 true`(密码 + Duo)；
   2. 在 WSL 重新挂 follow：`cd ~/cua-rl-station && CUA_RELAY_STATION=win setsid python3 -B -u scripts/vmhosts.py follow <作业号…> --up >> ~/.cua-rl/relay/follow-<作业号>.log 2>&1 < /dev/null &`。
 - **改 relay 槽数**：先按 PID 停掉那台主机的 relay(确认命令行是 `bridge_relay.py`)，再在 WSL 的 `~/cua-rl-station` 里执行 `CUA_RELAY_STATION=win python3 -B -c "import sys; sys.path.insert(0, 'scripts'); import vmhosts; vmhosts.start_relays(['win=4', 'ws=0'])"`。
+- **采样调用栈**：不要用 `faulthandler.dump_traceback_later`。它的看门狗线程不持 GIL 去读别的线程的栈帧，曾让三个只训练作业(341433、341399、341461)的训练进程无声死掉。要用 `examples/cua_desktop/tests/stack_sampler.py`：持 GIL 的守护线程配合 `sys._current_frames()`，由 `STACK_SAMPLE_DIR`、`STACK_SAMPLE_S` 环境变量开启。
 - **Tillicum 更新代码**：本机执行 `git bundle create <f> <旧提交>..pool-expand`，scp 到 `rl/`，再在 `rl/slime-cua-v2b` 里 `git fetch <f> pool-expand && git checkout --detach FETCH_HEAD`，并删掉 `__pycache__`。
 
 ## 7 版本追溯

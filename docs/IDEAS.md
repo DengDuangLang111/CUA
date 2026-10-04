@@ -1,7 +1,7 @@
 # IDEAS — 评估过的改进方向(候选实验档案)
 
 > 定位:**候选实验的评估与排队区**。已排进执行的看 `PLAN-*.md`,已出结果的看
-> `docs/EXPERIMENTS.md` / `outdated/docs/SFT_TRAINING_20260822.md`。每条记:想法、评估、与现状的接线、
+> `docs/EXPERIMENTS.md`。每条记:想法、评估、与现状的接线、
 > 依赖与坑。来源不限(外部讨论、复盘、论文),入档前须经评估。
 
 ## 2026-09-01 批次(严格语料线出厂后)
@@ -419,7 +419,7 @@ image path slug → 任务池 json → `ostg.difficulty`/`related_apps`)固化�
 "Use sheet_data as the backbone"(single_json.txt:228),非此前记的"示例引力"——
 示例本身只有结构无内容(用户记忆正确,原文核实)。修错地方警告:改示例治不了这个。
 
-**发现**(AWS session 实查官方 26 条 gimp 任务;数字详 `outdated/plans/PLAN-20260829-aws-rollout.md`):
+**发现**(AWS session 实查官方 26 条 gimp 任务;官方 26 条:infeasible 9、check_config_status 4、check_include_exclude 2、四个方向判据合计 4、另外 11 种各 1 条):
 官方 image 族用 15 种判据,方向判据(亮度/对比/饱和/镜像)只占 15%;v14g 的
 `IMAGE_FUNCS` 白名单只取了这 4 个方向函数铺满全族 —— **族规模配平了(8.8% vs
 官方 7.0%),族内构成没有**。后果:92% 通过率(方向严格不等式,幅度不设限,

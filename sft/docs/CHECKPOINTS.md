@@ -1,7 +1,7 @@
 # CHECKPOINTS — 模型/数据集/轨迹存放台账
 
 > 谁存在哪、哪个臂对应哪份数据、哪些能删。命令在 `taskgen/docs/RUNBOOK.md`,
-> 配方在 `outdated/docs/SFT_TRAINING_20260822.md`,分数在 `docs/EXPERIMENTS.md`。
+> 配方在 `sft/docs/TRAINING.md`(SFT recipe reference 节),分数在 `docs/EXPERIMENTS.md`。
 > **口径:目录名以 `pgrep -af run_multienv_qwen` / sbatch 里的 `DS=` 为准**,
 > 不以记忆为准(数结果数错目录的教训,`CLAUDE.root.md` 铁律 2)。
 
@@ -238,7 +238,7 @@ bs2→1,不是节点拓扑**(1 rank/节点多的是 CPU 内存,显存还是那�
 
 | job | 臂 | 数据 | 配置 | 状态 |
 |---|---|---|---|---|
-| **249492**(原 249458 撤) | **img1** | q38-Bhqs2t-img1-*(6385 条,窗 1,fold 1,cap 同 img3;自助构建,code e6b6e034,双端 md5 + 6385/6385 图片 resolve) | kE 配方同(lr3e-6/3ep/seed 同默认),仅窗口变量;**08-19 重拓扑 2×8→8×1,accum 4→8,gb64 梯度数学不变**(整节点申请卡到次日 01:15,碎片单卡秒排——**调度差异是唯一成立的理由**;曾附的"1 卡/节点避 PCIe 争用快 2.3×/rank"归因已由另一会话撤回:误把续训作业的墙钟除以全步数,拓扑对吞吐的影响**无定论**,教训见 outdated/docs/SFT_TRAINING_20260822.md;原 sbatch 注记已同步撤回标注,存 .bak-2x8) | **完训**(EXIT 0,1h42m,endpoint=checkpoint-300 @epoch3.00,12 ckpt;eval 臂 img1 已接链 @1图匹配窗;当时 8 节点 g001/002/006/010/011/017/019/020,新规前豁免形状) |
+| **249492**(原 249458 撤) | **img1** | q38-Bhqs2t-img1-*(6385 条,窗 1,fold 1,cap 同 img3;自助构建,code e6b6e034,双端 md5 + 6385/6385 图片 resolve) | kE 配方同(lr3e-6/3ep/seed 同默认),仅窗口变量;**08-19 重拓扑 2×8→8×1,accum 4→8,gb64 梯度数学不变**(整节点申请卡到次日 01:15,碎片单卡秒排——**调度差异是唯一成立的理由**;曾附的"1 卡/节点避 PCIe 争用快 2.3×/rank"归因已由另一会话撤回:误把续训作业的墙钟除以全步数,拓扑对吞吐的影响**无定论**,教训(引用 s/it 前先确认作业不是续训)见 `sft/docs/DATA_PIPELINE.md` §8 与 `sft/docs/TRAINING.md` Reading throughput 节;原 sbatch 注记已同步撤回标注,存 .bak-2x8) | **完训**(EXIT 0,1h42m,endpoint=checkpoint-300 @epoch3.00,12 ckpt;eval 臂 img1 已接链 @1图匹配窗;当时 8 节点 g001/002/006/010/011/017/019/020,新规前豁免形状) |
 | **273350**(**完成** 09-02,9h46;ckpt 580/725/870 齐)→ **eval 排队**:09-03 02:16 `prep_btf.sh` 推 `mixbtf9b-2x4-e870`,serve 占位 39306244 g3082:8047;WSL `chain_eval_btf.sh` 02:31 起、**07:21 收官 60.0%/61.9 = mixb9b,终止行为已修正、分数不动**(RESULTS §5.36) | **mixbtf9b-2x4 续跑** | 同 272551 | `--resume_from_checkpoint` 272551 的 checkpoint-435(ep1.5,含 global_step435/rng),**PYTHONPATH 加 nocudnn/ 关 cuDNN SDPA**,其余逐字同;剩 435 步 ≈ 8.5h,存档 580/725/870 | **完训**(09-02 ~01:10,EXIT 0,870/870,9h44,train_loss 0.151,cuDNN 错误 0 次;ckpt 580/725/870);e870 已在 Klone `mixbtf9b-2x4-e870`(非我推,READY_mixbtf9b 已有) |
 | **276060**(投于 09-04) | **mixbtf9b-histcomp**(渐变历史分辨率,用户令) | 原始 mixbtf(未加权,未变分辨率总量,只按帧龄降采样) | **Qwen3.5-9B,与 mixbtf9b(60.0%)逐字同**,唯一变量=历史帧按年龄降采样:最新2帧 2040tok/age2-4 1008/age5-7 510/最老(age8+)**252(1/8)**;每10图样本 9138 vs 20400 tok(省55%)。`PYTHONPATH=histcomp`(sitecustomize 猴补丁 Qwen2VLTemplate.replace_tag 逐帧 max_pixels + cuDNN off),脚本 `sft/training/histcomp/sitecustomize.py` | smoke(276059)**已验证阶梯精确**(age0→2040/age3→1008/age6→510/age9→252,patch marker 在、无 OOM);全程排队中。**eval 前需推理侧 mm_agents/qwen/images.py 按同档降采样(未做)** |
 | **276056**(投于 09-04) | **mixbtf9b-taskw**(任务均衡加权,用户令) | mixbtf-taskw(=mixbtf 866 轨迹+terminalfix,每条 assistant 加 `loss_scale=c/N`,c=22.68 令 token 加权均值=1) | **Qwen3.5-9B,与 mixbtf9b(272551/273350,60.0%)逐字同**,唯一变量=按轨迹步数 1/N 加权(长任务不再过权;每任务总 loss 相等)。`--loss_scale last_round --is_binary_loss_scale false`,2×4 gb64 3ep lr3e-6 max_len81920 nocudnn。脚本 `sft/data/task_weights.py` | **smoke(276054)EXIT 0 已验**:is_binary_loss_scale=False 生效、分数权重带着算、loss~0.8 量级正常、显存 95GiB;全程排队中。跑完对基线看 multi_apps(长任务被压,风险点) |

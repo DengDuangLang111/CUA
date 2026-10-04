@@ -10,14 +10,14 @@
 
 ```
  M desktop_env/evaluators/getters/file.py        自定义 get_local_file(见下)
- M desktop_env/evaluators/metrics/__init__.py    导入 20 个自定义 metric;**2026-08-22 补回 9 个被误删的上游导入** —— 加 generated_tasks 块时同一个 diff 里删掉了它们,导致 361 里 8 题在 env.reset() 就崩、全臂强制 0 分(清单与影响面 outdated/reports/SFT_FAILURE_ANATOMY_20260903.md §9)
+ M desktop_env/evaluators/metrics/__init__.py    导入 20 个自定义 metric;**2026-08-22 补回 9 个被误删的上游导入** —— 加 generated_tasks 块时同一个 diff 里删掉了它们,导致 361 里 8 题在 env.reset() 就崩、全臂强制 0 分。受影响 8 题(按任务 JSON 的 `evaluator.func` 反查):impress `a434992a` `a669ef01`(留出 50)、`4ed5abd0`,multi_apps `185f29bd` `236833a3` `2c1ebcd7` `42d25c08` `67890eb6`;`6f4073b8` 的函数名碰巧还在导出里,不受影响。折损上限:全 361 2.2pp、留出 50 4.0pp(2 题)、multi_apps 5.4pp(5 题)。所有臂同等受害,臂间差不受影响,只影响绝对值;不追溯,08-22 前评过的臂引用绝对分须注记。长驻 worker 已把 metrics 载入内存,修复只对新起的进程生效。防线:任务 JSON 里每个 `evaluator.func` 都应能在 `metrics` 里 `getattr` 到,可在跑之前全量静态检查
  M desktop_env/evaluators/metrics/vscode.py      改了官方 check_json_settings 行为
- M mm_agents/qwen/actions.py                     normalize_inline_parameters(环境变量门控,默认关)+ 日志;**空解析 fallback 已于 08-14 恢复上游 DONE**(可比性优先,旧文误记为 WAIT);08-18 起 OSTG_TYPE_NO_SPLIT=1 时多行 type 一条 typewrite 直发(默认 0=上游逐行拆,验收报告 outdated/reports/SFT_FAILURE_ANATOMY_20260903.md;**kD 及之前所有臂 = 拆行语义,kC 起 = 合并语义**);08-18 深夜再加 **OSTG_PARAM_DIALECT=json**:把 Qwen3-VL 原生 Hermes JSON tool_call 归一化成本模块既有的嵌套 XML 形式(与既有 `inline` 方言同构),**默认不设=行为逐字节不变**(闸A 全库 6,385 条回放 100% 一致;闸B JSON 与 XML 产生相同 pyautogui 100%;灵敏度对照能抓错)。目的:VL backbone 对照实验复用全部动作语义,避免重写时丢失 terminate(failure)。闸的 pipeline 命令 `ostg.sft.vlcheck dialect`
+ M mm_agents/qwen/actions.py                     normalize_inline_parameters(环境变量门控,默认关)+ 日志;**空解析 fallback 已于 08-14 恢复上游 DONE**(可比性优先,旧文误记为 WAIT);08-18 起 OSTG_TYPE_NO_SPLIT=1 时多行 type 一条 typewrite 直发(默认 0=上游逐行拆;验收 `sft/tests/typefix_gate.py`:闸 A 全库 2,278 个 traj.jsonl、58,211 个去重真实响应回放,开关关时新旧 parser 输出逐字节一致;闸 B 开关开时键事件流与拆行版严格相等,多行分支真实命中 558 个响应、省 13,982 条客机命令;灵敏度对照把换行故意写成空格,闸 B 报 214 处 FAIL。客机 PyAutoGUI==0.9.54 把 `\n` 映射为 Return。时序差异:拆行版每条命令间隔 ≥3s,合并版一次打完;**kD 及之前所有臂 = 拆行语义,kC 起 = 合并语义**);08-18 深夜再加 **OSTG_PARAM_DIALECT=json**:把 Qwen3-VL 原生 Hermes JSON tool_call 归一化成本模块既有的嵌套 XML 形式(与既有 `inline` 方言同构),**默认不设=行为逐字节不变**(闸A 全库 6,385 条回放 100% 一致;闸B JSON 与 XML 产生相同 pyautogui 100%;灵敏度对照能抓错)。目的:VL backbone 对照实验复用全部动作语义,避免重写时丢失 terminate(failure)。闸的 pipeline 命令 `ostg.sft.vlcheck dialect`
  M mm_agents/qwen/main.py                        加 preserve_thinking,透传 chat_template_kwargs;**08-29 再加 `OSTG_REASONING_EFFORT`**(设了才注入 chat_template_kwargs.reasoning_effort;不设=模板默认 xhigh,逐字节同旧行为。模板只认 xhigh/medium/low,传 high 会 400——见 RUNBOOK「chat template, read at source」)
  M mm_agents/qwen/client.py                      reasoning_content 取不到时 fallback 到 reasoning
  M mm_agents/agent.py                            ANTHROPIC_BASE_URL 可配 + thinking disabled(只影响 PromptAgent/Claude,跑 Qwen 不走这里)
  M scripts/python/run_multienv_qwen.py           加 --preserve_thinking flag(评测侧空转,见下);08-18 起崩溃题落 result.txt=0.0 + harness_error.json(孤儿题修复,**代价:崩溃题不再被补跑趟自愈**,恢复靠按 harness_error.json 显式删目录重跑);**09-01 加 signal handler 父子判别**(worker 继承父进程 handler 后对 `processes` 调 `is_alive()` 断言,断言落进任务 except 写假零,10 例;现子进程直接 `sys.exit(0)`,不写 result.txt)**+ AWS SSO 快速失败**(按类名 `TokenRetrievalError` 判定,SIGTERM 父进程中止全跑;71 例逐题假零的教训)
- M desktop_env/controllers/setup.py              **09-01 新增** `_server_restart_policy_setup`:给客机 `osworld_server.service` 打 systemd drop-in(`StartLimitIntervalSec=0`),去掉"60 秒内崩 5 次即永久判死"的限速。**只在 `OSTG_GUEST_RESTART_UNLIMITED=1` 时调用,不设=逐字节同旧行为**。根因与实测 outdated/reports/SFT_FAILURE_ANATOMY_20260903.md §10.0,语义验证 §10.12
+ M desktop_env/controllers/setup.py              **09-01 新增** `_server_restart_policy_setup`:给客机 `osworld_server.service` 打 systemd drop-in(`StartLimitIntervalSec=0`),去掉"60 秒内崩 5 次即永久判死"的限速。**只在 `OSTG_GUEST_RESTART_UNLIMITED=1` 时调用,不设=逐字节同旧行为**。根因:镜像单元 `StartLimitIntervalSec=60 / StartLimitBurst=4 / RestartSec=5s`,崩溃循环在 t=0/5/10/15 秒用完配额,第 5 次崩溃即永久停止重启;客机服务死亡是 harness 崩溃第一大死因(213/453 = 47%)。实测数据与语义验证见 `taskgen/docs/RUNBOOK.md`「Guest systemd restart limit」节
  M desktop_env/desktop_env.py                    **09-01**:`reset()` 里按上述开关调用(快照回滚会抹掉 drop-in,故每任务重打;+4 行)
  M desktop_env/controllers/python.py             **09-01**:截图非 200 时把 response body 前 500 字记进日志(此前只记状态码,68 次 HTTP 500 无从分辨"handler 抛异常"与"进程已死");纯日志
  M desktop_env/server/osworld_server.service     **09-01**:仓库副本同步改 `StartLimitIntervalSec=0`。**对预制镜像 `happysixd/osworld-docker` 无作用**(单元烤在镜像里),仅保证未来自建镜像不再带此限速
@@ -32,10 +32,20 @@
 
  M mm_agents/qwen/images.py                      **08-28 深夜**:process_image 的 max_pixels 环境变量化(`OSTG_MAX_PIXELS`,不设=13107200,逐字节同旧行为)。图窗试点 D 臂用 491520(≈960×512,~480 视觉 token/张;旧值下 1920×1088=2040 token/张)。坐标回缩 adjust_coordinates 原生按发送尺寸换算,无需配套改动
 
-**09-01 起共 15 个已跟踪文件**(09-01 加 setup.py/desktop_env.py/controllers/python.py/osworld_server.service 四个,净 +79/−8,分支 `fix-harness-crashes@0a6d674`,净补丁 `/mnt/d/research/patches/fix.5files.patch`,在跑树 5 文件 md5 见 outdated/reports/SFT_FAILURE_ANATOMY_20260903.md §10.12;此前 11 个:08-28 深夜加 images.py +2/−1 后;此前 10 个 +303/−40
+**09-01 起共 15 个已跟踪文件**(09-01 加 setup.py/desktop_env.py/controllers/python.py/osworld_server.service 四个,净 +79/−8,分支 `fix-harness-crashes@0a6d674`,净补丁 `/mnt/d/research/patches/fix.5files.patch`,在跑树 5 文件 md5 见本段下表;此前 11 个:08-28 深夜加 images.py +2/−1 后;此前 10 个 +303/−40
 复核于同日,HEAD 仍是 `091f5ef1`),另有
 上列未跟踪新增 + 新增未跟踪:`verified_eval261_rest.json`、`eval50b`、`vlsmoke3.json`、
 两个 codex-sync tar、`__init__.py.bak-before-restore-imports`。
+
+在跑树与分支 `fix-harness-crashes@0a6d674` 逐字节一致的 5 个文件(09-01):
+
+| 文件 | md5 |
+|---|---|
+| `desktop_env/controllers/setup.py` | `2847a501d0c55c71b2a311e59235a6aa` |
+| `desktop_env/desktop_env.py` | `b82f56d8658ba6f2e486ef69102289a3` |
+| `desktop_env/controllers/python.py` | `978cd03ed9bf5872e3fb7afbb5f73606` |
+| `desktop_env/server/osworld_server.service` | `154ca42cfec84922839ebc35033424f2` |
+| `scripts/python/run_multienv_qwen.py` | `fddfadb896e8300cd60fd04805777cdb` |
 
 > **08-28 复核补记**:`lib_run_single.py` 里存在一段 verifier-拒绝-DONE 逻辑,
 > 但它整个住在独立函数 `run_single_example_vlaa_gui`(verifier_agent 默认 None)

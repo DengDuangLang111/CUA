@@ -37,13 +37,13 @@ the builder, governed by the rules below.
 ## 3 Rendering the training context
 
 The full context anatomy — message layout, folding, wrapper strings,
-knob values — lives in [outdated/docs/SFT_CONTEXT_20260813.md](../../outdated/docs/SFT_CONTEXT_20260813.md); it is the
+knob meanings, how history think survives — lives in [CONTEXT.md](CONTEXT.md); it is the
 builder's specification. The rules below are the summary.
 
 | rule | receipt |
 |---|---|
 | **Labels come from `response`, never from `action`.** The model emits relative 0–999 coordinates; `action` holds pyautogui code already scaled to 1920×1080 (`[180,257]` → `doubleClick(345,277)`). Training on `action` shifts the coordinate distribution ~2×. | cross-checked v11 rows |
-| **History must be rendered by the model's own chat template with the same kwargs the campaign sent.** The client does NOT strip thinking (`ensure_empty_think_prefix` only prepends an empty block when missing) and under `nopreserve` it sends `chat_template_kwargs={"enable_thinking": true}` — no `preserve_thinking` key at all. The template's rule is `{%- if (preserve_thinking is defined and preserve_thinking is true) or (loop.index0 > ns.last_query_index) %}` — keep thinking, else drop. **On this harness it always keeps**: the backward scan computing `last_query_index` skips `<tool_response>`-wrapped user turns, `history.py` wraps every non-first user turn, so the index is pinned at 1 and the keep branch fires for every historical assistant turn. (An earlier revision of this row said the template strips — true on generic chat, false on the shape we actually send.) So: render history through `apply_chat_template` with the campaign's kwargs — hand-stripping in the builder duplicates template logic and WILL drift. | template read from Tillicum model dir 2026-08-13; **corrected 2026-08-18 (`sft/docs/RESULTS.md` §5.7) and re-verified live 2026-08-19 on the running eval server, two independent routes with sensitivity controls (`outdated/docs/SFT_CONTEXT_20260813.md` §4)**; client code `mm_agents/qwen/main.py:278-284`, `history.py:90-94` |
+| **History must be rendered by the model's own chat template with the same kwargs the campaign sent.** The client does NOT strip thinking (`ensure_empty_think_prefix` only prepends an empty block when missing) and under `nopreserve` it sends `chat_template_kwargs={"enable_thinking": true}` — no `preserve_thinking` key at all. The template's rule is `{%- if (preserve_thinking is defined and preserve_thinking is true) or (loop.index0 > ns.last_query_index) %}` — keep thinking, else drop. **On this harness it always keeps**: the backward scan computing `last_query_index` skips `<tool_response>`-wrapped user turns, `history.py` wraps every non-first user turn, so the index is pinned at 1 and the keep branch fires for every historical assistant turn. (An earlier revision of this row said the template strips — true on generic chat, false on the shape we actually send.) So: render history through `apply_chat_template` with the campaign's kwargs — hand-stripping in the builder duplicates template logic and WILL drift. | template read from Tillicum model dir 2026-08-13; **corrected 2026-08-18 (`sft/docs/RESULTS.md` §5.7) and re-verified 2026-08-19 by three independent routes, each with its own sensitivity control: live `/render` on the running eval server, offline `apply_chat_template` on two tokenizers, and the deployed jinja plus the vllm launch command**; client code `mm_agents/qwen/main.py:278-284`, `history.py:90-94` |
 | The current step's target keeps its full `<think>` block — that is what the model emitted under `enable_thinking` and what generation-time distribution looks like. | — |
 
 ## 4 The builder (test version, 2026-08-13)
@@ -84,7 +84,7 @@ and has no preserve_thinking kwarg — the student's default rendering equals th
 teacher's rollout distribution. (This paragraph originally read "it strips
 history `<think>`". The rule exists but never fires here: every non-first user
 turn is `<tool_response>`-wrapped, which pins `last_query_index` at 1 — see
-`outdated/docs/SFT_CONTEXT_20260813.md` §4 and `sft/docs/RESULTS.md` §5.7. History think is present on both
+rule 3.2 above and `sft/docs/RESULTS.md` §5.7. History think is present on both
 sides, which is what makes the two distributions equal.) Train with loss
 on the final round only; verify the exact ms-swift flag at install time.
 
@@ -92,11 +92,19 @@ on the final round only; verify the exact ms-swift flag at install time.
 
 No replay needed — the client already dumps every step's payload (text
 verbatim, image base64 truncated) to
-`OSWorld/draft/message_cache/qwen_messages_step_{i}.json` (see
-[outdated/docs/SFT_CONTEXT_20260813.md](../../outdated/docs/SFT_CONTEXT_20260813.md) §5). Byte-diff the builder's rendered text
+`OSWorld/draft/message_cache/qwen_messages_step_{i}.json`. Byte-diff the builder's rendered text
 against a handful of those dumps and rule 3.2 is measured, not derived. The
 dir is shared across envs and keyed by step index only, so treat it as a
-rolling sample, not an archive.
+rolling sample, not an archive: enough to byte-diff the builder's rendering,
+not enough to reconstruct one task's context. Two traps when reading it
+(2026-08-19):
+
+- Stale files from older runs sit next to live ones; filter by mtime before
+  aggregating. On 2026-08-19 the dir held 100 files, of which only
+  `step_0..49` came from the running eval and `step_50..99` from a 2026-08-14 run.
+- Adjacent `step_N` files come from different tasks (concurrent env workers
+  overwrite each other by step index), so they cannot be read as one
+  trajectory. For per-trajectory truth use `traj.jsonl` under `result_dir`.
 
 ## 6 Provenance to record per sample
 

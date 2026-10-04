@@ -1,8 +1,8 @@
 # Control scripts — the machinery behind the dashboard and the rollouts
 
 These run on **WSL** at `/mnt/d/research/osworld-verified-control/`. The repository files are **versioned copies**, not the execution copy: nothing here runs
-from the repo. It exists because dashboard/README.md and outdated/docs/SFT_TRAINING_20260822.md document these
-scripts as load-bearing, and until 2026-08-14 they lived on one WSL disk with no
+from the repo. It exists because the dashboard (dashboard/README.md) and the SFT tier-3 evaluation
+chain depend on these scripts, and until 2026-08-14 they lived on one WSL disk with no
 history at all.
 
 **Editing rule: change the WSL copy, then re-copy here.** Do not edit these and
@@ -21,9 +21,9 @@ EOF
 |---|---|
 | `sft_dash.py` | writes `dashboard/sft.json` and publishes per-arm trajectory viewers. Holds the arm registry: explicit `ARMS`, plus `FAMILY` patterns for `q35-<run>-ep<k>` (mid-schedule snapshot) and `q35-<run>-final` (annealed product). An unknown arm still appears, labelled by directory name |
 | `sft_dash_daemon.sh` | 5-minute loop around the above, working in the second clone `cua-dash-sft` so it can never contend with `dash_status_daemon.sh` |
-| `run_arm.sh` | one tier-3 arm end to end: wait → cancel stray serve → serve → 9 tasks → tear down. Has the port-collision detector |
+| `run_arm.sh` | one tier-3 arm end to end: wait → cancel stray serve → serve → 9 tasks → tear down. Has the port-collision detector: aborts when the serve log shows `Address already in use`; without it the driver waits out its whole timeout (up to 2 h) on a serve that died at startup |
 | `v11_500_fp8.sh` | switches the teacher serve BF16 → FP8 and supervises the v11-500 rollout across the serve's 12 h wall and node changes |
-| `final_evals.sh` | tier-3 for the **final** checkpoint of each training arm. Waits for every `sft-*` job to leave the queue |
+| `final_evals.sh` | tier-3 for the **final** checkpoint of each training arm. Waits for every `sft-*` job to leave the queue. If the final step's checkpoint is missing it falls back to the newest one and logs `NOT the full schedule` |
 | `eval_more3_pair.sh` | the scoped version: pause v11-500 → evaluate two finished arms → resume. Written because `final_evals.sh` would have blocked ~10 h on unrelated jobs still running |
 | `dash_status_daemon.sh` | the status/traj publisher loop (commits `dashboard/status.json` and eval50 traj viewers). Holds only the **path** of the deploy key (`~/.ssh/id_ed25519_cua`) — no secret material, so it is safe to version (corrected 2026-09-09; the old 'holds credentials' note below was over-cautious) |
 | `dash_watchdog.sh` | supervisor for the two daemons (merged in from `control/` 2026-09-09; see its own header for behaviour) |

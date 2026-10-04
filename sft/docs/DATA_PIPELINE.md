@@ -196,7 +196,19 @@ assistant 段。由此:
 "0 endings not terminate" 是假的。修正后:**362/362 任务都有唯一终止行**,
 语料与 corpusaudit 双双无罪。但这次误诊意外揪出了真问题 —— 其中 **3 条的终止行
 带 18 张图、超过 65536**,`truncation_strategy=delete` 会精确删掉这三条轨迹的
-收尾示范(决策与实测见 `outdated/docs/SFT_TRAINING_20260822.md` 现状块的 max_length 条目)。
+收尾示范(torque-spec-19a5b6dd / referral-128c9ca6 / bursary-acd3db2e)。
+
+`max_length` 的决策与实测(2026-08-19):
+
+- `truncation_strategy` 默认 `delete`,完全静默。cap 与 nocap 两版 20 图语料
+  (r5vl / r5vlnocap)各有 **11 条 >65536**(0.17%,max 72,594),条数完全一样 ——
+  超长的成因是图像,不是 think(16~20 图 × 2040 ≈ 3.2~4.1 万图像 token + 2.5~3.6 万文本)。
+- 20 图语料因此用 `max_length 81920`:smoke(11 条超长样本复制 6 份、8 节点×1 卡×accum 8)
+  2/2 步跑完无 OOM,峰值 142,279/143,771 MiB = 99.0%。
+- `truncation_strategy=left` 不是备选:实现取 `non_protected[-(N):]`
+  (`template/base.py:1436`),保留末尾与全部图像 token,砍掉的开头正是 system prompt。
+- 图窗缩到 10 张后最长样本 58,047(v16 语料 53,859),`max_length` 回到 65536 一条不丢
+  (20 图语料在 65536 下丢 14 条),此后它只当保险丝。
 
 ---
 
@@ -224,9 +236,9 @@ assistant 段。由此:
 | `verify OUT` | **不检查末步是否 terminate**,却照样打印 `0 endings not terminate(success)` | 2026-09-01 我把这行当成"末步合格"的证据发给用户,实际 v16 那 340 条末步 264 条纯散文、13 条 call_user、只有 1 条真 terminate。正确写法是 `verify OUT --require-terminate` |
 | `terminalfix --backend anthropic` | 漏传 `--model` 会**静默返回空理由** | RUNBOOK 终止规范化节已记 |
 | `terminalfix` | 漏传 `--style-examples N`,教师只按规则写 | 97% 的结尾句以 "Done." 开头(自然写只有 16%) |
-| `grade_steps` | 漏传 `--prompt-file` 会**静默退回**已被取代的 paper-four-stage v2 | `outdated/plans/PLAN-20260901-strict-corpus.md` §7 |
+| `grade_steps` | 漏传 `--prompt-file` 会**静默退回**已被取代的 paper-four-stage v2 | 主 prompt 是 `policy_official_revised.json`(webstar-official-revised-desktop-v1):WebSTAR `GPT_STEP_JUDGE_REVISED` 经 5 处断言替换适配桌面,产物 `official_revised_desktop.txt` strip 后 6303 字符,sha256 `3cd1d4350f1f6b59f69f0b9fc44ad220b8b72beb34ec711eae5293d40768ee69`。命令见 RUNBOOK「④ WebSTAR 步级过滤」 |
 | 推权重后立刻写 `READY_*` | 解包完成、md5 两端一致,**但 GPFS 上"文件可见"≠"数据可读"**:READY 出现后 1 秒起 vLLM 报 `SafetensorError: incomplete metadata, file not fully covered`,25 分钟后同一目录一次成功(2026-09-02,computeragent-00 在 Klone 读 mixaw9b-ckpt230) | 写 READY 前**真读一遍**每个 safetensors 的头(`safetensors.safe_open` 或至少 `python -c "open(f,'rb').read(8)"` + 大小两轮不变),消费方也应在首次加载失败时等 60 s 重试而不是判死。`prep_evals.sh` 第 5 步与本会话的推送脚本都是"解包即写 READY",待改 |
-| `to_swift` 的 `gen_meta`(ostg@5c6aea84 起) | 单语料时 ms-swift 加载后丢列,**看似无害**;两代语料合并时 `related_apps` 一边全 `[]` 一边有值,Arrow 推出 `list<null>` 后 cast 失败 | 2026-09-01 Slurm 271875 在 preflight 全绿之后死于 `DatasetGenerationError`;混合语料前先 `pop('gen_meta')` 或让类型稳定。`outdated/plans/PLAN-20260901-strict-corpus.md` §10 |
+| `to_swift` 的 `gen_meta`(ostg@5c6aea84 起) | 单语料时 ms-swift 加载后丢列,**看似无害**;两代语料合并时 `related_apps` 一边全 `[]` 一边有值,Arrow 推出 `list<null>` 后 cast 失败 | 2026-09-01 Slurm 271875 在 preflight 全绿之后死于 `DatasetGenerationError`;混合语料前先 `pop('gen_meta')` 或让类型稳定。`pop` 无损:swift 训练只读 `messages` / `images` / `channel`,溯源在 `step_decisions.final.jsonl` 完整保留。`to_swift.py` 里"accepts the extra column … DROPS it"的验证只覆盖单一语料;不根治(`related_apps` 类型稳定,或 `filter_copy` 路径不写 `gen_meta`)时,任何走 `filter_copy` 的混合语料都会踩同一坑 |
 
 **判据**:凡是"开关控制检查、不开则跳过"的工具,输出里那个 0 必须先确认是
 "查过=0"还是"没查"。区别在于有没有传开关,不在于输出长什么样。
@@ -351,7 +363,10 @@ harness actually produces it does not"),我没查就自己重推了一遍。
 **`ship_dataset.sh`** —— 建出 `val_swift.jsonl` 就带上,并核对远端行数、抽一张
 val 的图确认路径可解析。~~**没有 val 时大声说出来**,因为 `--val-ratio 0.05` 已是~~
 > **2026-08-25:`--val-ratio` 已退役(用户拍板),新语料本来就没有 val,
-> 这条告警不再适用。** 退役依据见 `outdated/plans/PLAN-20260822-datagen-v13.md`。
+> 这条告警不再适用。** 退役依据:三次实测,验证损失没有一次挑对 checkpoint
+> (决定性的 a7 vs a7e3:验证损失差值是尾部波动的 7.7 倍,eval 却 55.90 = 55.90);
+> 纯哈希切分还让 gimp / impress / thunderbird / vlc 四域零覆盖。完整数字见
+> `taskgen/docs/RUNBOOK.md` ② build 命令下的注释。
 > 下面这句保留为历史记录:
 默认,缺失才是意外。val 不需要单独运图:build 把所有录取任务的截图写进同一个
 `images/`,v11100 的 1358 张图对 1321 条 train 就是这部分盈余,不是泄漏。

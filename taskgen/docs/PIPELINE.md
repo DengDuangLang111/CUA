@@ -1,10 +1,21 @@
 # The taskgen pipeline
 
-> **datagenv12(分支,未合 main)**:fmt-w1 加 `intent=restyle` 与规则式
-> `grade=pptx` / `grade=image`(宿主 python-pptx / PIL 判呈现属性)。动机与闸 →
-> `outdated/plans/PLAN-20260818-datagenv12-fmt-w1.md`。**2026-08-20 起该分支扩为 targeted-200
-> 定向补数据 campaign 的载体**(缺口配额、`--focus` 补丁设计)→
-> `outdated/plans/PLAN-20260820-targeted100.md`。本文其余部分描述 v11.1 行为。
+> **datagenv12(分支,未合 main)**:fmt-w1 加 `intent=restyle`(同一属性跨多个对象)与规则式
+> `grade=pptx` / `grade=image`(宿主 python-pptx / PIL 判呈现属性;检查器
+> `check_pptx_props` / `check_image_props` 在 OSWorld fork 的 `generated_tasks.py`)。
+> - 动机:语料 544 道里格式类只有 1 道(0.2%),官方 369 里 56 道(15.2%)。成因是 grade
+>   词汇表(probe/table/browser)表达不了呈现属性,加上 prompt 规定"判不了就别写",
+>   这类题在下笔前就被丢弃;换生成器、加量都无效。
+> - 闸:教师通过率 >50% 开训,30–50% 加量到 100+ 道再训,<15% 停(记为教师能力瓶颈);
+>   新 checker 抽 10 条通过轨迹,用 LibreOffice→PDF 渲染人工核终态,不得用同一 checker 自证。
+> - restyle 的 deck 必须在 setup 里用 python3 + python-pptx 构建:`txt → odp:impress8`
+>   转换会产出零页空 deck,`odp → pptx` 同样为空。
+>
+> **2026-08-20 起该分支扩为 targeted-200 定向补数据 campaign 的载体**:按
+> `应用 × 动作 × 产出` 缺口定配额,`N_gen = ceil(target / max(p̂,0.15) × 1.15)`,
+> `p̂ = (s+1)/(n+2)`;p̂<15% 的格先修任务/checker,不加量。动作级定向的补丁设计是
+> `--focus FILE`:每 wave 一份技能清单注入 user prompt(与 avoid 块同构)。
+> 本文其余部分描述 v11.1 行为。
 
 How a task goes from a coordinate to a scored trajectory, what each stage
 catches, and what it costs. Every check listed here exists because its
@@ -35,7 +46,21 @@ Two rules shape the whole thing:
 > 抽签轴加 evaluator 族(口径 `reference/EVAL_FAMILY_TAXONOMY.md`);新增四个
 > gold grade(deck/doc/image/table_gold),ship 内插 bake 阶段(容器造
 > seed+gold、host 端不动点 0/1),evaluator 用官方 `cloud_file` 从本机 serve
-> 拉取。命令链 RUNBOOK §4.6,设计与验收 `outdated/plans/PLAN-20260828-v14g-gold.md`。
+> 拉取。命令链与放量门槛 RUNBOOK §4.6。设计要点:
+> - gold 的产生方式是执行后收割:LLM 写 `gold_transform`(非交互 /bin/sh),build 容器在
+>   post-setup 状态上执行它,把 `target_path` 的字节快照为 gold,sha256 写进 spec;
+>   expected 的 `dest` 嵌 `gold_sha256[:8]`,防评测端缓存吃旧 gold。
+> - bake 内置 host 侧不动点:`score(seed, gold) == 0.0`(防 seed 原样即通过)且
+>   `score(gold, gold) == 1.0`(判据自洽),任一不成立该 spec 拒收。
+> - gold 注入分两档:Tier-1 全量,直接落 bake 字节须得 1.0,验管道(getter/路径/postconfig);
+>   Tier-2 每族抽样 ≥5 条,先在 VM 里 `soffice --headless --convert-to` 同格式重存再落,
+>   须得 1.0,验 comparator 对 LibreOffice 重存噪声的容忍度。
+> - `soffice --convert-to 同格式 --outdir 同目录` 拒绝覆盖源文件(静默 no-op),所以 bake
+>   转到临时目录再 mv;不这样做时 gold 从未带过 LibreOffice 指纹,Tier-2 下 deck 0/7。
+> - 已知限制:`compare_docx_files` 只比段落文本,doc 族只做内容类任务;deck/image × create
+>   结构性不可 bake,已排除;加权抽签下 family 名义份额不可达(deck/image 只出现在
+>   transform 格),精确配额一律用 `cells` 钉死。
+>
 > 下文描述的是 v11–v14 主线行为,对 v14g 仍成立的部分不重复。
 
 ## 1 gen — draw a coordinate, ask for a task

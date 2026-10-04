@@ -19,22 +19,22 @@
 
 ## 11 族与官方 369 全量分布
 
-`family_census.py` 对官方 `evaluation_examples/examples` 实测:
+`family_census.py` 对官方 `evaluation_examples/examples` 实测;361 列是同一映射在
+跑测面板 `test_nogdrive.json`(369 去掉 8 道 Google Drive 题)上的计数
+(上游 worktree `091f5ef1`,2026-10-03 复算):
 
-| family | 判定手段 | 任务数 | 占比 |
-|---|---|---|---|
-| text_or_shell | 文本/stdout/文件内容比对(check_include_exclude、exact_match、diff…) | 70 | 19.0% |
-| table_property | 工作簿属性比对(compare_table 及 CSV 系) | 64 | 17.3% |
-| config_state | 配置/偏好读取(check_json_settings、gsettings 系) | 47 | 12.7% |
-| deck_property | 幻灯片属性比对(compare_pptx_files 系) | 42 | 11.4% |
-| doc_property | 文档属性比对(compare_docx_files 系) | 35 | 9.5% |
-| browser_state | 浏览器活态(URL/tab/书签/扩展) | 32 | 8.7% |
-| infeasible | 裸 `{"func":"infeasible"}`,FAIL 记 1 | 27 | 7.3% |
-| image_property | 图像属性/结构比对(gimp.py 系) | 27 | 7.3% |
-| media_state | VLC 配置/播放态/音视频比对 | 16 | 4.3% |
-| pdf_property | PDF 比对 | 9 | 2.4% |
-
-(361 跑测面板上的对应计数见 `outdated/plans/PLAN-20260828-v14g-gold.md` §0。)
+| family | 判定手段 | 任务数 | 占比 | 361 面板 | 占比 |
+|---|---|---|---|---|---|
+| text_or_shell | 文本/stdout/文件内容比对(check_include_exclude、exact_match、diff…) | 70 | 19.0% | 70 | 19.4% |
+| table_property | 工作簿属性比对(compare_table 及 CSV 系) | 64 | 17.3% | 63 | 17.5% |
+| config_state | 配置/偏好读取(check_json_settings、gsettings 系) | 47 | 12.7% | 45 | 12.5% |
+| deck_property | 幻灯片属性比对(compare_pptx_files 系) | 42 | 11.4% | 42 | 11.6% |
+| doc_property | 文档属性比对(compare_docx_files 系) | 35 | 9.5% | 34 | 9.4% |
+| browser_state | 浏览器活态(URL/tab/书签/扩展) | 32 | 8.7% | 32 | 8.9% |
+| infeasible | 裸 `{"func":"infeasible"}`,FAIL 记 1 | 27 | 7.3% | 27 | 7.5% |
+| image_property | 图像属性/结构比对(gimp.py 系) | 27 | 7.3% | 26 | 7.2% |
+| media_state | VLC 配置/播放态/音视频比对 | 16 | 4.3% | 16 | 4.4% |
+| pdf_property | PDF 比对 | 9 | 2.4% | 6 | 1.7% |
 
 ## 族 → 生成机制的映射(ostg v14g)
 
@@ -57,7 +57,7 @@ media 的 AV 子型(5 例,要音视频道具 + ffmpeg 链)与运行态子型(4 �
 
 ## 关联
 
-- 生成侧实现与验收:`outdated/plans/PLAN-20260828-v14g-gold.md`
+- 生成侧设计:`taskgen/docs/PIPELINE.md` 的 v14g 块;命令链与放量门槛:`taskgen/docs/RUNBOOK.md` §4.6
 - 三方动作普查(注释用途):会话记录 2026-08-28;动作分布表不再维护为口径
 
 <!-- REPO NAV -->

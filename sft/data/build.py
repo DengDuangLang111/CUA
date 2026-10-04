@@ -4,8 +4,10 @@
         --tasks TASKS_DIR --out OUT_DIR [--limit N] [--tail-run 5] \
         [--initial-fallback mp4]
 
-One sample per step, loss on the final assistant turn only (outdated/docs/SFT_CONTEXT_20260813.md
-section 6 says why a packed-conversation format cannot be equivalent). The
+One sample per step, loss on the final assistant turn only. A packed
+conversation cannot be equivalent: once history exceeds image_max, folding
+collapses the oldest screenshots to text, so a past turn renders differently
+depending on the target step (sft/docs/CONTEXT.md). The
 context is assembled by the AGENT'S OWN code -- build_messages, the tools
 def, the system prompt, the folding state -- imported from mm_agents.qwen,
 so the sample structure cannot drift from what the rollout actually sent.

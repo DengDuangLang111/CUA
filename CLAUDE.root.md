@@ -117,5 +117,6 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && set -a && . 
 
 - **同一事实只放在一个文件里**，其他地方放指针。文档都放 CUA 仓库；WSL ostg 仓库只有指路桩；os-simple-taskgen-v8 只有 shell 驱动和旧文件。
 - 变化频繁的状态写进 `CUA/docs/EXPERIMENTS.md` 带日期的现状块(RL 的写进 `RL_ENV_PLAN.md` §1)，**不写进本文件**。
-- 现行文档只写现在。过时的文档整份移进 `CUA/outdated/`，开头写明归档日期和取代它的文件。**现行文档不再引用 `outdated/` 下的任何文件**：还需要的事实，归档前先搬进现行文档。`outdated/` 不用读。
+- 现行文档只写现在。一份文档过时了，**先把里面还有用的部分(配方、门槛、清单、教训、仍有效的测量)搬进负责它的现行文档，剩下的才整份移进 `CUA/outdated/`**，开头写明归档日期和取代它的文件。
+- **现行文档不引用 `outdated/` 下的任何文件**，`outdated/` 不用读。例外：`docs/EXPERIMENTS.md` 里带日期的历史条目和 `reports/` 里的旧报告本身就是当时的记录，保持原样。
 - 本文件目标 <200 行：新增内容先问"删掉这行会犯错吗"，答案是否就放进域文档；可复用的流程写成 Skill。

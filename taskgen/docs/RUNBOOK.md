@@ -246,11 +246,11 @@ Reading the results:
   catches), the dual-requirement browser class (audit catches), the
   wrong-world-belief class (audit's world_assumptions catches).
 
-## 4.6 v14g gold 流水线(2026-08-28 落地;**生成尚未跑 — 等 API 更换**)
+## 4.6 v14g gold 流水线(2026-08-28 落地并实跑:pilot40 全环走通,wave-2 生成 1265 条入库;见 `docs/EXPERIMENTS.md` 08-28 条)
 
-代码全在 worktree `/mnt/d/research/ostg-v14/ostg` 分支 `datagenv14`;设计与
-验收门槛见 `outdated/plans/PLAN-20260828-v14g-gold.md`,口径见
-`reference/EVAL_FAMILY_TAXONOMY.md`。四个 gold grade(deck/doc/image/
+代码全在 worktree `/mnt/d/research/ostg-v14/ostg` 分支 `datagenv14`;设计要点见
+`taskgen/docs/PIPELINE.md` 的 v14g 块,口径见
+`reference/EVAL_FAMILY_TAXONOMY.md`,放量门槛见本节末表。四个 gold grade(deck/doc/image/
 table_gold)由 bake 产出标准答案文件,evaluator 用官方 `cloud_file` 从本机
 HTTP 拉取。全链:
 
@@ -274,6 +274,19 @@ PYTHONPATH=. python3 -m ostg.taskgen.validation.audit out/runs/v14g-pilot40/spec
 坑位:bake/serve 的 URL 约定 `http://127.0.0.1:8021/<set>/files/<slug>/gold/<名>`,
 `<set>` 必须等于 out/runs 下的目录名(task_json 的 batch 参数);bake 失败的
 spec 被 re-emit 丢弃(`ostg.baked` 不为真),不会带着 404 的 expected 出厂。
+注入脚本停 soffice 用 `pkill soffice`,不带 `-f`(`-f` 会匹配注入 shell 自身的命令行,
+pilot 里 36/36 `gold_rc=-15`);setup 内嵌文件超过 VM 单个 argv 上限 128KB 会静默失败,
+容器走 stdin 检不出,prebuild 已分块写入。
+
+放量门槛(全部达标才放大规模;pilot 存活率同时用作 `cells` 的 count 放大系数):
+
+| 闸 | 门槛 | pilot40 实测(2026-08-28) |
+|---|---|---|
+| bake 不动点成立 | ≥90% | 36/40 |
+| control 负向 0.0 率 | 100% | 36/36 |
+| Tier-1 注入得 1.0 | 100% | 36/36 |
+| Tier-2 重存后得 1.0(每族 ≥5 条抽样) | ≥80% | 36/36(修 round-trip 前 deck 0/7) |
+| audit covered | ≥80% | v1 52.5%,未达标;partial 两类:judge 误读 `sheet_data` 的全表比较语义,以及指令承诺了判分器看不见的副产物(真缺陷) |
 
 ## 5 Rollout
 
@@ -485,8 +498,23 @@ only images (10). The argparse-default column in that table records what runners
 **OpenWebRL cross-check** — the closest published 4B-student pipeline ships
 `hide_thinking`/`action_only` compression knobs and then defaults every released
 script to `full` with the reasoning window off; their headline numbers train on
-full thinking in history with **1–3 screenshots** in context. Details and the
-delta table: `outdated/docs/SFT_TRAINING_20260822.md`, "How OpenWebRL handles thinking".
+full thinking in history with **1–3 screenshots** in context. Checked
+2026-08-14 against their released code (`openwebrl/generate_browser.py:338-400`,
+`sft/`); the paper's ablations are summarised in `docs/READING.md`.
+
+| | OpenWebRL | ours |
+|---|---|---|
+| thinking in rollout history | full (default; `hide_thinking` / `action_only` knobs exist, off in every released script) | full (no knobs — would live in `_response_transform`) |
+| screenshots in context | **1** (4B) / 3 (8B) | 20 |
+| SFT reasoning placement | inline in content | inline in content |
+| SFT rendered via | base model's own chat template (byte-consistent with inference) | our own sample assembly from `traj.jsonl` `response` |
+| SFT granularity | per-turn prefix in the released recipe; whole-episode packing exists in the tooling | per-turn prefix only |
+| per-sample visual context | 1 current screenshot (matches their rollout) | the agent's own `build_messages` context — image window + folding (matches our rollout) |
+
+Whole-episode packing was measured for us and rejected: folding rewrites
+history as steps advance, so packing is lossless only for episodes ≤20 steps
+(49% of the v11 corpus by count); full packing saves 12.9× image encodings, the
+lossless subset only 1.1×.
 
 **Design consequence for us:** replaying full thinking in history is not our
 eccentricity — it is the norm across the authors' own Verified runs for every
@@ -877,8 +905,25 @@ the in-VM HTTP server inside one minute and systemd stops restarting it
 **permanently** — every later request gets `Connection refused` until the
 container is recycled, and the harness scores the task 0. This is the single
 largest harness-crash cause on record (213 of 453, 47%; vlc domain 15.7%).
-Root cause, measurements, and the disproof of "just retry more" are in
-`outdated/reports/SFT_FAILURE_ANATOMY_20260903.md` §10.
+With `RestartSec=5s` the crash loop uses up the 4 restarts at t=0/5/10/15 s,
+and the fifth crash is final (`start request repeated too quickly`).
+
+Measured over all `logs/qwen-direct-*.log` (283,180 successful screenshot
+calls, 612 failed = 0.22%, grouped into 415 consecutive-failure runs), and why
+more retries do not help:
+
+- Failures are bimodal with no samples in between. Of 317 recovered failure
+  runs, 314 (99%) recovered after a single failure; recovery took a median
+  5 s (= `RestartSec`), 97% within 11 s. The 98 runs that exhausted retries all
+  failed 3 times in a row.
+- `Connection refused` never recovered (0/79): once systemd gives up, no
+  process listens on the port. Read timeouts almost never kill a task (3 of
+  291 fatal failures); 99% of fatal failures are connection-layer errors.
+- Raising `retry_times` from 3 to 6 only adds ~45 s of waiting before the same
+  failure.
+- The unit is baked into the prebuilt image `happysixd/osworld-docker`, so
+  editing the repo's `.service` does nothing for existing VMs; the limit has to
+  be lifted at runtime.
 
 ```bash
 export OSTG_GUEST_RESTART_UNLIMITED=1   # per-task drop-in: StartLimitIntervalSec=0
@@ -895,10 +940,17 @@ crash-prone domains (vlc, vs_code, multi_apps); note it in the arm's args line.
 It is prevention, not rescue — a task already dead when the switch was off
 stays dead.
 
-**Status**: semantics verified on WSL's own systemd (drop-in overrides the
-baked value; unit keeps restarting, §10.12). **Not yet exercised on a real
-guest VM** — needs one free VM slot; until then treat the switch as untested
-end-to-end.
+**Status**: semantics verified on WSL's own systemd with a `systemctl --user`
+replica of the image unit (`Burst=4/60s`, `RestartSec=1s` to speed it up),
+read after 12 s: without the drop-in the unit ends `failed` with `NRestarts=4`
+frozen (bug reproduced); with it, `StartLimitIntervalUSec=0`, state
+`activating/auto-restart`, `NRestarts=9` and rising. **Not yet exercised on a
+real guest VM** — needs one free VM slot; until then treat the switch as
+untested end-to-end. The guest test script is
+`/mnt/d/research/patches/t4_guest_dropin.py`: it kills the server 6 times
+within 60 s with `systemctl kill -s KILL` (SIGTERM does not trigger
+`Restart=on-failure`), checks `/screenshot` returns 200 after each, then
+repeats without the drop-in as a control (expected dead after the 5th kill).
 
 **AWS provider pre-flight** (only when `--provider_name aws`): an expired SSO
 token fails every remaining task identically. Before a long run:
@@ -1235,7 +1287,11 @@ $P -m ostg.sft.data.build RESULT_DIR --tasks TASKS_DIR --out OUT \
 #      24 处不同、12 胜 12 负,与同模型重跑的自比基线(24/100)一模一样。
 #      今后 checkpoint 一律取 epoch-3 终点(pick_ckpt.sh endpoint),
 #      5% 的样本回到训练集。训练侧同时不再传 --val_dataset /
-#      --eval_strategy。完整论证见 outdated/plans/PLAN-20260822-datagen-v13.md。
+#      --eval_strategy。另两次:a6v 自身曲线最低点那个 checkpoint 比多训的臂
+#      低 15–19 题;a5v 曲线从 epoch 2 起上升(读作过训),eval 未证伪。
+#      结构问题:纯哈希切分不分层,5% 实抽 17/360 条,gimp / impress /
+#      thunderbird / vlc 四域零覆盖,逐域验证信号不成立。退役的只是"用验证
+#      损失挑 checkpoint、判过训";明显过训(如 a5v 的 5 epoch)看 eval 本身。
 #    ↑ --fold-size 1 也要显式传。默认 10 会让可见图数在 image_max-9..image_max
 #      之间锯齿(见 sft/docs/RESULTS.md §5.19);e6b6e034 的提交信息原话是
 #      "fold_size>1 silently trains on fewer images than the window says"。
@@ -1324,8 +1380,18 @@ python3 -B -m ostg.sft.strongjudge RESULT_DIR --tasks $V/out/runs/v16-main-1 \
 
 ## v16 严格语料流水线(2026-09-01 固化)
 
-口径与偏置披露见 `outdated/plans/PLAN-20260901-strict-corpus.md` §8;判官与规则闸见
-`sft/docs/JUDGING.md` §2f。四步,前三步在 WSL 的 ostg-v16 跑,第四步在
+**准入口径**(`curate16 --strict`,ostg@5c8594f2):在默认规则(只看 verdict +
+每条 requirement done)之上,再要求每条 requirement 都有截图为证 ——
+`j_inferred == 0`、`j_cannot_tell == 0`、`j_crit_fail` 为假、
+`j_evidence_violations == 0`、`j_derived >= 10`。1374 条里默认准入 645(46.9%),
+strict 准入 340(24.7%);按难度 d1 168/468 = 36%、d2 137/465 = 29%、
+**d3 35/441 = 8%**。
+
+**偏置披露**(报结果必须带):evidence 字段是判官自填、没有外部验证;strict
+对靠推断取证的任务系统性欠采样,尤其是 d3。语料级的其余已披露代价
+(重写末步未经判官、阈值未标定、sha256 校验已删)见 `sft/docs/RESULTS.md` §3.4。
+
+判官与规则闸见 `sft/docs/JUDGING.md` §2f。四步,前三步在 WSL 的 ostg-v16 跑,第四步在
 `/mnt/d/research/webstar`。
 
 ```bash

@@ -86,7 +86,7 @@ OSWorld 有一个名为 `multi_apps` 的域。ostg 生成的任务没有这个�
 | 与 r5 的关系 | 轨迹 +90%,样本仅 +13%;r5 半区自身被砍 44% —— **不是 a2 的"加数据"对照** |
 | 已披露代价 | 687 个重写末步未经判官;阈值未标定(opus 比 luna 松 19pp);sha256 校验已删 |
 
-全链与偏置见 `outdated/plans/PLAN-20260901-strict-corpus.md` §8-10。
+全链与偏置见 `taskgen/docs/RUNBOOK.md`「v16 严格语料流水线」一节。
 
 ## 4 语料与臂的对应
 
@@ -425,8 +425,8 @@ rich 是 √7 = 2.6 题 = **5.3 个百分点**,lean 是 √9 = 3.0 题 = **6.2 �
 `taskgen/docs/RUNBOOK.md` 在 2026-08-14 就记过同一个机制:"模板从**独立的
 `message.reasoning_content` 字段**读推理…我们从不设这个字段 —— 我们的推理由
 `client.py:51` 合并进 `content`","**服务端的开关够不到我们的思考**,任何隐藏思考
-的实验都必须在客户端做"。`outdated/docs/SFT_TRAINING_20260822.md` 也写着 runner 那个参数"对我们的消息
-形状是 no-op"。
+的实验都必须在客户端做"。runner 的那个参数对我们的消息
+形状同样是 no-op。
 
 那两处讲的是**教师** Qwen3.8 的服务路径。次日(08-15)为**学生** Qwen3.5-4B 新建
 `qwen35_4b_keepthink.jinja` 时做了 T1–T4 验证并全绿,记录是"history think kept,
@@ -753,7 +753,7 @@ epoch 对照。那 10 分对应的实际差异是 global batch 8 → 64、卡数
 
 | 臂 | 事实 |
 |---|---|
-| B-gb128 ep2 | global batch 128 需要 accum 8。该训练栈显存正比于梯度累积次数(实测:accum 4 稳定在 131.9 GiB;accum 16 在第 8–13 步 OOM;accum 32/64 在第 1 步前 OOM)。**gb128 六次提交全部 OOM,3 个 epoch 从未跑完**,表中该行使用崩溃前保存的第 2 个 epoch 边界存档。详见 `outdated/docs/SFT_TRAINING_20260822.md`,上游 ms-swift issue #5230 同症 |
+| B-gb128 ep2 | global batch 128 需要 accum 8。该训练栈显存正比于梯度累积次数(实测:accum 4 稳定在 131.9 GiB;accum 16 在第 8–13 步 OOM;accum 32/64 在第 1 步前 OOM)。**gb128 六次提交全部 OOM,3 个 epoch 从未跑完**,表中该行使用崩溃前保存的第 2 个 epoch 边界存档。原因与可行域(batch=1 且 accum≤8)见 `sft/docs/TRAINING.md` 的 Batch, accumulation and memory 一节,上游 ms-swift issue #5230 同症 |
 | **Bs-LoRA** | 合并的适配器是 `checkpoint-90`(1.02 epoch),不是终点 264。合并作业与 serve 脚本共用同一条按字典序排的挑选行(见 §5.2)。47.81% 是 1 epoch 权重的分数 |
 | **Bs-gb64** | 同一处缺陷:服务 `checkpoint-90`(1.02 epoch),终点是 264。45.81% 是 1 epoch 权重的分数 |
 | **B-gb64o** | 同一处缺陷:服务 `checkpoint-90`(1.01 epoch),终点是 267。41.81% 是 1 epoch 权重的分数 |
@@ -1468,7 +1468,7 @@ SFT 增益本身也随长度衰减:+21.7 / +21.8 / **+17.4**pp(相对增益反�
 这条发现把优先级动了:
 
 - **加负例**只解决"卡住时别硬撑",不解决"本来就走不到底";
-- **改语料配比**(掺 `os` 副应用,`outdated/plans/PLAN-20260822-datagen-v13.md` 缺口二)
+- **改语料配比**(掺 `os` 副应用,即 v13 列出的"跨应用组合类型"缺口)
   让题型更像,但**长任务仍然是长任务**;
 - **`max_steps` 50→100 的评测实验优先级最高**:长档 34.8% 的成功率里,
   失败的那 65% 有多少是"走到 50 步还没做完"而不是"走错了"?
@@ -1513,7 +1513,7 @@ nocapms100 是同权重冠军在 `max_steps 100` 下重跑 eval100。它要回�
 
 那 2 条"其他中断"是 **0 步、`last_action=null`**。**根因当天查清了,不是 VM 抖动,
 是我们自己的 fork 把 evaluator 导入删了** —— 全 361 里共 8 题如此,详见
-`outdated/reports/SFT_FAILURE_ANATOMY_20260903.md` §9(含权威受影响清单与切片归属)。确定性代码故障,
+`docs/OPS.md` §1 的 `metrics/__init__.py` 一行(含受影响的 8 题清单)。确定性代码故障,
 所有臂同等受害,`env.reset()` 阶段就崩、agent 一步没跑。**因此本表的 70/28/2
 仍然成立,但那 2 不该读成"偶发",要读成"结构性"。**
 

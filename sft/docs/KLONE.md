@@ -3,7 +3,7 @@
 > **2026-09-17 新短测，勿把下文2026-08-28的“只有zero3能装下”当作普适结论。** 在单节点4×A100 80GB、16CPU/384GiB RAM上，505条新语料的原ZeRO2-offload执行方式在32K/48K压力样本上均于视觉编码OOM；显式对完全冻结的视觉塔使用no_grad后，64K、原10图/2040视觉tokens、同ZeRO2-offload完成最长64行上的2个optimizer steps及完整checkpoint保存，峰值reserved63.66GiB、nvidia-smi采样66.92GiB，语言权重变化已核对。最长实际序列58,441，64K不丢正式语料样本。此为隔离短测，未验证全程或效果，补丁没有进入正式训练。完整证据：[A100长度短测](../../reports/A100_SFT_LENGTH_PROBE_20260917.md)。
 
 > 2026-08-28 建。Tillicum 之外的第二条训练链路。**这里只放 Klone 特有的事实**;
-> 配方本身(lr / epoch / loss_scale / 步数算术)在 `outdated/docs/SFT_TRAINING_20260822.md`,不重复。
+> 配方本身(lr / epoch / loss_scale / 步数算术)在 [TRAINING.md](TRAINING.md#sft-recipe-reference),不重复。
 >
 > 写这份文档的直接原因:同一批坑在两个 session 里各踩了一遍。
 
@@ -167,12 +167,15 @@ zero3 慢的原因是**每层**都 all-gather 参数、reduce-scatter 梯度,而
 **外部 loss 路径**,而该路径**按微批持有一份 logits 大小的张量**。
 9B 上:`vocab 248,320 × ~11,800 token × 2 bytes = 5.9 GB`(bf16)。
 
-`outdated/docs/SFT_TRAINING_20260822.md` 记的可行域是 **`batch=1 且 accum≤8`**,而 4 卡凑 global batch 64
+Tillicum H200 上 2026-08-17 实测的可行域是 **`batch=1 且 accum≤8`**(accum 4 稳在
+131.9 GiB,16 在第 8-13 步死于 ~137 GiB,与卡数、ZeRO 阶段无关;同一轮里关掉 channel_loss 的
+accum 64 运行峰值仍是 137.87 GiB,与上面的源码判断矛盾,未复测;细节见
+[TRAINING.md](TRAINING.md#batch-accumulation-and-memory)),而 4 卡凑 global batch 64
 需要 **accum 16** —— 正好是那个泄漏被验证过能承受的两倍。a2 在 8 卡上用 accum 8,
 从没越过这条线。
 
-**关掉它对实验无害**:同一份文档记着它**不进梯度**,"只往
-`metrics[f'loss_{channel}']` 写日志,真正的 loss 仍是那个分母"。代价仅是日志里
+**关掉它对实验无害**:它**不进梯度**(`seq2seq_trainer.py:175-181`),只往
+`metrics[f'loss_{channel}']` 写日志,真正的 loss 仍是那个分母。代价仅是日志里
 没有 `loss_chrome` / `loss_gimp` 分域拆解。
 
 > ⚠️ 2026-08-28 状态:`enable_channel_loss=false` 这个修复**尚未上机验证**
