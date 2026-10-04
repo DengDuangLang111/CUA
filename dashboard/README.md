@@ -239,9 +239,10 @@ Deploys still matter for the page code and the trajectory viewers. Status
 pushes stop consuming quota via `vercel.json`'s `ignoreCommand` — which the
 docs confirm **overrides the UI's Ignored Build Step**, so no dashboard setting
 is needed (earlier advice that the UI was required was wrong; corrected
-2026-08-15). Both `vercel.json` and `dashboard/vercel.json` carry it (only the
-project-root copy is read; the other is inert because the project's root
-directory is not recorded anywhere we can see):
+2026-08-15). Both `vercel.json` and `dashboard/vercel.json` carry it. The project's
+root directory is **`dashboard/`** (checked 2026-10-03: the site serves `dashboard/index.html`
+at `/`, while `/dashboard/index.html` and `/README.md` are 404), so `dashboard/vercel.json`
+is the copy Vercel reads, and nothing outside `dashboard/` is uploaded:
 
 ```json
 {"ignoreCommand":
