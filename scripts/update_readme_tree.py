@@ -7,6 +7,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 START = '<!-- BEGIN REPO TREE -->'
 END = '<!-- END REPO TREE -->'
+# archived material: listed as a directory only, its files are not part of the maintained layout
+COLLAPSED = {'outdated'}
 
 
 def source_files():
@@ -20,7 +22,10 @@ def render_tree():
     tree = {}
     for name in source_files():
         node = tree
-        for part in Path(name).parts:
+        parts = Path(name).parts
+        if parts[0] in COLLAPSED:
+            parts = (parts[0], '…')
+        for part in parts:
             node = node.setdefault(part, {})
     lines = ['CUA/']
 

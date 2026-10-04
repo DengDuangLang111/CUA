@@ -17,7 +17,7 @@ This directory contains local code mirrors and research tooling, organized by re
 
 Start with [training](docs/TRAINING.md), [context](docs/CONTEXT.md), [v11 data preparation](docs/DATA_PIPELINE.md), [v16 differences](docs/DATA_PIPELINE_V16.md), or [results](docs/RESULTS.md).
 
-[TMAX-9B → v11 r5 CUA SFT plan](plans/PLAN-20260915-tmax9b-r5-cua-sft.md) records the downloaded terminal-RL checkpoint, required visual-module restoration, frozen r5 corpus and matched SFT/evaluation protocol. Tillicum job 296948 requests four H200 GPUs for direct training; see the plan for its recorded status.
+The TMAX-9B → v11 r5 SFT (completed 2026-09-16) is recorded in [checkpoints](docs/CHECKPOINTS.md) and the [experiment ledger](../docs/EXPERIMENTS.md).
 
 Use [EVAL_AUTOMATION.md](docs/EVAL_AUTOMATION.md) for the reusable model/benchmark/panel registry, unique run IDs, fixed two-host allocation, isolated task attempts, status and resume commands. Its preparation section covers [prepare_model.py](scripts/serve/prepare_model.py): explicit Tillicum checkpoint → resumable verified transfer → one Klone Slurm service. Register the ready endpoint once, then use the existing eval commands. Preparation does not launch evaluations.
 
@@ -27,7 +27,7 @@ The **standalone trajectory debugger** has one fixed catalog with **Formal Eval*
 
 The [visual-signal plan](plans/PLAN-20260914-visual-signal-monitoring.md) retains design scope and dated validation, including historical v11/v16/teacher/MixB/history-compression imports. A recorded deployment or acceptance count is not a live availability check. Historical runs without attention or evaluator inputs remain explicitly unavailable for those fields.
 
-The old mixed training/context/failure ledgers are preserved under [outdated/](../outdated/README.md). Exact checkpoint arguments and actual evaluation records take precedence over old prose or copied sbatch comments.
+Exact checkpoint arguments and actual evaluation records take precedence over old prose or copied sbatch comments.
 
 Swift message serialization is implemented once in [data/to_swift.py](data/to_swift.py). [data/export.py](data/export.py) keeps its legacy CLI/default fields, and the SWE-MeM adapter adds its own paths/weights; both reuse that serializer. See [the serialization contract](docs/SFT_DATA.md#serialization-implementation-2026-09-14).
 

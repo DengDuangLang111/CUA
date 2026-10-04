@@ -104,21 +104,18 @@ ssh osworld-windows 'wsl -e bash -lc "cd /mnt/d/research/OSWorld && set -a && . 
 | 轨迹页面、visual signal、正式和测试目录与恢复 | `CUA/sft/docs/TRAJECTORY_PIPELINE.md` |
 | rollout 打分体系：judge 输入、刻度、schema、仲裁、判官对照 | `CUA/sft/docs/JUDGING.md` |
 | checkpoint、数据集、轨迹存哪，能删什么 | `CUA/sft/docs/CHECKPOINTS.md` |
-| **失败证据与历史解释** | `CUA/reports/SFT_FAILURE_PATTERNS_20260904.md`；旧账 `CUA/outdated/reports/SFT_FAILURE_ANATOMY_20260903.md` |
+| **失败证据与历史解释** | `CUA/reports/SFT_FAILURE_PATTERNS_20260904.md` |
 | 运维深度：魔改明细、代理、隧道、资源、任务 JSON 语义与坑 | `CUA/docs/OPS.md` |
 | **RL：现状、现行设置、链路、提速措施、常用操作** | `CUA/docs/RL_ENV_PLAN.md`(§1 现状是入口) |
 | **RL：VM 镜像装了什么、bridge 怎么跑题、VM 泄漏** | `CUA/docs/RL_VM_ENVIRONMENT.md` |
 | RL：题库构成与筛选 / 实验设计 | `CUA/docs/RL_TASK_POOL.md` · `CUA/docs/RL_EXPERIMENT_DESIGN.md` |
-| RL：09-18 至 10-03 的过程记录 | `CUA/outdated/docs/RL_ENV_LOG_20260918-20261003.md` |
 | Dashboard / Vercel 契约 | `CUA/dashboard/README.md` |
 | 论文与创新点 / 候选实验的评估与排队 | `CUA/docs/READING.md` · `CUA/docs/IDEAS.md` |
-| ostg 分支史 / main 是谁 | `CUA/outdated/docs/TASKGEN_GIT_HISTORY_20260815.md` |
 | 官方 361 / V2 任务运行条件(冻结参考) | `CUA/reference/OSWORLD_VERIFIED_RUNTIME_REQUIREMENTS.md` · `..._V2_...` |
-| 历史方案(v7 计划、配对组、旧状态页；v12–v15 datagen 方案在 `plans/`) | `CUA/outdated/` · `CUA/outdated/plans/` |
 
 ## 8 文档管理规矩
 
 - **同一事实只放在一个文件里**，其他地方放指针。文档都放 CUA 仓库；WSL ostg 仓库只有指路桩；os-simple-taskgen-v8 只有 shell 驱动和旧文件。
 - 变化频繁的状态写进 `CUA/docs/EXPERIMENTS.md` 带日期的现状块(RL 的写进 `RL_ENV_PLAN.md` §1)，**不写进本文件**。
-- 现行文档只写现在；过时的过程记录整份移进 `CUA/outdated/`，开头写明归档日期和取代它的文件。
+- 现行文档只写现在。过时的文档整份移进 `CUA/outdated/`，开头写明归档日期和取代它的文件。**现行文档不再引用 `outdated/` 下的任何文件**：还需要的事实，归档前先搬进现行文档。`outdated/` 不用读。
 - 本文件目标 <200 行：新增内容先问"删掉这行会犯错吗"，答案是否就放进域文档；可复用的流程写成 Skill。

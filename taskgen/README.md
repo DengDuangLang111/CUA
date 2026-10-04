@@ -1,6 +1,6 @@
 # Task generation
 
-The folders below organize the source snapshot in this repository. In particular, `generation/gen.py` is the historical adapter snapshot described in [the archived source note](../outdated/docs/TASKGEN_SNAPSHOT_20260815.md). This reorganization does not make it the current v16 implementation or deploy it to Windows.
+The folders below organize the source snapshot in this repository. In particular, `generation/gen.py` is a historical adapter snapshot (2026-08-15): it is not the current v16 implementation, and this reorganization does not deploy it to Windows.
 
 | Folder | Responsibility |
 |---|---|

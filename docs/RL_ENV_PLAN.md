@@ -3,7 +3,6 @@
 > 本文件只写**现在**：在跑什么、怎么设置的、链路、正在用的提速措施、仍然有效的测量、常用操作。
 > - VM 镜像里装了什么、bridge 怎么跑题、VM 泄漏与清理：`RL_VM_ENVIRONMENT.md`
 > - 题库构成和筛选：`RL_TASK_POOL.md`；实验设计：`RL_EXPERIMENT_DESIGN.md`
-> - 09-18 至 10-03 的逐日过程(路线取舍、冒烟、v1、各项提速的证据、快照原型)：`outdated/docs/RL_ENV_LOG_20260918-20261003.md`
 >
 > 代码全在私有仓库 `DengDuangLang111/slime-cua`，分支 `pool-expand`：`examples/cua_desktop/` 是训练端插件，`examples/cua_desktop/vm/` 是 VM 主机和 relay 站的代码。
 

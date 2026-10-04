@@ -4,7 +4,7 @@
 
 - 9B r5 在 6,847 道 CUA-Gym 题(桌面、PDF、网页、跨应用)上做 GRPO，算法与 Zixian 的 OpenWebRL 基线对齐。接力链 342297 → 342305(24 h × 9，2 节点 16 卡)；342297 排队中，Slurm 估计 10-04 00:16 开始。
 - VM：工作站 8 台 + Windows 4 台，跑自建训练镜像；relay 在 Windows WSL，**Mac 不必开着**。训练期间两台主机被 RL 占用，**不要跑 eval 链**。
-- 现状、设置、常用操作：`docs/RL_ENV_PLAN.md`；VM 环境：`docs/RL_VM_ENVIRONMENT.md`；v1(341861)与之前的过程：`outdated/docs/RL_ENV_LOG_20260918-20261003.md`。
+- 现状、设置、常用操作：`docs/RL_ENV_PLAN.md`；VM 环境：`docs/RL_VM_ENVIRONMENT.md`。
 
 ## OSWorld2 teacher 剩余91题续跑，仅workstation（2026-09-30 00:27 PDT启动）
 
@@ -308,7 +308,7 @@
 - **Slurm 296948** / Tillicum / account video / gpu-h200 / normal / **8h**；2026-09-15 19:25按用户要求原位缩短时限，作业号和19:18的提交时间保留。调度预测会动态变化。
 - 规范臂 `tmax9b-full-r5-ml65k`；r5 6474样本，lr3e-6、3ep、306steps、max_length65536，与读取到的原a2参数对齐。
 - 原始TMAX已下载到Tillicum；已装配427个TMAX语言张量 + 333个原始视觉张量 + 15个兼容MTP张量，视觉/merger冻结，MTP不启用。
-- 详见[实验计划](../sft/plans/PLAN-20260915-tmax9b-r5-cua-sft.md)；日志 `/gpfs/scrubbed/jy050706/sft/tmax9b_r5_296948.out`，输出 `out/tmax9b-full-r5-ml65k/`。
+- 日志 `/gpfs/scrubbed/jy050706/sft/tmax9b_r5_296948.out`，输出 `out/tmax9b-full-r5-ml65k/`。
 
 ## OSWorld-V2 全 token 采集：8 题 pilot（2026-09-15，workstation 已启动）
 

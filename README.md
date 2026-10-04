@@ -17,7 +17,6 @@ Generated desktop tasks, teacher trajectories, SFT data/training recipes, evalua
 | Trajectory inspection pipeline | [Default workflow for every eval](sft/docs/TRAINING.md#default-evaluation-workflow) · [pipeline, unified catalog and recovery](sft/docs/TRAJECTORY_PIPELINE.md) · [automatic per-task callback](sft/scripts/eval/after_task.py) |
 | Operations and shared documentation | [docs/README.md](docs/README.md) |
 | Dashboard | [dashboard/README.md](dashboard/README.md) |
-| Historical/superseded material | [outdated/README.md](outdated/README.md) |
 
 ## Responsibilities
 
@@ -32,7 +31,7 @@ Generated desktop tasks, teacher trajectories, SFT data/training recipes, evalua
 | `taskgen/validation/`, `taskgen/fixtures/` | Static/VM checks and fixture preparation |
 | `taskgen/analysis/`, `taskgen/scripts/` | Coverage analysis and rollout/monitoring drivers |
 | `docs/`, domain `docs/`, `reports/`, `reference/` | Shared contracts, domain guides, dated evidence and frozen references |
-| `outdated/` | Historical documents, with original evidence retained; archived scripts stay under their domain's `scripts/*/archive/` |
+| `outdated/` | Archived documents. Not maintained, and the maintained documents do not link into it |
 | `dashboard/scripts/` | Shared dashboard health/watchdog helpers; domain-specific publishers live with SFT/taskgen |
 | `scripts/`, `tests/` | Only repository-wide maintenance and layout regression checks |
 
@@ -44,11 +43,10 @@ There is no top-level `tools/` or `control/` catch-all. Shared API/legacy trajec
 - Source Python modules use the `ostg` package namespace from the live project. This directory is a mirror named CUA; a folder move alone does not install a Python package or update a remote environment.
 - `sft/data/build.py` uses the external OSWorld Qwen context/image code. Run runtime-sensitive checks against the correct WSL version.
 - Existing remote result/checkpoint paths, flat control-script basenames, datasets and screenshots are unchanged. Follow [docs/RUNTIME_MIRRORS.md](docs/RUNTIME_MIRRORS.md) before deployment.
-- Old training/context/failure ledgers and the completed-era strict-corpus plan are under `outdated/`. Their conclusions and commands retain their original scope/date; use the maintained entry guides to select relevant evidence.
 
 ## Maintain this layout
 
-Update the owning document rather than creating another summary/status file. Keep active implementation plans in the domain's `plans/`; move completed or superseded records to `outdated/` only after checking their status. Keep agent entry files short and read detailed documents on demand.
+Update the owning document rather than creating another summary/status file. Keep active implementation plans in the domain's `plans/`; move completed or superseded records to `outdated/` only after checking their status, carry any fact still needed into the maintained document first, and do not link to archived files from maintained ones. Keep agent entry files short and read detailed documents on demand.
 
 The complete source tree below is generated from Git-tracked and non-ignored new files that exist on disk. It excludes Git internals, caches and ignored generated trajectory/report trees. Refresh it after adding or moving a source file:
 
@@ -66,6 +64,21 @@ These local checks do not launch APIs, VMs, Slurm jobs or model inference. Windo
 <!-- BEGIN REPO TREE -->
 ```text
 CUA/
+├── .claude/
+│   └── skills/
+│       ├── rl-deploy/
+│       │   └── SKILL.md
+│       ├── rl-run-status/
+│       │   └── SKILL.md
+│       ├── rl-task-check/
+│       │   ├── SKILL.md
+│       │   └── make_rows.py
+│       ├── rl-vm-image/
+│       │   ├── SKILL.md
+│       │   └── resolve_pins.md
+│       └── rl-vm-leak-cleanup/
+│           ├── SKILL.md
+│           └── list_orphans.sh
 ├── dashboard/
 │   ├── scripts/
 │   │   ├── dash_probe.sh
@@ -95,34 +108,7 @@ CUA/
 │   ├── verified_eval100_nonproxy.json
 │   └── verified_eval50_nonproxy.json
 ├── outdated/
-│   ├── docs/
-│   │   ├── SFT_CONTEXT_20260813.md
-│   │   ├── SFT_TRAINING_20260822.md
-│   │   ├── TASKGEN_GIT_HISTORY_20260815.md
-│   │   └── TASKGEN_SNAPSHOT_20260815.md
-│   ├── plans/
-│   │   ├── PLAN-20260815-rollout2vm-richrich-eval.md
-│   │   ├── PLAN-20260816-armB-bestof3-armC.md
-│   │   ├── PLAN-20260818-datagenv12-fmt-w1.md
-│   │   ├── PLAN-20260820-targeted100.md
-│   │   ├── PLAN-20260822-datagen-v13.md
-│   │   ├── PLAN-20260825-datagen-v14.md
-│   │   ├── PLAN-20260825-v14-impl.md
-│   │   ├── PLAN-20260825-v14-offpolicy-roi.md
-│   │   ├── PLAN-20260828-v14g-gold.md
-│   │   ├── PLAN-20260829-aws-rollout.md
-│   │   ├── PLAN-20260830-v15.md
-│   │   ├── PLAN-20260901-strict-corpus.md
-│   │   └── V11.md
-│   ├── reports/
-│   │   └── SFT_FAILURE_ANATOMY_20260903.md
-│   ├── OSWORLD_EXPERIMENT_STATUS.md
-│   ├── PAIRED_GROUP_EXPERIMENT.md
-│   ├── README.md
-│   ├── SAMPLING.md
-│   ├── TASK_GENERATION_PLAN.md
-│   ├── V3_RUN.md
-│   └── eval_actions.py
+│   └── …
 ├── reference/
 │   ├── osworld-author-runs/
 │   │   ├── README.md
@@ -277,48 +263,10 @@ CUA/
 │   │   ├── save_inferred_review_candidate.jsonl
 │   │   ├── save_seen_review_candidate.jsonl
 │   │   └── text-save.png
-│   ├── weekly-20260917/
-│   │   ├── assets/
-│   │   │   ├── bluetooth-case.png
-│   │   │   ├── clickloop-case.png
-│   │   │   ├── failure-6.png
-│   │   │   ├── failure-9.png
-│   │   │   ├── freeze-Freeze_row_column.xlsx
-│   │   │   ├── freeze-Freeze_row_column_gold.xlsx
-│   │   │   ├── freeze-case.png
-│   │   │   ├── paragraph-CCCH9003_Tutorial_guidelines.docx
-│   │   │   ├── paragraph-CCCH9003_Tutorial_guidelines_Gold_1.docx
-│   │   │   ├── paragraph-CCCH9003_Tutorial_guidelines_Gold_2.docx
-│   │   │   ├── paragraph-CCCH9003_Tutorial_guidelines_Gold_3.docx
-│   │   │   ├── paragraph-CCCH9003_Tutorial_guidelines_Gold_4.docx
-│   │   │   ├── paragraph-case.png
-│   │   │   ├── paragraph-repair.png
-│   │   │   ├── scrollloop-case.png
-│   │   │   ├── subscript-H2O_Factsheet_WA.docx
-│   │   │   ├── subscript-H2O_Factsheet_WA_Gold.docx
-│   │   │   ├── subscript-case.png
-│   │   │   ├── subscript-old.png
-│   │   │   ├── success-0.png
-│   │   │   ├── success-1.png
-│   │   │   ├── table-Table_Of_Work_Effort_Instructions.docx
-│   │   │   ├── table-Table_Of_Work_Effort_Instructions_Gold.docx
-│   │   │   ├── table-case.png
-│   │   │   ├── table-close.png
-│   │   │   └── terminal-case.png
-│   │   ├── README.md
-│   │   ├── additional-failure-evidence.json
-│   │   ├── attention-cohort.json
-│   │   ├── evidence.json
-│   │   ├── failure-analysis.json
-│   │   ├── failure-signals.json
-│   │   ├── index.html
-│   │   ├── repetition-audit.json
-│   │   ├── speaker-notes.md
-│   │   └── subscript-evidence.json
 │   ├── A100_SFT_LENGTH_PROBE_20260917.md
+│   ├── ARM_DISTILL_RESULTS_20261001.md
 │   ├── ATTENTION_ASYNC_DOWNLOAD_20260917.validation.json
 │   ├── CAPTURE_SERVER_OPTIMIZATION_20260917.validation.json
-│   ├── FOLDING_SETUPS.md
 │   ├── OSWORLD_V2_HARNESS_DIFF_20260915.md
 │   ├── OSWORLD_V2_OFFICIAL_0808_WORKSTATION_20260915.patch
 │   ├── OSWORLD_V2_REMAINING_20260916.json
@@ -329,8 +277,6 @@ CUA/
 │   ├── OSWORLD_V2_THINK_TWO_HOSTS_20260915.sh
 │   ├── OSWORLD_V2_THREE_OFFICIAL_REVERTS_20260915.patch
 │   ├── OSWORLD_V2_THREE_OFFICIAL_REVERTS_20260915.validation.json
-│   ├── OSWORLD_V2_TRAJECTORY_PIPELINE_20260915.md
-│   ├── PIPELINE_OPTIMIZATION_REVIEW_20260917.md
 │   ├── SFT_DIAGNOSIS_20260904.md
 │   ├── SFT_FAILURE_INVENTORY_20260904.json
 │   ├── SFT_FAILURE_PATTERNS_20260904.md
@@ -432,7 +378,7 @@ CUA/
 │   │       └── test_prepare_copy.py
 │   ├── plans/
 │   │   ├── PLAN-20260914-visual-signal-monitoring.md
-│   │   └── PLAN-20260915-tmax9b-r5-cua-sft.md
+│   │   └── PLAN-20260930-qwencua-arm.md
 │   ├── quality/
 │   │   ├── __init__.py
 │   │   ├── arb.py

@@ -35,7 +35,6 @@ Windows/WSL：每题 rollout → 原始记录 → evaluator 分数 → 自动后
 
 1. **确认最终模型。** 查本次续训真实输出目录，确认 `trainer_state.json` 的
    `global_step=306`、权重完整且保存已结束。不要用最大目录名推断完成状态。
-   本轮训练配方和公平对照要求见 [TMAX 计划](../plans/PLAN-20260915-tmax9b-r5-cua-sft.md#6-最小实验矩阵与评测)。
 2. **在 Tillicum 配置和准备服务。** 从 [配置示例](../scripts/serve/prepare_model.example.json)
    复制一份私有配置，填写实际路径；执行下文的 `prepare_model.py plan / prepare / status`。
    必须在拥有有效 Klone SSH master 的源主机执行。首次需把脚本复制到该主机。
