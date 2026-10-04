@@ -458,8 +458,8 @@ self.environment = {"DISK_SIZE": "32G", "RAM_SIZE": "4G", "CPU_CORES": "4"}
 | CPU | 4 核 | 5 个 |
 | 磁盘 | ~24.5 GB overlay | 30+ 个 |
 
-RL 的 desktop bridge(cua-rl-gigpo `vm_hosts.json` 的 `max_vms`)按另一套实测:开 KSM 时 Windows 5 / 工作站 15,
-不开时 4 / 10,KSM 随 WSL 重启失效。容量表和测法见 `docs/RL_ENV_PLAN.md`(10-02 傍晚);RL 与 eval 不同时跑满。
+RL 的 desktop bridge(slime-cua `examples/cua_desktop/vm/vm_hosts.json` 的 `max_vms`,用户 10-03 定):Windows 4 / 工作站 8,
+两台都开 KSM(随 WSL 重启失效,要用户重开)。摘要见 `docs/RL_ENV_PLAN.md` §3,测法和原始数据见 `outdated/docs/RL_ENV_LOG_20260918-20261003.md`;RL 与 eval 不同时跑满。
 
 ### 内存实测(2026-08-14,3 VM 跑 v11-500 稳态)
 

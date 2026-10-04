@@ -1,16 +1,8 @@
 # 桌面 CUA RL 实验设计：Qwen3.5-9B SFT → GRPO
 
-日期：2026-09-18(09-22 更新)。状态：**P0 已完成**(09-22：π1 发布为新服务 → π1 在策略采样 16 回合 → 从 step1 恢复并更新到 step2 → 独立校验通过，得到 π2)；**P1 已完成并过关**(09-22 23:57)；P2 题单已定(train 64 / dev 24)；持续 online RL 尚未启动，上游源码未改。**训练题来源已改为 CUA-Gym 去除与 OSWorld-Verified 重叠的部分**(用户 09-22 选方案 a)。
-
-**最新进度**：普通r5-9B checkpoint-306已完成16条真实轨迹；其中Writer完整四轨迹group已完成一次HF/DeepSpeed GRPO更新，原生clipped loss复用OpenWebRL。127次输入匹配、33次backward、global_step1、独立权重变化/视觉冻结/重新加载均通过。采用训练侧old-policy重算。09-22 已验收：新权重发布为新服务并做 VM rollout、从 checkpoint 恢复后第二次更新；仍未做：跨后端采样一致性(vLLM 与 HF 的 logprob 差异仍存在)、不重启服务的在线权重同步。精确结果和运行证据见[环境进度MD顶部](RL_ENV_PLAN.md)。以下较早执行说明保留历史背景，以最新记录为准。
-
-**执行进度更新**：用户授权试跑后，已按其指定在 workstation 完成 Calc 的 P0 环境/评分/重置检查（0 → 0.7 → 1 → reset 后 0），原始任务/evaluator 未改；测试 VM 已全部停止。此为 scripted fixture 资格检查，不是模型 rollout 或 RL update。完整事实与文件证据只记录在 [环境进度 MD](RL_ENV_PLAN.md)。后续 P0 优先使用 workstation 的独立空闲 slot，Windows 既有评测保持不动。
-
-**后续真实模型试跑已完成**：普通 r5-9B checkpoint-306 已核实、发布并以单 L40S 服务；一个 Calc task 在原 GUI agent 下完成9次决策，reward=0，采集与页面验证通过。最可能的失败原因是未保存；另有第三项评分要求未明确写在指令中的疑点。该次只是单条可记录的真实 rollout，尚未完成本设计的16任务信号探测或参数更新。执行细节与原始成绩仍以环境进度 MD 为准。
-
-用户已确认初始模型：**现有 Qwen3.5-9B CUA SFT**。普通r5 checkpoint-306已核对并以校验后的推理文件部署，路径和发布清单见环境进度MD。主 benchmark 已由用户于 2026-09-22 确认为 **OSWorld-Verified**(官方 361 题)；OSWorld-V2 仍只作后续迁移检查。
-
-本文件是实验问题、对照和预算的权威设计；环境事实与操作历史见 [RL_ENV_PLAN.md](RL_ENV_PLAN.md)。
+日期：2026-09-18(09-22 更新)。本文件只讲**实验设计**：要回答的问题、对照、数据、配方提案、预算和判定标准。
+- 现在实际在跑什么、用什么参数：`RL_ENV_PLAN.md` §1–§2(第 5 节的配方是启动前的提案，不是现行参数)。
+- 09-18 至 10-03 的执行过程(P0/P1 验收、路线选择、Arijit 框架评估)：`outdated/docs/RL_ENV_LOG_20260918-20261003.md`；本文件原来的进度段落和第 10、11 节也移到了那里的附录。
 
 ## 1. 要回答的一个问题
 
@@ -221,49 +213,9 @@ VM crash、reset 失败、截图服务不可用、evaluator crash 标为 infrast
 
 记录每条轨迹的真实输入、response token IDs/logprobs/mask、图像身份和动作，支持从某个 reward 回溯到具体文件与操作。复用现有日志结构和 renderer，不引入新 dashboard 或在线监控平台。
 
-## 10. 当前进度与执行前剩余项
+## 10. 执行情况
 
-- [x] 用户确认 Qwen3.5-9B CUA SFT 初始化。
-- [x] 任务候选数、Python 初始化子集、GRPO/GiGPO 区别与现有 Windows 路线已核对。
-- [x] 明确 A/B/C、原始交互预算匹配、reward 与失败语义、数据划分和验收门槛。
-- [x] 用户确定主 benchmark：OSWorld-Verified(官方 361 题，2026-09-22)。
-- [x] 初始SFT checkpoint / model registry / 已执行采样协议冻结。
-- [x] Qwen3.5-9B在HF/DeepSpeed完成加载、backward、单步更新、保存和独立重载。
-- [x] 新权重发布为新服务、VM rollout、第二轮更新及 checkpoint resume 验收(09-22，π1 → π2)。
-- [ ] 不重启服务的在线权重同步(目前每次更新后重新发布并起服务，加载约 3 分钟)。
-- [x] 独立VM slot、SFT endpoint和单步训练GPU资源已验证；π1 endpoint 已部署(g3108 GPU3，端口 8083)。
-- [~] 任务资格检查、family split 和与 benchmark 的重叠审计：P2 所需部分已完成(09-22)；与旧 SFT 数据的重叠未单独审(SFT 题生成时已按 CUA-Gym 文本相似度 <0.50 回避)；P3 规模的候选池不足，需扩池。
-- [ ] 持续训练调度adapter待接入；原生VM任务adapter及离线训练样本导出已实现并运行。
-- [x] P0 完成(09-22)。
-- [x] P1：16 题 × 4 条 π0 采样完成(09-22)。环境无效 0/48，未检出格式无效；有差异组原始分 10/16、Binary 9/16，过关。只在 Partial 下才有差异的组仅 1 个(已被重叠审计排除)。详见 RL_ENV_PLAN。
-- [x] 重叠审计(对 OSWorld-Verified)与家族划分(09-22)；P2 题单：train 64、dev 24(Impress dev 仅 1)，每题经审题、四态检查与 VM 往返检查。
-- [ ] 按 P0/P1 实测吞吐批准 P2/P3 预算。
-
-## 11. 用户任务清单(2026-10-01 记录)
-
-用户列出的 RL 任务(用户注明"这些也可以让 Arijit 做")：
-1. 把 CUA 环境加进 OpenWebRL 仓库并跑通。
-2. 把 Arijit 那边 CUA RL 较好的 setup 拿来，在 OpenWebRL 上试。
-
-用户 10-01 指示：**暂不往 OpenWebRL 里加**；先看 Arijit 现有的 CUA RL 能否直接对 r5 模型做 RL。评估结论(只读核对 `arijitray1993/multi-agent-framework` `cac0a51`，与远端 HEAD 一致；证据与细节见 RL_ENV_PLAN "10-01：Arijit 的 CUA RL 能否训 r5")：
-
-- **能加载，但不能直接用**。训练栈(vendored verl/GiGPO，`verl-qwen35` 环境：transformers 5.15.1 + vLLM 0.27.1)能加载 Qwen3.5。它的起点本来就是用户的 SFT 模型(`DanielYanCua/osworld-verified-sft-qwen3.5` 的 4b 版本)。
-- **主要障碍**：
-  1. **RL 采样格式与 r5 不同**：截图缩到 1280×736；坐标用 0–999 相对网格并以 JSON 工具调用输出；每步 1 张历史截图；`max_tokens=1500`。r5 训练时是原尺寸截图、`pyautogui` 像素坐标、10 张历史截图。Arijit 自己测过：在他的格式下，4B SFT 模型 12% 的步骤给不出可用输出；用原生格式时，2 张图 5.0%、最多 15 张图 22.2%。原生格式只接进了评测，没接进训练采样。
-  2. **硬件**：4B 在 2×H200 上峰值 102GB，每步约 24 分钟。r5 是 9B，原生格式又要 10 张历史截图，需要 8×80GB 级别的机器；L40S(48GB)他已实测会 OOM。
-  3. **桌面环境跑在 AWS EC2**(`worker_bridge.py` 写死 `provider_name="aws"`)，要花钱、要凭据；我们现有的是 WSL/workstation 上的 docker。
-  4. **题没有做 OSWorld 重叠审计**：从 CUA-Gym 四个应用的 7,249 题里随机抽 282 道，包含 `osworld_` 家族。
-- **它的结果**：截至 09-08，4B 跑了 36 步 RL，在 OSWorld 19 道共同题上没有可测提升(基座 2/19，第 17/24/36 步分别为 2、3、1)。作者自己写的是还不知道是 setup 问题还是方法问题。
-- **值得借鉴的 setup**：
-  - 奖励 v2：按最终状态给 [0,1] 分，不减初始分；
-  - 零优势过滤按真实除数取整，不丢掉带梯度的行；
-  - 卡死循环提前终止并扣分；
-  - GiGPO 步级分组；
-  - 实测瓶颈在多模态样本的 old_log_prob/ref/update 三遍前向，占每步 97.8%，环境只占 2.2%。
-
-**下一步待用户决定**：
-- (a) 在 Arijit 的栈里把 r5 的原生格式接进训练采样，并换成本地 docker 环境，需要 8×80GB 的卡；
-- (b) 先在我们自己已验证的单卡更新链路上补齐自动循环(r5 原生格式已跑通两次更新)，把 Arijit 的 GiGPO、奖励和过滤做法移植过来对比。
+P0(环境与模型链路验收)和 P1(16 题训练信号探测)已在 09-22 完成。10-02 用户定改走 MSR-Orchard/slime 底座(私有仓库 `slime-cua`)，算法与 Zixian 的 OpenWebRL 基线对齐；之后的正式训练(v1 `grpo-r5-cuagym-v1`，v2 `grpo-r5-cuagym-v2`)见 `RL_ENV_PLAN.md`。第 6 节的 P2/P3 对照还没有按原计划执行。
 
 ## 源码依据
 

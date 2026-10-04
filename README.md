@@ -9,7 +9,7 @@ Generated desktop tasks, teacher trajectories, SFT data/training recipes, evalua
 | Agent instructions and runtime boundaries | [AGENTS.md](AGENTS.md), [CLAUDE.root.md](CLAUDE.root.md), [runtime mirror mapping](docs/RUNTIME_MIRRORS.md) |
 | SFT: data, quality, training, evaluation | [sft/README.md](sft/README.md) |
 | Task generation and validation | [taskgen/README.md](taskgen/README.md) |
-| RL (GRPO) design and progress | [docs/RL_EXPERIMENT_DESIGN.md](docs/RL_EXPERIMENT_DESIGN.md), [docs/RL_ENV_PLAN.md](docs/RL_ENV_PLAN.md); code and evidence in the sibling `cua-rl-local/` git repository |
+| RL (GRPO) design and progress | [docs/RL_EXPERIMENT_DESIGN.md](docs/RL_EXPERIMENT_DESIGN.md), [docs/RL_ENV_PLAN.md](docs/RL_ENV_PLAN.md), [docs/RL_VM_ENVIRONMENT.md](docs/RL_VM_ENVIRONMENT.md), [docs/RL_TASK_POOL.md](docs/RL_TASK_POOL.md); code in the private repository `DengDuangLang111/slime-cua` (branch `pool-expand`), pool scripts in the sibling `cua-rl-local/` |
 | Model/corpus naming | [docs/NAMING.md](docs/NAMING.md), [sft/armname.py](sft/armname.py) |
 | Latest recorded status | [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md), with its evidence date; not a live job query |
 | Recorded evaluation results | [sft/docs/RESULTS.md](sft/docs/RESULTS.md), section 12 |
@@ -87,6 +87,8 @@ CUA/
 │   ├── README.md
 │   ├── RL_ENV_PLAN.md
 │   ├── RL_EXPERIMENT_DESIGN.md
+│   ├── RL_TASK_POOL.md
+│   ├── RL_VM_ENVIRONMENT.md
 │   └── RUNTIME_MIRRORS.md
 ├── eval/
 │   ├── qwen35_4b_keepthink.jinja
