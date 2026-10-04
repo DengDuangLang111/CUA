@@ -1,13 +1,13 @@
 # Evaluator 族归类(117 → 11)—— 统计与配额的唯一口径
 
-> 定稿 2026-08-28。可执行的真相在 `CUA/tools/family_census.py`(前缀规则表
+> 定稿 2026-08-28。可执行的真相在 `CUA/taskgen/analysis/family_census.py`(前缀规则表
 > `PREFIX`,顺序敏感);本文件是它的散文镜像 + 决策依据。改映射先改代码,再改这里。
 
 ## 为什么是 evaluator 族,不是动作词表
 
 两次实测(2026-08-28,官方 361 全量 LLM 标注 + 对抗复标):
 
-- 旧关键词标注器 `tools/taxonomy_tag.py`:对 LLM 标注 **precision 0.50 /
+- 旧关键词标注器 `taskgen/analysis/taxonomy_tag.py`:对 LLM 标注 **precision 0.50 /
   recall 0.46**,24% 任务打不上任何标签。**已废弃**,历史结论凡引用它的数字
   一律视为基于已废弃口径。
 - 动作词表本身:两个标注者、同一词表、同一批任务,**分歧 25%**。边界(文字
@@ -34,11 +34,11 @@
 | media_state | VLC 配置/播放态/音视频比对 | 16 | 4.3% |
 | pdf_property | PDF 比对 | 9 | 2.4% |
 
-(361 跑测面板上的对应计数见 PLAN-20260828-v14g-gold §0。)
+(361 跑测面板上的对应计数见 `outdated/plans/PLAN-20260828-v14g-gold.md` §0。)
 
 ## 族 → 生成机制的映射(ostg v14g)
 
-`taskgen/taxonomy.py:FAMILIES` 是权威;摘要:
+`taskgen/generation/taxonomy.py:FAMILIES` 是权威;摘要:
 
 | family | grade | 宿主 | gold 需求 |
 |---|---|---|---|
@@ -57,5 +57,9 @@ media 的 AV 子型(5 例,要音视频道具 + ffmpeg 链)与运行态子型(4 �
 
 ## 关联
 
-- 生成侧实现与验收:`PLAN-20260828-v14g-gold.md`
+- 生成侧实现与验收:`outdated/plans/PLAN-20260828-v14g-gold.md`
 - 三方动作普查(注释用途):会话记录 2026-08-28;动作分布表不再维护为口径
+
+<!-- REPO NAV -->
+[Repository map](../README.md)
+<!-- /REPO NAV -->

@@ -1,0 +1,95 @@
+--- a/mm_agents/qwen_internal_agent.py
++++ b/mm_agents/qwen_internal_agent.py
+@@ -1,4 +1,3 @@
+-import base64
+ import json
+ import os
+ import re
+@@ -187,10 +186,9 @@
+             "- For non-terminal UI steps, output exactly in the order: Action, <tool_call>.\n"
+             "- Be brief: one sentence for Action.\n"
+             "- Do not output anything after a tool call.\n"
+-            "- Use call_user when you need information or confirmation that only the user can provide. The call_user tool call must be the only tool call in that response.\n"
++            "- Use call_user when you need user information or confirmation.\n"
+             "- Use terminate when you want to explicitly end the task with a success or failure status.\n"
+-            "- A plain-text response without a tool call is treated as a question to the user, not task completion.\n"
+-            "- If the task is infeasible, use terminate with status=failure."
++            "- If the task is infeasible, say so explicitly in the response."
+         )
+ 
+     def _message_cache_path(self, step_idx: int) -> str:
+@@ -342,18 +340,6 @@
+         )
+         return runner_response, pyautogui_code
+ 
+-    @staticmethod
+-    def _build_clipboard_paste_command(text: str) -> str:
+-        encoded = base64.b64encode(text.encode("utf-8")).decode("ascii")
+-        return (
+-            "import base64, time, pyautogui, pyperclip\n"
+-            f"_text = base64.b64decode('{encoded}').decode('utf-8')\n"
+-            "pyperclip.copy(_text)\n"
+-            "time.sleep(0.1)\n"
+-            "pyautogui.hotkey('ctrl', 'v')\n"
+-            "time.sleep(0.1)"
+-        )
+-
+     def parse_response(
+         self,
+         response: str,
+@@ -428,8 +414,10 @@
+             except Exception:
+                 return float(default)
+ 
++        response_lower = response.lower()
++        infeasible_response = "[infeasible]" in response_lower or "infeasible" in response_lower
++
+         def process_tool_call_params(params: Dict) -> None:
+-            nonlocal low_level_instruction
+             action = params.get("action")
+             if not action:
+                 return
+@@ -469,9 +457,7 @@
+             elif action == "type":
+                 text = "" if params.get("text") is None else str(params.get("text", ""))
+                 normalized_text = text.replace("\r\n", "\n").replace("\r", "\n")
+-                if not normalized_text.isascii():
+-                    pyautogui_code.append(self._build_clipboard_paste_command(normalized_text))
+-                elif "\n" not in normalized_text:
++                if "\n" not in normalized_text:
+                     pyautogui_code.append(f"pyautogui.typewrite({self._py_string(normalized_text)})")
+                 else:
+                     chunks = normalized_text.split("\n")
+@@ -509,13 +495,7 @@
+                 status = str(params.get("status", "success")).strip().lower()
+                 pyautogui_code.append("FAIL" if status == "failure" else "DONE")
+             elif action == "call_user":
+-                question = (
+-                    str(params.get("text") or "").strip()
+-                    or low_level_instruction.strip()
+-                    or "Please provide the required information."
+-                )
+-                self._pending_user_question = question
+-                low_level_instruction = question
++                pyautogui_code.append("FAIL" if infeasible_response else "DONE")
+             elif action == "screenshot":
+                 pyautogui_code.append("pyautogui.screenshot()")
+             elif action == "mouse_move":
+@@ -553,15 +533,8 @@
+             if params:
+                 process_tool_call_params(params)
+ 
+-        if self._pending_user_question is not None:
+-            # Asking the user is a terminal action for this model turn.  Do not
+-            # execute clicks or keystrokes that appeared beside it.
+-            pyautogui_code.clear()
+-        elif not pyautogui_code:
+-            # lib_run_single interprets an empty action list as ASK_USER and
+-            # feeds the simulator's answer back through obs["user_response"].
+-            self._pending_user_question = response.strip()
+-            low_level_instruction = self._pending_user_question
++        if not pyautogui_code:
++            pyautogui_code.append("FAIL" if infeasible_response else "DONE")
+ 
+         if not low_level_instruction and pyautogui_code:
+             first_code = pyautogui_code[0]

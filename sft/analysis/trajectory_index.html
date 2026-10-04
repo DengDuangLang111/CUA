@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>轨迹调试器 · 实验目录</title>
+<style>
+*{box-sizing:border-box}body{font:14px/1.55 system-ui;background:#f7f7f5;color:#181818;margin:28px auto;padding:0 24px;max-width:1400px}h1{font-size:27px;margin:0}p{color:#666;margin:6px 0 18px}button,input,select{font:inherit;color:inherit;background:white;border:1px solid #ccc;border-radius:6px;padding:8px 11px}button,summary{cursor:pointer}button:hover{background:#eee}input,select{width:100%;min-width:0}label{display:grid;gap:5px;font-size:12px;color:#555}form{background:#fff;border:1px solid #ddd;border-radius:10px;padding:16px;margin:20px 0}.search{margin-bottom:12px}.filters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}form details{margin-top:12px}form summary{color:#555}.advanced{padding-top:12px}.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:15px 0}.toolbar output{margin-right:auto;font-weight:600}.run{border:1px solid #d6d6d3;border-radius:10px;background:#fff;margin:12px 0;overflow:hidden}.run>summary{display:block;position:relative;padding:18px 20px 18px 44px;list-style:none}.run>summary::-webkit-details-marker{display:none}.run>summary:before{content:'▸';position:absolute;left:18px;top:20px}.run[open]>summary:before{content:'▾'}.run>summary:hover{background:#fafaf8}.title{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.title strong{font-size:18px}.count{margin-left:auto;font-size:13px;font-weight:600}.sub{margin:7px 0;color:#444}.chips{display:flex;gap:6px;flex-wrap:wrap}.chip{background:#f1f1ef;border:1px solid #e5e5e2;padding:3px 8px;border-radius:5px;font:12px ui-monospace,monospace}.run-name{font:11px ui-monospace,monospace;color:#777;margin-top:9px;overflow-wrap:anywhere}.body{border-top:1px solid #ddd;padding:0 18px 16px}.metadata{margin:12px 0;color:#555}.metadata dl{display:grid;grid-template-columns:90px 1fr;gap:7px;font-size:12px}.metadata dd{margin:0;overflow-wrap:anywhere;white-space:pre-wrap}.table{overflow:auto}table{border-collapse:collapse;width:100%;font-size:13px}td,th{padding:11px 9px;text-align:left;border-bottom:1px solid #e5e5e5;vertical-align:top}th{color:#777;font-size:12px;font-weight:500}.task{min-width:250px;max-width:660px}.task strong{display:block;font:11px ui-monospace,monospace;color:#888}.task span{display:block;margin-top:5px}.score{white-space:nowrap;font-variant-numeric:tabular-nums}a{color:#111;white-space:nowrap}.empty{padding:30px;text-align:center;background:white;border:1px dashed #bbb;border-radius:8px}.note{font-size:12px;margin-top:18px}summary:focus-visible,a:focus-visible,button:focus-visible{outline:2px solid #111;outline-offset:3px}@media(max-width:1000px){.filters{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:620px){body{padding:0 12px;margin:18px auto}.filters{grid-template-columns:repeat(2,minmax(0,1fr))}.run>summary{padding-left:34px}.run>summary:before{left:12px}.title strong{font-size:16px}.count{margin-left:0}.body{padding:0 8px 12px}}
+</style>
+<h1>轨迹调试器 · 实验目录</h1>
+<p>先选实验，再展开任务。每组保留完整轨迹、原始截图和评测记录。</p>
+<nav class="toolbar" aria-label="实验分类"><a id="eval-tab" href="?collection=eval">正式 Eval</a><a id="test-tab" href="?collection=test">测试 / 功能调试</a></nav>
+<p id="collection-description"></p><div id="source-status" role="status"></div>
+<form id="filters" onsubmit="return false">
+  <label class="search">搜索<input id="q" type="search" placeholder="任务 ID、instruction、模型、数据集、参数或 checkpoint" aria-label="搜索任务或实验"></label>
+  <div class="filters">
+    <label>模型 / 实验臂<select id="model"></select></label>
+    <label>训练数据集<select id="dataset"></select></label>
+    <label>任务类别（基准域）<select id="domain"></select></label>
+    <label>关联应用<select id="app"></select></label>
+    <label>原始得分<select id="score"><option value="">全部得分</option><option value="full">满分（= 1）</option><option value="partial">部分分（0 &lt; score &lt; 1）</option><option value="zero">零分（= 0）</option><option value="missing">未记录</option></select></label>
+  </div>
+  <details id="advanced"><summary>更多筛选：模型规模、训练方式、推理参数、评测项</summary><div class="filters advanced">
+    <label>基础模型 / 参数规模<select id="backbone"></select></label>
+    <label>训练方式<select id="method"></select></label>
+    <label>图片上限 image_max<select id="image_max"></select></label>
+    <label>历史折叠 fold_size<select id="fold_size"></select></label>
+    <label>步数上限 max_steps<select id="max_steps"></select></label>
+    <label>采样 temperature<select id="temperature"></select></label>
+    <label>评测项（原始函数）<select id="evaluator"></select></label>
+  </div></details>
+</form>
+<div class="toolbar"><output id="count" aria-live="polite"></output><button id="expand">全部展开</button><button id="collapse">全部折叠</button><button id="reset">清空筛选</button><button onclick="location.reload()">刷新目录</button></div>
+<main id="groups"></main>
+<p class="note">模型和数据集沿用命名注册表；推理参数来自原始 run 配置。任务类别使用基准域，关联应用与评测项使用任务配置；没有记录的字段显示“未记录”。分数直接取 result.txt。</p>
+<script>
+const allGroups=(/*__INDEX_DATA__*/).map(g=>g.collection==='test'?g:{...g,entries:g.entries.filter(r=>Number.isFinite(r.score))}).filter(g=>g.entries.length),catalog=/*__CATALOG_DATA__*/;
+const collection=new URLSearchParams(location.search).get('collection')==='test'?'test':'eval';
+const groups=allGroups.filter(g=>g.collection===collection),indexKey='cua-trajectory-index-'+collection;
+const $=id=>document.getElementById(id), esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+$('collection-description').textContent=collection==='eval'?'仅显示已有最终分数的正式任务（含 0 分）；新任务评分完成后自动加入。':'新增功能、采集链路和界面调试；与正式评测分开。';
+if(collection==='eval')$('score').querySelector('option[value="missing"]').remove();
+for(const [key,label] of [['eval','正式 Eval'],['test','测试 / 功能调试']]){const tab=$(key+'-tab');tab.textContent=label+' · '+allGroups.filter(g=>g.collection===key).length+' 组';if(key===collection){tab.style.fontWeight='700';tab.setAttribute('aria-current','page');}}
+$('source-status').innerHTML=catalog.sources.filter(s=>s.collection===collection||allGroups.some(g=>g.collection===collection&&(g.member_run_ids||[g.id]).some(id=>id.startsWith(s.id+':')))).map(s=>`<p class="note">${esc(s.label)} · ${s.online?'在线，自动读取已完成任务':s.cached?'来源离线 · 当前是缓存；最后同步 '+new Date(s.fetched_at*1000).toLocaleString()+'；截图需恢复连接':'来源离线，尚未取得目录；恢复连接后自动出现'}</p>`).join('');
+const domains={chrome:'浏览器 · Chrome',os:'操作系统 · Ubuntu',multi_apps:'多应用任务',libreoffice_calc:'表格 · Calc',libreoffice_writer:'文档 · Writer',libreoffice_impress:'演示文稿 · Impress',gimp:'图像编辑 · GIMP',vlc:'媒体 · VLC',thunderbird:'邮件 · Thunderbird',vs_code:'代码编辑 · VS Code'};
+const appNames={writer:'LibreOffice Writer',libreoffice_writer:'LibreOffice Writer',libreoffice_calc:'LibreOffice Calc',libreoffice_impress:'LibreOffice Impress',chrome:'Chrome',gimp:'GIMP',os:'Ubuntu',terminal:'Terminal',thunderbird:'Thunderbird',ubuntu_media_player:'Ubuntu Media Player',vlc:'VLC',vs_code:'VS Code',vscode:'VS Code'};
+const apps=r=>(r.related_apps?.length?r.related_apps:['未记录']).map(x=>appNames[String(x).toLowerCase().replaceAll(' ','_')]||x);
+const evaluators=r=>r.evaluator_functions?.length?r.evaluator_functions:['未记录'];
+const value=x=>x===undefined||x===null?'未记录':String(x);
+const keys=['q','model','dataset','domain','app','score','backbone','method','image_max','fold_size','max_steps','temperature','evaluator'];
+const parameterKeys=['image_max','fold_size','max_steps','temperature'];
+const rows=groups.flatMap(g=>g.entries), uniqueTasks=rs=>new Set(rs.map(r=>r.run_id+':'+r.task_path)).size;
+const totalTasks=uniqueTasks(rows);
+function options(id,values,label=x=>x){$(id).innerHTML='<option value="">全部</option>'+[...new Set(values)].sort((a,b)=>String(a).localeCompare(String(b),'zh-CN',{numeric:true})).map(x=>`<option value="${esc(x)}">${esc(label(x))}</option>`).join('');}
+for(const key of ['model','dataset','backbone','method'])options(key,groups.map(g=>g[key]),x=>key==='dataset'?(groups.find(g=>g.dataset===x)?.dataset_label||x):x);
+options('domain',rows.map(r=>r.domain||'未记录'),x=>domains[x]||x);options('app',rows.flatMap(apps));options('evaluator',rows.flatMap(evaluators));
+parameterKeys.forEach(key=>options(key,groups.map(g=>value(g.args[key]))));
+let openGroups=new Set(), saved={};
+try{saved=JSON.parse(sessionStorage.getItem(indexKey)||'{}');}catch{}
+for(const key of keys)if(saved.filters?.[key]!==undefined)$(key).value=saved.filters[key];
+openGroups=new Set(saved.open||[]);for(const g of groups)if((g.member_run_ids||[]).some(id=>openGroups.has(id)))openGroups.add(g.id);$('advanced').open=!!saved.advanced;
+function persist(){saved={...saved,filters:Object.fromEntries(keys.map(k=>[k,$(k).value])),open:[...openGroups],advanced:$('advanced').open};try{sessionStorage.setItem(indexKey,JSON.stringify(saved));}catch{}}
+function scoreKind(r){return r.score===null||r.score===undefined?'missing':r.score===1?'full':r.score===0?'zero':'partial';}
+function render(expandMatches=false){
+  const f=Object.fromEntries(keys.map(k=>[k,$(k).value])), q=f.q.trim().toLowerCase();let matching=0,matchedTasks=0;
+  const sections=groups.map(g=>{
+    if(['model','dataset','backbone','method'].some(k=>f[k]&&f[k]!==g[k])||parameterKeys.some(k=>f[k]&&f[k]!==value(g.args[k])))return '';
+    const common=[g.model,g.alias,g.name,g.source,g.dataset,g.dataset_label,g.backbone,g.method,g.checkpoint,JSON.stringify(g.args)].join(' ').toLowerCase();
+    const visible=g.entries.filter(r=>(!f.domain||f.domain===(r.domain||'未记录'))&&(!f.app||apps(r).includes(f.app))&&(!f.evaluator||evaluators(r).includes(f.evaluator))&&(!f.score||scoreKind(r)===f.score)&&(!q||(common+' '+[r.task_id,r.instruction,r.domain,...apps(r),...evaluators(r)].join(' ').toLowerCase()).includes(q)));
+    if(!visible.length)return '';matching++;matchedTasks+=uniqueTasks(visible);if(expandMatches)openGroups.add(g.id);
+    const latest=[...new Map([...g.entries].sort((a,b)=>a.episode-b.episode).map(r=>[r.run_id+':'+r.task_path,r])).values()], scored=latest.filter(r=>r.score!==null&&r.score!==undefined), full=scored.filter(r=>r.score===1).length;
+    const mean=scored.length?(100*scored.reduce((n,r)=>n+r.score,0)/scored.length).toFixed(2)+'%':'未记录';
+    const data=visible.map(r=>`<tr><td class="task"><strong>${esc(r.task_id)}</strong><span title="${esc(r.instruction||'')}">${esc(r.instruction||'Instruction 未记录')}</span></td><td>${esc(domains[r.domain]||r.domain||'未记录')}<br><small>${esc(apps(r).join(' / '))}</small></td><td>${esc(r.source)}</td><td>${esc(r.episode)}</td><td>${esc(r.actionCount)}</td><td class="score">${r.score===null||r.score===undefined?'未记录':esc(Number(r.score.toFixed(4)))}</td><td><a data-task-link href="${esc(r.html)}">打开轨迹 →</a></td></tr>`).join('');
+    return `<details class="run" data-run="${esc(g.id)}" ${openGroups.has(g.id)?'open':''}><summary><div class="title"><strong>${esc(g.model)}</strong><span>${esc(g.alias)}</span><span class="count">${uniqueTasks(visible)} / ${uniqueTasks(g.entries)} 任务 · ${visible.length} episode</span></div><div class="sub">${esc(g.dataset_label)} · ${esc(g.backbone)} · ${esc(g.method)}</div><div class="chips">${parameterKeys.map(k=>`<span class="chip">${k} ${esc(value(g.args[k]))}</span>`).join('')}<span class="chip">provider ${esc(value(g.args.provider_name))}</span><span class="chip">已评分 ${scored.length}/${latest.length} · 未评分 ${latest.length-scored.length}</span><span class="chip">整组满分 ${full}/${latest.length}</span><span class="chip">整组均分 ${mean}</span></div><div class="run-name">${esc(g.name)} · ${esc(g.source)} · ${esc(g.precision)}</div></summary><div class="body"><details class="metadata"><summary>查看训练数据、checkpoint 与原始配置</summary><dl><dt>数据定义</dt><dd>${esc(g.dataset_description)}</dd><dt>训练配方</dt><dd>${esc(g.train_recipe)}</dd><dt>Checkpoint</dt><dd>${esc(g.checkpoint)}</dd><dt>推理参数</dt><dd>${esc(JSON.stringify(g.args,null,2))}</dd></dl></details><div class="table"><table><thead><tr><th>任务 / 原始 instruction</th><th>类别 / 关联应用</th><th>来源</th><th>Episode</th><th>动作数</th><th>原始得分</th><th></th></tr></thead><tbody>${data}</tbody></table></div></div></details>`;
+  }).join('');
+  $('groups').innerHTML=sections||'<div class="empty">没有匹配的任务。请调整条件或清空筛选。</div>';
+  $('count').textContent=`${matching} / ${groups.length} 组实验 · ${matchedTasks} / ${totalTasks} 个${collection==='eval'?'已评分':'已导出'}任务`;
+  document.querySelectorAll('.run').forEach(el=>el.addEventListener('toggle',()=>{el.open?openGroups.add(el.dataset.run):openGroups.delete(el.dataset.run);persist();}));persist();
+}
+$('filters').addEventListener('input',()=>{saved.anchor=null;render(keys.some(k=>$(k).value));});
+$('advanced').addEventListener('toggle',persist);
+$('expand').onclick=()=>{document.querySelectorAll('.run').forEach(el=>{el.open=true;openGroups.add(el.dataset.run);});persist();};
+$('collapse').onclick=()=>{openGroups.clear();document.querySelectorAll('.run').forEach(el=>el.open=false);persist();};
+$('reset').onclick=()=>{keys.forEach(k=>$(k).value='');openGroups.clear();saved.anchor=null;saved.scrollY=0;render();};
+function rememberPosition(link){
+ if(link){saved.anchor=link.getAttribute('href');saved.anchorOffset=link.getBoundingClientRect().top;}
+ saved.scrollY=window.scrollY;persist();
+}
+$('groups').addEventListener('click',e=>{
+ const link=e.target.closest('a[data-task-link]');if(!link)return;
+ rememberPosition(link);
+ const run=link.closest('.run'),byTask=new Map();
+ run.querySelectorAll('a[data-task-link]').forEach(a=>{const url=a.getAttribute('href');byTask.set(url.split('#')[0],{url,label:a.closest('tr').querySelector('.task span').textContent});});
+ const items=[...byTask.values()];const selected=items.find(x=>x.url.split('#')[0]===link.getAttribute('href').split('#')[0]);if(selected)selected.url=link.getAttribute('href');
+ try{sessionStorage.setItem('cua-trajectory-navigation',JSON.stringify({runId:run.dataset.run,runIds:groups.find(g=>g.id===run.dataset.run)?.member_run_ids||[],items,fromIndex:true,indexKey,scoredOnly:collection==='eval'}));}catch{}
+});
+function restorePosition(){
+ try{const latest=JSON.parse(sessionStorage.getItem(indexKey)||'{}');saved={...saved,anchor:latest.anchor,anchorOffset:latest.anchorOffset,scrollY:latest.scrollY};}catch{}
+ requestAnimationFrame(()=>{const link=[...document.querySelectorAll('a[data-task-link]')].find(a=>a.getAttribute('href')===saved.anchor);
+  if(link&&link.getClientRects().length){window.scrollTo(0,window.scrollY+link.getBoundingClientRect().top-(saved.anchorOffset??120));link.focus({preventScroll:true});}
+  else window.scrollTo(0,saved.scrollY||0);
+ });
+}
+if('scrollRestoration' in history)history.scrollRestoration='manual';
+window.addEventListener('pagehide',()=>rememberPosition());
+window.addEventListener('pageshow',restorePosition);
+render();
+if(catalog.revision)setInterval(async()=>{if(document.hidden)return;try{const r=await fetch('index.json',{cache:'no-store'});if(r.ok&&(await r.json()).revision!==catalog.revision){rememberPosition();location.reload();}}catch{}},15000);
+</script>
+</html>

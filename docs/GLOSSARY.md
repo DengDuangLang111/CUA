@@ -1,0 +1,118 @@
+# 术语表 — 本项目所有标准说法(2026-08-30 立,防语义漂移)
+
+> 规矩:①对话与文档一律用"标准词"列的说法;②新概念先入此表再使用;
+> ③代码/命令列是锚点,词义有歧义时以锚点为准。别名列是**禁用词**(历史黑话)。
+
+## 流水线六步(顺序固定)
+
+| 标准词 | 一句话 | 代码锚点 | 禁用别名 |
+|---|---|---|---|
+| 生成 | LLM 按抽中的格子一次产出"题面+初始化+判据+做答案脚本" | taskgen/generation/gen.py | gen |
+| 门闸 | 生成后的静态格式检查,不合格丢弃重抽 | gen.py `gate()` | gate |
+| 烤箱 | 构建容器里真跑一遍:做出种子和答案文件并存档 | taskgen/bake.py | bake、B类烤箱 |
+| 虚拟机验证 | 在真 VM 里做负向检验+注入检验(合并为一次开机,08-30 起) | taskgen/control | control、闸 |
+| 查重对撞 | 文本查重 + 与官方/CUA-Gym 撞题检查,命中即删 | taskgen/accept | accept |
+| 合并 | 多批任务并成一个总池目录 | taskgen/merge | merge |
+
+## 检验体系
+
+| 标准词 | 一句话 | 代码锚点 | 禁用别名 |
+|---|---|---|---|
+| 探针 | 每题现写的检查程序,在 VM 里跑,打印 PASS/FAIL | spec 的 probe 字段 | probe |
+| 答案文件 | 生成时先做出来的正确成品,判分时逐字节比对 | files/<slug>/gold/ | gold |
+| 判据 | 官方判分函数+它的参数(查什么、期望什么) | evaluator.func | func、判分器 |
+| 复合判据 | 一道题挂多个判据(主产物+副产物各查各的) | evaluator.func 列表 | multi-func |
+| 副产物 | 题面要求的第二产出(台账/日志),难题必须连它一起判 | — | side-artifact |
+| 单轴合同(级) | 级=应用数(官方词表 9 词,os 家族整体算 1 个),1/2/3 均分;组合由抽签发牌、门闸照牌验收;含 os 比例 d2 59%(官方)/d3 50%(用户压缩,常数在 draw_combo);os 要计数必须干实活,搬运不算(2026-08-30 用户裁定) | gen16.py draw_combo+gate | 判据数=难度(旧)、os不计数(旧) |
+| 意图族 | 任务性质轴,19 族(用户全谱裁剪,交易/远控/监控/远程协作弃);族名+动词串进输入行,示例永不进提示词;创意制作限 impress/gimp/writer | gen16.INTENTS+draw_intent | intent、目的 |
+| os 工种 | os 主应用三分:设置 45/终端 45/文件管理 10(照官方 24 道) | gen16.draw_oskind | os-trade |
+| 预打开数 | warm=K:开局已打开的应用数,0..GUI 应用数均匀,指代型(a3)≥1;K<应用数即逼中途开应用 | gen16.draw_warm+open_paths | warm start(旧布尔) |
+| 装箱16 | v16 装箱一条命令:合并查重→撞题(官方+CUA-Gym,3-gram)→prebuild→容器冒烟(setup 实跑 rc==0)→官方格式任务 JSON | taskgen/emit16.py | emit、ship16 |
+| 定点自检 | 烤箱出炉检查:种子必须判0分、答案必须判满分 | bake.py `_FP` | fixed point |
+| 负向检验 | VM 里不做题就判分,必须0分(防白送分) | control | negative |
+| 注入检验 | 把答案文件塞进 VM 再判分,必须满分(防判据永不可满足) | control --gold | tier1、Tier-1 |
+| 往返容差 | 答案文件经 VM 的 LibreOffice 重存后仍须满分 | gold.py tier2 | tier2、Tier-2 |
+| 审计 | LLM 判官读题面+判据,答固定问题(可开思考) | taskgen/validation/audit.py | audit |
+| 体检 | 每批任务的多样性/可验证性自动报告 | taskgen/divcheck.py | divcheck |
+| 修补 | 门闸拒收后只重写题面措辞的廉价返工(全上下文+只改措辞) | gen.py repair_instruction | repair |
+
+## 判据质量三律(08-30 定)
+
+| 标准词 | 内容 |
+|---|---|
+| 对称条款 | 判据只可要求题面明文说过的性质;歧义作用于措辞,不作用于要求集合 |
+| 内容不查格式 | 题面没钉死格式的,判据查内容元素(含),禁比对整行结构 |
+| 固有文书律 | 副产物必须是该职业场景真实存在的文书,不许发明无人保存的记录 |
+
+## 统计与口径
+
+| 标准词 | 一句话 | 禁用别名 |
+|---|---|---|
+| 评分家族 | 任务的统计主轴,按判据类型归 11 族 | family、族 |
+| 格子/抽签 | 配方按 难度×歧义×口吻×应用×家族 抽坐标 | 坐标、cell |
+| 判据口径通过率 | "完成了被判分部分"的比率——不等于完成题面全部要求 | — |
+| 载荷对撞 | (判据,查什么,期望值)三元组与官方逐条比,防换皮抄题 | collision |
+| 操作指纹 | 做答案脚本用到的操作集合,聚类后看动作多样性 | fingerprint |
+| 旅程 | 题面要求的完整做事过程(尤指跨应用部分) | journey |
+| 计数应用 | 数难度用的八个文档/图形应用(表格/文档/幻灯片/浏览器/图像/邮件/播放器/代码编辑器) | GUI apps |
+| 环境设施 | 终端/文件管理器/系统设置——随便用,不计入应用数 | 辅助应用、cheap apps |
+| 示例跟签 | 抽中哪种规则/判据,提示词就配那种的官方真例 | example-follows-draw |
+
+## 轨迹判分(rollout 侧;细节 sft/docs/JUDGING.md)
+
+| 标准词 | 一句话 | 代码锚点 | 禁用别名 |
+|---|---|---|---|
+| 盲评判官 | 看不到程序评分的轨迹打分员(0-10),只提名不定罪 | sft/quality/trajaudit.py | judge、trajaudit |
+| 仲裁 | 分歧轨迹的定罪环节:亮判据代码,Opus5+思考 | sft/quality/arb.py | arb |
+| 强判官 | v16 唯一裁判:规则闸拦掉后每条一次调用,给二元判定+要求清单。生产证据袋=末尾8帧+全动作(不给思考/不给自述,2×2 实测四格纯度无差异)+磁盘转录 | sft/strongjudge.py | strong judge、llm judge |
+| 严格准入 | 轨迹级准入的收紧口径:判官 success 且每条要求 done=yes 之上,再要求全部要求有截图为证(无 inferred/cannot_tell/crit_fail/evidence 违规,derived≥10);v16 全池 1374 → 340 | curate16.py `--strict` | strict-340、证据闸 |
+| 步级过滤 | 对已准入轨迹的每一步打 0-10 分,>5 留作训练目标,≤5 不算 loss 但仍留在后续步上下文;末步不直接删 | webstar_step_filter grade_steps / decide_steps / filter_copy | WebSTAR、step filter、stepaudit(另一工具,教师看前后帧打元数据,不删) |
+| 终止规范化 | 教师重写每条轨迹的末步理由并确定性拼上 terminate(success);没做时末步是纯散文,harness 贴的 DONE 不是模型动作 | terminalfix.py + build `--terminal-rewrite`;验收 verify `--require-terminate` | terminal-rewrite、补 done |
+| 规则闸 | 判官前的零成本确定性拦截:自报 FAIL/空轨迹直接记败,不花判官钱(承 OpenWebRL) | strongjudge.py 门 | protocol gate |
+| 双判官 | **已废(08-31)**:2×2+3臂对照证明错放是系统性盲区不是手抖,四种证据配置在同一批硬负样本上一起栽,冗余无效、只翻倍成本 | — | double judge |
+| 哑判据 | v16 可行题的占位判据(恒 0),程序分作废、判官唯一裁判;infeasible 题仍挂真 `infeasible` 判据白捡信号 | emit16.py ZERO_EVAL | dummy evaluator |
+| 完成度/证据度 | 要求项拆成两个独立字段:`done`(yes/partial/no/cannot_tell,做到了吗)与 `evidence`(seen/inferred,看见的还是推断的);旧的六值枚举把两者混在一起,`mostly_satisfied` 实为"按了保存但没拍到确认" | strongjudge REQ_PROPS16 | status、satisfied 六值(旧) |
+| 磁盘证据 | rollout 判分前把 VM 里 /home/user 最终状态转录成文字给判官(`OSTG_FINAL_STATE=1`);治"像素里看不见"的那类错放 | final_state.py + J2 | J2、final_state |
+
+## 训练并行(RL,2026-10-02 立)
+
+| 标准词 | 一句话 | 代码锚点 | 禁用别名 |
+|---|---|---|---|
+| 张量并行(TP) | 把每层的权重矩阵切成 N 份放到 N 张卡上，每张卡算一部分，逐层合并结果；省的是权重和每层中间结果的显存。RL 用 TP=2(10-02 起；TP=4 时每层的卡间通信更多) | run_cua_desktop.sh `--tensor-model-parallel-size` | — |
+| 数据并行(DP) | 每组卡各放一份完整模型，分别处理不同样本，最后把梯度求平均；16 卡 / TP2 = DP8 | 由卡数 ÷ TP 推出 | — |
+| rollout(采样) | RL 每轮的前半段：用当前模型在 VM 里实际做题，收集训练数据。48 题 × 5 次 = 240 条轨迹；每条轨迹 = reset VM → 反复"截图 + 历史拼成 prompt → SGLang 生成思考和动作 → VM 执行 → 新截图"直到结束或 50 步 → reward.py 打分。产出每一轮的 turn 样本(prompt、回复、采样时的 logprob、奖励)。后半段是训练；训练完把新权重同步给 SGLang，下一轮 rollout 用新模型 | slime `generate_desktop.py` | — |
+| GRPO | 同一题采样一组(我们 5 次)，每次得分减去组内平均、除以组内标准差得到优势值；优势值为正的回复被加强、为负的被削弱；不需要单独的价值模型。loss 是 PPO 的截断形式(概率比限制在 0.8–1.28)，KL、entropy 系数均为 0 | `--advantage-estimator grpo`，`reward_post_process.py` | — |
+| 组 / 优势值 | 组 = 同一题的 5 条轨迹；优势值 = (本条得分 − 组平均) ÷ 组标准差，同一条轨迹的每一轮、每个 token 都用这个值；5 条得分全相同的组没有信号，被过滤 | `--rollout-batch-size 48 --n-samples-per-prompt 5` | advantage |
+| turn 样本 | 轨迹里的一步 = 一条训练样本：这一步的 prompt + 模型这一步的回复；loss 只算回复部分 | `CUA_LOSS_GROUP=turn` | — |
+| logits | 模型在序列的每个位置给词表里每个 token(r5 共 248,320 个)打一个分，预测下一个 token；经 softmax 变成概率，取实际生成那个 token 的对数概率即 logprob，GRPO 的 loss 用它。尺寸 = 位置数 × 248,320，fp32 下 2 万个位置约 20.7 GB(TP 会按词表切到各卡) | slime `loss.py` `get_log_probs_and_entropy` | — |
+| 只算回复位置的 logits | 只对本轮回复(约 500 个位置)跑输出层和 logprob；prompt(截图 + 历史，约 2 万个位置)的 logits 不进 loss，不再计算。prompt 仍要完整过一遍模型，只省最后打分这一步 | `--response-only-logits`，`response_logits.py` | — |
+| 舍入级差异 | 数学上是同一个计算，只是浮点数相加的顺序或分块不同，结果在末几位不同(bf16 约第 3 位有效数字、fp32 约第 7 位)。例：bf16 里 (256+1)+1 = 256，256+(1+1) = 258。改 TP、换 GPU/CPU 实现、改分块大小都会产生；单步差异极小，但多步之后两次训练会像换了随机种子一样逐渐分开，预期效果不变 | RL_ENV_PLAN.md 提速总表"训练结果"列 | 数值噪声(未说明量级时) |
+| 上下文并行(CP) | 把**同一条样本的序列**按长度切开分给 N 张卡，各算一段，注意力层再互相交换；省的是长序列的显存。bridge 版 Qwen3.5-VL 不支持 CP>1，RL 固定 CP=1 | run_cua_desktop.sh `--context-parallel-size 1` | — |
+
+## RL 环境(2026-10-03 立；细节 docs/RL_ENV_PLAN.md)
+
+| 标准词 | 一句话 | 代码锚点 | 禁用别名 |
+|---|---|---|---|
+| 内存快照 | VM 第一次开机就绪时，存下它的内存和系统盘；之后每次 reset 直接载回，不再冷启动(约 16 s 对 75–228 s) | worker_bridge.py `_snapshot_resets` | savevm 快照、热重置 |
+| relay 站 | 替训练端连接 VM 主机的那台机器：Tillicum 端口转发 + 每台主机一个 relay 进程。现在是 Windows WSL | vmhosts.py `CUA_RELAY_STATION` | 中转机 |
+| 开机名额 | 一台主机上同时允许开机或载回快照、做任务初始化的 VM 数；其余排队，免得 CPU 被开机挤满 | worker_bridge.py `_boot_slot`，host.env `BOOT_SLOTS` | boot slot |
+| 补采 | 一轮 rollout 里有组被动态过滤丢掉时，再抽一批题(默认 48 道)补上；凑满 48 个合格组后，还没跑完的组作废，题目不放回 | slime `over_sampling_batch_size` | 过采样 |
+| eval-50 | OSWorld-Verified 的 50 道题(其中 5 道"做不到")，训练中每 10 轮评一次；reset 后等 60 s、打分前等 20 s，与标准评测相同 | `osworld_eval50_20261002.parquet` | dev 题 |
+
+## 防臃肿立法(08-30 用户批准)
+
+**每件进流水线的新东西,提案必须写明它替代或删除了什么。** 净增机器需专门论证。
+
+## 命名(2026-09-09 立;规范在 `docs/NAMING.md`,锚点 `sft/armname.py`)
+
+| 标准词 | 一句话 | 代码锚点 | 禁用别名 |
+|---|---|---|---|
+| 规范臂名 | `<骨干>-<训练法>-<语料>[-<偏离项>…][~e<N>][@<img>f<fold>…]`,由 sbatch 推导,只写与标准配方不同的部分 | armname.py from-sbatch / emit / check | 手打名(`mixbtf9b-2x4-lr1e6`、`taskw`) |
+| 语料公式 | `<来源>[+<来源>][.<变换>]`;常用组合登记短 id(`mixb`) | armname.py CORPUS_DIRS / CORPORA | "mixB 语料"之类不带公式的说法 |
+| 偏离项 | 臂名里与标准配方不同的那些 token(`lr1e5` `ep1` `gb128` `wd0p1` `ml65k` `imgtok3072` `histcomp`) | armname.py deviations() | `2x4`(拓扑不进名)、`cap1p5`(说 imgtok3072) |
+| 推理后缀 | `@<img>f<fold>[.t0][.ms100]`,推理侧配置,不属于权重;默认 `@10f1` 省略 | armname.py eval_suffix() | `w20`、`h3`、`ms100` 前缀写法 |
+| 中途快照 | `~e<N>`:未退火的中途 checkpoint,终点权重不写 | — | "2 epoch 模型"(RESULTS §6 口径) |
+
+<!-- REPO NAV -->
+[Repository map](../README.md)
+<!-- /REPO NAV -->

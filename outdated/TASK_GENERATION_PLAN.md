@@ -1,5 +1,5 @@
-> **SUPERSEDED(2026-08-15 收编)**:v7 时代的方案记录。现行设计看 `TASKGEN_PIPELINE.md`,
-> 操作看 `RUNBOOK.md`,结果与决策看 `EXPERIMENTS.md`。本文只作历史。
+> **SUPERSEDED(2026-08-15 收编)**:v7 时代的方案记录。现行设计看 `taskgen/docs/PIPELINE.md`,
+> 操作看 `taskgen/docs/RUNBOOK.md`,结果与决策看 `docs/EXPERIMENTS.md`。本文只作历史。
 
 # 新一批 OSWorld 任务生成 —— 方案记录
 
@@ -1315,3 +1315,7 @@ uv pip install <package>
 （xlsx→openpyxl、docx→python-docx、pptx→python-pptx、png→Pillow），
 所以不存在格式往返不一致的风险。**唯一例外就是 PDF**（我们写 minipdf、官方读 pdfplumber），
 这也是第 1 条该修的理由。
+
+<!-- REPO NAV -->
+Archived record · [Repository map](../README.md) · [Archive index](README.md)
+<!-- /REPO NAV -->

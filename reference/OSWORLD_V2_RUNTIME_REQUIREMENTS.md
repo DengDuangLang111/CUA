@@ -12,7 +12,7 @@
 >
 > 最后更新 **2026-08-30**(0624 → 0808 迁移 + 本地 harness 分叉;正文其余部分的统计仍基于 0624 的 108 个 `task_*.py`,
 > 0808 任务哈希已变但官方未公布改了哪几个,重下后需复核 —— 见 §0.5)。
-> V1 的对应文档见 [OSWORLD_VERIFIED_RUNTIME_REQUIREMENTS.md](OSWORLD_VERIFIED_RUNTIME_REQUIREMENTS.md)，操作手册见 [CLAUDE.md](CLAUDE.md)。
+> V1 的对应文档见 [OSWORLD_VERIFIED_RUNTIME_REQUIREMENTS.md](OSWORLD_VERIFIED_RUNTIME_REQUIREMENTS.md)，操作手册见 [CLAUDE.md](../CLAUDE.root.md)。
 >
 > ⚠️ **`OSWorld-V2` 不是 OSWorld 的一个分支，是另一个 benchmark**（`xlang-ai/OSWorld-V2`，论文 arXiv 2606.29537）。它顺带把 V1 的 361 个 JSON 任务也放在 `evaluation_examples/examples/` 里，可以用 `--eval_version` 切换，但**分数不可与 V1 直接比较**。
 
@@ -702,7 +702,7 @@ V2 大幅减少了对真实商业站点的依赖，剩下的主要是**学术/�
 
 `proxy: true` 只有 **8 个任务**：`036` `037` `050` `055` `056` `062` `075` `098`（V1 是 49 个）。
 机制与 V1 完全一致（`PROXY_CONFIG_FILE` + 五字段 JSON + `enable_proxy`），不锁定 dataimpulse。
-详细配置步骤见 [CLAUDE.md](CLAUDE.md) §4 与 `docs/PROXY_GUIDELINE.md`。
+详细配置步骤见 [CLAUDE.md](../CLAUDE.root.md) §4 与 `docs/PROXY_GUIDELINE.md`。
 
 ---
 
@@ -1090,3 +1090,7 @@ uv run python scripts/python/run_multienv_claude.py \
 ```
 注:internal runner 用 `--api_key_env <变量名>`(不是 `--api_key`);无 `--action_space`/`--sleep_after_execution`/`--headless` 等 flag。
 **启动坑**:`cat > f && … & setsid …` 合并一条会让 `&` 把 cat 也后台化抢 stdin,进程起不来;**分三步**(单独 cat 写脚本 / 单独 `setsid bash f </dev/null >/dev/null 2>&1 &` 启动 / 再验证)。08-05 14:16 起,6 VM。
+
+<!-- REPO NAV -->
+[Repository map](../README.md)
+<!-- /REPO NAV -->

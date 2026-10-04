@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>轨迹调试器</title>
+<style>
+:root{color-scheme:light;--ink:#171717;--muted:#737373;--line:#dededb;--paper:#fff;--soft:#f5f5f2}*{box-sizing:border-box}body{height:100vh;display:flex;flex-direction:column;margin:0;background:var(--soft);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,select{font:inherit;color:inherit;background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:7px 11px}button{cursor:pointer}button:hover{border-color:#888}button:disabled{opacity:.4;cursor:default}button.active{background:var(--ink);color:white;border-color:var(--ink)}button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid #555;outline-offset:3px}input{accent-color:#171717}a{color:inherit}header{flex:none;padding:15px 24px;background:white;border-bottom:1px solid var(--line)}.topbar{display:flex;align-items:center;gap:16px;flex-wrap:wrap}.topbar h1{font-size:19px;margin:0}.topbar .meta{color:var(--muted);font:12px/1.5 ui-monospace,monospace;overflow-wrap:anywhere}.topbar a{margin-left:auto;font-size:13px}.instruction{display:grid;grid-template-columns:90px 1fr;gap:12px;margin-top:12px}.instruction strong{font-size:12px;color:var(--muted)}.instruction p{margin:0;white-space:pre-wrap;max-height:110px;overflow:auto}.workspace{display:grid;grid-template-columns:minmax(360px,43%) minmax(440px,57%);flex:1;min-height:0}.graph-panel{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line);background:#fafaf8}.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:13px 16px;background:white;border-bottom:1px solid var(--line)}.toolbar label{font-size:12px}.toolbar select{max-width:240px}.graph-help{padding:8px 16px;margin:0;color:var(--muted);font-size:12px;border-bottom:1px solid var(--line)}#graph-scroll{flex:1;overflow:auto;min-height:220px}#graph{display:block;margin:auto}.timeline-wrap{padding:12px 16px;background:white;border-top:1px solid var(--line)}.timeline-wrap small{color:var(--muted)}#timeline{display:flex;gap:5px;overflow:auto;padding:7px 2px}.tick{flex:0 0 auto;padding:5px 8px;font:12px ui-monospace,monospace}.detail{overflow:auto;background:white;padding:20px 24px;min-width:0}.detail h2{font-size:19px;margin:0 0 5px}.detail h3{font-size:14px;margin:18px 0 10px}.quiet{font-size:12px;color:var(--muted)}#selection-meta{margin:0 0 12px}.visits{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 16px}.visits button{font-size:12px}.navigation{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:15px}.navigation strong{margin-right:auto}.section{padding-top:14px;margin-top:16px;border-top:1px solid var(--line)}.shot-controls{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:12px 0}.shots{display:grid;grid-template-columns:1fr;gap:12px}.shots.compare{grid-template-columns:1fr 1fr}figure{margin:0;min-width:0}.canvas{position:relative;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#eee;cursor:zoom-in}.canvas img{display:block;width:100%;height:auto}.canvas svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}figcaption{color:var(--muted);font-size:12px;margin-top:6px}.missing{background:var(--soft);border:1px dashed var(--line);padding:24px;font-size:13px;color:var(--muted)}pre{font:12px/1.75 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--soft);padding:13px;border:1px solid #e8e8e4;border-radius:6px;max-height:330px;overflow:auto;margin:8px 0}.tabs{display:flex;gap:6px;margin:15px 0 10px}.tabs button{font-size:12px}.text-panels>section[hidden]{display:none}.signal-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.signal-images{display:flex;gap:9px;overflow:auto;padding:10px 2px}.signal-images button{flex:0 0 120px;padding:5px;font-size:11px}.signal-images img{width:100%;height:72px;object-fit:contain;display:block}.table-wrap{overflow:auto;margin:10px 0}table{border-collapse:collapse;width:100%;font-size:12px}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}td{font-variant-numeric:tabular-nums}tr.selected{background:var(--soft)}.status{padding:10px 12px;background:var(--soft);border-left:3px solid #aaa;font-size:12px;margin:10px 0}.stat-row{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;margin:10px 0}.stat-row strong{font-size:16px;display:block}.raw-details{margin-top:15px}.raw-details summary{cursor:pointer;font-size:12px;color:var(--muted)}dialog{padding:18px;border:1px solid var(--line);border-radius:10px;width:min(1250px,96vw);max-height:92vh;overflow:auto}dialog::backdrop{background:#0008}.dialog-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.empty{padding:32px;color:var(--muted)}@media(max-width:900px){body{height:auto;display:block}.workspace{grid-template-columns:1fr;height:auto}.graph-panel{height:520px;border-right:0;border-bottom:1px solid var(--line)}.detail{overflow:visible;padding:18px}.instruction{grid-template-columns:1fr;gap:4px}header{padding:14px 18px}.shots.compare{grid-template-columns:1fr 1fr}}@media(max-width:520px){.shots.compare{grid-template-columns:1fr}.toolbar select{max-width:180px}.topbar .meta{width:100%}}
+.signal-heatmaps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:12px 0}.coverage td{white-space:normal}.token-note{font-size:13px;line-height:1.7;padding:10px 12px;border:1px solid var(--line);border-radius:6px}.heat-key{height:9px;width:150px;background:linear-gradient(90deg,rgb(35,85,220),rgb(250,250,250),rgb(220,40,35));border:1px solid var(--line)}
+.task-navigation{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}.task-navigation a{font-size:13px}.task-navigation #task-position{margin-left:auto}.task-navigation button{font-size:12px}
+</style></head>
+<body>
+<header><div class="topbar"><h1>轨迹调试器</h1><span class="meta" id="run-meta"></span><button id="jump-signals">图片 / Attention 热力图</button><button id="jump-records">完整记录清单</button><button id="jump-evaluation">最终评测 / 最后一步</button><a id="download-json" download>原始 JSON ↓</a></div><div class="instruction"><strong>Instruction</strong><p id="instruction"></p></div><nav class="task-navigation" aria-label="任务导航"><button id="back-page">← 返回</button><a id="return-index" href="index.html">返回列表</a><span id="task-position" class="quiet"></span><button id="previous-task" disabled>← 上一个任务</button><button id="next-task" disabled>下一个任务 →</button></nav></header>
+<main class="workspace">
+<section class="graph-panel" aria-label="轨迹流程图"><div class="toolbar"><label>Episode <select id="episode" aria-label="Episode"></select></label><label>节点合并 <select id="grouping" aria-label="节点合并"><option value="action">相同指令 + 应用</option><option value="state">完全相同的画面 + 应用</option><option value="steps">展开每一次执行</option></select></label><button id="zoom-out" aria-label="缩小流程图">−</button><button id="zoom-in" aria-label="放大流程图">＋</button><button id="fit">适合宽度</button><button id="download-svg">导出图</button></div><p id="graph-help" class="graph-help"></p><div id="graph-scroll"><svg id="graph" role="group" aria-label="带回边的完整轨迹图"></svg></div><div class="timeline-wrap"><small>原始执行顺序 · 点击序号定位具体一次执行</small><div id="timeline"></div></div></section>
+<article class="detail" id="detail"><h2 id="node-title"></h2><p class="quiet" id="selection-meta"></p><div id="visits" class="visits"></div><div class="navigation"><strong id="position"></strong><button id="previous">← 上一次执行</button><button id="next">下一次执行 →</button></div><div class="shot-controls"><button data-mode="before">执行前</button><button data-mode="compare">前后对照</button><button data-mode="after">执行后</button><label><input id="show-marks" type="checkbox" checked> 标注执行动作</label></div><div id="shots" class="shots compare"></div><section id="evaluation" class="section" hidden></section><h3>实际执行动作</h3><pre id="action"></pre><p class="quiet" id="coordinates"></p><div class="tabs"><button data-text="thinking" class="active">Thinking（原始）</button><button data-text="prediction">Prediction / 完整回复</button><button data-text="raw">原始动作 / Tool reply</button></div><div class="text-panels"><section id="panel-thinking"><pre id="thinking"></pre></section><section id="panel-prediction" hidden><pre id="prediction"></pre></section><section id="panel-raw" hidden><pre id="raw-action"></pre></section></div><section class="section" id="signals"><h3>Visual signals · 当前模型决策的真实输入</h3><div id="signal-content"></div></section><details class="raw-details"><summary>运行参数与数据来源</summary><pre id="run-raw"></pre></details></article>
+</main>
+<dialog id="zoom-dialog"><div class="dialog-bar"><strong id="zoom-title"></strong><button id="close-zoom">关闭</button></div><div id="zoom-content"></div></dialog>
+<script>
+// Translate UI literals only. Raw instructions, actions, model output, and JSON stay intact.
+const UI_EN = {
+ "正在读取…": "Loading…",
+ "读取失败：": "Read failed: ",
+ "读取失败，收起后可重试：": "Read failed. Collapse and reopen to retry: ",
+ "任务导航暂不可用；可返回列表重试。": "Task navigation is unavailable. Return to the list to retry.",
+ "第 {0} / {1} 个任务 · {2}": "Task {0} / {1} · {2}",
+ "当前筛选": "Current filters",
+ "本组实验": "This experiment",
+ "执行 {0} → {1}": "Action {0} → {1}",
+ "节点 {0}，{1}，出现 {2} 次": "Node {0}, {1}, visited {2} times",
+ "相同画面": "Identical screenshot",
+ "\n执行序号：": "\nAction numbers: ",
+ "应用未记录": "App not recorded",
+ "出现 {0} 次 · #{1}{2}": "Visited {0} times · #{1}{2}",
+ "同一应用内相同执行指令合并；回边与自环保留。{0} 个节点 / {1} 次执行。合并不代表同一个 UI 控件。": "Identical commands within the same app are merged; back edges and self-loops are retained. {0} nodes / {1} actions. Merging does not imply the same UI element.",
+ "仅按截图文件 SHA-256 完全相同合并；缺图不合并。{0} 个画面 / {1} 次执行。": "Only screenshots with identical SHA-256 hashes are merged. Missing screenshots stay separate. {0} states / {1} actions.",
+ "每次执行独立显示，共 {0} 次。": "Each action is shown separately: {0} actions.",
+ "模型步 {0}.{1} · 节点 N{2}": "Model step {0}.{1} · Node N{2}",
+ "实际动作位置标记": "Executed action markers",
+ "未保存这张截图。": "This screenshot was not saved.",
+ "图片不可用；请确认独立截图服务已启动。": "Image unavailable. Check that the screenshot server is running.",
+ "，放大图片": ", enlarge image",
+ "执行前 · 标记实际动作位置": "Before · Executed action markers",
+ "执行后 · 查看环境结果": "After · Environment result",
+ "画面节点": "State node",
+ "当前是该节点第 {0} / {1} 次出现。每次的截图和输出独立保留。": "Visit {0} / {1} to this node. Each visit retains its own screenshots and output.",
+ "执行 {0} / {1} · 模型步 {2}.{3}": "Action {0} / {1} · Model step {2}.{3}",
+ "原始行 {0} · {1} · {2}": "Source row {0} · {1} · {2}",
+ "时间戳未记录": "Timestamp not recorded",
+ "没有可标注的显式坐标": "No explicit coordinates to mark",
+ "本次请求设置 enable_thinking=false，没有单独的 thinking 输出。": "This request set enable_thinking=false; no separate thinking output is available.",
+ "这条记录没有独立的 thinking 内容；完整原始回复仍可查看。": "No separate thinking content was recorded. The complete original response is available.",
+ "未记录模型回复。": "Model response not recorded.",
+ "最终评测 · 原始脚本依据": "Final evaluation · Original evaluator evidence",
+ "此 episode 没有单独保存最终评测；result.txt 仅对应最后一次运行。": "No separate final evaluation was saved for this episode; result.txt refers only to the last run.",
+ "未记录": "Not recorded",
+ "result.txt 得分：{0} · 最后动作：{1} · 评测函数：{2}": "result.txt score: {0} · Last action: {1} · Evaluator: {2}",
+ "infeasible：最后动作是 FAIL 时返回 1；否则返回 0。": "infeasible: returns 1 if the last action is FAIL; otherwise returns 0.",
+ "非 infeasible 任务：最后动作是 FAIL 时直接返回 0，不继续调用结果比较函数。": "For non-infeasible tasks, a final FAIL returns 0 without running the comparison function.",
+ "检查项": "Check",
+ "标准 / 条件": "Expected / Condition",
+ "实际记录": "Recorded result",
+ "最后动作": "Last action",
+ "不得以 FAIL 结束；其余条件由评测函数检查": "Must not end with FAIL; other conditions are checked by the evaluator",
+ "--- 期望终止标记\n+++ 实际终止标记\n{0}": "--- Expected terminal marker\n+++ Actual terminal marker\n{0}",
+ "按展示脚本的该分支得到 {0}；原始 result.txt 为 {1}{2}。": "This branch of the displayed script gives {0}; original result.txt is {1}{2}.",
+ "（一致）": " (matches)",
+ "（不一致，保留原始记录，不覆盖得分）": " (differs; original records and score are retained)",
+ "检查 / 角色": "Check / Role",
+ "标准 expected": "Expected",
+ "实际 actual / 原始输入": "Actual / Raw inputs",
+ "脚本返回值": "Evaluator return value",
+ "原始评测输入的结构 diff": "Structural diff of original evaluator inputs",
+ "完整评测记录与文件": "Complete evaluation records and files",
+ "标准答案 / 期望输入配置": "Reference answer / Expected-input configuration",
+ "打开标准答案文件": "Open reference answer file",
+ "CUA 执行结果 / evaluator 实际输入": "CUA result / Actual evaluator inputs",
+ "这次历史运行没有保存 result_getter / expected_getter 的返回值或对应文件副本，无法生成内容 diff。下面保留实际结果的读取配置；它不是当时读到的结果。": "This historical run did not save result_getter / expected_getter return values or file copies, so a content diff is unavailable. The configuration below describes how results were read; it is not the observed result.",
+ "判断标准 / 原始 options": "Criteria / Original options",
+ "原始详细得分 / Phase 结果": "Original detailed score / Phase results",
+ "采集原始日志": "Raw capture log",
+ "原始 result.txt": "Original result.txt",
+ "原始 runtime.log": "Original runtime.log",
+ "完整 evaluator 配置（含 postconfig / expected / result / options）": "Complete evaluator configuration (postconfig / expected / result / options)",
+ "配置与脚本来源 / 版本": "Configuration and evaluator source / Version",
+ "采集日志包含实际执行函数和当时的输入；下方保留配置来源。": "The capture log includes the executed functions and their inputs. Configuration provenance is retained below.",
+ "此历史运行未保存配置与脚本快照；以下是当前基准配置和脚本，原始得分保持不变。": "This historical run did not save configuration or script snapshots. The current benchmark configuration and script are shown below; the original score is unchanged.",
+ "当前输入图片的 attention 热力图": "Attention heatmap for the current input image",
+ "key {0} · {1} {2} · 中心 ({3}, {4})": "key {0} · {1} {2} · center ({3}, {4})",
+ "渲染强度（8-bit）": "Rendered intensity (8-bit)",
+ "原始 attention": "Raw attention",
+ "换行 ↵": "Newline ↵",
+ "未记录 token 文本": "Token text not recorded",
+ "当前图": "Current image",
+ "历史图 · 来源步 {0}": "History image · Source step {0}",
+ "来源步未确定": "Source step unknown",
+ "Attention 文件未验证": "Attention file is not verified",
+ "Attention 分段读取失败：HTTP ": "Attention range request failed: HTTP ",
+ "Attention 文件校验失败": "Attention file checksum failed",
+ "Attention 长度与 key_count 不一致": "Attention length does not match key_count",
+ "当前决策的完整记录清单": "Complete record inventory for this decision",
+ "未知": "Unknown",
+ "记录内容": "Record",
+ "实际覆盖范围": "Actual coverage",
+ "模型输入图片": "Model input images",
+ "{0} 张；原始字节、顺序、来源步、尺寸、hash、实际视觉 token / patch 映射": "{0} images; original bytes, order, source step, dimensions, hash, and actual vision-token / patch mapping",
+ "完整请求": "Complete request",
+ "已保存 messages、图片文件引用及采样参数": "Messages, image file references, and sampling parameters saved",
+ "原始 API 回复": "Raw API response",
+ "已保存原始字段、usage、结束原因": "Original fields, usage, and finish reason saved",
+ "输入 / 输出 token IDs": "Input / Output token IDs",
+ "输出 token 概率": "Output-token probabilities",
+ "{0} / {1} 个输出位置；API 返回的选中 token 与 top-k 候选": "{0} / {1} output positions; selected tokens and top-k candidates returned by the API",
+ "逐 token 渲染热力图（原始 patch 权重不保留）": "Per-token rendered heatmaps (raw patch weights not retained)",
+ "Attention 原始权重": "Raw attention weights",
+ "{0} 行；层 {1}；head {2}；输出位置（从 0 计）{3}": "{0} rows; layers {1}; heads {2}; output positions (zero-based) {3}",
+ "（全部 ": " (all ",
+ " 个）": " positions)",
+ "完整词表熵": "Full-vocabulary entropy",
+ "{0} / {1} 个输出位置已采集": "{0} / {1} output positions captured",
+ "动作 / 环境反馈": "Actions / Environment feedback",
+ "{0} 次动作；前后截图及原始 tool / reward / done 记录": "{0} actions; before/after screenshots and original tool / reward / done records",
+ "请求过程": "Request transport",
+ "{0} 条传输事件；客户端耗时 {1} 秒": "{0} transport events; client latency {1} seconds",
+ "未保存的模型内部量": "Model internals not saved",
+ "{0}{1}{2}其他层 / head 的 attention、完整词表 logits、processed pixel_values、hidden states / gradients 未保存": "Not saved: {0}{1}{2}attention from other layers / heads, full-vocabulary logits, processed pixel_values, hidden states / gradients",
+ "原始 patch attention 矩阵、": "raw patch attention matrices, ",
+ "其余输出位置的 attention、": "attention for other output positions, ",
+ "逐个文本位置的 attention 权重（保留文本总mass和entropy）、": "individual text-position attention weights (text mass and entropy retained), ",
+ "完整请求（图片以文件引用保存）": "Complete request (images stored as file references)",
+ "完整输入 / 输出 token IDs": "Complete input / output token IDs",
+ "请求关联、重试与耗时": "Request correlation, retries, and timing",
+ "模型与处理器来源": "Model and processor provenance",
+ "请求记录 JSON": "Request record JSON",
+ "全部决策信号 JSONL": "All decision signals JSONL",
+ "正在加载当前模型决策的原始信号…": "Loading original signals for the current model decision…",
+ "信号读取失败：": "Signal read failed: ",
+ "当前决策：thinking {0} tokens · vision {1} tokens · 输出 {2} tokens（真实 token IDs / 输入位置）。": "Current decision: thinking {0} tokens · vision {1} tokens · output {2} tokens (actual token IDs / input positions).",
+ "当前模型决策只计一次输出；think 估计 {0} tokens（字符数 / 3.5）。": "Output is counted once per model decision; estimated thinking length: {0} tokens (characters / 3.5).",
+ "轨迹和截图已就绪；Visual signals 正在处理。": "Trajectory and screenshots are ready. Visual signals are being processed.",
+ "Visual signals 处理失败；轨迹、截图和原始记录仍可查看。": "Visual-signal processing failed. Trajectory, screenshots, and original records remain available.",
+ "刷新处理状态": "Refresh processing status",
+ "未记录或尚未匹配：{0}": "Not recorded or not yet matched: {0}",
+ "无 visual signal 文件": "No visual-signal file",
+ "下载原始 signal JSONL": "Download original signal JSONL",
+ "来源：{0} · {1}": "Source: {0} · {1}",
+ "整步输出 · 平均热力图": "Whole output · Mean heatmap",
+ "单个 token": "Single token",
+ "输出第 {0} 个 token {1} · L{2} / H{3} / Q{4}": "Output token {0} {1} · L{2} / H{3} / Q{4}",
+ "未记录 attention 权重。": "Attention weights not recorded.",
+ "当前层 / head 缺少可唯一关联的输出位置，无法汇总整步热力图。": "Output positions cannot be uniquely associated with this layer / head; the whole-output heatmap is unavailable.",
+ "正在校验并加载当前 token 的完整原始权重…": "Verifying and loading the current token's complete raw weights…",
+ "正在加载已验证的逐 token 热力图图片…": "Loading verified per-token heatmap images…",
+ "图片读取失败：": "Image read failed: ",
+ "此导出保留每个 token 的线性 / 对数 8-bit 热力图及精确图片级统计；单个 patch 的原始权重不再保留。整体平均图仍保留数值。": "This export retains each token's linear / logarithmic 8-bit heatmap and exact image-level statistics. Individual raw patch weights are not retained. The mean heatmap still retains numeric weights.",
+ "{0}：{1} / {2} 个 token 等权平均 · L{3} / H{4}。包括已采集的格式、动作及 thinking token；未采集位置不补零。先平均原始权重，再计算图片 share 与熵。": "{0}: equal-weight mean of {1} / {2} tokens · L{3} / H{4}. Includes captured formatting, action, and thinking tokens. Missing positions are not zero-filled. Raw weights are averaged before computing image shares and entropy.",
+ "完整输出": "Complete output",
+ "部分输出 · 仅已采集位置": "Partial output · Captured positions only",
+ "此图对应预测输出位置 {0} token {1}。L{2} = 第 {3} 层；H{4} = 第 {5} 个 head；query 位置 Q{6} 从 0 编号。当前只展示采样到的 attention 行。Query dtype：{7}。": "This heatmap predicts output position {0}, token {1}. L{2} = layer {3}; H{4} = head {5}. Query Q{6} is zero-based. Only captured attention rows are shown. Query dtype: {7}.",
+ "第 ": "#",
+ " 个": "",
+ "全部图片的平均 attention mass": "Mean attention mass across all images",
+ "全部图片的原始 attention mass": "Raw attention mass across all images",
+ "全部 key · raw ": "All keys · raw ",
+ "图片选择熵 {0} nats · 归一化 {1}": "Image-selection entropy {0} nats · normalized {1}",
+ "存储范围：全部图片 patch 的原始全上下文 attention；逐个文本位置权重未保存。非图片 mass {0} · 全上下文熵 {1} nats · 非图片条件熵 {2} nats": "Stored: original full-context attention for all image patches. Individual text-position weights are not saved. Non-image mass {0} · full-context entropy {1} nats · conditional non-image entropy {2} nats",
+ "输入图片": "Input image",
+ "平均 mass": "Mean mass",
+ "原始 mass": "Raw mass",
+ "图片间 share（仅图片）": "Image share (images only)",
+ "每视觉 token 均值": "Mean per vision token",
+ "空间熵 (nats)": "Spatial entropy (nats)",
+ "归一化空间熵": "Normalized spatial entropy",
+ "输入图片 {0}": "Input image {0}",
+ "全部输入图片": "All input images",
+ "选中的单张图片": "Selected image",
+ "隐藏 Attention 覆盖": "Hide attention overlay",
+ "显示 Attention 覆盖": "Show attention overlay",
+ "实际模型输入与 Attention 热力图": "Actual model inputs and attention heatmaps",
+ "Attention 色标": "Attention color scale",
+ "对数色标 · 显示细节": "Logarithmic scale · Show detail",
+ "线性色标 · 原始比例": "Linear scale · Original proportions",
+ " 显示网格": " Show grid",
+ "最强处不透明度 ": "Peak opacity ",
+ "热力图最强处不透明度": "Peak heatmap opacity",
+ "{0} · {1} vision tokens · 请求 {2}×{3} → 模型处理 {4}×{5} · {6}": "{0} · {1} vision tokens · request {2}×{3} → model input {4}×{5} · {6}",
+ "Attention 热力图": "Attention heatmap",
+ "原图": "Original image",
+ "{0}色标：低/透明 0 → 中 {1} → 高/红 {2}。低权重更透明；所有输入图片共用此色标，切到单张图也不重新缩放。每一步/输出 token 的色标独立计算，跨步强弱请比较原始数值。": "{0} scale: low/transparent 0 → middle {1} → high/red {2}. Lower weights are more transparent. All input images share this scale, including single-image view. Each step / output token has its own scale; compare raw values across steps.",
+ "对数": "Logarithmic",
+ "线性": "Linear",
+ "显示变换 log(1 + w / m)，m = {0}（所有图片非零权重的中位数）。仅调整颜色与透明度，不截断权重、不改变 mass / share。": "Display transform log(1 + w / m), m = {0} (median nonzero weight across all images). Changes colors and opacity only; no weight clipping or changes to mass / share.",
+ "平均图展示当前这一次模型决策的整体关注分布，短暂的局部关注可能被平均淡化；可切换单个 token 查看。": "The mean heatmap shows attention across this model decision. Brief local attention may be diluted by averaging; switch to a single token to inspect it.",
+ "单个 token 图展示生成该 token 时的 decoder attention。Attention 本身不能判断点击或历史图片选择是否正确。": "A single-token heatmap shows decoder attention when generating that token. Attention alone does not establish whether a click or history-image choice was correct.",
+ "整体热力图：汇总权重与覆盖位置": "Whole-output heatmap: aggregate weights and covered positions",
+ "输出 token 诊断：{0} 个位置 · 点击展开": "Output-token diagnostics: {0} positions · Expand",
+ "输出位置 / 阶段": "Output position / Phase",
+ "完整词表熵 (nats)": "Full-vocabulary entropy (nats)",
+ "未标注": "Unlabeled",
+ "输出 token 诊断 · {0}": "Output-token diagnostics · {0}",
+ "Token 计数 / Prediction 概率（原始记录）": "Token counts / Prediction probabilities (original records)",
+ "原始请求与信号元数据（不含已清理的矩阵）": "Original request and signal metadata (cleaned matrices excluded)",
+ "完整 attention 权重与信号记录": "Complete attention weights and signal records",
+ "区域 / 历史图片干预：原始请求与回复（未执行动作）": "Region / History-image interventions: original requests and responses (actions not executed)",
+ "整体 instruction 未记录。": "Task instruction not recorded.",
+ "模型未记录": "Model not recorded",
+ "轨迹 · {0}": "Trajectory · {0}",
+ "运行标记：{0} · 本次上限 {1} 步": "Run classification: {0} · Limit: {1} steps",
+ "采集完整性：{0} · {1} 次决策 · {2} 张图片已解码": "Capture integrity: {0} · {1} decisions · {2} decoded images",
+ "通过": "Passed",
+ "发现问题": "Issues found",
+ "Visual signals 处理中": "Visual signals processing",
+ "历史数据不完整": "Historical data incomplete",
+ "下载校验报告 JSON": "Download validation report JSON",
+ "未找到完整的 episode 记录。": "No complete episode record found.",
+ "轨迹调试器": "Trajectory debugger",
+ "图片 / Attention 热力图": "Images / Attention heatmaps",
+ "完整记录清单": "Record inventory",
+ "最终评测 / 最后一步": "Final evaluation / Last step",
+ "原始 JSON ↓": "Original JSON ↓",
+ "任务导航": "Task navigation",
+ "← 返回": "← Back",
+ "返回列表": "Back to list",
+ "← 上一个任务": "← Previous task",
+ "下一个任务 →": "Next task →",
+ "轨迹流程图": "Trajectory graph",
+ "节点合并": "Node grouping",
+ "相同指令 + 应用": "Same command + app",
+ "完全相同的画面 + 应用": "Identical screenshot + app",
+ "展开每一次执行": "Show every action",
+ "缩小流程图": "Zoom out",
+ "放大流程图": "Zoom in",
+ "适合宽度": "Fit width",
+ "导出图": "Export graph",
+ "带回边的完整轨迹图": "Complete trajectory graph with back edges",
+ "原始执行顺序 · 点击序号定位具体一次执行": "Original action order · Click a number to inspect an action",
+ "← 上一次执行": "← Previous action",
+ "下一次执行 →": "Next action →",
+ "执行前": "Before",
+ "前后对照": "Before / After",
+ "执行后": "After",
+ "标注执行动作": "Mark executed actions",
+ "实际执行动作": "Executed action",
+ "Thinking（原始）": "Thinking (original)",
+ "Prediction / 完整回复": "Prediction / Complete response",
+ "原始动作 / Tool reply": "Original action / Tool reply",
+ "Visual signals · 当前模型决策的真实输入": "Visual signals · Actual inputs for this decision",
+ "运行参数与数据来源": "Run parameters and provenance",
+ "关闭": "Close"
+};
+let uiLanguage = new URLSearchParams(location.search).get('lang');
+if (!['en','zh'].includes(uiLanguage)) {try {uiLanguage=localStorage.getItem('cua-trajectory-language');} catch {}}
+uiLanguage=uiLanguage==='en'?'en':'zh';
+try {localStorage.setItem('cua-trajectory-language',uiLanguage);} catch {}
+document.documentElement.lang=uiLanguage==='en'?'en':'zh-CN';
+function ui(text,...values) {
+ const key=typeof text==='string'?text:text.reduce((s,part,i)=>s+(i?'{'+(i-1)+'}':'')+part,'');
+ const translated=uiLanguage==='en'?(UI_EN[key]??key):key;
+ // A callback inserts raw dynamic values verbatim, without translating or reparsing them.
+ return typeof text==='string'?translated:translated.replace(/\{(\d+)\}/g,(_,i)=>String(values[Number(i)]));
+}
+// This runs once before data rendering, so the walker only sees the static UI shell.
+const staticText=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
+while(staticText.nextNode()) {
+ const node=staticText.currentNode;if(node.parentElement.closest('script,style'))continue;
+ const key=node.textContent.trim();if(Object.hasOwn(UI_EN,key))node.textContent=node.textContent.replace(key,ui(key));
+}
+for(const node of document.querySelectorAll('[aria-label]'))node.setAttribute('aria-label',ui(node.getAttribute('aria-label')));
+document.title=ui(document.title);
+const languageButton=document.createElement('button');languageButton.id='language-toggle';
+languageButton.textContent=uiLanguage==='en'?'中文':'English';languageButton.setAttribute('aria-label','Switch language / 切换语言');
+languageButton.onclick=()=>{const next=uiLanguage==='en'?'zh':'en';try{localStorage.setItem('cua-trajectory-language',next);}catch{}const url=new URL(location.href);url.searchParams.set('lang',next);location.assign(url.href);};
+document.querySelector('.topbar').prepend(languageButton);
+</script>
+<script type="application/json" id="trajectory-data">/*__TRAJECTORY_DATA__*/</script>
+<script>
+'use strict';
+const DATA=JSON.parse(document.getElementById('trajectory-data').textContent), $=id=>document.getElementById(id), NS='http://www.w3.org/2000/svg';
+const sourceUrl=url=>DATA.catalog&&typeof url==='string'&&url.startsWith('/assets/')?DATA.catalog.prefix+url:url;
+const indexUrl=DATA.catalog?'/index.html?collection='+DATA.catalog.collection:'index.html';
+$('return-index').href=indexUrl;
+const state={episode:0,mode:'action',occurrence:0,shotMode:'compare',zoom:1,signalRow:0,signalImage:0,pendingOutput:null,attentionMode:'mean',heatmapView:'all',showHeatmap:true,heatScale:'log',heatGrid:false,heatOpacity:.8,panel:'',autoFit:true};
+const pretty=v=>typeof v==='string'?v:JSON.stringify(v,null,2), finite=v=>Number.isFinite(v)?Number(v).toPrecision(5):'—';
+const episode=()=>DATA.episodes[state.episode], graph=()=>episode().graphs[state.mode];
+const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e};
+const svgEl=(tag,attrs,parent)=>{const e=document.createElementNS(NS,tag);Object.entries(attrs||{}).forEach(([k,v])=>e.setAttribute(k,String(v)));if(parent)parent.append(e);return e};
+const svgText=(parent,x,y,text,size=13)=>{const e=svgEl('text',{x,y,fill:'#202020','font-size':size,'font-family':'system-ui,sans-serif'},parent);e.textContent=text;return e};
+function jsonDisclosure(title,value){const d=el('details',undefined,'raw-details');d.append(el('summary',title));let loaded=false;d.ontoggle=async()=>{if(d.open&&!loaded){loaded=true;const pre=el('pre',ui('正在读取…'));d.append(pre);try{pre.textContent=pretty((typeof value==='function'?await value():value)??null);}catch(e){pre.textContent=ui('读取失败：')+e;loaded=false;pre.remove();d.append(el('p',ui('读取失败，收起后可重试：')+e,'quiet'));}}};return d;}
+async function artifactBytes(ref){
+ const response=await fetch(sourceUrl(ref.src),{headers:{Range:`bytes=${ref.offset}-${ref.offset+ref.length-1}`}});
+ if(response.status!==206)throw Error('Artifact range: HTTP '+response.status);
+ const data=await response.arrayBuffer(),hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',data))).map(x=>x.toString(16).padStart(2,'0')).join('');
+ if(data.byteLength!==ref.length||hash!==(ref.sha256||ref.chunk_sha256))throw Error('Artifact checksum failed');return data;
+}
+async function rawSignal(signal){
+ if(signal.raw_details_ref){const data=await artifactBytes(signal.raw_details_ref),stream=new Blob([data]).stream().pipeThrough(new DecompressionStream('gzip'));return {...signal,...JSON.parse(await new Response(stream).text())};}
+ if(!signal.raw_details_url)return signal;const response=await fetch(signal.raw_details_url);if(!response.ok)throw Error('HTTP '+response.status);return {...signal,...await response.json()};
+}
+
+const signalCache=new Map(),signalRequests=new Map();
+function rememberSignal(frame,signal){
+ signalCache.delete(frame);signalCache.set(frame,signal);frame.signals=signal;
+ while(signalCache.size>2){const victim=[...signalCache.keys()].find(f=>f!==current()?.frame);if(!victim)break;signalCache.delete(victim);victim.signals=null;}
+}
+function fetchSignal(frame){
+ if(signalRequests.has(frame))return signalRequests.get(frame);
+ const request=fetch(frame.signals_url).then(r=>{if(!r.ok)throw Error('HTTP '+r.status);return r.json();}).then(signal=>{rememberSignal(frame,signal);return signal;}).finally(()=>signalRequests.delete(frame));
+ signalRequests.set(frame,request);return request;
+}
+
+const button=(text,action,active=false)=>{const b=el('button',text,active?'active':'');b.type='button';b.onclick=action;return b};
+const shorten=(value,limit=34)=>{let width=0,result='';for(const ch of value){width+=ch.codePointAt(0)>255?2:1;if(width>limit)return result+'…';result+=ch;}return result;};
+const current=()=>{const o=graph().occurrences[state.occurrence];return o?{o,frame:episode().frames[o.step_order],action:episode().frames[o.step_order].actions[o.action_index]}:null};
+function taskPage(url){try{const u=new URL(url,location.href);return u.origin===location.origin&&/^\/(?:sources\/[a-z0-9-]+\/)?task-[a-f0-9]{32}\.html$/.test(u.pathname)?u.pathname:null;}catch{return null;}}
+async function setupTaskNavigation(){
+ let context=null;try{context=JSON.parse(sessionStorage.getItem('cua-trajectory-navigation')||'null');}catch{}
+ const scoredOnly=DATA.catalog?.collection==='eval';
+ if(!context||(context.runId!==DATA.run.id&&!context.runIds?.includes(DATA.run.id))||(scoredOnly&&!context.scoredOnly)||!Array.isArray(context.items)||!context.items.some(x=>taskPage(x.url)===location.pathname)){
+  try{const response=await fetch('index.json',{cache:'no-store'});if(!response.ok)throw Error('Index unavailable');const index=await response.json(),byTask=new Map();
+   (index.trajectories||[]).filter(r=>(DATA.catalog?.run_ids||[DATA.run.id]).includes(r.run_id)&&(!scoredOnly||Number.isFinite(r.score))).forEach(r=>byTask.set(taskPage(r.html),{url:r.html,label:r.instruction||r.task_id}));
+   context={runId:DATA.run.id,runIds:DATA.catalog?.run_ids||[DATA.run.id],items:[...byTask.values()],fromIndex:false,scoredOnly};
+  }catch{$('task-position').textContent=ui('任务导航暂不可用；可返回列表重试。');return;}
+ }
+ context.items=context.items.filter(x=>taskPage(x.url));
+ const position=context.items.findIndex(x=>taskPage(x.url)===location.pathname);if(position<0)return;
+ $('task-position').textContent=ui`第 ${position+1} / ${context.items.length} 个任务 · ${context.fromIndex?ui('当前筛选'):ui('本组实验')}`;
+ for(const [id,next] of [['previous-task',position-1],['next-task',position+1]]){
+  const item=context.items[next];$(id).disabled=!item;if(item){$(id).title=item.label;$(id).onclick=()=>location.assign(item.url);}
+ }
+ try{
+  sessionStorage.setItem('cua-trajectory-navigation',JSON.stringify(context));
+  if(context.fromIndex){const saved=JSON.parse(sessionStorage.getItem(context.indexKey||'cua-trajectory-index-eval')||'{}');saved.anchor=context.items[position].url;sessionStorage.setItem(context.indexKey||'cua-trajectory-index-eval',JSON.stringify(saved));}
+ }catch{}
+}
+$('back-page').onclick=()=>{let local=false;try{local=new URL(document.referrer).origin===location.origin;}catch{}if(local&&history.length>1)history.back();else location.assign(indexUrl);};
+setupTaskNavigation();
+function setHash(){const row=current()?.frame.signals?.attention?.[state.signalRow]||state.pendingOutput;history.replaceState(null,'','#'+new URLSearchParams({episode:String(episode().trace.episode),occurrence:String(state.occurrence),group:state.mode,attention:state.attentionMode,scale:state.heatScale,grid:state.heatGrid?'1':'0',opacity:String(state.heatOpacity),...(state.panel?{panel:state.panel}:{}),...(row?.output_index!=null?{output:String(row.output_index),layer:String(row.layer),head:String(row.head)}:{})}));}
+function selectOccurrence(index,focusGraph=false){state.occurrence=Math.max(0,Math.min(graph().occurrences.length-1,index));state.signalRow=0;state.signalImage=0;state.pendingOutput=null;drawGraph();drawDetail();$('detail').scrollTop=0;setHash();if(focusGraph){const n=$('graph').querySelector('[data-node="'+graph().route[state.occurrence]+'"]');n?.scrollIntoView({block:'nearest',inline:'nearest'});}}
+function drawGraph(){
+ const g=graph(), svg=$('graph'), H=Math.max(260,g.nodes.length*108+60);svg.replaceChildren();svg.setAttribute('viewBox',`0 0 700 ${H}`);svg.setAttribute('width',700*state.zoom);svg.setAttribute('height',H*state.zoom);
+ const defs=svgEl('defs',{},svg), marker=svgEl('marker',{id:'arrow',viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:6,markerHeight:6,orient:'auto'},defs);svgEl('path',{d:'M 0 0 L 10 5 L 0 10 z',fill:'#777'},marker);
+ const active=g.route[state.occurrence], previous=state.occurrence?g.route[state.occurrence-1]:null;
+ g.edges.forEach((edge,i)=>{const x=210,w=280,y=45+edge.source*108+35,ty=45+edge.target*108+35,lane=90+(i%4)*17;let d,lx,ly;
+  if(edge.source===edge.target){d=`M ${x+w} ${y-16} C ${x+w+105} ${y-70} ${x+w+105} ${y+70} ${x+w} ${y+16}`;lx=x+w+70;ly=y;}
+  else if(edge.target===edge.source+1){d=`M ${x+w/2} ${y+35} L ${x+w/2} ${ty-35}`;lx=x+w/2+12;ly=(y+ty)/2;}
+  else if(edge.target<edge.source){d=`M ${x} ${y} C ${x-lane} ${y} ${x-lane} ${ty} ${x} ${ty}`;lx=x-lane*.75-8;ly=(y+ty)/2;}
+  else{d=`M ${x+w} ${y} C ${x+w+lane} ${y} ${x+w+lane} ${ty} ${x+w} ${ty}`;lx=x+w+lane*.75;ly=(y+ty)/2;}
+  const selected=previous===edge.source&&active===edge.target, p=svgEl('path',{d,fill:'none',stroke:selected?'#111':'#aaa','stroke-width':selected?2.7:1.5,'marker-end':'url(#arrow)','data-edge':`${edge.source}-${edge.target}`},svg);const t=svgEl('title',{},p);t.textContent=edge.occurrences.map(([a,b])=>ui`执行 ${a+1} → ${b+1}`).join('\n');
+  if(edge.occurrences.length>1)svgText(svg,lx,ly,'×'+edge.occurrences.length,12);
+ });
+ g.nodes.forEach(n=>{const x=210,y=45+n.id*108,selected=n.id===active,node=svgEl('g',{'data-node':n.id,role:'button',tabindex:0,'aria-label':ui`节点 ${n.id+1}，${state.mode==='state'?ui('相同画面'):n.label}，出现 ${n.occurrences.length} 次`},svg);node.style.cursor='pointer';const title=svgEl('title',{},node);title.textContent=n.label+ui('\n执行序号：')+n.occurrences.map(i=>i+1).join(', ');
+  svgEl('rect',{x,y,width:280,height:70,rx:8,fill:selected?'#e9e9e5':'white',stroke:selected?'#111':'#c5c5c0','stroke-width':selected?2:1},node);svgText(node,x+13,y+20,`N${n.id+1} · ${n.app||ui('应用未记录')}`,11);
+  svgText(node,x+13,y+42,shorten(state.mode==='state'?ui('相同画面'):n.label.replace(/\s+/g,' ')),13);svgText(node,x+13,y+60,ui`出现 ${n.occurrences.length} 次 · #${n.occurrences.slice(0,5).map(i=>i+1).join(', ')}${n.occurrences.length>5?'…':''}`,11);
+  node.onclick=()=>{selectOccurrence(n.occurrences.includes(state.occurrence)?state.occurrence:n.occurrences[0]);if(innerWidth<900)$('detail').scrollIntoView({block:'start'});};node.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();node.onclick();}};
+ });
+ $('graph-help').textContent=state.mode==='action'?ui`同一应用内相同执行指令合并；回边与自环保留。${g.nodes.length} 个节点 / ${g.occurrences.length} 次执行。合并不代表同一个 UI 控件。`:state.mode==='state'?ui`仅按截图文件 SHA-256 完全相同合并；缺图不合并。${g.nodes.length} 个画面 / ${g.occurrences.length} 次执行。`:ui`每次执行独立显示，共 ${g.occurrences.length} 次。`;
+ const timeline=$('timeline');timeline.replaceChildren();g.occurrences.forEach((o,i)=>{const b=button(String(i+1),()=>selectOccurrence(i,true),i===state.occurrence);b.classList.add('tick');b.title=ui`模型步 ${o.step_num}.${o.action_index+1} · 节点 N${g.route[i]+1}`;timeline.append(b);});
+}
+function markerOverlay(action,width,height){
+ if(!(width>0&&height>0)||!$('show-marks').checked)return null;
+ const s=svgEl('svg',{viewBox:`0 0 ${width} ${height}`,'aria-label':ui('实际动作位置标记')}),r=Math.max(width,height)/65;
+ (action.markers||[]).forEach((m,i)=>{const group=svgEl('g',{},s);const title=svgEl('title',{},group);title.textContent=`${m.label}: (${m.x}, ${m.y})`;
+  if(m.type==='drag'&&m.fromX!=null){svgEl('line',{x1:m.fromX,y1:m.fromY,x2:m.x,y2:m.y,stroke:'white','stroke-width':8},group);svgEl('line',{x1:m.fromX,y1:m.fromY,x2:m.x,y2:m.y,stroke:'#111','stroke-width':4,'stroke-dasharray':'12 7'},group);svgEl('circle',{cx:m.fromX,cy:m.fromY,r:r*.5,fill:'white',stroke:'#111','stroke-width':3},group);}
+  svgEl('circle',{cx:m.x,cy:m.y,r,fill:'none',stroke:'white','stroke-width':8},group);svgEl('circle',{cx:m.x,cy:m.y,r,fill:'none',stroke:'#111','stroke-width':3},group);svgEl('path',{d:`M ${m.x-r*.5} ${m.y} h ${r} M ${m.x} ${m.y-r*.5} v ${r}`,stroke:'#111','stroke-width':3},group);svgText(group,m.x+r,m.y-r,String(i+1),r);
+ });return s;
+}
+function shot(src,caption,overlay){
+ const f=el('figure');if(!src){f.append(el('div',ui('未保存这张截图。'),'missing'));return f;}const canvas=el('div',undefined,'canvas'),img=el('img');img.src=sourceUrl(src);img.alt=caption;canvas.append(img);if(overlay)canvas.append(overlay);
+ img.onerror=()=>{canvas.replaceChildren(el('div',ui('图片不可用；请确认独立截图服务已启动。'),'missing'));canvas.onclick=null;};canvas.tabIndex=0;canvas.setAttribute('role','button');canvas.setAttribute('aria-label',caption+ui('，放大图片'));canvas.onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&canvas.onclick){e.preventDefault();canvas.onclick();}};canvas.onclick=()=>{$('zoom-title').textContent=caption;$('zoom-content').replaceChildren(canvas.cloneNode(true));$('zoom-dialog').showModal();};f.append(canvas,el('figcaption',caption));return f;
+}
+function drawShots(){const c=current();if(!c)return;const {action}=c,shots=$('shots');shots.replaceChildren();shots.className='shots '+(state.shotMode==='compare'?'compare':'');document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===state.shotMode));
+ if(state.shotMode!=='after')shots.append(shot(action.before,ui('执行前 · 标记实际动作位置'),markerOverlay(action,action.width,action.height)));
+ if(state.shotMode!=='before')shots.append(shot(action.after,ui('执行后 · 查看环境结果'),null));
+}
+function drawDetail(){const c=current();if(!c){$('detail').hidden=true;return;}$('detail').hidden=false;const {o,frame,action}=c,g=graph(),node=g.nodes[g.route[state.occurrence]];
+ $('node-title').textContent=`N${node.id+1} · ${state.mode==='state'?ui('画面节点'):node.app||ui('应用未记录')}`;$('selection-meta').textContent=ui`当前是该节点第 ${node.occurrences.indexOf(state.occurrence)+1} / ${node.occurrences.length} 次出现。每次的截图和输出独立保留。`;
+ const visits=$('visits');visits.replaceChildren();node.occurrences.forEach(i=>{const v=g.occurrences[i];visits.append(button(`#${i+1} · ${v.step_num}.${v.action_index+1}`,()=>selectOccurrence(i),i===state.occurrence));});
+ $('position').textContent=ui`执行 ${state.occurrence+1} / ${g.occurrences.length} · 模型步 ${o.step_num}.${o.action_index+1}`;$('previous').disabled=state.occurrence===0;$('next').disabled=state.occurrence===g.occurrences.length-1;
+ $('action').textContent=pretty(action.action);$('coordinates').textContent=ui`原始行 ${action.row_number} · ${action.timestamp||ui('时间戳未记录')} · ${(action.markers||[]).map(m=>`${m.label} (${m.x}, ${m.y})${m.fromX!=null?` ← (${m.fromX}, ${m.fromY})`:''}`).join(' / ')||ui('没有可标注的显式坐标')}`;
+ const response=frame.response==null?'':typeof frame.response==='string'?frame.response:pretty(frame.response), matches=typeof response==='string'?[...response.matchAll(/<think>([\s\S]*?)<\/think>/g)]:[];
+ $('thinking').textContent=matches.length?matches.map(m=>m[1]).join('\n'):action.raw?.thinking||action.raw?.reasoning_content||(frame.signals?.request?.extra_body?.chat_template_kwargs?.enable_thinking===false?ui('本次请求设置 enable_thinking=false，没有单独的 thinking 输出。'):ui('这条记录没有独立的 thinking 内容；完整原始回复仍可查看。'));$('prediction').textContent=response||ui('未记录模型回复。');$('raw-action').textContent=pretty(action.raw||action);drawShots();drawEvaluation();drawSignals();
+}
+function drawEvaluation(){
+ const root=$('evaluation'), ep=episode();root.replaceChildren();root.hidden=state.occurrence!==graph().occurrences.length-1;if(root.hidden)return;
+ root.append(el('h3',ui('最终评测 · 原始脚本依据')));
+ const evidence=ep.trace.evaluation;if(!evidence){root.append(el('div',ui('此 episode 没有单独保存最终评测；result.txt 仅对应最后一次运行。'),'status'));return;}
+ const criteria=evidence.criteria||{}, funcs=Array.isArray(criteria.func)?criteria.func:[criteria.func||ui('未记录')];
+ root.append(el('div',ui`result.txt 得分：${evidence.score??ui('未记录')} · 最后动作：${pretty(evidence.last_action)} · 评测函数：${funcs.join(' + ')}`,'status'));
+ const sourceRecorded=!!evidence.script?.code;
+ let expectedTerminal=null, terminalRule=null, computed=null;
+ if(sourceRecorded&&criteria.func==='infeasible'){
+   expectedTerminal='FAIL';computed=evidence.last_action==='FAIL'?1:0;
+   terminalRule=ui('infeasible：最后动作是 FAIL 时返回 1；否则返回 0。');
+ }else if(sourceRecorded&&criteria.func&&evidence.last_action==='FAIL'){
+   computed=0;terminalRule=ui('非 infeasible 任务：最后动作是 FAIL 时直接返回 0，不继续调用结果比较函数。');
+ }
+ if(terminalRule){
+   root.append(el('p',terminalRule));
+   const table=el('table'),head=el('tr');[ui('检查项'),ui('标准 / 条件'),ui('实际记录')].forEach(x=>head.append(el('th',x)));table.append(head);
+   const tr=el('tr');[ui('最后动作'),expectedTerminal||ui('不得以 FAIL 结束；其余条件由评测函数检查'),pretty(evidence.last_action)].forEach(x=>tr.append(el('td',x)));table.append(tr);root.append(table);
+   if(expectedTerminal)root.append(el('pre',ui`--- 期望终止标记
++++ 实际终止标记
+${expectedTerminal===evidence.last_action?'  '+expectedTerminal:'- '+expectedTerminal+'\n+ '+pretty(evidence.last_action)}`));
+   root.append(el('p',ui`按展示脚本的该分支得到 ${computed}；原始 result.txt 为 ${evidence.score??ui('未记录')}${computed===evidence.score?ui('（一致）'):ui('（不一致，保留原始记录，不覆盖得分）')}。`,'quiet'));
+ }
+ if(evidence.actual_inputs_status==='recorded'){
+   const table=el('table'),head=el('tr');[ui('检查 / 角色'),ui('标准 expected'),ui('实际 actual / 原始输入'),ui('脚本返回值')].forEach(x=>head.append(el('th',x)));table.append(head);
+   for(const check of evidence.checks||[]){if(!['evaluator_call','evaluator_error','check'].includes(check.type))continue;const tr=el('tr');[check.name||check.role,pretty(check.comparison?.expected??check.expected??null),pretty(check.comparison?.actual??check.actual??check.inputs),pretty(check.result??check.error)].forEach(x=>{const td=el('td');td.append(el('pre',x));tr.append(td);});table.append(tr);if(check.comparison?.value_diff){const diff=el('tr'),td=el('td');td.colSpan=4;td.append(el('p',ui('原始评测输入的结构 diff'),'quiet'),el('pre',check.comparison.value_diff));diff.append(td);table.append(diff);}}root.append(table);
+   const details=el('details');details.append(el('summary',ui('完整评测记录与文件')),el('pre',pretty(evidence.checks)));root.append(details);
+   function files(v){if(!v||typeof v!=='object')return;if(v.src){const a=el('a',v.original_path||v.path);a.href=sourceUrl(v.src);a.target='_blank';a.rel='noopener';root.append(a,el('br'));}Object.values(v).forEach(x=>{if(typeof x==='object')files(x);});}files(evidence.checks);
+ }else if(criteria.func!=='infeasible'){
+   root.append(el('h3',ui('标准答案 / 期望输入配置')),el('pre',pretty(criteria.expected??{options:criteria.options??null,func:criteria.func??null})));
+   function expectedLinks(v){if(!v||typeof v!=='object')return;for(const [key,val] of Object.entries(v)){if(key==='path'&&typeof val==='string'&&/^https?:\/\//.test(val)){const a=el('a',ui('打开标准答案文件'));a.href=val;a.target='_blank';a.rel='noopener noreferrer';root.append(a,el('p',val,'quiet'));}else if(typeof val==='object')expectedLinks(val);}}
+   expectedLinks(criteria.expected);
+   root.append(el('h3',ui('CUA 执行结果 / evaluator 实际输入')));
+   root.append(el('div',ui('这次历史运行没有保存 result_getter / expected_getter 的返回值或对应文件副本，无法生成内容 diff。下面保留实际结果的读取配置；它不是当时读到的结果。'),'status'));
+   root.append(el('pre',pretty(criteria.result??null)));
+   if(criteria.options){root.append(el('h3',ui('判断标准 / 原始 options')),el('pre',pretty(criteria.options)));}
+ }
+ if(evidence.rich_result||evidence.phase_results)root.append(el('h3',ui('原始详细得分 / Phase 结果')),el('pre',pretty({result:evidence.rich_result,phases:evidence.phase_results})));
+ const links=el('div',undefined,'signal-controls');for(const [key,label] of [['events_file',ui('采集原始日志')],['result_file',ui('原始 result.txt')],['runtime_log',ui('原始 runtime.log')]])if(evidence[key]){const a=el('a',label);a.href=sourceUrl(evidence[key]);a.target='_blank';a.rel='noopener';links.append(a);}root.append(links);
+ const contract=el('details',undefined,'raw-details');contract.append(el('summary',ui('完整 evaluator 配置（含 postconfig / expected / result / options）')),el('pre',pretty(criteria)));root.append(contract);
+ const origin=el('details',undefined,'raw-details');origin.append(el('summary',ui('配置与脚本来源 / 版本')),el('p',evidence.actual_inputs_status==='recorded'?ui('采集日志包含实际执行函数和当时的输入；下方保留配置来源。'):ui('此历史运行未保存配置与脚本快照；以下是当前基准配置和脚本，原始得分保持不变。'),'quiet'),el('pre',pretty({criteria_source:evidence.criteria_source,script:evidence.script?{path:evidence.script.path,sha256:evidence.script.sha256,line:evidence.script.line}:null})));if(evidence.script)origin.append(el('pre',evidence.script.code));root.append(origin);
+}
+function attentionColor(value){const t=Math.max(0,Math.min(1,value)),a=t<=.5?[35,85,220]:[250,250,250],b=t<=.5?[250,250,250]:[220,40,35],f=t<=.5?t*2:(t-.5)*2;return `rgb(${a.map((v,i)=>Math.round(v+(b[i]-v)*f)).join(',')})`;}
+function attentionDisplayScale(frames,mode){
+ const values=frames.flatMap(f=>f.weights||[]).filter(v=>Number.isFinite(v)&&v>=0).sort((a,b)=>a-b),positive=values.filter(v=>v>0),max=values.at(-1)||0;
+ const middle=Math.floor(positive.length/2),pivot=positive.length?(positive.length%2?positive[middle]:(positive[middle-1]+positive[middle])/2):1;
+ const normalize=weight=>{const value=Math.max(0,Math.min(max,weight));return !max?0:mode==='linear'?value/max:Math.log1p(value/pivot)/Math.log1p(max/pivot);};
+ return {max,pivot,normalize,midpoint:mode==='linear'?max/2:pivot*Math.expm1(Math.log1p(max/pivot)/2)};
+}
+function heatmap(image,weights,scale,rendered=false){if(!image.patch_boxes||!weights)return null;const s=svgEl('svg',{viewBox:'0 0 1 1',preserveAspectRatio:'none','aria-label':ui('当前输入图片的 attention 热力图')});s.style.pointerEvents='auto';image.patch_boxes.forEach((b,i)=>{const value=rendered?weights[i]:scale.normalize(weights[i]),r=svgEl('rect',{x:b[0],y:b[1],width:b[2]-b[0],height:b[3]-b[1],fill:attentionColor(value),opacity:state.heatOpacity*value,stroke:state.heatGrid?'white':'none','stroke-width':.001},s);const t=svgEl('title',{},r);t.textContent=ui`key ${image.key_indices[i]} · ${rendered?ui("渲染强度（8-bit）"):ui("原始 attention")} ${weights[i]} · 中心 (${Math.round((b[0]+b[2])*image.processed_width/2)}, ${Math.round((b[1]+b[3])*image.processed_height/2)})`;});return s;}
+function tokenText(text){return text==='\n'?ui('换行 \u21b5'):text===undefined?ui('未记录 token 文本'):JSON.stringify(text);}
+function imageLabel(image,frame){const role=image.source_step===frame.step?ui('当前图'):image.source_step!=null?ui`历史图 · 来源步 ${image.source_step}`:ui('来源步未确定');return `${image.id} · ${role}`;}
+async function loadRenderedRow(row,images){
+ const ref=row.render_ref;if(ref.codec!=='png-u8-linear-log')throw Error('Unknown rendered heatmap format');
+ const bytes=await artifactBytes(ref),bitmap=await createImageBitmap(new Blob([bytes],{type:'image/png'}));
+ if(bitmap.width!==ref.width||bitmap.height!==ref.height){bitmap.close();throw Error('Rendered heatmap dimensions differ');}
+ const canvas=document.createElement('canvas');canvas.width=bitmap.width;canvas.height=bitmap.height;const context=canvas.getContext('2d');context.drawImage(bitmap,0,0);bitmap.close();
+ const data=context.getImageData(0,0,canvas.width,canvas.height).data,n=ref.value_count;if(n*2>data.length/4)throw Error('Rendered heatmap length differs');
+ let offset=0;row.frames.forEach(f=>{const image=images.find(i=>i.id===f.image_id),count=image.token_count;f.display_values={linear:Array.from({length:count},(_,i)=>data[(offset+i)*4]/255),log:Array.from({length:count},(_,i)=>data[(n+offset+i)*4]/255)};offset+=count;});if(offset!==n)throw Error('Rendered image mapping differs');
+}
+async function loadAttentionRow(row,images){
+ const ref=row.weights_ref;if(ref.codec!=='zlib-float32-le'||!ref.src)throw Error(ui('Attention 文件未验证'));
+ const response=await fetch(sourceUrl(ref.src),{headers:{Range:`bytes=${ref.offset}-${ref.offset+ref.length-1}`}});
+ if(response.status!==206)throw Error(ui('Attention 分段读取失败：HTTP ')+response.status);
+ const compressed=await response.arrayBuffer(),hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',compressed))).map(x=>x.toString(16).padStart(2,'0')).join('');
+ if(compressed.byteLength!==ref.length||hash!==ref.chunk_sha256)throw Error(ui('Attention 文件校验失败'));
+ const stream=new Blob([compressed]).stream().pipeThrough(new DecompressionStream('deflate')),raw=await new Response(stream).arrayBuffer();
+ if(raw.byteLength!==(row.stored_key_count??row.key_count)*4)throw Error(ui('Attention 长度与 key_count 不一致'));
+ const values=new DataView(raw);let offset=0;row.frames.forEach(f=>{const image=images.find(i=>i.id===f.image_id);f.weights=image.key_indices.map(k=>values.getFloat32((row.weights_scope==='image_keys'?offset++:k)*4,true));});
+}
+function recordInventory(frame,s){
+ const root=el('section',undefined,'section');root.id='record-inventory';root.append(el('h3',ui('当前决策的完整记录清单')));
+ const total=s.output_token_ids?.length??s.counts?.output?.value??ui('未知'),probs=Array.isArray(s.output_tokens)?s.output_tokens:s.output_tokens?.content||[],rows=s.attention||[],positions=[...new Set(rows.map(r=>r.output_index))].filter(Number.isInteger);
+ const table=el('table',undefined,'coverage'),head=el('tr');[ui('记录内容'),ui('实际覆盖范围')].forEach(x=>head.append(el('th',x)));table.append(head);
+ const fields=[[ui('模型输入图片'),ui`${(s.images||[]).length} 张；原始字节、顺序、来源步、尺寸、hash、实际视觉 token / patch 映射`],[ui('完整请求'),(s.request||s.raw_fields?.includes('request'))?ui('已保存 messages、图片文件引用及采样参数'):ui('未记录')],[ui('原始 API 回复'),(s.api_response||s.raw_fields?.includes('api_response'))?ui('已保存原始字段、usage、结束原因'):ui('未记录')],[ui('输入 / 输出 token IDs'),`${s.input_token_ids?.length??s.input_token_count??ui('未记录')} / ${s.output_token_ids?.length??ui('未记录')}`],[ui('输出 token 概率'),ui`${probs.length} / ${total} 个输出位置；API 返回的选中 token 与 top-k 候选`],[s.raw_retention==='rendered-only'?ui('逐 token 渲染热力图（原始 patch 权重不保留）'):ui('Attention 原始权重'),ui`${rows.length} 行；层 ${[...new Set(rows.map(r=>r.layer))].join(', ')}；head ${[...new Set(rows.map(r=>r.head))].join(', ')}；输出位置（从 0 计）${positions.length===total?'0–'+(total-1)+ui('（全部 ')+total+ui(' 个）'):positions.join(', ')}`],[ui('完整词表熵'),ui`${s.token_diagnostics?.length??0} / ${total} 个输出位置已采集`],[ui('动作 / 环境反馈'),ui`${frame.actions.length} 次动作；前后截图及原始 tool / reward / done 记录`],[ui('请求过程'),ui`${s.transport_attempts?.length??0} 条传输事件；客户端耗时 ${finite(s.client_latency_seconds)} 秒`],[ui('未保存的模型内部量'),ui`${s.raw_retention==='rendered-only'?ui('原始 patch attention 矩阵、'):''}${positions.length<total?ui('其余输出位置的 attention、'):''}${rows.some(r=>r.weights_scope==='image_keys')?ui('逐个文本位置的 attention 权重（保留文本总mass和entropy）、'):''}其他层 / head 的 attention、完整词表 logits、processed pixel_values、hidden states / gradients 未保存`]];
+ for(const values of fields){const tr=el('tr');values.forEach(v=>tr.append(el('td',v)));table.append(tr);}root.append(table);
+ for(const [title,value] of [[ui('完整请求（图片以文件引用保存）'),()=>rawSignal(s).then(v=>v.request)],[ui('原始 API 回复'),()=>rawSignal(s).then(v=>v.api_response)],[ui('完整输入 / 输出 token IDs'),()=>rawSignal(s).then(v=>({input:v.input_token_ids,output:v.output_token_ids}))],[ui('请求关联、重试与耗时'),{request_id:s.request_id,request_sha256:s.request_sha256,response_sha256:s.response_sha256,attempt:s.attempt,transport_attempts:s.transport_attempts,client_latency_seconds:s.client_latency_seconds}],[ui('模型与处理器来源'),s.backend_provenance]]){root.append(jsonDisclosure(title,value));}
+ const links=el('div',undefined,'signal-controls');for(const [url,title] of [[s.request_file,ui('请求记录 JSON')],[frame.signal_source,ui('全部决策信号 JSONL')]])if(url){const a=el('a',title);a.href=sourceUrl(url);a.target='_blank';a.rel='noopener';links.append(a);}root.append(links);return root;
+}
+function drawSignals(){const {frame}=current(),root=$('signal-content');root.replaceChildren();const s=frame.signals;if(s&&frame.signals_url)rememberSignal(frame,s);
+ if(!s&&frame.signals_url){const status=el('p',ui('正在加载当前模型决策的原始信号…'),'status');root.append(status);
+  fetchSignal(frame).then(signal=>{if(current()?.frame===frame){const requested=state.pendingOutput;if(requested){const i=signal.attention?.findIndex(r=>r.output_index===requested.output_index&&(requested.layer==null||r.layer===requested.layer)&&(requested.head==null||r.head===requested.head));if(i>=0)state.signalRow=i;state.pendingOutput=null;}drawSignals();setHash();}}).catch(e=>{if(status.isConnected)status.textContent=ui('信号读取失败：')+e;});return;}
+
+ root.append(el('p',s?.counts?.reasoning?.value!=null?ui`当前决策：thinking ${s.counts.reasoning.value} tokens · vision ${s.counts.vision?.value??'—'} tokens · 输出 ${s.counts.output?.value??'—'} tokens（真实 token IDs / 输入位置）。`:ui`当前模型决策只计一次输出；think 估计 ${frame.think_tokens_estimate??'—'} tokens（字符数 / 3.5）。`,'quiet'));
+ if(!s){if(['processing','failed'].includes(frame.signal_status)){root.append(el('div',frame.signal_status==='processing'?ui('轨迹和截图已就绪；Visual signals 正在处理。'):ui('Visual signals 处理失败；轨迹、截图和原始记录仍可查看。'),'status'),button(ui('刷新处理状态'),()=>location.reload()));}root.append(el('div',ui`未记录或尚未匹配：${frame.signal_reason||ui('无 visual signal 文件')}`,'status'));if(frame.signal_source){const link=el('a',ui('下载原始 signal JSONL'));link.href=sourceUrl(frame.signal_source);link.download='visual_signals.jsonl';root.append(link);}return;}
+ root.append(el('div',ui`来源：${s.origin||ui('未记录')} · ${frame.signal_reason}`,'status'));
+ if(s.capture_errors?.length)root.append(el('pre',pretty(s.capture_errors),'status'));
+ const rows=s.attention||[],overviews=s.attention_overviews||[],images=s.images||[],selected=rows[state.signalRow],overview=overviews.find(r=>r.layer===selected?.layer&&r.head===selected?.head),isMean=state.attentionMode==='mean'&&!!overview,byOutput=new Map((s.token_diagnostics||[]).map(t=>[t.output_index,t]));
+ const modes=el('div',undefined,'signal-controls'),meanButton=button(ui('整步输出 · 平均热力图'),()=>{state.attentionMode='mean';drawSignals();setHash();},isMean);meanButton.disabled=!overview;modes.append(meanButton,button(ui('单个 token'),()=>{state.attentionMode='token';drawSignals();setHash();},!isMean));if(rows.length)root.append(modes);
+ const controls=el('div',undefined,'signal-controls'),select=el('select');select.setAttribute('aria-label',isMean?'Attention layer head':'Attention layer head query');
+ (isMean?overviews:rows).forEach((r,i)=>{const token=byOutput.get(r.output_index),option=el('option',isMean?`L${r.layer} / H${r.head} · ${r.output_indices.length} / ${r.output_total??'?'} tokens`:ui`输出第 ${Number.isInteger(r.output_index)?r.output_index+1:'?'} 个 token ${tokenText(token?.text)} · L${r.layer} / H${r.head} / Q${r.query}`);option.value=i;select.append(option);});select.value=isMean?overviews.indexOf(overview):state.signalRow;select.onchange=()=>{const i=Number(select.value);state.signalRow=isMean?rows.findIndex(r=>r.layer===overviews[i].layer&&r.head===overviews[i].head):i;drawSignals();setHash();};if(rows.length)controls.append(el('span',isMean?'Layer / Head':'Layer / Head / Query'),select);else controls.append(el('span',ui('未记录 attention 权重。')));root.append(controls);
+ if(rows.length&&!overview)root.append(el('p',ui('当前层 / head 缺少可唯一关联的输出位置，无法汇总整步热力图。'),'quiet'));
+ if(!isMean&&selected?.weights_ref&&selected.frames.some(f=>!f.weights)){
+  const status=el('p',ui('正在校验并加载当前 token 的完整原始权重…'),'status');root.append(status);
+  loadAttentionRow(selected,images).then(()=>{if(current()?.frame===frame&&state.attentionMode==='token'&&rows[state.signalRow]===selected)drawSignals();}).catch(error=>{if(status.isConnected)status.textContent=String(error);});return;
+ }
+ if(!isMean&&selected?.render_ref&&selected.frames.some(f=>!f.display_values)){
+  const status=el('p',ui('正在加载已验证的逐 token 热力图图片…'),'status');root.append(status);loadRenderedRow(selected,images).then(()=>{if(current()?.frame===frame)drawSignals();}).catch(e=>{if(status.isConnected)status.textContent=ui('图片读取失败：')+e;});return;
+ }
+ const row=isMean?overview:selected, im=images[state.signalImage],rendered=!!row?.render_ref;
+ const scale=rendered?{...row.render_scale,midpoint:state.heatScale==='linear'?row.render_scale.max/2:row.render_scale.pivot*Math.expm1(Math.log1p(row.render_scale.max/row.render_scale.pivot)/2)}:attentionDisplayScale(row?.frames||[],state.heatScale);
+ if(s.raw_retention==='rendered-only')root.append(el('p',ui('此导出保留每个 token 的线性 / 对数 8-bit 热力图及精确图片级统计；单个 patch 的原始权重不再保留。整体平均图仍保留数值。'),'status'));
+ if(row){const predicted=byOutput.get(row.output_index);root.append(el('p',isMean?ui`${row.complete?ui('完整输出'):ui('部分输出 · 仅已采集位置')}：${row.output_indices.length} / ${row.output_total??ui('未知')} 个 token 等权平均 · L${row.layer} / H${row.head}。包括已采集的格式、动作及 thinking token；未采集位置不补零。先平均原始权重，再计算图片 share 与熵。`:ui`此图对应预测输出位置 ${Number.isInteger(row.output_index)?ui('第 ')+(row.output_index+1)+ui(' 个'):ui('未记录')} token ${tokenText(predicted?.text)}。L${row.layer} = 第 ${row.layer+1} 层；H${row.head} = 第 ${row.head+1} 个 head；query 位置 Q${row.query} 从 0 编号。当前只展示采样到的 attention 行。Query dtype：${row.dtype||ui('未记录')}。`,'token-note'));const stats=el('div',undefined,'stat-row'),mass=el('span',isMean?ui('全部图片的平均 attention mass'):ui('全部图片的原始 attention mass'));mass.append(el('strong',(row.image_mass*100).toFixed(2)+'%'),el('small',ui('全部 key · raw ')+finite(row.image_mass)));stats.append(mass);stats.append(el('span',ui`图片选择熵 ${finite(row.image_entropy_nats)} nats · 归一化 ${finite(row.image_entropy_normalized)}`));root.append(stats);if(row.weights_scope==='image_keys'){root.append(el('p',ui`存储范围：全部图片 patch 的原始全上下文 attention；逐个文本位置权重未保存。非图片 mass ${finite(row.non_image_mass)} · 全上下文熵 ${finite(row.full_attention_entropy_nats)} nats · 非图片条件熵 ${finite(row.non_image_entropy_nats)} nats`,'quiet'));}
+  const wrap=el('div',undefined,'table-wrap'),table=el('table'),head=el('tr');[ui('输入图片'),'Vision tokens',isMean?ui('平均 mass'):ui('原始 mass'),ui('图片间 share（仅图片）'),ui('每视觉 token 均值'),ui('空间熵 (nats)'),ui('归一化空间熵')].forEach(t=>head.append(el('th',t)));table.append(head);
+  row.frames.forEach((f,i)=>{const tr=el('tr');if(i===state.signalImage)tr.className='selected';const td=el('td');td.append(button(imageLabel(images[i],frame),()=>{state.signalImage=i;state.heatmapView='single';drawSignals();}));tr.append(td);[f.token_count,f.frame_mass,f.frame_share,f.mean_weight,f.spatial_entropy_nats,f.spatial_entropy_normalized].forEach((v,j)=>tr.append(el('td',j===0?String(v):j===2&&Number.isFinite(v)?(v*100).toFixed(2)+'%':finite(v))));table.append(tr);});wrap.append(table);root.append(wrap);
+ }
+ const thumbs=el('div',undefined,'signal-images');images.forEach((image,i)=>{const b=button('',()=>{state.signalImage=i;state.heatmapView='single';drawSignals();},state.heatmapView==='single'&&i===state.signalImage),img=el('img');img.src=sourceUrl(image.src);img.alt=ui`输入图片 ${i+1}`;b.append(img,el('span',`${imageLabel(image,frame)} · ${image.token_count??'?'} tokens`));thumbs.append(b);});root.append(thumbs);
+ const display=el('div',undefined,'signal-controls');display.append(button(ui('全部输入图片'),()=>{state.heatmapView='all';drawSignals();},state.heatmapView==='all'),button(ui('选中的单张图片'),()=>{state.heatmapView='single';drawSignals();},state.heatmapView==='single'),button(state.showHeatmap?ui('隐藏 Attention 覆盖'):ui('显示 Attention 覆盖'),()=>{state.showHeatmap=!state.showHeatmap;drawSignals();}));root.append(el('h3',ui('实际模型输入与 Attention 热力图')),display);
+ const settings=el('div',undefined,'shot-controls'),scaleSelect=el('select');scaleSelect.setAttribute('aria-label',ui('Attention 色标'));for(const [value,label] of [['log',ui('对数色标 · 显示细节')],['linear',ui('线性色标 · 原始比例')]]){const option=el('option',label);option.value=value;scaleSelect.append(option);}scaleSelect.value=state.heatScale;scaleSelect.onchange=()=>{state.heatScale=scaleSelect.value;drawSignals();setHash();};settings.append(scaleSelect);
+ const gridLabel=el('label'),grid=el('input');grid.type='checkbox';grid.checked=state.heatGrid;grid.onchange=()=>{state.heatGrid=grid.checked;drawSignals();setHash();};gridLabel.append(grid,document.createTextNode(ui(' 显示网格')));settings.append(gridLabel);
+ const opacityLabel=el('label',ui('最强处不透明度 ')),opacity=el('input');opacity.type='range';opacity.min=0;opacity.max=100;opacity.step=5;opacity.value=Math.round(state.heatOpacity*100);opacity.setAttribute('aria-label',ui('热力图最强处不透明度'));const opacityValue=el('span',opacity.value+'%');opacity.oninput=()=>{opacityValue.textContent=opacity.value+'%';};opacity.onchange=()=>{state.heatOpacity=Number(opacity.value)/100;drawSignals();setHash();};opacityLabel.append(opacity,opacityValue);settings.append(opacityLabel);root.append(settings);
+ const gallery=el('div',undefined,'signal-heatmaps');const visible=state.heatmapView==='all'?images:(im?[im]:[]);
+ for(const input of visible){const values=row?.frames.find(f=>f.image_id===input.id),weights=rendered?values?.display_values?.[state.heatScale]:values?.weights;gallery.append(shot(input.src,ui`${imageLabel(input,frame)} · ${input.token_count??'?'} vision tokens · 请求 ${input.width??'?'}×${input.height??'?'} → 模型处理 ${input.processed_width??'?'}×${input.processed_height??'?'} · ${state.showHeatmap&&weights?ui('Attention 热力图'):ui('原图')}`,state.showHeatmap?heatmap(input,weights,scale,rendered):null));}root.append(gallery);
+ if(row){const legend=el('div',undefined,'heat-key');legend.style.background=`linear-gradient(90deg,rgba(35,85,220,0),rgba(250,250,250,${state.heatOpacity/2}),rgba(220,40,35,${state.heatOpacity}))`;root.append(legend,el('p',ui`${state.heatScale==='log'?ui('对数'):ui('线性')}色标：低/透明 0 → 中 ${finite(scale.midpoint)} → 高/红 ${finite(scale.max)}。低权重更透明；所有输入图片共用此色标，切到单张图也不重新缩放。每一步/输出 token 的色标独立计算，跨步强弱请比较原始数值。`,'quiet'));if(state.heatScale==='log')root.append(el('p',ui`显示变换 log(1 + w / m)，m = ${finite(scale.pivot)}（所有图片非零权重的中位数）。仅调整颜色与透明度，不截断权重、不改变 mass / share。`,'quiet'));}
+ root.append(el('p',isMean?ui('平均图展示当前这一次模型决策的整体关注分布，短暂的局部关注可能被平均淡化；可切换单个 token 查看。'):ui('单个 token 图展示生成该 token 时的 decoder attention。Attention 本身不能判断点击或历史图片选择是否正确。'),'quiet'));
+ if(isMean)root.append(jsonDisclosure(ui('整体热力图：汇总权重与覆盖位置'),row));
+ if(s.token_diagnostics?.length){const details=el('details',undefined,'raw-details');details.append(el('summary',ui`输出 token 诊断：${s.token_diagnostics.length} 个位置 · 点击展开`));let loaded=false;details.ontoggle=()=>{if(!details.open||loaded)return;loaded=true;const table=el('table'),head=el('tr');[ui('输出位置 / 阶段'),'Token / ID','log p',ui('完整词表熵 (nats)')].forEach(x=>head.append(el('th',x)));table.append(head);for(const t of s.token_diagnostics){const tr=el('tr');[`${t.output_index} / ${t.phase||ui('未标注')}`,`${t.text??''} (${t.token_id??'—'})`,finite(t.logprob),finite(t.entropy_nats)].forEach(x=>tr.append(el('td',x)));table.append(tr);}details.append(el('h4',ui`输出 token 诊断 · ${s.entropy_stage||'raw_logits'}`),table);};root.append(details);}
+ const counts=jsonDisclosure(ui('Token 计数 / Prediction 概率（原始记录）'),{counts:s.counts??null,output_tokens:s.output_tokens??null});const raw=jsonDisclosure(s.raw_retention==='rendered-only'?ui('原始请求与信号元数据（不含已清理的矩阵）'):ui('完整 attention 权重与信号记录'),()=>rawSignal(s));root.append(counts,raw,recordInventory(frame,s));
+ if(frame.interventions?.length){root.append(jsonDisclosure(ui('区域 / 历史图片干预：原始请求与回复（未执行动作）'),frame.interventions));}
+}
+function fit(){state.autoFit=true;state.zoom=Math.max(.35,Math.min(1.2,($('graph-scroll').clientWidth-12)/700));drawGraph();}
+function loadEpisode(index){state.episode=index;state.occurrence=0;state.signalRow=0;state.signalImage=0;const ep=episode();$('episode').value=index;$('instruction').textContent=ep.trace.instruction||ui('整体 instruction 未记录。');$('run-meta').textContent=`${DATA.run.canonical_name||DATA.run.version?.base_model||DATA.run.legacy_name||ui('模型未记录')} · ${DATA.run.source} · ${ep.trace.task_id} · score ${ep.trace.score??'—'}`;$('run-raw').textContent=pretty({run:DATA.run,episode:ep.trace});document.title=ui`轨迹 · ${ep.trace.task_id}`;fit();drawDetail();}
+if(DATA.run.version?.classification){const scope=el('p',ui`运行标记：${DATA.run.version.classification} · 本次上限 ${DATA.run.args?.max_steps??ui('未记录')} 步`,'quiet');document.querySelector('header').append(scope);}
+if(DATA.validation){const v=DATA.validation,panel=el('details',undefined,'raw-details');panel.append(el('summary',ui`采集完整性：${v.status==='passed'?ui('通过'):v.status==='failed'?ui('发现问题'):v.status==='processing'?ui('Visual signals 处理中'):ui('历史数据不完整')} · ${v.decisions} 次决策 · ${v.decoded_images} 张图片已解码`),el('pre',pretty(v)));const link=el('a',ui('下载校验报告 JSON'));link.href=DATA.json_path.replace(/^tasks\//,'validation/');link.target='_blank';link.rel='noopener';panel.append(link);document.querySelector('header').append(panel);}
+DATA.episodes.forEach((ep,i)=>{const option=el('option',String(ep.trace.episode));option.value=i;$('episode').append(option);});$('download-json').href=DATA.json_path;$('episode').onchange=e=>{loadEpisode(Number(e.target.value));setHash();};$('grouping').onchange=e=>{state.mode=e.target.value;drawGraph();drawDetail();setHash();};$('jump-signals').onclick=()=>{state.panel='signals';setHash();$('signals').scrollIntoView({block:'start'});};$('jump-records').onclick=()=>{state.panel='records';setHash();($('record-inventory')||$('signals')).scrollIntoView({block:'start'});};$('jump-evaluation').onclick=()=>{selectOccurrence(graph().occurrences.length-1,true);$('evaluation').scrollIntoView({block:'start'});};$('previous').onclick=()=>selectOccurrence(state.occurrence-1,true);$('next').onclick=()=>selectOccurrence(state.occurrence+1,true);$('show-marks').onchange=drawShots;document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{state.shotMode=b.dataset.mode;drawShots();});document.querySelectorAll('[data-text]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-text]').forEach(x=>x.classList.toggle('active',x===b));['thinking','prediction','raw'].forEach(name=>$('panel-'+name).hidden=name!==b.dataset.text);});$('zoom-in').onclick=()=>{state.autoFit=false;state.zoom=Math.min(2,state.zoom+.15);drawGraph();};$('zoom-out').onclick=()=>{state.autoFit=false;state.zoom=Math.max(.25,state.zoom-.15);drawGraph();};$('fit').onclick=fit;$('close-zoom').onclick=()=>$('zoom-dialog').close();$('download-svg').onclick=()=>{const copy=$('graph').cloneNode(true);copy.setAttribute('xmlns',NS);const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(copy)],{type:'image/svg+xml'})),a=el('a');a.href=url;a.download='trajectory-graph.svg';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+if(DATA.episodes.length){const hash=new URLSearchParams(location.hash.slice(1)),requested=DATA.episodes.findIndex(e=>String(e.trace.episode)===hash.get('episode'));state.panel=hash.get('panel')||'';state.heatScale=hash.get('scale')==='linear'?'linear':'log';state.heatGrid=hash.get('grid')==='1';if(hash.has('opacity')&&Number.isFinite(Number(hash.get('opacity'))))state.heatOpacity=Math.max(0,Math.min(1,Number(hash.get('opacity'))));state.attentionMode=hash.get('attention')==='mean'?'mean':hash.get('attention')==='token'||hash.has('output')?'token':'mean';if(['action','state','steps'].includes(hash.get('group')))state.mode=hash.get('group');$('grouping').value=state.mode;loadEpisode(requested<0?DATA.episodes.length-1:requested);const n=Number(hash.get('occurrence'));if(Number.isInteger(n)&&n>=0&&n<graph().occurrences.length)selectOccurrence(n);if(hash.has('output')){const requestedOutput=Number(hash.get('output')),idx=current()?.frame.signals?.attention?.findIndex(r=>r.output_index===requestedOutput&&(!hash.has('layer')||r.layer===Number(hash.get('layer')))&&(!hash.has('head')||r.head===Number(hash.get('head'))))??-1;if(idx>=0){state.signalRow=idx;drawSignals();setHash();}else{state.pendingOutput={output_index:requestedOutput,layer:hash.has('layer')?Number(hash.get('layer')):null,head:hash.has('head')?Number(hash.get('head')):null};}}}else{$('instruction').textContent=ui('未找到完整的 episode 记录。');$('detail').hidden=true;}
+if(state.panel)requestAnimationFrame(()=>{(state.panel==='records'?$('record-inventory'):$('signals'))?.scrollIntoView({block:'start'});});
+let lastGraphWidth=0;new ResizeObserver(()=>{const width=$('graph-scroll').clientWidth;if(width!==lastGraphWidth){lastGraphWidth=width;if(state.autoFit&&DATA.episodes.length)fit();}}).observe($('graph-scroll'));
+</script></body></html>
