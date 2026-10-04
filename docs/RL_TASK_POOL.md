@@ -140,10 +140,7 @@
 
 ## 6 运行这些题需要的环境
 
-- **bridge**(`vm/worker_bridge.py`，slime-cua `pool-expand`)：
-  - 按每道题自带的初始化步骤执行；打分前执行题目要求的操作(r0 不执行)。
-  - 初始化脚本的输出写进 VM 里的文件。否则 sh 脚本在后台开的应用会占住 VM 服务的输出管道，直到 120 秒超时；989 道 sh 题里有 317 道是这种写法。
-- **VM 里的 Python 库**：`vm/guest_requirements.txt` 固定了版本，每台 VM 开机后、存快照前用 pip 装进 `/home/user/.cuagym/site`，约 20 秒。只有初始化脚本和 `reward.py` 能用到，agent 自己开的终端里看不到。
+VM 里装了什么、bridge 怎么跑题：见 **`RL_VM_ENVIRONMENT.md`**(唯一记录)。这里只留与题库有关的两条：
 - **模拟网站**：`vm/mock_sites.py` 在每台 VM 主机上装 Node 20.20.2 和 CUA-Gym-Hub，31 个站点各占一个固定端口(18500–18530)常驻，约 3 GB 内存。VM 通过 `host.docker.internal` 访问。
 - 旧版 bridge 跑不了新题：它会漏掉 sh 初始化、"打开文件"、Ctrl+S 和站点地址替换。
 
@@ -155,7 +152,7 @@
   - 两道题本身有问题：`ca775249` 假设 Python 有 `site-packages` 目录，同类题 5 道；`6744967d` 初始状态就得 0.4 分。训练时都会被自动丢掉。
   - 截图核对：Chrome 打开了模拟 Trello，GIMP 打开了题目文件。
 - **网页题的接口不防作弊**：题目脚本用的是不带口令的旧接口，agent 在终端里能直接改网站数据。训练中要留意网页题成功率有没有异常上升。
-- **sh 初始化脚本常会 pip 装包**：728 道 sh 题带 `pip install`。有的按包名检查而不是按 import 名检查(比如 `python-docx`)，导致每次初始化都从网上重装，reset 会变慢。
+- **sh 初始化脚本常会 pip 装包**：728 道 sh 题带 `pip install`。有的按包名检查而不是按 import 名检查(比如 `python-docx`)，以前每次初始化都从网上重装。10-03 起这些包都预装在私有库目录里，pip 直接报"已安装"(`RL_VM_ENVIRONMENT.md` §3)。
 - **没有 TASK_ID 的 2,176 道题**只靠文本相似度防止和 OSWorld 重叠，比带 TASK_ID 的题风险高。
 - **不可完成题为 0**：训练可能让模型更不愿意回答 FAIL。
 
